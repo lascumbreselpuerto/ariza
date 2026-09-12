@@ -241,6 +241,7 @@ const ESTADOS = {
   fuera_servicio:   {t:'Fuera de servicio',      c:'mal',   b:'#EE5A48'},
   mantenimiento:    {t:'Mantenimiento pendiente',c:'gris',  b:'#A49E99'}
 };
+const TIPOS_DOC = ['Manual de instrucciones','Esquema eléctrico','Declaración CE','Certificado','Informe técnico','Presupuesto','Fotos de obra','Otro'];
 const EST_AVISO = {recibido:'Recibido', asignado:'Asignado', en_curso:'En curso', repuesto:'Esperando repuesto', cerrado:'Cerrado'};
 
 /* ================= Utilidades ================= */
@@ -300,6 +301,14 @@ async function vistaPublica(ref){
   filas.forEach(f=>{ if(f[1]) h+='<div><dt>'+f[0]+'</dt><dd>'+esc(f[1])+'</dd></div>'; });
   h += '</dl></div>';
 
+  const docs = data.documentos || [];
+  if (docs.length){
+    h += '<div class="tarjeta"><h2 style="font-size:20px">Documentos de esta puerta</h2>'+
+         '<p class="mini" style="margin:0;color:#A49E99">Desbloqueo de emergencia e instrucciones de uso.</p>'+
+         docs.map(d => '<a class="btn sec" style="text-decoration:none;display:block;text-align:center" target="_blank" rel="noopener" href="'+
+            esc(SUPA_URL + '/storage/v1/object/public/publicos/' + String(d.ruta).split('/').map(encodeURIComponent).join('/'))+'">'+esc(d.nombre)+'</a>').join('')+
+         '</div>';
+  }
   h += '<div class="tarjeta"><h2 style="font-size:20px">¿Ves algo que no funciona?</h2>'+
        '<div class="campo"><label for="p-desc">Cuéntanos qué pasa</label><textarea id="p-desc" rows="3" maxlength="500" placeholder="Ej.: la puerta no cierra del todo y hace ruido"></textarea></div>'+
        '<div class="campo"><label for="p-cont">Tu teléfono o correo (opcional)</label><input id="p-cont" type="text" maxlength="120"></div>'+
@@ -443,6 +452,14 @@ function vistaFicha(id){
   h += '<div class="panel"><div class="panel-h"><h3>Fotos</h3><label class="btn sm">Añadir fotos<input type="file" accept="image/*" multiple hidden data-act="subir-foto" data-id="'+p.id+'"></label></div>'+
        '<div class="fotos" id="fotos-'+p.id+'"><p class="mini" style="margin:0">Cargando fotos…</p></div></div>';
 
+  h += '<div class="panel"><div class="panel-h"><h3>Documentación</h3>'+
+       '<span class="fila"><select id="doc-tipo-'+p.id+'" style="padding:6px 9px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:14px">'+
+       TIPOS_DOC.map(t => '<option>'+esc(t)+'</option>').join('')+'</select>'+
+       '<label style="display:inline-flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="doc-pub-'+p.id+'" style="accent-color:var(--amarillo);width:16px;height:16px">Visible para el cliente</label>'+
+       '<label class="btn sm">Subir PDF<input type="file" accept="application/pdf,.pdf" multiple hidden data-act="subir-doc" data-id="'+p.id+'"></label></span></div>'+
+       '<div id="docs-'+p.id+'"><p class="mini" style="margin:0">Cargando documentación…</p></div>'+
+       '<p class="mini" style="margin:10px 0 0">Manuales, esquemas y certificados de esta puerta. Solo los ve el equipo, salvo los que marques como visibles para el cliente: esos aparecen al escanear el QR, pensados para el desbloqueo de emergencia y las instrucciones de uso.</p></div>';
+
   h += '<div class="panel"><div class="panel-h"><h3>Avisos y trabajos</h3><span class="mini">'+av.length+' en total</span></div>';
   if (!av.length) h += '<p class="muted" style="margin:0">Sin avisos registrados.</p>';
   else {
@@ -459,7 +476,7 @@ function vistaFicha(id){
     h += '</div>';
   }
   h += '</div></div>';
-  setTimeout(() => pintarFotos(p.id), 0);
+  setTimeout(() => { pintarFotos(p.id); pintarDocs(p.id); }, 0);
   return h;
 }
 
@@ -540,10 +557,14 @@ function vistaEquipo(){
     h += '</tbody></table></div>';
   }
   h += '</div>';
-  h += '<div class="panel"><div class="panel-h"><h3>Cómo se da de alta a un técnico</h3></div>'+
-       '<ol style="margin:0;padding-left:20px" class="mini"><li>Entra en el panel de Supabase, apartado Authentication, y pulsa Add user.</li>'+
-       '<li>Pon su correo y una contraseña provisional, y marca Auto Confirm User.</li>'+
-       '<li>Dile que entre en arizapa.es con esos datos. Al entrar aparecerá en esta lista y podrás darle o quitarle acceso.</li></ol></div></div>';
+  h += '<div class="panel"><div class="panel-h"><h3>Dar de alta a un técnico</h3></div>'+
+       '<div class="campos" style="max-width:640px">'+
+       '<div class="campo"><label for="t-nombre">Nombre</label><input id="t-nombre" type="text" placeholder="Ej.: Juan"></div>'+
+       '<div class="campo"><label for="t-mail">Correo</label><input id="t-mail" type="email" autocomplete="off" placeholder="juan@correo.com"></div>'+
+       '<div class="campo"><label for="t-pass">Contraseña provisional</label><input id="t-pass" type="text" autocomplete="off" placeholder="Mínimo 6 caracteres"></div>'+
+       '<div class="campo" style="align-content:end"><button class="btn pri" data-act="equipo-alta">Dar de alta</button></div>'+
+       '</div><p class="err" id="t-err" role="alert" style="margin:10px 0 0"></p>'+
+       '<p class="mini" style="margin:8px 0 0">Dale la contraseña en persona. Él puede cambiarla desde la pantalla de entrada, con «He olvidado mi contraseña».</p></div></div>';
   return h;
 }
 
@@ -588,6 +609,59 @@ function reducir(file, max=1600, calidad=0.82){
     img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Imagen no válida')); };
     img.src = url;
   });
+}
+
+/* ================= Documentación ================= */
+async function pintarDocs(puertaId){
+  const cont = document.getElementById('docs-'+puertaId);
+  if (!cont) return;
+  const { data, error } = await sb.from('documentos').select('*').eq('puerta_id', puertaId).order('creado', {ascending:false});
+  if (error){ cont.innerHTML = '<p class="mini" style="margin:0">No se pudo cargar la documentación.</p>'; return; }
+  if (!data.length){ cont.innerHTML = '<p class="mini" style="margin:0">Sin documentos todavía.</p>'; return; }
+  const urls = await Promise.all(data.map(d => d.publico
+    ? Promise.resolve({ data: { signedUrl: urlPublica(d.ruta) } })
+    : sb.storage.from('documentos').createSignedUrl(d.ruta, 3600)));
+  cont.innerHTML = '<div class="tabla-wrap"><table class="tabla"><tbody>' + data.map((d,i) => {
+    const u = urls[i] && urls[i].data ? urls[i].data.signedUrl : '';
+    return '<tr><td><b style="font-weight:600">'+esc(d.nombre)+'</b>'+(d.publico?' <span class="chip ok sin" style="vertical-align:2px">Visible para el cliente</span>':'')+
+           '<span class="sub">'+esc(d.tipo||'')+' · '+fechaCorta(d.creado)+(d.autor?(' · '+esc(d.autor)):'')+'</span></td>'+
+           '<td style="text-align:right;white-space:nowrap"><a class="btn sm" href="'+esc(u)+'" target="_blank" rel="noopener">Abrir</a> '+
+           '<button class="btn sm plana" data-act="doc-visible" data-id="'+d.id+'" data-puerta="'+puertaId+'">'+(d.publico?'Ocultar al cliente':'Mostrar al cliente')+'</button> '+
+           '<button class="btn sm plana" data-act="doc-borrar" data-id="'+d.id+'" data-ruta="'+esc(d.ruta)+'" data-bucket="'+(d.publico?'publicos':'documentos')+'" data-puerta="'+puertaId+'">Borrar</button></td></tr>';
+  }).join('') + '</tbody></table></div>';
+}
+function urlPublica(ruta){ return SUPA_URL + '/storage/v1/object/public/publicos/' + ruta.split('/').map(encodeURIComponent).join('/'); }
+async function subirDocs(puertaId, ficheros, tipo, publico){
+  const bucket = publico ? 'publicos' : 'documentos';
+  for (const file of ficheros){
+    try {
+      if (file.size > 20*1024*1024) throw new Error('El archivo "'+file.name+'" pasa de 20 MB');
+      const limpio = file.name.replace(/[^A-Za-z0-9._-]/g,'_');
+      const ruta = puertaId+'/'+Date.now()+'-'+limpio;
+      const { error } = await sb.storage.from(bucket).upload(ruta, file, { contentType: file.type || 'application/pdf' });
+      if (error) throw error;
+      await sb.from('documentos').insert({ puerta_id: puertaId, nombre: file.name, tipo, ruta, autor: yo(), publico: !!publico, bucket });
+    } catch(e){ fallo(e); }
+  }
+  toast('Documentación subida.');
+  pintarDocs(puertaId);
+}
+async function cambiarVisibilidad(docId, puertaId){
+  try {
+    const { data: d, error: e1 } = await sb.from('documentos').select('*').eq('id', docId).maybeSingle();
+    if (e1 || !d) throw (e1 || new Error('Documento no encontrado'));
+    const origen = d.publico ? 'publicos' : 'documentos';
+    const destino = d.publico ? 'documentos' : 'publicos';
+    const { data: fichero, error: e2 } = await sb.storage.from(origen).download(d.ruta);
+    if (e2) throw e2;
+    const { error: e3 } = await sb.storage.from(destino).upload(d.ruta, fichero, { contentType: fichero.type || 'application/pdf', upsert: true });
+    if (e3) throw e3;
+    await sb.storage.from(origen).remove([d.ruta]);
+    const { error: e4 } = await sb.from('documentos').update({ publico: !d.publico, bucket: destino }).eq('id', docId);
+    if (e4) throw e4;
+    toast(d.publico ? 'Ya no lo ve el cliente.' : 'Ahora el cliente lo ve al escanear el QR.');
+    pintarDocs(puertaId);
+  } catch(err){ fallo(err); }
 }
 
 /* ================= QR ================= */
@@ -780,6 +854,30 @@ raiz.addEventListener('click', async e => {
     try { await sb.storage.from('fotos').remove([b.dataset.ruta]); await sb.from('fotos').delete().eq('id', b.dataset.id); pintarFotos(b.dataset.puerta); }
     catch(err){ fallo(err); }
   }
+  else if (a === 'doc-borrar'){
+    if (!armar(b, 'Confirmar')) return;
+    try { await sb.storage.from(b.dataset.bucket || 'documentos').remove([b.dataset.ruta]); await sb.from('documentos').delete().eq('id', b.dataset.id); pintarDocs(b.dataset.puerta); }
+    catch(err){ fallo(err); }
+  }
+  else if (a === 'doc-visible') cambiarVisibilidad(b.dataset.id, b.dataset.puerta);
+  else if (a === 'equipo-alta'){
+    const err = document.getElementById('t-err');
+    const nombre = (document.getElementById('t-nombre')||{}).value || '';
+    const email = ((document.getElementById('t-mail')||{}).value || '').trim().toLowerCase();
+    const pass = (document.getElementById('t-pass')||{}).value || '';
+    err.textContent = '';
+    if (!nombre.trim()) { err.textContent = 'Escribe el nombre.'; return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { err.textContent = 'El correo no es válido.'; return; }
+    if (pass.length < 6) { err.textContent = 'La contraseña debe tener al menos 6 caracteres.'; return; }
+    b.disabled = true; b.textContent = 'Dando de alta…';
+    try {
+      const { data, error } = await sb.functions.invoke('crear-tecnico', { body: { nombre: nombre.trim(), email, password: pass } });
+      if (error) throw new Error((data && data.error) || error.message);
+      if (data && data.error) throw new Error(data.error);
+      await cargar(); toast(nombre.trim()+' dado de alta. Pásale el correo y la contraseña.');
+    } catch(e){ err.textContent = e.message || 'No se pudo dar de alta.'; }
+    b.disabled = false; b.textContent = 'Dar de alta';
+  }
   else if (a === 'equipo-activo'){
     try { const { error } = await sb.from('perfiles').update({ activo: b.dataset.v === '1' }).eq('id', b.dataset.id); if (error) throw error; await cargar(); }
     catch(err){ fallo(err); }
@@ -788,6 +886,11 @@ raiz.addEventListener('click', async e => {
 raiz.addEventListener('input', e => { if (e.target.dataset.act === 'busca'){ S.busca = e.target.value; pintar(); } });
 raiz.addEventListener('change', e => {
   if (e.target.dataset.act === 'subir-foto' && e.target.files.length){ subirFotos(e.target.dataset.id, Array.from(e.target.files)); e.target.value=''; }
+  if (e.target.dataset.act === 'subir-doc' && e.target.files.length){
+    const sel = document.getElementById('doc-tipo-'+e.target.dataset.id);
+    const pub = document.getElementById('doc-pub-'+e.target.dataset.id);
+    subirDocs(e.target.dataset.id, Array.from(e.target.files), sel ? sel.value : 'Manual de instrucciones', pub && pub.checked); e.target.value='';
+  }
 });
 dlgForm.addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
