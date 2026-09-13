@@ -1,0 +1,1079 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ARIZA SAT</title>
+<meta name="theme-color" content="#1C1817">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Ariza SAT">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#F4F4F2; --surface:#FFFFFF; --surface-2:#ECECE8; --ink:#1C1817; --muted:#5F5B58; --line:#D6D4CF;
+  --amarillo:#FCBA1D; --amarillo-oscuro:#C98F08; --grafito:#454545; --negro:#1C1817;
+  --ok:#2E7D46; --ok-bg:#E3F1E6; --aviso:#9A6206; --aviso-bg:#FCEFD3; --mal:#B3271E; --mal-bg:#F8E1DF;
+  --gris:#6B6764; --gris-bg:#E9E8E4;
+  --sans:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --cond:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --sombra:0 10px 30px rgba(28,24,23,.18);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#151312; --surface:#201D1C; --surface-2:#2A2624; --ink:#F2EFEC; --muted:#A49E99; --line:#3A3533;
+    --ok:#69C184; --ok-bg:#1C3325; --aviso:#E3AC4F; --aviso-bg:#382B14; --mal:#EE7F73; --mal-bg:#3B201D;
+    --gris:#A49E99; --gris-bg:#2A2624; --sombra:0 10px 30px rgba(0,0,0,.55);
+  }
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{color-scheme:light dark}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--sans);-webkit-font-smoothing:antialiased;padding-bottom:env(safe-area-inset-bottom)}
+h1,h2,h3{font-family:var(--cond);font-weight:600;margin:0;text-wrap:balance;letter-spacing:.01em}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--amarillo);outline-offset:2px}
+img{max-width:100%}
+.wrap{max-width:1000px;margin:0 auto;padding-inline:16px;padding-block:0 56px}
+
+/* Cabecera */
+.top{background:var(--negro);color:#fff;position:sticky;top:0;z-index:5}
+.top-in{max-width:1000px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.marca{display:flex;align-items:center;gap:9px;font-family:var(--cond);font-size:22px;font-weight:700;letter-spacing:.02em}
+.marca i{width:26px;height:22px;background:var(--amarillo);clip-path:polygon(50% 0,100% 100%,72% 100%,50% 44%,28% 100%,0 100%);display:block}
+.marca b{color:var(--amarillo);font-weight:700}
+.top .sp{flex:1}
+.top .quien{font-size:13px;color:#CFC9C4;display:flex;align-items:center;gap:8px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block}
+.dot.off{background:var(--aviso)}
+.tabs{display:flex;gap:2px;overflow-x:auto;background:var(--negro);scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs-in{max-width:1000px;margin:0 auto;display:flex;gap:2px;padding:0 8px}
+.tabs button{border:0;background:none;color:#B9B3AE;padding:10px 14px 12px;font:600 14px var(--sans);cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap}
+.tabs button[aria-selected="true"]{color:#fff;border-bottom-color:var(--amarillo)}
+
+/* Piezas */
+.btn{border:1px solid var(--line);background:var(--surface);padding:9px 14px;border-radius:6px;font:600 14px var(--sans);cursor:pointer;white-space:nowrap;line-height:1.25}
+.btn:hover{border-color:var(--muted)}
+.btn.pri{background:var(--amarillo);border-color:var(--amarillo);color:#1C1817}
+.btn.pri:hover{background:var(--amarillo-oscuro);border-color:var(--amarillo-oscuro)}
+.btn.oscuro{background:var(--negro);border-color:var(--negro);color:#fff}
+.btn.sm{padding:6px 10px;font-size:13px}
+.btn.plana{background:transparent}
+.btn.armado{background:var(--mal);border-color:var(--mal);color:#fff}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px}
+.panel-h{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between;margin-bottom:12px}
+.panel-h h2,.panel-h h3{font-size:20px}
+.stack{display:grid;gap:16px;padding-top:16px}
+.fila{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sp{flex:1}
+.muted{color:var(--muted)}
+.mini{font-size:13px;color:var(--muted)}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.eti{font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.chip{display:inline-flex;align-items:center;gap:6px;font:600 12px var(--sans);padding:5px 9px;border-radius:4px;white-space:nowrap}
+.chip::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.chip.ok{color:var(--ok);background:var(--ok-bg)}
+.chip.aviso{color:var(--aviso);background:var(--aviso-bg)}
+.chip.mal{color:var(--mal);background:var(--mal-bg)}
+.chip.gris{color:var(--gris);background:var(--gris-bg)}
+.chip.sin::before{display:none}
+.codigo{font:700 15px var(--mono);letter-spacing:.04em}
+.buscador{display:flex;gap:8px;align-items:center}
+.buscador input{flex:1;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:16px}
+
+/* Listado de puertas */
+.lista{display:grid;gap:10px}
+.item{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;cursor:pointer;text-align:left;width:100%;font:inherit;color:inherit}
+.item:hover{border-color:var(--muted)}
+.item .tit{font-weight:600;overflow-wrap:anywhere}
+.item .sub{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.item .qr{width:38px;height:38px;display:grid;place-items:center;background:var(--negro);color:var(--amarillo);border-radius:6px;font:700 11px var(--mono)}
+
+/* Formularios */
+.campos{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px 14px}
+.campo{display:grid;gap:4px}
+.campo.full{grid-column:1/-1}
+.campo label{font-size:13px;font-weight:600}
+.campo input,.campo select,.campo textarea{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:16px;resize:vertical}
+.campo .pista{font-size:12px;color:var(--muted)}
+.grupo{border:1px solid var(--line);border-radius:8px;padding:14px;background:var(--surface);display:grid;gap:12px}
+.grupo>h3{font-size:17px}
+.checks{display:flex;flex-wrap:wrap;gap:8px}
+.checks label{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:20px;padding:6px 12px;font-size:14px;cursor:pointer;background:var(--surface)}
+.checks input{accent-color:var(--amarillo);width:16px;height:16px}
+
+/* Ficha */
+.ficha-h{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+.ficha-h h2{font-size:24px}
+.datos{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:12px 18px;margin:0}
+.datos div{min-width:0}
+.datos dt{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.datos dd{margin:0;overflow-wrap:anywhere}
+.fotos{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px}
+.foto{position:relative;aspect-ratio:4/3;border-radius:6px;overflow:hidden;border:1px solid var(--line);background:var(--surface-2)}
+.foto img{width:100%;height:100%;object-fit:cover;display:block}
+.foto button{position:absolute;top:4px;right:4px;border:0;background:rgba(28,24,23,.75);color:#fff;border-radius:4px;font-size:12px;padding:3px 7px;cursor:pointer}
+.pie-foto{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(transparent,rgba(0,0,0,.72));color:#fff;font-size:11px;line-height:1.3;padding:12px 6px 4px;pointer-events:none}
+.foto-rota{display:grid;place-items:center;width:100%;height:100%;font-size:12px;color:var(--muted);text-align:center;padding:8px;text-decoration:none}
+.linea{border-top:1px solid var(--line);padding-top:12px;margin-top:4px}
+.avisos{display:grid;gap:10px}
+.aviso{border:1px solid var(--line);border-radius:8px;padding:12px;background:var(--surface);display:grid;gap:8px}
+.aviso .cab{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* Etiquetas */
+.tabla-wrap{overflow-x:auto}
+table.tabla{width:100%;border-collapse:collapse;font-size:14px}
+table.tabla th{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}
+table.tabla td{padding:9px 8px;border-bottom:1px solid var(--line)}
+table.tabla tr:last-child td{border-bottom:0}
+
+/* Pública */
+.pub{min-height:100vh;background:var(--negro);color:#F2EFEC}
+.pub-in{max-width:520px;margin:0 auto;padding:24px 16px 60px;display:grid;gap:18px}
+.pub .tarjeta{background:#262221;border:1px solid #3A3533;border-radius:10px;padding:18px;display:grid;gap:12px}
+.pub h1{font-size:28px;color:#fff}
+.pub .estado-grande{display:flex;align-items:center;gap:12px;font-family:var(--cond);font-size:26px}
+.pub .bola{width:18px;height:18px;border-radius:50%;flex:none}
+.pub dt{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.07em;color:#A49E99}
+.pub dd{margin:0}
+.pub .btn{background:var(--amarillo);border-color:var(--amarillo);color:#1C1817;width:100%;padding:12px;font-size:16px}
+.pub .btn.sec{background:transparent;color:#F2EFEC;border-color:#4A4442}
+.pub .pie{font-size:13px;color:#A49E99;text-align:center}
+.pub .campo input,.pub .campo textarea{background:#1C1817;border-color:#3A3533;color:#F2EFEC}
+
+/* Impresión de etiquetas */
+#hoja{background:#fff;color:#000}
+@media print{
+  body{background:#fff}
+  .no-print{display:none!important}
+  #hoja{padding:0}
+}
+.hoja-grid{display:grid;grid-template-columns:repeat(auto-fill,50mm);gap:5mm;background:#fff;padding:5mm}
+.etq{width:50mm;height:65mm;border:.2mm dashed #bbb;padding:3mm;display:flex;flex-direction:column;align-items:center;justify-content:space-between;background:#fff;color:#000;text-align:center}
+.etq .logo{font-family:var(--cond);font-weight:700;font-size:5mm;letter-spacing:.02em}
+.etq .cod{font-family:var(--mono);font-weight:700;font-size:6mm;letter-spacing:.05em}
+.etq .url{font-family:var(--sans);font-size:2.6mm;color:#333}
+.etq svg{width:30mm;height:30mm}
+
+dialog{border:1px solid var(--line);border-radius:10px;padding:0;background:var(--surface);color:var(--ink);width:min(600px,calc(100% - 24px));box-shadow:var(--sombra)}
+dialog::backdrop{background:rgba(20,18,17,.55)}
+.dlg{display:grid;gap:14px;padding:18px 20px}
+.dlg h3{font-size:20px}
+.dlg .pie{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
+.err{color:var(--mal);font-size:14px;margin:0;min-height:1em}
+.aviso-caja{background:var(--aviso-bg);color:var(--ink);border:1px solid color-mix(in srgb,var(--aviso) 35%,transparent);border-radius:6px;padding:10px 12px;font-size:14px}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--negro);color:#fff;padding:11px 16px;border-radius:6px;font-size:14px;box-shadow:var(--sombra);z-index:20;max-width:calc(100% - 24px)}
+.login{max-width:380px;margin:8vh auto 0;display:grid;gap:14px}
+.login .panel{display:grid;gap:12px}
+.cargando{padding:40px 0;text-align:center;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<!-- Vista pública (QR) -->
+<div id="publica" class="pub" hidden><div class="pub-in" id="publica-in"></div></div>
+
+<!-- App -->
+<div id="app-root" hidden>
+  <header class="top">
+    <div class="top-in">
+      <span class="marca"><i></i>ARIZA <b>SAT</b></span>
+      <span class="sp"></span>
+      <span class="quien" id="quien"></span>
+      <button class="btn sm plana" id="btn-salir" style="color:#fff;border-color:#4A4442;background:transparent">Salir</button>
+    </div>
+  </header>
+  <nav class="tabs"><div class="tabs-in" id="tabs">
+    <button data-tab="puertas" role="tab">Puertas</button>
+    <button data-tab="avisos" role="tab">Avisos</button>
+    <button data-tab="etiquetas" role="tab">Etiquetas</button>
+    <button data-tab="equipo" role="tab" hidden>Equipo</button>
+  </div></nav>
+  <main class="wrap" id="vista"></main>
+</div>
+
+<!-- Login -->
+<form id="login" class="login" hidden>
+  <div class="panel">
+    <h2 style="font-size:22px">Entrar en ARIZA SAT</h2>
+    <div class="campo"><label for="l-mail">Correo</label><input id="l-mail" type="email" autocomplete="username" inputmode="email"></div>
+    <div class="campo"><label for="l-pass">Contraseña</label><input id="l-pass" type="password" autocomplete="current-password"></div>
+    <p class="err" id="l-err" role="alert"></p>
+    <button class="btn pri" type="submit" id="l-go">Entrar</button>
+    <button class="btn plana sm" type="button" id="l-olvido">He olvidado mi contraseña</button>
+  </div>
+</form>
+
+<div id="arranque" class="cargando">Cargando…</div>
+<dialog id="dlg"><form id="dlg-form" class="dlg" novalidate></form></dialog>
+<div id="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+/* ================= Configuración ================= */
+const SUPA_URL = 'https://dgxoiuvuidawovpoewwl.supabase.co';
+const SUPA_KEY = 'sb_publishable_26cGPRb06Y3tNEU0Hw6Zrw_rF3gquaN';
+const BASE_QR  = 'https://arizapa.es/#';
+const ADMIN    = 'arizapuertasautomaticas@gmail.com';
+
+const sb = createClient(SUPA_URL, SUPA_KEY);
+
+/* ================= Catálogos ================= */
+const TIPOS = ['Corredera','Batiente','Seccional','Enrollable','Basculante','Peatonal automática','Barrera','Otro'];
+const USOS = ['Residencial','Industrial','Retail'];
+const CLIENTES = ['Particular','Comunidad','Empresa de servicios','Industria','Administración'];
+const SEGURIDAD = ['Fotocélulas','Banda de seguridad','Semáforo','Baliza','Desbloqueo manual','Pulsador de emergencia','Protección de dedos','Limitador de fuerza'];
+const ESTADOS = {
+  operativa:        {t:'Operativa',              c:'ok',    b:'#2E7D46'},
+  aviso_recibido:   {t:'Aviso recibido',         c:'aviso', b:'#E3AC4F'},
+  tecnico_asignado: {t:'Técnico asignado',       c:'aviso', b:'#E3AC4F'},
+  en_reparacion:    {t:'En reparación',          c:'aviso', b:'#E3AC4F'},
+  esperando_repuesto:{t:'Esperando repuesto',    c:'aviso', b:'#E3AC4F'},
+  fuera_servicio:   {t:'Fuera de servicio',      c:'mal',   b:'#EE5A48'},
+  mantenimiento:    {t:'Mantenimiento pendiente',c:'gris',  b:'#A49E99'}
+};
+const TIPOS_DOC = ['Manual de instrucciones','Desbloqueo de emergencia','Instrucciones de uso','Esquema eléctrico','Declaración CE','Certificado','Informe técnico','Presupuesto','Fotos de obra','Otro'];
+const EST_AVISO = {recibido:'Recibido', asignado:'Asignado', en_curso:'En curso', repuesto:'Esperando repuesto', cerrado:'Cerrado'};
+
+/* ================= Utilidades ================= */
+const $ = s => document.querySelector(s);
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const hoy = () => new Date().toISOString().slice(0,10);
+const fechaCorta = s => { if(!s) return '—'; const d=new Date(s); return d.toLocaleDateString('es-ES',{day:'numeric',month:'short',year:'numeric'}); };
+const fechaHora = s => { if(!s) return '—'; const d=new Date(s); return d.toLocaleDateString('es-ES',{day:'numeric',month:'short'})+' '+d.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}); };
+const dias = s => Math.round((new Date(s)-new Date())/86400000);
+function relativo(s){ const n=dias(s); if(n===0)return 'hoy'; if(n===1)return 'mañana'; if(n===-1)return 'ayer'; return n>0?('en '+n+' días'):('hace '+(-n)+' días'); }
+let toastT=0;
+function toast(m){ const t=$('#toast'); t.textContent=m; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,3400); }
+function fallo(e){ console.error(e); toast(e && e.message ? 'Error: '+e.message : 'No se pudo completar la operación.'); }
+function armar(btn,texto){ if(btn.dataset.armado) return true; btn.dataset.armado='1'; btn.dataset.orig=btn.textContent; btn.textContent=texto; btn.classList.add('armado');
+  setTimeout(()=>{ if(btn.isConnected&&btn.dataset.armado){ btn.textContent=btn.dataset.orig; delete btn.dataset.armado; btn.classList.remove('armado'); } },4000); return false; }
+function token(){ const abc='ACDEFHJKLMNPQRTUVWXY3479'; let s=''; for(let i=0;i<4;i++) s+=abc[Math.floor(Math.random()*abc.length)]; return s; }
+function estadoChip(e){ const x=ESTADOS[e]||ESTADOS.operativa; return '<span class="chip '+x.c+'">'+x.t+'</span>'; }
+
+/* ================= Estado ================= */
+const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etiquetas:[], equipo:[], ajustes:{}, ficha:null, cargando:true, busca:'', filtroTec:'' };
+/* Listas que el administrador puede cambiar desde la app; si no hay nada guardado, valen las de fábrica. */
+const lista = (clave, defecto) => (Array.isArray(S.ajustes[clave]) && S.ajustes[clave].length) ? S.ajustes[clave] : defecto;
+const esAdmin = () => !!(S.perfil && S.perfil.rol === 'admin');
+const activos = () => S.equipo.filter(t => t.activo);
+const nombreTec = id => { const t = S.equipo.find(x => x.id === id); return t ? (t.nombre || '') : ''; };
+
+/* ================= Vista pública por QR ================= */
+function codigoDeURL(){
+  const h = (location.hash||'').replace(/^#/,'').trim();
+  const m = h.match(/^([A-Z]{2}-?\d{3,6})-?([A-Z0-9]{4})$/i);
+  if (!m) return null;
+  const cod = m[1].toUpperCase().replace(/^([A-Z]{2})-?/,'$1-');
+  return { codigo: cod, token: m[2].toUpperCase() };
+}
+async function vistaPublica(ref){
+  $('#arranque').hidden = true;
+  $('#publica').hidden = false;
+  const cont = $('#publica-in');
+  cont.innerHTML = '<p class="pie">Consultando…</p>';
+  const { data, error } = await sb.rpc('ficha_publica', { p_codigo: ref.codigo, p_token: ref.token });
+  if (error || !data){
+    cont.innerHTML = '<div class="tarjeta"><h1>Etiqueta no encontrada</h1><p>Esta etiqueta todavía no está asignada a ninguna puerta, o el código no es correcto.</p><p class="mini">Si eres técnico de Ariza, entra en la aplicación para darla de alta.</p><a class="btn sec" href="./" style="text-align:center;text-decoration:none;display:block">Ir a ARIZA SAT</a></div>';
+    return;
+  }
+  const est = ESTADOS[data.estado] || ESTADOS.operativa;
+  let h = '<div class="tarjeta">';
+  h += '<span class="marca" style="font-size:20px"><i></i>ARIZA <b>puertas automáticas</b></span>';
+  h += '<h1>Puerta '+esc(data.codigo)+'</h1>';
+  h += '<div class="estado-grande"><span class="bola" style="background:'+est.b+'"></span>'+est.t+'</div>';
+  if (data.aviso){
+    const a = data.aviso;
+    h += '<p style="margin:0">Aviso de '+(a.tipo==='mantenimiento'?'mantenimiento':'avería')+' registrado el '+fechaCorta(a.creado)+'. Situación: <b>'+(EST_AVISO[a.estado]||a.estado)+'</b>'+
+         (a.fecha_prevista ? '. Visita prevista para el '+fechaCorta(a.fecha_prevista) : '')+'.</p>';
+  } else if (data.estado==='operativa'){
+    h += '<p style="margin:0">No hay ningún aviso abierto para esta puerta.</p>';
+  }
+  h += '</div>';
+
+  h += '<div class="tarjeta"><dl class="datos" style="gap:12px">';
+  const filas = [['Tipo',data.tipo],['Uso',data.uso],['Marca',data.marca],['Modelo',data.modelo],['Ubicación',data.ubicacion],
+                 ['Última revisión',data.ultima_revision?fechaCorta(data.ultima_revision):''],['Próxima revisión',data.proxima_revision?fechaCorta(data.proxima_revision):'']];
+  filas.forEach(f=>{ if(f[1]) h+='<div><dt>'+f[0]+'</dt><dd>'+esc(f[1])+'</dd></div>'; });
+  h += '</dl></div>';
+
+  const docs = data.documentos || [];
+  if (docs.length){
+    h += '<div class="tarjeta"><h2 style="font-size:20px">Documentos de esta puerta</h2>'+
+         '<p class="mini" style="margin:0;color:#A49E99">Desbloqueo de emergencia e instrucciones de uso.</p>'+
+         docs.map(d => '<a class="btn sec" style="text-decoration:none;display:block;text-align:center" target="_blank" rel="noopener" href="'+
+            esc(SUPA_URL + '/storage/v1/object/public/publicos/' + String(d.ruta).split('/').map(encodeURIComponent).join('/'))+'">'+esc(d.nombre)+'</a>').join('')+
+         '</div>';
+  }
+  h += '<div class="tarjeta"><h2 style="font-size:20px">¿Ves algo que no funciona?</h2>'+
+       '<div class="campo"><label for="p-desc">Cuéntanos qué pasa</label><textarea id="p-desc" rows="3" maxlength="500" placeholder="Ej.: la puerta no cierra del todo y hace ruido"></textarea></div>'+
+       '<div class="campo"><label for="p-cont">Tu teléfono o correo (opcional)</label><input id="p-cont" type="text" maxlength="120"></div>'+
+       '<p class="err" id="p-err"></p><button class="btn" id="p-enviar">Dar aviso de avería</button></div>';
+  h += '<p class="pie">Ariza Puertas y Automatismos · Instalación, mantenimiento y reparación</p>';
+  cont.innerHTML = h;
+
+  $('#p-enviar').addEventListener('click', async () => {
+    const d = $('#p-desc').value.trim();
+    if (d.length < 5){ $('#p-err').textContent = 'Escribe brevemente qué le pasa a la puerta.'; return; }
+    $('#p-err').textContent=''; $('#p-enviar').disabled = true; $('#p-enviar').textContent = 'Enviando…';
+    const { data: r, error: e } = await sb.rpc('aviso_publico', { p_codigo: ref.codigo, p_token: ref.token, p_descripcion: d, p_contacto: $('#p-cont').value.trim() });
+    if (e || !r || !r.ok){ $('#p-err').textContent='No se pudo enviar el aviso. Llama al teléfono de Ariza.'; $('#p-enviar').disabled=false; $('#p-enviar').textContent='Dar aviso de avería'; return; }
+    vistaPublica(ref);
+    toast('Aviso enviado. Gracias.');
+  });
+}
+
+/* ================= Datos ================= */
+async function cargar(){
+  S.cargando = true; pintar();
+  const [p, a, e, t, j] = await Promise.all([
+    sb.from('puertas').select('*').order('codigo'),
+    sb.from('avisos').select('*').order('creado', {ascending:false}),
+    sb.from('etiquetas').select('*').order('codigo'),
+    sb.from('perfiles').select('*').order('nombre'),
+    sb.from('ajustes').select('*')
+  ]);
+  if (p.error) fallo(p.error); else S.puertas = p.data || [];
+  if (a.error) fallo(a.error); else S.avisos = a.data || [];
+  if (e.error) fallo(e.error); else S.etiquetas = e.data || [];
+  if (!t.error) S.equipo = t.data || [];
+  if (!j.error){ S.ajustes = {}; (j.data || []).forEach(x => { S.ajustes[x.clave] = x.valor; }); }
+  S.cargando = false; pintar();
+}
+const puertaDe = id => S.puertas.find(x => x.id === id);
+const avisosDe = id => S.avisos.filter(x => x.puerta_id === id);
+const abiertoDe = id => avisosDe(id).find(x => !x.cerrado);
+
+/* ================= Arranque y sesión ================= */
+async function arranque(){
+  const ref = codigoDeURL();
+  if (ref){ await vistaPublica(ref); return; }
+  sb.auth.onAuthStateChange((_ev, sesion) => entrar(sesion));
+  const { data } = await sb.auth.getSession();
+  entrar(data.session);
+}
+async function entrar(sesion){
+  $('#arranque').hidden = true;
+  S.user = sesion ? sesion.user : null;
+  if (!S.user){ $('#login').hidden = false; $('#app-root').hidden = true; return; }
+  $('#login').hidden = true; $('#app-root').hidden = false;
+  $('#quien').innerHTML = '<span class="dot"></span>' + esc(S.user.email);
+  // perfil
+  let { data: per } = await sb.from('perfiles').select('*').eq('id', S.user.id).maybeSingle();
+  if (!per){
+    const nombre = (S.user.email||'').split('@')[0];
+    const ins = await sb.from('perfiles').insert({ id:S.user.id, nombre, rol: (S.user.email===ADMIN?'admin':'tecnico') }).select().maybeSingle();
+    per = ins.data || { id:S.user.id, nombre, rol:(S.user.email===ADMIN?'admin':'tecnico'), activo:true };
+  }
+  S.perfil = per;
+  $('#quien').innerHTML = '<span class="dot"></span>' + esc(per.nombre || S.user.email) + (per.rol==='admin' ? ' · admin' : '');
+  $('#tabs button[data-tab="equipo"]').hidden = per.rol !== 'admin';
+  await cargar();
+}
+const yo = () => (S.perfil && S.perfil.nombre) || (S.user && S.user.email) || 'Técnico';
+
+/* ================= Render ================= */
+const raiz = $('#vista');
+let pend = 0;
+function pintar(){ if (pend) return; pend = requestAnimationFrame(()=>{ pend=0; render(); }); }
+function render(){
+  const act = document.activeElement, keep = act && act.id && raiz.contains(act)
+    ? {id:act.id, v:act.value, s:act.selectionStart, e:act.selectionEnd, txt:/^(text|email|password|search|number|date)$/.test(act.type)||act.tagName==='TEXTAREA'} : null;
+  document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab===S.tab ? 'true':'false'));
+  let h = '';
+  if (S.cargando) h = '<p class="cargando">Cargando datos…</p>';
+  else if (S.ficha) h = vistaFicha(S.ficha);
+  else if (S.tab === 'avisos') h = vistaAvisos();
+  else if (S.tab === 'etiquetas') h = vistaEtiquetas();
+  else if (S.tab === 'equipo') h = vistaEquipo();
+  else h = vistaPuertas();
+  raiz.innerHTML = h;
+  if (keep){ const el = document.getElementById(keep.id); if (el){ if(keep.txt) el.value = keep.v; el.focus(); if(keep.txt){ try{ el.setSelectionRange(keep.s,keep.e); }catch(_){} } } }
+}
+
+/* ---- Puertas ---- */
+function vistaPuertas(){
+  const q = S.busca.toLowerCase();
+  const lista = S.puertas.filter(p => !q || [p.codigo,p.cliente,p.direccion,p.ubicacion,p.marca,p.modelo,p.tipo].join(' ').toLowerCase().includes(q));
+  let h = '<div class="stack">';
+  h += '<div class="fila"><div class="buscador sp"><input id="busca" type="search" placeholder="Buscar por código, cliente, dirección o marca" value="'+esc(S.busca)+'" data-act="busca"></div>'+
+       '<button class="btn pri" data-act="puerta-nueva">Nueva puerta</button></div>';
+  const libres = S.etiquetas.filter(e => !S.puertas.some(p => p.codigo === e.codigo)).length;
+  h += '<p class="mini" style="margin:0">'+S.puertas.length+' puertas dadas de alta · '+libres+' etiquetas libres en la furgoneta</p>';
+  if (!lista.length) h += '<div class="panel"><p class="muted" style="margin:0">'+(S.puertas.length?'Ninguna puerta coincide con la búsqueda.':'Todavía no hay puertas. Genera etiquetas y da de alta la primera.')+'</p></div>';
+  else {
+    h += '<div class="lista">';
+    lista.forEach(p => {
+      const av = abiertoDe(p.id);
+      h += '<button class="item" data-act="abrir" data-id="'+p.id+'">'+
+           '<span class="qr">'+esc((p.codigo||'—').replace(/^[A-Z]+-/,''))+'</span>'+
+           '<span><span class="tit">'+esc(p.cliente||'Sin cliente')+'</span><span class="sub">'+esc([p.direccion,p.ubicacion].filter(Boolean).join(' · ')||'Sin dirección')+'</span>'+
+           '<span class="sub">'+esc([p.tipo,p.marca,p.modelo].filter(Boolean).join(' · '))+'</span></span>'+
+           '<span>'+estadoChip(p.estado)+(av?'<span class="mini" style="display:block;text-align:right;margin-top:4px">'+(EST_AVISO[av.estado]||'')+'</span>':'')+'</span>'+
+           '</button>';
+    });
+    h += '</div>';
+  }
+  h += '</div>';
+  return h;
+}
+
+function vistaFicha(id){
+  const p = puertaDe(id);
+  if (!p) return '<p class="cargando">Puerta no encontrada.</p>';
+  const et = S.etiquetas.find(e => e.codigo === p.codigo);
+  const av = avisosDe(p.id), abierto = av.find(a => !a.cerrado);
+  let h = '<div class="stack">';
+  h += '<div class="fila"><button class="btn sm plana" data-act="volver">‹ Volver</button><span class="sp"></span>'+
+       '<button class="btn sm" data-act="puerta-editar" data-id="'+p.id+'">Editar ficha</button></div>';
+
+  h += '<div class="panel"><div class="ficha-h"><h2>'+esc(p.cliente||'Sin cliente')+'</h2><span class="codigo">'+esc(p.codigo||'')+'</span><span class="sp"></span>'+estadoChip(p.estado)+'</div>'+
+       '<p class="mini" style="margin:6px 0 0">'+esc([p.direccion,p.ubicacion].filter(Boolean).join(' · '))+'</p>'+
+       '<div class="fila" style="margin-top:12px"><button class="btn sm" data-act="estado" data-id="'+p.id+'">Cambiar estado</button>'+
+       (et ? '<button class="btn sm plana" data-act="ver-qr" data-cod="'+esc(p.codigo)+'">Ver QR</button>' : '')+
+       '<button class="btn sm pri" data-act="aviso-nuevo" data-id="'+p.id+'">Nuevo aviso</button></div>'+
+       '<p class="mini" style="margin:10px 0 0">Estado desde '+fechaCorta(p.estado_desde)+'</p></div>';
+
+  h += '<div class="panel"><div class="panel-h"><h3>Ficha técnica</h3></div><dl class="datos">';
+  const d = [['Tipo',p.tipo],['Uso',p.uso],['Tipo de cliente',p.tipo_cliente],['Marca',p.marca],['Modelo',p.modelo],
+    ['Cuadro de maniobra',p.cuadro],['Motor',p.motor],['Año',p.anio],['Instalador',p.instalador],
+    ['Medidas',(p.ancho_mm||p.alto_mm)?((p.ancho_mm||'?')+' x '+(p.alto_mm||'?')+' mm'):''],['Peso hoja',p.peso_kg?(p.peso_kg+' kg'):''],
+    ['Última revisión',p.ultima_revision?fechaCorta(p.ultima_revision):''],['Próxima revisión',p.proxima_revision?(fechaCorta(p.proxima_revision)+' · '+relativo(p.proxima_revision)):'']];
+  d.forEach(x => { if (x[1]) h += '<div><dt>'+x[0]+'</dt><dd>'+esc(x[1])+'</dd></div>'; });
+  h += '</dl>';
+  if ((p.seguridad||[]).length) h += '<div class="linea"><dt class="eti">Seguridad instalada</dt><p style="margin:6px 0 0">'+esc((p.seguridad||[]).join(' · '))+'</p></div>';
+  if (p.notas) h += '<div class="linea"><dt class="eti">Observaciones</dt><p style="margin:6px 0 0">'+esc(p.notas)+'</p></div>';
+  h += '</div>';
+
+  h += '<div class="panel"><div class="panel-h"><h3>Fotos</h3><label class="btn sm">Añadir fotos<input type="file" accept="image/*" multiple hidden data-act="subir-foto" data-id="'+p.id+'"></label></div>'+
+       '<div class="fotos" id="fotos-'+p.id+'"><p class="mini" style="margin:0">Cargando fotos…</p></div></div>';
+
+  h += '<div class="panel"><div class="panel-h"><h3>Documentación</h3>'+
+       '<span class="fila"><select id="doc-tipo-'+p.id+'" style="padding:6px 9px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:14px">'+
+       lista('tipos_doc', TIPOS_DOC).map(t => '<option>'+esc(t)+'</option>').join('')+'</select>'+
+       '<label style="display:inline-flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="doc-pub-'+p.id+'" style="accent-color:var(--amarillo);width:16px;height:16px">Visible para el cliente</label>'+
+       '<label class="btn sm">Subir PDF<input type="file" accept="application/pdf,.pdf" multiple hidden data-act="subir-doc" data-id="'+p.id+'"></label></span></div>'+
+       '<div id="docs-'+p.id+'"><p class="mini" style="margin:0">Cargando documentación…</p></div>'+
+       '<p class="mini" style="margin:10px 0 0">Manuales, esquemas y certificados de esta puerta. Solo los ve el equipo, salvo los que marques como visibles para el cliente: esos aparecen al escanear el QR, pensados para el desbloqueo de emergencia y las instrucciones de uso.</p></div>';
+
+  h += '<div class="panel"><div class="panel-h"><h3>Avisos y trabajos</h3><span class="mini">'+av.length+' en total</span></div>';
+  if (!av.length) h += '<p class="muted" style="margin:0">Sin avisos registrados.</p>';
+  else {
+    h += '<div class="avisos">';
+    av.slice(0,20).forEach(a => {
+      h += '<div class="aviso"><div class="cab"><span class="chip '+(a.cerrado?'gris':'aviso')+'">'+(a.cerrado?'Cerrado':(EST_AVISO[a.estado]||a.estado))+'</span>'+
+           '<span class="mini">'+(a.tipo==='mantenimiento'?'Mantenimiento':'Avería')+' · '+fechaHora(a.creado)+' · '+(a.origen==='cliente'?'avisó el cliente':'interno')+'</span>'+
+           '<span class="sp"></span>'+
+           (a.cerrado ? '' : '<button class="btn sm" data-act="aviso-editar" data-id="'+a.id+'">Actualizar</button>')+'</div>'+
+           (a.descripcion ? '<p style="margin:0">'+esc(a.descripcion)+'</p>' : '')+
+           '<p class="mini" style="margin:0">'+[('Técnico: '+((a.tecnico_id?nombreTec(a.tecnico_id):a.tecnico)||'sin asignar')), a.fecha_prevista?('Previsto: '+fechaCorta(a.fecha_prevista)):'', a.contacto?('Contacto: '+a.contacto):''].filter(Boolean).map(esc).join(' · ')+'</p>'+
+           '</div>';
+    });
+    h += '</div>';
+  }
+  h += '</div></div>';
+  setTimeout(() => { pintarFotos(p.id); pintarDocs(p.id); }, 0);
+  return h;
+}
+
+/* ---- Avisos (todos) ---- */
+const claveFecha = a => (a.fecha_prevista || (a.creado || '').slice(0, 10) || '9999-12-31');
+const porFecha = (a, b) => claveFecha(a) < claveFecha(b) ? -1 : (claveFecha(a) > claveFecha(b) ? 1 : 0);
+
+function tarjetaAviso(a){
+  const p = puertaDe(a.puerta_id) || {};
+  const tec = a.tecnico_id ? nombreTec(a.tecnico_id) : (a.tecnico || '');
+  return '<div class="aviso"><div class="cab"><span class="chip '+(a.tipo==='mantenimiento'?'gris':'aviso')+'">'+(EST_AVISO[a.estado]||a.estado)+'</span>'+
+    '<b>'+esc(p.cliente||'Sin cliente')+'</b><span class="mini">'+esc(p.codigo||'')+' · '+esc(p.direccion||'')+'</span><span class="sp"></span>'+
+    '<button class="btn sm plana" data-act="abrir" data-id="'+a.puerta_id+'">Ver puerta</button>'+
+    '<button class="btn sm" data-act="aviso-editar" data-id="'+a.id+'">Actualizar</button></div>'+
+    (a.descripcion?'<p style="margin:0">'+esc(a.descripcion)+'</p>':'')+
+    '<p class="mini" style="margin:0">'+
+      (a.fecha_prevista ? ('Visita: '+fechaCorta(a.fecha_prevista)+' · '+relativo(a.fecha_prevista)+' · ') : '')+
+      'Avisado el '+fechaHora(a.creado)+
+      (tec ? (' · '+esc(tec)) : ' · <b>sin asignar</b>')+
+      (a.origen==='cliente'?' · avisó el cliente':'')+(a.contacto?(' · '+esc(a.contacto)):'')+
+    '</p></div>';
+}
+
+function vistaAvisos(){
+  const abiertos = S.avisos.filter(a => !a.cerrado);
+  const yoId = S.perfil ? S.perfil.id : null;
+  const mios = abiertos.filter(a => a.tecnico_id === yoId).sort(porFecha);
+  const resto = abiertos.filter(a => a.tecnico_id !== yoId)
+                        .filter(a => !S.filtroTec || (S.filtroTec === 'sin' ? !a.tecnico_id : a.tecnico_id === S.filtroTec))
+                        .sort(porFecha);
+  let h = '<div class="stack">';
+
+  h += '<div class="panel"><div class="panel-h"><h2>Mis avisos</h2><span class="mini">'+mios.length+'</span></div>';
+  if (!mios.length) h += '<p class="muted" style="margin:0">No tienes ningún aviso asignado ahora mismo.</p>';
+  else h += '<div class="avisos">'+mios.map(tarjetaAviso).join('')+'</div>';
+  h += '</div>';
+
+  h += '<div class="panel"><div class="panel-h"><h2>'+(esAdmin()?'Resto de avisos abiertos':'Otros avisos del equipo')+'</h2>'+
+       '<span class="sp"></span>'+
+       (esAdmin() ? '<select id="f-tec" data-act="filtro-tec" style="padding:6px 9px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);font-size:14px">'+
+          '<option value="">Todos los técnicos</option><option value="sin"'+(S.filtroTec==='sin'?' selected':'')+'>Sin asignar</option>'+
+          activos().map(t => '<option value="'+t.id+'"'+(S.filtroTec===t.id?' selected':'')+'>'+esc(t.nombre||'—')+'</option>').join('')+
+          '</select>' : '<span class="mini">'+resto.length+'</span>')+
+       '</div>';
+  if (!resto.length) h += '<p class="muted" style="margin:0">'+(abiertos.length?'Nada más abierto con ese filtro.':'No hay avisos abiertos. Todo en orden.')+'</p>';
+  else h += '<div class="avisos">'+resto.map(tarjetaAviso).join('')+'</div>';
+  h += '</div>';
+
+  const rev = S.puertas.filter(p => p.proxima_revision).sort((a,b)=>a.proxima_revision<b.proxima_revision?-1:1).slice(0,15);
+  h += '<div class="panel"><div class="panel-h"><h2>Próximas revisiones</h2></div>';
+  if (!rev.length) h += '<p class="muted" style="margin:0">Ninguna puerta tiene fecha de próxima revisión.</p>';
+  else {
+    h += '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Puerta</th><th>Cliente</th><th>Fecha</th><th></th></tr></thead><tbody>';
+    rev.forEach(p => {
+      const n = dias(p.proxima_revision);
+      h += '<tr><td class="num">'+esc(p.codigo||'')+'</td><td>'+esc(p.cliente||'')+'<span class="sub mini" style="display:block">'+esc(p.direccion||'')+'</span></td>'+
+           '<td class="num">'+fechaCorta(p.proxima_revision)+'<span class="mini" style="display:block;color:'+(n<0?'var(--mal)':'var(--muted)')+'">'+relativo(p.proxima_revision)+'</span></td>'+
+           '<td style="text-align:right"><button class="btn sm plana" data-act="abrir" data-id="'+p.id+'">Abrir</button></td></tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+  h += '</div></div>';
+  return h;
+}
+
+/* ---- Etiquetas ---- */
+function vistaEtiquetas(){
+  const usadas = new Set(S.puertas.map(p => p.codigo));
+  const libres = S.etiquetas.filter(e => !usadas.has(e.codigo));
+  let h = '<div class="stack">';
+  h += '<div class="fila"><div><h2 style="font-size:20px">Etiquetas con QR</h2><p class="mini" style="margin:2px 0 0">'+S.etiquetas.length+' generadas · '+libres.length+' sin asignar</p></div><span class="sp"></span>'+
+       '<button class="btn" data-act="hoja" '+(libres.length?'':'disabled')+'>Hoja para imprimir</button>'+
+       '<button class="btn pri" data-act="generar">Generar serie</button></div>';
+  h += '<div class="panel"><p class="mini" style="margin:0 0 10px">Cada etiqueta lleva el número visible y un QR con un código de seguridad. Genera la serie, mándala a imprimir y pega las etiquetas; después, al escanearlas, la app te ofrece dar de alta la puerta.</p>';
+  if (!S.etiquetas.length) h += '<p class="muted" style="margin:0">Todavía no has generado ninguna etiqueta.</p>';
+  else {
+    h += '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Código</th><th>Estado</th><th>Puerta</th><th></th></tr></thead><tbody>';
+    S.etiquetas.slice().reverse().slice(0,200).forEach(e => {
+      const p = S.puertas.find(x => x.codigo === e.codigo);
+      h += '<tr><td class="num">'+esc(e.codigo)+'</td>'+
+           '<td>'+(p?'<span class="chip gris sin">Asignada</span>':'<span class="chip ok sin">Libre</span>')+'</td>'+
+           '<td>'+(p?esc([p.cliente,p.direccion].filter(Boolean).join(' · ')):'<span class="muted">—</span>')+'</td>'+
+           '<td style="text-align:right"><button class="btn sm plana" data-act="ver-qr" data-cod="'+esc(e.codigo)+'">QR</button>'+
+           (p?'<button class="btn sm plana" data-act="abrir" data-id="'+p.id+'">Abrir</button>':'')+'</td></tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+  h += '</div></div>';
+  return h;
+}
+
+/* ---- Equipo ---- */
+function vistaEquipo(){
+  let h = '<div class="stack"><div class="panel"><div class="panel-h"><h2>Técnicos con acceso</h2><span class="mini">'+S.equipo.length+'</span></div>';
+  if (!S.equipo.length) h += '<p class="muted" style="margin:0">Todavía no hay técnicos dados de alta.</p>';
+  else {
+    h += '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Nombre</th><th>Rol</th><th>Estado</th><th></th></tr></thead><tbody>';
+    S.equipo.forEach(t => {
+      h += '<tr><td>'+esc(t.nombre||'—')+'</td><td>'+(t.rol==='admin'?'Administrador':'Técnico')+'</td>'+
+           '<td>'+(t.activo?'<span class="chip ok sin">Activo</span>':'<span class="chip gris sin">Sin acceso</span>')+'</td>'+
+           '<td style="text-align:right">'+(t.rol==='admin'?'':'<button class="btn sm" data-act="equipo-activo" data-id="'+t.id+'" data-v="'+(t.activo?'0':'1')+'">'+(t.activo?'Quitar acceso':'Dar acceso')+'</button>')+'</td></tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+  h += '</div>';
+  h += '<div class="panel"><div class="panel-h"><h3>Dar de alta a un técnico</h3></div>'+
+       '<div class="campos" style="max-width:640px">'+
+       '<div class="campo"><label for="t-nombre">Nombre</label><input id="t-nombre" type="text" placeholder="Ej.: Juan"></div>'+
+       '<div class="campo"><label for="t-mail">Correo</label><input id="t-mail" type="email" autocomplete="off" placeholder="juan@correo.com"></div>'+
+       '<div class="campo"><label for="t-pass">Contraseña provisional</label><input id="t-pass" type="text" autocomplete="off" placeholder="Mínimo 6 caracteres"></div>'+
+       '<div class="campo" style="align-content:end"><button class="btn pri" data-act="equipo-alta">Dar de alta</button></div>'+
+       '</div><p class="err" id="t-err" role="alert" style="margin:10px 0 0"></p>'+
+       '<p class="mini" style="margin:8px 0 0">Dale la contraseña en persona. Él puede cambiarla desde la pantalla de entrada, con «He olvidado mi contraseña».</p></div>';
+  h += panelLista('seguridad', 'Elementos de seguridad', SEGURIDAD,
+        'Es la lista de casillas que sale al dar de alta o editar una puerta. Cada técnico puede añadir uno suelto en una puerta concreta sin tocar esta lista.');
+  h += panelLista('tipos_doc', 'Tipos de documento', TIPOS_DOC,
+        'Las opciones del desplegable al subir un PDF a una puerta.');
+  h += panelLista('tipos', 'Tipos de puerta', TIPOS, 'Desplegable «Tipo» de la ficha.');
+  h += '</div>';
+  return h;
+}
+
+/* Lista editable (añadir, quitar, ordenar) guardada en la tabla ajustes */
+function panelLista(clave, titulo, defecto, ayuda){
+  const arr = lista(clave, defecto);
+  let h = '<div class="panel"><div class="panel-h"><h3>'+esc(titulo)+'</h3><span class="mini">'+arr.length+'</span></div>';
+  h += '<div class="lista-simple">';
+  arr.forEach((s, i) => {
+    h += '<div class="fila" style="padding:6px 0;border-bottom:1px solid var(--line)">'+
+         '<span class="sp">'+esc(s)+'</span>'+
+         '<button class="btn sm plana" data-act="lista-subir" data-clave="'+clave+'" data-i="'+i+'"'+(i===0?' disabled':'')+'>↑</button>'+
+         '<button class="btn sm plana" data-act="lista-bajar" data-clave="'+clave+'" data-i="'+i+'"'+(i===arr.length-1?' disabled':'')+'>↓</button>'+
+         '<button class="btn sm" data-act="lista-quitar" data-clave="'+clave+'" data-i="'+i+'">Quitar</button></div>';
+  });
+  h += '</div><span class="fila" style="margin-top:10px"><input id="nuevo-'+clave+'" type="text" placeholder="Escribe el elemento nuevo" style="flex:1">'+
+       '<button class="btn pri" data-act="lista-anadir" data-clave="'+clave+'">Añadir</button></span>';
+  h += '<p class="mini" style="margin:8px 0 0">'+esc(ayuda)+'</p></div>';
+  return h;
+}
+
+/* ================= Fotos ================= */
+async function pintarFotos(puertaId){
+  const cont = document.getElementById('fotos-'+puertaId);
+  if (!cont) return;
+  const { data, error } = await sb.from('fotos').select('*').eq('puerta_id', puertaId).order('creado', {ascending:false});
+  if (error){ cont.innerHTML = '<p class="mini">No se pudieron cargar las fotos.</p>'; return; }
+  if (!data.length){ cont.innerHTML = '<p class="mini" style="margin:0">Sin fotos todavía.</p>'; return; }
+  const urls = await Promise.all(data.map(f => sb.storage.from('fotos').createSignedUrl(f.ruta, 3600)));
+  cont.innerHTML = data.map((f,i) => {
+    const u = urls[i] && urls[i].data ? urls[i].data.signedUrl : '';
+    FOTOS[f.id] = { url:u, autor:f.autor||'', creado:f.creado, ruta:f.ruta, puerta:puertaId };
+    return '<div class="foto">'+
+      '<img src="'+esc(u)+'" alt="Foto de la puerta" loading="lazy" data-act="foto-ver" data-id="'+f.id+'" style="cursor:zoom-in" '+
+        'onerror="this.replaceWith(Object.assign(document.createElement(\'a\'),{href:this.src,target:\'_blank\',rel:\'noopener\',className:\'foto-rota\',textContent:\'Foto guardada · abrir\'}))">'+
+      '<span class="pie-foto">'+esc([f.autor||'', f.creado?fechaCorta(f.creado):''].filter(Boolean).join(' · '))+'</span>'+
+      '<button data-act="foto-borrar" data-id="'+f.id+'" data-ruta="'+esc(f.ruta)+'" data-puerta="'+puertaId+'">Borrar</button></div>';
+  }).join('');
+}
+const FOTOS = {};
+function dlgFoto(id){
+  const f = FOTOS[id];
+  if (!f) return;
+  abrirDlg('<h3>Foto de la puerta</h3>'+
+    '<div style="background:#000;border-radius:8px;display:grid;place-items:center;max-height:70vh;overflow:auto">'+
+    '<img src="'+esc(f.url)+'" alt="Foto de la puerta" style="max-width:100%;height:auto;display:block">'+
+    '</div>'+
+    '<p class="mini" style="margin:10px 0 0">'+esc([f.autor?('Subida por '+f.autor):'', f.creado?fechaHora(f.creado):''].filter(Boolean).join(' · '))+'</p>'+
+    '<div class="pie"><a class="btn plana" href="'+esc(f.url)+'" target="_blank" rel="noopener" style="text-decoration:none">Abrir aparte</a>'+
+    '<span class="sp"></span><button type="button" class="btn" data-cerrar>Cerrar</button></div>', null);
+}
+async function subirFotos(puertaId, ficheros){
+  let n = 0, tal = 0;
+  for (const file of ficheros){
+    const esImagen = file.type.startsWith('image/') || /\.(jpe?g|png|heic|heif|webp|gif|tiff?)$/i.test(file.name||'');
+    if (!esImagen) continue;
+    try {
+      let blob, tipo = 'image/jpeg', ext = 'jpg';
+      try {
+        blob = await reducir(file);                      // caso normal: se reduce a 1600 px
+      } catch(_){
+        if (file.size > 25*1024*1024) throw new Error('La foto «'+(file.name||'')+'» pesa demasiado (más de 25 MB).');
+        blob = file;                                     // formatos que el navegador no sabe procesar (HEIC del iPhone): se sube tal cual
+        tipo = file.type || 'application/octet-stream';
+        ext = ((file.name||'').split('.').pop() || 'jpg').toLowerCase().slice(0,5);
+        tal++;
+      }
+      const ruta = puertaId+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'.'+ext;
+      const { error } = await sb.storage.from('fotos').upload(ruta, blob, { contentType: tipo });
+      if (error) throw error;
+      await sb.from('fotos').insert({ puerta_id: puertaId, ruta, autor: yo() });
+      n++;
+    } catch(e){ fallo(e); }
+  }
+  if (n) toast(n === 1 ? 'Foto subida.' : n+' fotos subidas.');
+  if (tal) toast(tal+(tal===1?' foto se ha guardado en su formato original (HEIC): se ve desde el iPhone y con «abrir».':' fotos se han guardado en su formato original (HEIC).'));
+  pintarFotos(puertaId);
+}
+function reducir(file, max=1600, calidad=0.82){
+  return new Promise((res, rej) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const r = Math.min(1, max/Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width*r); c.height = Math.round(img.height*r);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      c.toBlob(b => b ? res(b) : rej(new Error('No se pudo procesar la imagen')), 'image/jpeg', calidad);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Imagen no válida')); };
+    img.src = url;
+  });
+}
+
+/* ================= Documentación ================= */
+async function pintarDocs(puertaId){
+  const cont = document.getElementById('docs-'+puertaId);
+  if (!cont) return;
+  const { data, error } = await sb.from('documentos').select('*').eq('puerta_id', puertaId).order('creado', {ascending:false});
+  if (error){ cont.innerHTML = '<p class="mini" style="margin:0">No se pudo cargar la documentación.</p>'; return; }
+  if (!data.length){ cont.innerHTML = '<p class="mini" style="margin:0">Sin documentos todavía.</p>'; return; }
+  const urls = await Promise.all(data.map(d => d.publico
+    ? Promise.resolve({ data: { signedUrl: urlPublica(d.ruta) } })
+    : sb.storage.from('documentos').createSignedUrl(d.ruta, 3600)));
+  cont.innerHTML = '<div class="tabla-wrap"><table class="tabla"><tbody>' + data.map((d,i) => {
+    const u = urls[i] && urls[i].data ? urls[i].data.signedUrl : '';
+    return '<tr><td><b style="font-weight:600">'+esc(d.nombre)+'</b>'+(d.publico?' <span class="chip ok sin" style="vertical-align:2px">Visible para el cliente</span>':'')+
+           '<span class="sub">'+esc(d.tipo||'')+' · '+fechaCorta(d.creado)+(d.autor?(' · '+esc(d.autor)):'')+'</span></td>'+
+           '<td style="text-align:right;white-space:nowrap"><a class="btn sm" href="'+esc(u)+'" target="_blank" rel="noopener">Abrir</a> '+
+           '<button class="btn sm plana" data-act="doc-visible" data-id="'+d.id+'" data-puerta="'+puertaId+'">'+(d.publico?'Ocultar al cliente':'Mostrar al cliente')+'</button> '+
+           '<button class="btn sm plana" data-act="doc-borrar" data-id="'+d.id+'" data-ruta="'+esc(d.ruta)+'" data-bucket="'+(d.publico?'publicos':'documentos')+'" data-puerta="'+puertaId+'">Borrar</button></td></tr>';
+  }).join('') + '</tbody></table></div>';
+}
+function urlPublica(ruta){ return SUPA_URL + '/storage/v1/object/public/publicos/' + ruta.split('/').map(encodeURIComponent).join('/'); }
+async function subirDocs(puertaId, ficheros, tipo, publico){
+  const bucket = publico ? 'publicos' : 'documentos';
+  for (const file of ficheros){
+    try {
+      if (file.size > 20*1024*1024) throw new Error('El archivo "'+file.name+'" pasa de 20 MB');
+      const limpio = file.name.replace(/[^A-Za-z0-9._-]/g,'_');
+      const ruta = puertaId+'/'+Date.now()+'-'+limpio;
+      const { error } = await sb.storage.from(bucket).upload(ruta, file, { contentType: file.type || 'application/pdf' });
+      if (error) throw error;
+      await sb.from('documentos').insert({ puerta_id: puertaId, nombre: file.name, tipo, ruta, autor: yo(), publico: !!publico, bucket });
+    } catch(e){ fallo(e); }
+  }
+  toast('Documentación subida.');
+  pintarDocs(puertaId);
+}
+async function cambiarVisibilidad(docId, puertaId){
+  try {
+    const { data: d, error: e1 } = await sb.from('documentos').select('*').eq('id', docId).maybeSingle();
+    if (e1 || !d) throw (e1 || new Error('Documento no encontrado'));
+    const origen = d.publico ? 'publicos' : 'documentos';
+    const destino = d.publico ? 'documentos' : 'publicos';
+    const { data: fichero, error: e2 } = await sb.storage.from(origen).download(d.ruta);
+    if (e2) throw e2;
+    const { error: e3 } = await sb.storage.from(destino).upload(d.ruta, fichero, { contentType: fichero.type || 'application/pdf', upsert: true });
+    if (e3) throw e3;
+    await sb.storage.from(origen).remove([d.ruta]);
+    const { error: e4 } = await sb.from('documentos').update({ publico: !d.publico, bucket: destino }).eq('id', docId);
+    if (e4) throw e4;
+    toast(d.publico ? 'Ya no lo ve el cliente.' : 'Ahora el cliente lo ve al escanear el QR.');
+    pintarDocs(puertaId);
+  } catch(err){ fallo(err); }
+}
+
+/* ================= QR ================= */
+function svgQR(texto, tam){
+  if (typeof qrcode === 'undefined') return '<p class="mini">No se pudo cargar el generador de códigos QR.</p>';
+  const q = qrcode(0, 'Q'); q.addData(texto); q.make();
+  return q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }).replace('<svg', '<svg style="width:'+tam+';height:'+tam+'"');
+}
+function enlaceQR(codigo){
+  const e = S.etiquetas.find(x => x.codigo === codigo);
+  return BASE_QR + (codigo.replace('-','')) + (e ? e.token : '');
+}
+
+/* ================= Diálogos ================= */
+const dlg = $('#dlg'), dlgForm = $('#dlg-form');
+let alGuardar = null;
+function abrirDlg(html, guardar){ dlgForm.innerHTML = html; alGuardar = guardar; dlg.showModal(); const f = dlgForm.querySelector('input,select,textarea'); if (f) f.focus(); }
+function cerrarDlg(){ dlg.close(); alGuardar = null; }
+dlgForm.addEventListener('submit', e => { e.preventDefault(); if (alGuardar) alGuardar(); });
+dlgForm.addEventListener('click', e => { const b = e.target.closest('[data-cerrar]'); if (b) cerrarDlg(); });
+const val = id => { const e = document.getElementById(id); return e ? e.value.trim() : ''; };
+const setErr = m => { const e = dlgForm.querySelector('.err'); if (e) e.textContent = m; };
+const opts = (arr, sel) => ['<option value=""></option>'].concat(arr.map(o => '<option'+(o===sel?' selected':'')+'>'+esc(o)+'</option>')).join('');
+const casillaSeg = (s, marcado) => '<label><input type="checkbox" class="f-seg" value="'+esc(s)+'"'+(marcado?' checked':'')+'>'+esc(s)+'</label>';
+async function guardarLista(clave, arr){
+  const { error } = await sb.from('ajustes').upsert({ clave, valor: arr, actualizado: new Date().toISOString() }, { onConflict:'clave' });
+  if (error) throw error;
+  S.ajustes[clave] = arr;
+}
+
+function dlgPuerta(id){
+  const p = id ? puertaDe(id) : null;
+  const usadas = new Set(S.puertas.filter(x => !p || x.id !== p.id).map(x => x.codigo));
+  const libres = S.etiquetas.filter(e => !usadas.has(e.codigo)).map(e => e.codigo);
+  const d = p || { estado:'operativa', seguridad:[] };
+  let h = '<h3>'+(p ? 'Editar puerta '+esc(p.codigo||'') : 'Nueva puerta')+'</h3>';
+  h += '<div class="grupo"><h3>Identificación</h3><div class="campos">'+
+    '<div class="campo"><label for="f-cod">Etiqueta / código</label><select id="f-cod">'+opts(libres, d.codigo)+'</select><span class="pista">'+(libres.length?'Elige la etiqueta que acabas de pegar':'No quedan etiquetas libres: genera una serie')+'</span></div>'+
+    '<div class="campo"><label for="f-cliente">Cliente</label><input id="f-cliente" type="text" value="'+esc(d.cliente||'')+'"></div>'+
+    '<div class="campo full"><label for="f-dir">Dirección</label><input id="f-dir" type="text" value="'+esc(d.direccion||'')+'"></div>'+
+    '<div class="campo full"><label for="f-ubi">Ubicación dentro del edificio</label><input id="f-ubi" type="text" value="'+esc(d.ubicacion||'')+'" placeholder="Ej.: garaje sótano -1, muelle 2"></div>'+
+    '<div class="campo"><label for="f-tcliente">Tipo de cliente</label><select id="f-tcliente">'+opts(lista('clientes', CLIENTES), d.tipo_cliente)+'</select></div>'+
+    '</div></div>';
+  h += '<div class="grupo"><h3>La puerta</h3><div class="campos">'+
+    '<div class="campo"><label for="f-tipo">Tipo</label><select id="f-tipo">'+opts(lista('tipos', TIPOS), d.tipo)+'</select></div>'+
+    '<div class="campo"><label for="f-uso">Uso</label><select id="f-uso">'+opts(lista('usos', USOS), d.uso)+'</select></div>'+
+    '<div class="campo"><label for="f-marca">Marca</label><input id="f-marca" type="text" value="'+esc(d.marca||'')+'"></div>'+
+    '<div class="campo"><label for="f-modelo">Modelo</label><input id="f-modelo" type="text" value="'+esc(d.modelo||'')+'"></div>'+
+    '<div class="campo"><label for="f-cuadro">Cuadro de maniobra</label><input id="f-cuadro" type="text" value="'+esc(d.cuadro||'')+'"></div>'+
+    '<div class="campo"><label for="f-motor">Motor</label><input id="f-motor" type="text" value="'+esc(d.motor||'')+'"></div>'+
+    '<div class="campo"><label for="f-anio">Año</label><input id="f-anio" type="number" min="1950" max="2100" value="'+esc(d.anio||'')+'"></div>'+
+    '<div class="campo"><label for="f-instalador">Instalada por</label><input id="f-instalador" type="text" value="'+esc(d.instalador||'')+'"></div>'+
+    '<div class="campo"><label for="f-ancho">Ancho (mm)</label><input id="f-ancho" type="number" value="'+esc(d.ancho_mm||'')+'"></div>'+
+    '<div class="campo"><label for="f-alto">Alto (mm)</label><input id="f-alto" type="number" value="'+esc(d.alto_mm||'')+'"></div>'+
+    '<div class="campo"><label for="f-peso">Peso hoja (kg)</label><input id="f-peso" type="number" step="0.1" value="'+esc(d.peso_kg||'')+'"></div>'+
+    '</div></div>';
+  const puestos = d.seguridad || [];
+  const maestra = lista('seguridad', SEGURIDAD);
+  const elementos = maestra.concat(puestos.filter(s => !maestra.includes(s)));
+  h += '<div class="grupo"><h3>Seguridad instalada</h3><div class="checks" id="f-segs">'+
+    elementos.map(s => casillaSeg(s, puestos.includes(s))).join('')+
+    '</div><div class="campos" style="margin-top:10px"><div class="campo full"><label for="f-seg-nuevo">Añadir un elemento que no esté en la lista</label>'+
+    '<span class="fila"><input id="f-seg-nuevo" type="text" placeholder="Ej.: bucle magnético, radar de apertura" style="flex:1">'+
+    '<button type="button" class="btn sm" data-act="seg-extra">Añadir</button></span>'+
+    (esAdmin() ? '<label class="mini" style="display:inline-flex;align-items:center;gap:6px;margin-top:8px"><input type="checkbox" id="f-seg-maestra" checked style="accent-color:var(--amarillo);width:16px;height:16px">Guardarlo también en la lista general, para todas las puertas</label>' : '')+
+    '</div></div></div>';
+  h += '<div class="grupo"><h3>Revisiones y notas</h3><div class="campos">'+
+    '<div class="campo"><label for="f-ult">Última revisión</label><input id="f-ult" type="date" value="'+esc(d.ultima_revision||'')+'"></div>'+
+    '<div class="campo"><label for="f-prox">Próxima revisión</label><input id="f-prox" type="date" value="'+esc(d.proxima_revision||'')+'"></div>'+
+    '<div class="campo full"><label for="f-notas">Observaciones</label><textarea id="f-notas" rows="3">'+esc(d.notas||'')+'</textarea></div>'+
+    '</div></div>';
+  h += '<p class="err" role="alert"></p><div class="pie">'+
+    (p ? '<button type="button" class="btn" data-act="puerta-borrar" data-id="'+p.id+'">Borrar puerta</button>' : '')+
+    '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button><button type="submit" class="btn pri">Guardar</button></div>';
+  abrirDlg(h, async () => {
+    const seg = Array.from(dlgForm.querySelectorAll('.f-seg')).filter(x => x.checked).map(x => x.value);
+    const o = {
+      codigo: val('f-cod') || null, cliente: val('f-cliente'), direccion: val('f-dir'), ubicacion: val('f-ubi'),
+      tipo_cliente: val('f-tcliente'), tipo: val('f-tipo'), uso: val('f-uso'), marca: val('f-marca'), modelo: val('f-modelo'),
+      cuadro: val('f-cuadro'), motor: val('f-motor'), anio: val('f-anio')?+val('f-anio'):null, instalador: val('f-instalador'),
+      ancho_mm: val('f-ancho')?+val('f-ancho'):null, alto_mm: val('f-alto')?+val('f-alto'):null, peso_kg: val('f-peso')?+val('f-peso'):null,
+      seguridad: seg, ultima_revision: val('f-ult')||null, proxima_revision: val('f-prox')||null, notas: val('f-notas')
+    };
+    if (!o.cliente && !o.direccion) return setErr('Pon al menos el cliente o la dirección.');
+    try {
+      if (p){ const { error } = await sb.from('puertas').update(o).eq('id', p.id); if (error) throw error; }
+      else { o.creado_por = yo(); const { data, error } = await sb.from('puertas').insert(o).select().maybeSingle(); if (error) throw error; if (data) S.ficha = data.id; }
+      cerrarDlg(); await cargar(); toast(p ? 'Ficha actualizada.' : 'Puerta dada de alta.');
+    } catch(e){ setErr(e.message || 'No se pudo guardar.'); }
+  });
+}
+
+function dlgEstado(id){
+  const p = puertaDe(id);
+  let h = '<h3>Estado de la puerta '+esc(p.codigo||'')+'</h3><div class="campos">'+
+    '<div class="campo full"><label for="e-estado">Estado</label><select id="e-estado">'+
+    Object.keys(ESTADOS).map(k => '<option value="'+k+'"'+(p.estado===k?' selected':'')+'>'+ESTADOS[k].t+'</option>').join('')+'</select></div></div>'+
+    '<p class="mini" style="margin:0">Lo que elijas aquí es lo que ve cualquiera que escanee el QR de esta puerta.</p>'+
+    '<p class="err"></p><div class="pie"><button type="button" class="btn plana" data-cerrar>Cancelar</button><button type="submit" class="btn pri">Guardar</button></div>';
+  abrirDlg(h, async () => {
+    try {
+      const { error } = await sb.from('puertas').update({ estado: val('e-estado'), estado_desde: new Date().toISOString() }).eq('id', id);
+      if (error) throw error;
+      cerrarDlg(); await cargar(); toast('Estado actualizado.');
+    } catch(e){ setErr(e.message); }
+  });
+}
+
+function dlgAviso(puertaId, avisoId){
+  const a = avisoId ? S.avisos.find(x => x.id === avisoId) : null;
+  const pid = a ? a.puerta_id : puertaId;
+  const d = a || { tipo:'averia', estado:'recibido' };
+  let h = '<h3>'+(a ? 'Actualizar aviso' : 'Nuevo aviso')+'</h3><div class="campos">'+
+    '<div class="campo"><label for="a-tipo">Tipo</label><select id="a-tipo"><option value="averia"'+(d.tipo==='averia'?' selected':'')+'>Avería</option><option value="mantenimiento"'+(d.tipo==='mantenimiento'?' selected':'')+'>Mantenimiento</option></select></div>'+
+    '<div class="campo"><label for="a-estado">Situación</label><select id="a-estado">'+Object.keys(EST_AVISO).map(k => '<option value="'+k+'"'+(d.estado===k?' selected':'')+'>'+EST_AVISO[k]+'</option>').join('')+'</select></div>'+
+    '<div class="campo"><label for="a-tec">Técnico asignado</label><select id="a-tec"><option value="">Sin asignar</option>'+
+      activos().map(t => '<option value="'+t.id+'"'+(d.tecnico_id===t.id?' selected':'')+'>'+esc(t.nombre||'—')+(t.rol==='admin'?' (admin)':'')+'</option>').join('')+
+      '</select><span class="pista">Lo verá en «Mis avisos» al entrar en la app</span></div>'+
+    '<div class="campo"><label for="a-fecha">Visita prevista</label><input id="a-fecha" type="date" value="'+esc(d.fecha_prevista||'')+'"></div>'+
+    '<div class="campo full"><label for="a-desc">Descripción</label><textarea id="a-desc" rows="3">'+esc(d.descripcion||'')+'</textarea></div>'+
+    '</div><p class="mini" style="margin:0">Al cerrar un aviso, la puerta vuelve a quedar como operativa.</p><p class="err"></p>'+
+    '<div class="pie">'+(a ? '<button type="button" class="btn" data-act="aviso-cerrar" data-id="'+a.id+'">Cerrar aviso</button>' : '')+
+    '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button><button type="submit" class="btn pri">Guardar</button></div>';
+  abrirDlg(h, async () => {
+    const tid = val('a-tec') || null;
+    const o = { tipo: val('a-tipo'), estado: val('a-estado'), tecnico_id: tid, tecnico: tid ? nombreTec(tid) : '',
+                fecha_prevista: val('a-fecha')||null, descripcion: val('a-desc'), actualizado: new Date().toISOString() };
+    if (tid && o.estado === 'recibido') o.estado = 'asignado';   // al asignar técnico, el aviso pasa a asignado
+    const mapa = { recibido:'aviso_recibido', asignado:'tecnico_asignado', en_curso:'en_reparacion', repuesto:'esperando_repuesto' };
+    try {
+      if (a){ const { error } = await sb.from('avisos').update(o).eq('id', a.id); if (error) throw error; }
+      else { o.puerta_id = pid; o.origen = 'tecnico'; const { error } = await sb.from('avisos').insert(o); if (error) throw error; }
+      if (mapa[o.estado]) await sb.from('puertas').update({ estado: mapa[o.estado], estado_desde: new Date().toISOString() }).eq('id', pid);
+      cerrarDlg(); await cargar(); toast('Aviso guardado.');
+    } catch(e){ setErr(e.message); }
+  });
+}
+
+function dlgQR(codigo){
+  const url = enlaceQR(codigo);
+  abrirDlg('<h3>Etiqueta '+esc(codigo)+'</h3><div style="display:grid;gap:12px;justify-items:center;background:#fff;padding:16px;border-radius:8px">'+
+    svgQR(url, '200px')+'<span class="codigo" style="color:#000">'+esc(codigo)+'</span><span class="mini" style="color:#444">'+esc(url.replace('https://',''))+'</span></div>'+
+    '<p class="mini" style="margin:0">Este es el enlace que lleva la etiqueta impresa.</p>'+
+    '<div class="pie"><button type="button" class="btn" data-cerrar>Cerrar</button></div>', null);
+}
+
+function dlgGenerar(){
+  const ultimo = S.etiquetas.map(e => parseInt((e.codigo.split('-')[1]||'0'), 10)).filter(n => !isNaN(n)).sort((a,b) => b-a)[0] || 0;
+  abrirDlg('<h3>Generar serie de etiquetas</h3><div class="campos">'+
+    '<div class="campo"><label for="g-desde">Desde el número</label><input id="g-desde" type="number" min="1" value="'+(ultimo+1)+'"></div>'+
+    '<div class="campo"><label for="g-cuantas">Cuántas</label><input id="g-cuantas" type="number" min="1" max="500" value="50"></div>'+
+    '</div><p class="mini" style="margin:0">Se crean con el formato AR-0001 y un código de seguridad de 4 caracteres que va dentro del QR, no a la vista.</p>'+
+    '<p class="err"></p><div class="pie"><button type="button" class="btn plana" data-cerrar>Cancelar</button><button type="submit" class="btn pri">Generar</button></div>', async () => {
+    const desde = parseInt(val('g-desde'), 10), cuantas = parseInt(val('g-cuantas'), 10);
+    if (!(desde >= 1) || !(cuantas >= 1)) return setErr('Revisa los números.');
+    const filas = [];
+    for (let i = 0; i < cuantas; i++) filas.push({ codigo: 'AR-' + String(desde + i).padStart(4, '0'), token: token() });
+    try {
+      const { error } = await sb.from('etiquetas').upsert(filas, { onConflict:'codigo', ignoreDuplicates:true });
+      if (error) throw error;
+      cerrarDlg(); await cargar(); toast(cuantas + ' etiquetas generadas.');
+    } catch(e){ setErr(e.message); }
+  });
+}
+
+function hojaImprimible(){
+  const usadas = new Set(S.puertas.map(p => p.codigo));
+  const libres = S.etiquetas.filter(e => !usadas.has(e.codigo));
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana de impresión.'); return; }
+  const etiquetas = libres.map(e => {
+    const url = BASE_QR + e.codigo.replace('-','') + e.token;
+    return '<div class="etq"><div class="logo">ARIZA <span style="color:#C98F08">puertas automáticas</span></div>'+
+           svgQR(url, '30mm')+'<div class="cod">'+e.codigo+'</div><div class="url">arizapa.es</div></div>';
+  }).join('');
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Etiquetas ARIZA SAT</title>'+
+    '<style>@page{size:1000mm 500mm;margin:5mm}body{margin:0;font-family:system-ui,sans-serif;background:#fff;color:#000}'+
+    '.hoja-grid{display:grid;grid-template-columns:repeat(auto-fill,50mm);gap:5mm;padding:5mm}'+
+    '.etq{width:50mm;height:65mm;border:.2mm dashed #bbb;padding:3mm;display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-align:center;page-break-inside:avoid}'+
+    '.etq .logo{font-weight:700;font-size:3.4mm}.etq .cod{font-family:ui-monospace,monospace;font-weight:700;font-size:6mm;letter-spacing:.5mm}'+
+    '.etq .url{font-size:2.6mm;color:#333}.etq svg{width:30mm;height:30mm}'+
+    '@media print{.aviso-print{display:none}}</style></head><body>'+
+    '<p class="aviso-print" style="padding:8mm;font-size:4mm">Hoja de '+libres.length+' etiquetas. Imprime o guarda como PDF y mándala a tu imprenta. Tamaño de plancha: 1000 x 500 mm.</p>'+
+    '<div class="hoja-grid">'+etiquetas+'</div></body></html>');
+  w.document.close();
+}
+
+/* ================= Eventos ================= */
+$('#tabs').addEventListener('click', e => {
+  const b = e.target.closest('button[data-tab]'); if (!b) return;
+  S.tab = b.dataset.tab; S.ficha = null; pintar(); window.scrollTo({top:0});
+});
+raiz.addEventListener('click', async e => {
+  const b = e.target.closest('[data-act]'); if (!b || b.tagName === 'INPUT') return;
+  const a = b.dataset.act;
+  if (a === 'abrir'){ S.ficha = b.dataset.id; S.tab = 'puertas'; pintar(); window.scrollTo({top:0}); }
+  else if (a === 'volver'){ S.ficha = null; pintar(); }
+  else if (a === 'puerta-nueva') dlgPuerta(null);
+  else if (a === 'puerta-editar') dlgPuerta(b.dataset.id);
+  else if (a === 'estado') dlgEstado(b.dataset.id);
+  else if (a === 'aviso-nuevo') dlgAviso(b.dataset.id, null);
+  else if (a === 'aviso-editar') dlgAviso(null, b.dataset.id);
+  else if (a === 'foto-ver') dlgFoto(b.dataset.id);
+  else if (a === 'ver-qr') dlgQR(b.dataset.cod);
+  else if (a === 'generar') dlgGenerar();
+  else if (a === 'hoja') hojaImprimible();
+  else if (a === 'foto-borrar'){
+    if (!armar(b, 'Confirmar')) return;
+    try { await sb.storage.from('fotos').remove([b.dataset.ruta]); await sb.from('fotos').delete().eq('id', b.dataset.id); pintarFotos(b.dataset.puerta); }
+    catch(err){ fallo(err); }
+  }
+  else if (a === 'doc-borrar'){
+    if (!armar(b, 'Confirmar')) return;
+    try { await sb.storage.from(b.dataset.bucket || 'documentos').remove([b.dataset.ruta]); await sb.from('documentos').delete().eq('id', b.dataset.id); pintarDocs(b.dataset.puerta); }
+    catch(err){ fallo(err); }
+  }
+  else if (a === 'doc-visible') cambiarVisibilidad(b.dataset.id, b.dataset.puerta);
+  else if (a === 'equipo-alta'){
+    const err = document.getElementById('t-err');
+    const nombre = (document.getElementById('t-nombre')||{}).value || '';
+    const email = ((document.getElementById('t-mail')||{}).value || '').trim().toLowerCase();
+    const pass = (document.getElementById('t-pass')||{}).value || '';
+    err.textContent = '';
+    if (!nombre.trim()) { err.textContent = 'Escribe el nombre.'; return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { err.textContent = 'El correo no es válido.'; return; }
+    if (pass.length < 6) { err.textContent = 'La contraseña debe tener al menos 6 caracteres.'; return; }
+    b.disabled = true; b.textContent = 'Dando de alta…';
+    try {
+      const { data, error } = await sb.functions.invoke('crear-tecnico', { body: { nombre: nombre.trim(), email, password: pass } });
+      if (error) throw new Error((data && data.error) || error.message);
+      if (data && data.error) throw new Error(data.error);
+      await cargar(); toast(nombre.trim()+' dado de alta. Pásale el correo y la contraseña.');
+    } catch(e){ err.textContent = e.message || 'No se pudo dar de alta.'; }
+    b.disabled = false; b.textContent = 'Dar de alta';
+  }
+  else if (a === 'lista-anadir' || a === 'lista-quitar' || a === 'lista-subir' || a === 'lista-bajar'){
+    const clave = b.dataset.clave;
+    const base = { seguridad:SEGURIDAD, tipos_doc:TIPOS_DOC, tipos:TIPOS, usos:USOS, clientes:CLIENTES }[clave] || [];
+    const arr = lista(clave, base).slice();
+    if (a === 'lista-anadir'){
+      const campo = document.getElementById('nuevo-'+clave);
+      const v = (campo ? campo.value : '').trim();
+      if (!v) return;
+      if (arr.some(x => x.toLowerCase() === v.toLowerCase())) { toast('Ese elemento ya está en la lista.'); return; }
+      arr.push(v);
+    } else {
+      const i = +b.dataset.i;
+      if (a === 'lista-quitar'){ if (!armar(b, 'Confirmar')) return; arr.splice(i, 1); }
+      else if (a === 'lista-subir' && i > 0){ const t = arr[i-1]; arr[i-1] = arr[i]; arr[i] = t; }
+      else if (a === 'lista-bajar' && i < arr.length-1){ const t = arr[i+1]; arr[i+1] = arr[i]; arr[i] = t; }
+    }
+    try { await guardarLista(clave, arr); pintar(); toast('Lista guardada.'); }
+    catch(err){ fallo(err); }
+  }
+  else if (a === 'equipo-activo'){
+    try { const { error } = await sb.from('perfiles').update({ activo: b.dataset.v === '1' }).eq('id', b.dataset.id); if (error) throw error; await cargar(); }
+    catch(err){ fallo(err); }
+  }
+});
+raiz.addEventListener('input', e => { if (e.target.dataset.act === 'busca'){ S.busca = e.target.value; pintar(); } });
+raiz.addEventListener('change', e => {
+  if (e.target.dataset.act === 'filtro-tec'){ S.filtroTec = e.target.value; pintar(); return; }
+  if (e.target.dataset.act === 'subir-foto' && e.target.files.length){ subirFotos(e.target.dataset.id, Array.from(e.target.files)); e.target.value=''; }
+  if (e.target.dataset.act === 'subir-doc' && e.target.files.length){
+    const sel = document.getElementById('doc-tipo-'+e.target.dataset.id);
+    const pub = document.getElementById('doc-pub-'+e.target.dataset.id);
+    subirDocs(e.target.dataset.id, Array.from(e.target.files), sel ? sel.value : 'Manual de instrucciones', pub && pub.checked); e.target.value='';
+  }
+});
+dlgForm.addEventListener('click', async e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const a = b.dataset.act;
+  if (a === 'seg-extra'){
+    const campo = document.getElementById('f-seg-nuevo');
+    const cont = document.getElementById('f-segs');
+    const v = (campo ? campo.value : '').trim();
+    if (!v || !cont) return;
+    const ya = Array.from(cont.querySelectorAll('.f-seg')).find(x => x.value.toLowerCase() === v.toLowerCase());
+    if (ya){ ya.checked = true; campo.value = ''; return; }
+    cont.insertAdjacentHTML('beforeend', casillaSeg(v, true));
+    campo.value = '';
+    const maestra = document.getElementById('f-seg-maestra');
+    if (maestra && maestra.checked){
+      try { await guardarLista('seguridad', lista('seguridad', SEGURIDAD).concat([v])); }
+      catch(err){ setErr('El elemento se ha añadido a esta puerta, pero no a la lista general: '+err.message); }
+    }
+    return;
+  }
+  if (a === 'puerta-borrar'){
+    if (!armar(b, 'Confirmar borrado')) return;
+    try { const { error } = await sb.from('puertas').delete().eq('id', b.dataset.id); if (error) throw error; cerrarDlg(); S.ficha = null; await cargar(); toast('Puerta borrada.'); }
+    catch(err){ setErr(err.message); }
+  } else if (a === 'aviso-cerrar'){
+    if (!armar(b, 'Confirmar cierre')) return;
+    const av = S.avisos.find(x => x.id === b.dataset.id);
+    try {
+      const { error } = await sb.from('avisos').update({ estado:'cerrado', cerrado: new Date().toISOString(), actualizado: new Date().toISOString() }).eq('id', b.dataset.id);
+      if (error) throw error;
+      if (av) await sb.from('puertas').update({ estado:'operativa', estado_desde: new Date().toISOString() }).eq('id', av.puerta_id);
+      cerrarDlg(); await cargar(); toast('Aviso cerrado.');
+    } catch(err){ setErr(err.message); }
+  }
+});
+
+/* ---- Sesión ---- */
+const login = $('#login'), lErr = $('#l-err');
+login.addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn = $('#l-go'); btn.disabled = true; btn.textContent = 'Entrando…'; lErr.textContent = '';
+  const { error } = await sb.auth.signInWithPassword({ email: $('#l-mail').value.trim(), password: $('#l-pass').value });
+  if (error) lErr.textContent = /Invalid/i.test(error.message) ? 'Correo o contraseña incorrectos.' : error.message;
+  btn.disabled = false; btn.textContent = 'Entrar';
+});
+$('#l-olvido').addEventListener('click', async () => {
+  const m = $('#l-mail').value.trim();
+  if (!m){ lErr.textContent = 'Escribe tu correo arriba y vuelve a pulsar.'; return; }
+  const { error } = await sb.auth.resetPasswordForEmail(m, { redirectTo: location.origin });
+  lErr.textContent = error ? error.message : 'Te hemos enviado un correo para cambiar la contraseña.';
+});
+$('#btn-salir').addEventListener('click', () => sb.auth.signOut());
+window.addEventListener('hashchange', () => { const r = codigoDeURL(); if (r) location.reload(); });
+
+if ('serviceWorker' in navigator && location.protocol === 'https:')
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(()=>{}));
+
+arranque();
+</script>
+</body>
+</html>
