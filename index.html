@@ -316,21 +316,62 @@ async function vistaPublica(ref){
             esc(SUPA_URL + '/storage/v1/object/public/publicos/' + String(d.ruta).split('/').map(encodeURIComponent).join('/'))+'">'+esc(d.nombre)+'</a>').join('')+
          '</div>';
   }
-  h += '<div class="tarjeta"><h2 style="font-size:20px">¿Ves algo que no funciona?</h2>'+
-       '<div class="campo"><label for="p-desc">Cuéntanos qué pasa</label><textarea id="p-desc" rows="3" maxlength="500" placeholder="Ej.: la puerta no cierra del todo y hace ruido"></textarea></div>'+
-       '<div class="campo"><label for="p-cont">Tu teléfono o correo (opcional)</label><input id="p-cont" type="text" maxlength="120"></div>'+
-       '<p class="err" id="p-err"></p><button class="btn" id="p-enviar">Dar aviso de avería</button></div>';
+  h += '<div class="tarjeta"><h2 style="font-size:20px">¿Necesitas algo de esta puerta?</h2>'+
+       '<div class="campo"><label for="p-tipo">¿Qué quieres decirnos?</label>'+
+       '<select id="p-tipo">'+
+         '<option value="averia">Una avería: la puerta no funciona bien</option>'+
+         '<option value="comercial">Quiero presupuesto: puerta nueva, mejora o accesorios</option>'+
+       '</select></div>'+
+       '<div class="campo"><label for="p-desc" id="p-desc-eti">Cuéntanos qué pasa</label><textarea id="p-desc" rows="3" maxlength="500" placeholder="Ej.: la puerta no cierra del todo y hace ruido"></textarea></div>'+
+       '<div class="campo"><label for="p-nombre">Tu nombre</label><input id="p-nombre" type="text" maxlength="80" autocomplete="name" placeholder="Nombre y apellidos"></div>'+
+       '<div class="campo"><label for="p-tel">Tu teléfono</label><input id="p-tel" type="tel" inputmode="tel" maxlength="20" autocomplete="tel" placeholder="Para poder llamarte"></div>'+
+       '<div class="campo"><label for="p-mail">Tu correo (opcional)</label><input id="p-mail" type="email" maxlength="120" autocomplete="email"></div>'+
+       '<p class="err" id="p-err"></p><button class="btn" id="p-enviar">Enviar el aviso</button>'+
+       '<p class="mini" style="margin:10px 0 0;color:#A49E99">Usamos tus datos solo para atender esta solicitud.</p></div>';
   h += '<p class="pie">Ariza Puertas y Automatismos · Instalación, mantenimiento y reparación</p>';
   cont.innerHTML = h;
 
+  // El texto de ayuda cambia según lo que elija el cliente
+  const ajustarTipo = () => {
+    const comercial = $('#p-tipo').value === 'comercial';
+    $('#p-desc-eti').textContent = comercial ? 'Cuéntanos qué necesitas' : 'Cuéntanos qué pasa';
+    $('#p-desc').placeholder = comercial
+      ? 'Ej.: quiero presupuesto de una puerta igual para el otro portal'
+      : 'Ej.: la puerta no cierra del todo y hace ruido';
+    $('#p-enviar').textContent = comercial ? 'Pedir presupuesto' : 'Enviar el aviso';
+  };
+  $('#p-tipo').addEventListener('change', ajustarTipo);
+  ajustarTipo();
+
   $('#p-enviar').addEventListener('click', async () => {
+    const tipo = $('#p-tipo').value;
     const d = $('#p-desc').value.trim();
-    if (d.length < 5){ $('#p-err').textContent = 'Escribe brevemente qué le pasa a la puerta.'; return; }
-    $('#p-err').textContent=''; $('#p-enviar').disabled = true; $('#p-enviar').textContent = 'Enviando…';
-    const { data: r, error: e } = await sb.rpc('aviso_publico', { p_codigo: ref.codigo, p_token: ref.token, p_descripcion: d, p_contacto: $('#p-cont').value.trim() });
-    if (e || !r || !r.ok){ $('#p-err').textContent='No se pudo enviar el aviso. Llama al teléfono de Ariza.'; $('#p-enviar').disabled=false; $('#p-enviar').textContent='Dar aviso de avería'; return; }
-    vistaPublica(ref);
-    toast('Aviso enviado. Gracias.');
+    const nombre = $('#p-nombre').value.trim();
+    const tel = $('#p-tel').value.trim();
+    const mail = $('#p-mail').value.trim();
+    const err = m => { $('#p-err').textContent = m; };
+    if (d.length < 5) return err(tipo==='comercial' ? 'Cuéntanos brevemente qué necesitas.' : 'Escribe brevemente qué le pasa a la puerta.');
+    if (nombre.length < 2) return err('Escribe tu nombre.');
+    if (tel.replace(/\D/g,'').length < 9) return err('Escribe un teléfono de contacto válido.');
+    if (mail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) return err('Revisa el correo, no parece correcto.');
+    err(''); $('#p-enviar').disabled = true;
+    const original = $('#p-enviar').textContent;
+    $('#p-enviar').textContent = 'Enviando…';
+    const { data: r, error: e } = await sb.rpc('aviso_publico', {
+      p_codigo: ref.codigo, p_token: ref.token, p_tipo: tipo, p_descripcion: d,
+      p_nombre: nombre, p_telefono: tel, p_email: mail || null });
+    if (e || !r || !r.ok){
+      err(r && r.error === 'contacto' ? 'Revisa el nombre y el teléfono.' : 'No se ha podido enviar. Inténtalo de nuevo en un momento.');
+      $('#p-enviar').disabled = false; $('#p-enviar').textContent = original; return;
+    }
+    cont.innerHTML = '<div class="tarjeta"><h1>'+(tipo==='comercial'?'Petición enviada':'Aviso enviado')+'</h1>'+
+      '<p style="margin:0">Gracias, '+esc(nombre.split(' ')[0])+'. '+
+      (tipo==='comercial' ? 'Un comercial de Ariza te llamará al '+esc(tel)+' para darte presupuesto.'
+                          : 'Hemos registrado el aviso y te llamaremos al '+esc(tel)+'.')+'</p>'+
+      '<p class="mini" style="color:#A49E99">Puerta '+esc(ref.codigo)+'</p>'+
+      '<a class="btn sec" href="'+esc(location.pathname + location.hash)+'" onclick="location.reload();return false" style="text-align:center;text-decoration:none;display:block">Volver a la ficha</a></div>'+
+      '<p class="pie">Ariza Puertas y Automatismos · Instalación, mantenimiento y reparación</p>';
+    window.scrollTo({top:0});
   });
 }
 
@@ -353,7 +394,7 @@ async function cargar(){
 }
 const puertaDe = id => S.puertas.find(x => x.id === id);
 const avisosDe = id => S.avisos.filter(x => x.puerta_id === id);
-const abiertoDe = id => avisosDe(id).find(x => !x.cerrado);
+const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comercial');
 
 /* ================= Arranque y sesión ================= */
 async function arranque(){
@@ -472,12 +513,17 @@ function vistaFicha(id){
   else {
     h += '<div class="avisos">';
     av.slice(0,20).forEach(a => {
-      h += '<div class="aviso"><div class="cab"><span class="chip '+(a.cerrado?'gris':'aviso')+'">'+(a.cerrado?'Cerrado':(EST_AVISO[a.estado]||a.estado))+'</span>'+
-           '<span class="mini">'+(a.tipo==='mantenimiento'?'Mantenimiento':'Avería')+' · '+fechaHora(a.creado)+' · '+(a.origen==='cliente'?'avisó el cliente':'interno')+'</span>'+
+      const cto = contactoAviso(a);
+      h += '<div class="aviso"><div class="cab">'+
+           (a.tipo==='comercial' ? '<span class="chip ok">Presupuesto</span>' : '')+
+           '<span class="chip '+(a.cerrado?'gris':'aviso')+'">'+(a.cerrado?'Cerrado':(EST_AVISO[a.estado]||a.estado))+'</span>'+
+           '<span class="mini">'+(TIPO_AVISO[a.tipo]||'Avería')+' · '+fechaHora(a.creado)+' · '+(a.origen==='cliente'?'lo pidió el cliente':'interno')+'</span>'+
            '<span class="sp"></span>'+
            (a.cerrado ? '' : '<button class="btn sm" data-act="aviso-editar" data-id="'+a.id+'">Actualizar</button>')+'</div>'+
            (a.descripcion ? '<p style="margin:0">'+esc(a.descripcion)+'</p>' : '')+
-           '<p class="mini" style="margin:0">'+[('Técnico: '+((a.tecnico_id?nombreTec(a.tecnico_id):a.tecnico)||'sin asignar')), a.fecha_prevista?('Previsto: '+fechaCorta(a.fecha_prevista)):'', a.contacto?('Contacto: '+a.contacto):''].filter(Boolean).map(esc).join(' · ')+'</p>'+
+           '<p class="mini" style="margin:0">'+esc('Técnico: '+((a.tecnico_id?nombreTec(a.tecnico_id):a.tecnico)||'sin asignar'))+
+             (a.fecha_prevista ? esc(' · Previsto: '+fechaCorta(a.fecha_prevista)) : '')+
+             (cto ? ' · '+cto : '')+'</p>'+
            '</div>';
     });
     h += '</div>';
@@ -491,10 +537,23 @@ function vistaFicha(id){
 const claveFecha = a => (a.fecha_prevista || (a.creado || '').slice(0, 10) || '9999-12-31');
 const porFecha = (a, b) => claveFecha(a) < claveFecha(b) ? -1 : (claveFecha(a) > claveFecha(b) ? 1 : 0);
 
+const TIPO_AVISO = { averia:'Avería', mantenimiento:'Mantenimiento', comercial:'Presupuesto' };
+function contactoAviso(a){
+  const tel = (a.contacto_telefono||'').trim();
+  const mail = (a.contacto_email||'').trim();
+  const nom = (a.contacto_nombre||'').trim();
+  if (!nom && !tel && !mail) return a.contacto ? esc(a.contacto) : '';
+  return [nom ? '<b>'+esc(nom)+'</b>' : '',
+          tel ? '<a href="tel:'+esc(tel.replace(/\s/g,''))+'">'+esc(tel)+'</a>' : '',
+          mail ? '<a href="mailto:'+esc(mail)+'">'+esc(mail)+'</a>' : ''].filter(Boolean).join(' · ');
+}
 function tarjetaAviso(a){
   const p = puertaDe(a.puerta_id) || {};
   const tec = a.tecnico_id ? nombreTec(a.tecnico_id) : (a.tecnico || '');
-  return '<div class="aviso"><div class="cab"><span class="chip '+(a.tipo==='mantenimiento'?'gris':'aviso')+'">'+(EST_AVISO[a.estado]||a.estado)+'</span>'+
+  const cont = contactoAviso(a);
+  return '<div class="aviso"><div class="cab">'+
+    (a.tipo==='comercial' ? '<span class="chip ok">Presupuesto</span>' : '')+
+    '<span class="chip '+(a.tipo==='mantenimiento'?'gris':'aviso')+'">'+(EST_AVISO[a.estado]||a.estado)+'</span>'+
     '<b>'+esc(p.cliente||'Sin cliente')+'</b><span class="mini">'+esc(p.codigo||'')+' · '+esc(p.direccion||'')+'</span><span class="sp"></span>'+
     '<button class="btn sm plana" data-act="abrir" data-id="'+a.puerta_id+'">Ver puerta</button>'+
     '<button class="btn sm" data-act="aviso-editar" data-id="'+a.id+'">Actualizar</button></div>'+
@@ -503,15 +562,18 @@ function tarjetaAviso(a){
       (a.fecha_prevista ? ('Visita: '+fechaCorta(a.fecha_prevista)+' · '+relativo(a.fecha_prevista)+' · ') : '')+
       'Avisado el '+fechaHora(a.creado)+
       (tec ? (' · '+esc(tec)) : ' · <b>sin asignar</b>')+
-      (a.origen==='cliente'?' · avisó el cliente':'')+(a.contacto?(' · '+esc(a.contacto)):'')+
-    '</p></div>';
+      (a.origen==='cliente'?' · lo pidió el cliente':'')+
+    '</p>'+
+    (cont ? '<p class="mini" style="margin:0">'+cont+'</p>' : '')+
+    '</div>';
 }
 
 function vistaAvisos(){
   const abiertos = S.avisos.filter(a => !a.cerrado);
   const yoId = S.perfil ? S.perfil.id : null;
   const mios = abiertos.filter(a => a.tecnico_id === yoId).sort(porFecha);
-  const resto = abiertos.filter(a => a.tecnico_id !== yoId)
+  const comerciales = abiertos.filter(a => a.tipo === 'comercial' && a.tecnico_id !== yoId).sort(porFecha);
+  const resto = abiertos.filter(a => a.tecnico_id !== yoId && a.tipo !== 'comercial')
                         .filter(a => !S.filtroTec || (S.filtroTec === 'sin' ? !a.tecnico_id : a.tecnico_id === S.filtroTec))
                         .sort(porFecha);
   let h = '<div class="stack">';
@@ -520,6 +582,12 @@ function vistaAvisos(){
   if (!mios.length) h += '<p class="muted" style="margin:0">No tienes ningún aviso asignado ahora mismo.</p>';
   else h += '<div class="avisos">'+mios.map(tarjetaAviso).join('')+'</div>';
   h += '</div>';
+
+  if (comerciales.length){
+    h += '<div class="panel"><div class="panel-h"><h2>Peticiones de presupuesto</h2><span class="mini">'+comerciales.length+'</span></div>'+
+         '<p class="mini" style="margin:0 0 10px">Clientes que han pedido oferta al escanear el QR de una puerta.</p>'+
+         '<div class="avisos">'+comerciales.map(tarjetaAviso).join('')+'</div></div>';
+  }
 
   h += '<div class="panel"><div class="panel-h"><h2>'+(esAdmin()?'Resto de avisos abiertos':'Otros avisos del equipo')+'</h2>'+
        '<span class="sp"></span>'+
@@ -861,26 +929,40 @@ function dlgAviso(puertaId, avisoId){
   const pid = a ? a.puerta_id : puertaId;
   const d = a || { tipo:'averia', estado:'recibido' };
   let h = '<h3>'+(a ? 'Actualizar aviso' : 'Nuevo aviso')+'</h3><div class="campos">'+
-    '<div class="campo"><label for="a-tipo">Tipo</label><select id="a-tipo"><option value="averia"'+(d.tipo==='averia'?' selected':'')+'>Avería</option><option value="mantenimiento"'+(d.tipo==='mantenimiento'?' selected':'')+'>Mantenimiento</option></select></div>'+
+    '<div class="campo"><label for="a-tipo">Tipo</label><select id="a-tipo">'+
+      '<option value="averia"'+(d.tipo==='averia'?' selected':'')+'>Avería</option>'+
+      '<option value="mantenimiento"'+(d.tipo==='mantenimiento'?' selected':'')+'>Mantenimiento</option>'+
+      '<option value="comercial"'+(d.tipo==='comercial'?' selected':'')+'>Presupuesto (comercial)</option>'+
+      '</select></div>'+
     '<div class="campo"><label for="a-estado">Situación</label><select id="a-estado">'+Object.keys(EST_AVISO).map(k => '<option value="'+k+'"'+(d.estado===k?' selected':'')+'>'+EST_AVISO[k]+'</option>').join('')+'</select></div>'+
     '<div class="campo"><label for="a-tec">Técnico asignado</label><select id="a-tec"><option value="">Sin asignar</option>'+
       activos().map(t => '<option value="'+t.id+'"'+(d.tecnico_id===t.id?' selected':'')+'>'+esc(t.nombre||'—')+(t.rol==='admin'?' (admin)':'')+'</option>').join('')+
       '</select><span class="pista">Lo verá en «Mis avisos» al entrar en la app</span></div>'+
     '<div class="campo"><label for="a-fecha">Visita prevista</label><input id="a-fecha" type="date" value="'+esc(d.fecha_prevista||'')+'"></div>'+
     '<div class="campo full"><label for="a-desc">Descripción</label><textarea id="a-desc" rows="3">'+esc(d.descripcion||'')+'</textarea></div>'+
-    '</div><p class="mini" style="margin:0">Al cerrar un aviso, la puerta vuelve a quedar como operativa.</p><p class="err"></p>'+
+    '<div class="campo"><label for="a-cnom">Contacto: nombre</label><input id="a-cnom" type="text" maxlength="80" value="'+esc(d.contacto_nombre||'')+'"></div>'+
+    '<div class="campo"><label for="a-ctel">Contacto: teléfono</label><input id="a-ctel" type="tel" maxlength="20" value="'+esc(d.contacto_telefono||'')+'"></div>'+
+    '<div class="campo"><label for="a-cmail">Contacto: correo</label><input id="a-cmail" type="email" maxlength="120" value="'+esc(d.contacto_email||'')+'"></div>'+
+    '</div><p class="mini" style="margin:0">'+(d.tipo==='comercial'
+        ? 'Una petición de presupuesto no cambia el estado de la puerta.'
+        : 'Al cerrar un aviso, la puerta vuelve a quedar como operativa.')+'</p><p class="err"></p>'+
     '<div class="pie">'+(a ? '<button type="button" class="btn" data-act="aviso-cerrar" data-id="'+a.id+'">Cerrar aviso</button>' : '')+
     '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button><button type="submit" class="btn pri">Guardar</button></div>';
   abrirDlg(h, async () => {
     const tid = val('a-tec') || null;
+    const nom = val('a-cnom'), tel = val('a-ctel'), mail = val('a-cmail');
     const o = { tipo: val('a-tipo'), estado: val('a-estado'), tecnico_id: tid, tecnico: tid ? nombreTec(tid) : '',
-                fecha_prevista: val('a-fecha')||null, descripcion: val('a-desc'), actualizado: new Date().toISOString() };
+                fecha_prevista: val('a-fecha')||null, descripcion: val('a-desc'),
+                contacto_nombre: nom || null, contacto_telefono: tel || null, contacto_email: mail || null,
+                contacto: [nom, tel, mail].filter(Boolean).join(' · '),
+                actualizado: new Date().toISOString() };
     if (tid && o.estado === 'recibido') o.estado = 'asignado';   // al asignar técnico, el aviso pasa a asignado
     const mapa = { recibido:'aviso_recibido', asignado:'tecnico_asignado', en_curso:'en_reparacion', repuesto:'esperando_repuesto' };
     try {
       if (a){ const { error } = await sb.from('avisos').update(o).eq('id', a.id); if (error) throw error; }
       else { o.puerta_id = pid; o.origen = 'tecnico'; const { error } = await sb.from('avisos').insert(o); if (error) throw error; }
-      if (mapa[o.estado]) await sb.from('puertas').update({ estado: mapa[o.estado], estado_desde: new Date().toISOString() }).eq('id', pid);
+      // una petición comercial no toca el estado de la puerta
+      if (o.tipo !== 'comercial' && mapa[o.estado]) await sb.from('puertas').update({ estado: mapa[o.estado], estado_desde: new Date().toISOString() }).eq('id', pid);
       cerrarDlg(); await cargar(); toast('Aviso guardado.');
     } catch(e){ setErr(e.message); }
   });
@@ -1046,7 +1128,8 @@ dlgForm.addEventListener('click', async e => {
     try {
       const { error } = await sb.from('avisos').update({ estado:'cerrado', cerrado: new Date().toISOString(), actualizado: new Date().toISOString() }).eq('id', b.dataset.id);
       if (error) throw error;
-      if (av) await sb.from('puertas').update({ estado:'operativa', estado_desde: new Date().toISOString() }).eq('id', av.puerta_id);
+      // cerrar una petición de presupuesto no cambia el estado de la puerta
+      if (av && av.tipo !== 'comercial') await sb.from('puertas').update({ estado:'operativa', estado_desde: new Date().toISOString() }).eq('id', av.puerta_id);
       cerrarDlg(); await cargar(); toast('Aviso cerrado.');
     } catch(err){ setErr(err.message); }
   }
