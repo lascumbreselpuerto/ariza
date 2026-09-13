@@ -121,6 +121,8 @@ img{max-width:100%}
 .foto{position:relative;aspect-ratio:4/3;border-radius:6px;overflow:hidden;border:1px solid var(--line);background:var(--surface-2)}
 .foto img{width:100%;height:100%;object-fit:cover;display:block}
 .foto button{position:absolute;top:4px;right:4px;border:0;background:rgba(28,24,23,.75);color:#fff;border-radius:4px;font-size:12px;padding:3px 7px;cursor:pointer}
+.pie-foto{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(transparent,rgba(0,0,0,.72));color:#fff;font-size:11px;line-height:1.3;padding:12px 6px 4px;pointer-events:none}
+.foto-rota{display:grid;place-items:center;width:100%;height:100%;font-size:12px;color:var(--muted);text-align:center;padding:8px;text-decoration:none}
 .linea{border-top:1px solid var(--line);padding-top:12px;margin-top:4px}
 .avisos{display:grid;gap:10px}
 .aviso{border:1px solid var(--line);border-radius:8px;padding:12px;background:var(--surface);display:grid;gap:8px}
@@ -632,21 +634,51 @@ async function pintarFotos(puertaId){
   const urls = await Promise.all(data.map(f => sb.storage.from('fotos').createSignedUrl(f.ruta, 3600)));
   cont.innerHTML = data.map((f,i) => {
     const u = urls[i] && urls[i].data ? urls[i].data.signedUrl : '';
-    return '<div class="foto"><img src="'+esc(u)+'" alt="Foto de la puerta" loading="lazy"><button data-act="foto-borrar" data-id="'+f.id+'" data-ruta="'+esc(f.ruta)+'" data-puerta="'+puertaId+'">Borrar</button></div>';
+    FOTOS[f.id] = { url:u, autor:f.autor||'', creado:f.creado, ruta:f.ruta, puerta:puertaId };
+    return '<div class="foto">'+
+      '<img src="'+esc(u)+'" alt="Foto de la puerta" loading="lazy" data-act="foto-ver" data-id="'+f.id+'" style="cursor:zoom-in" '+
+        'onerror="this.replaceWith(Object.assign(document.createElement(\'a\'),{href:this.src,target:\'_blank\',rel:\'noopener\',className:\'foto-rota\',textContent:\'Foto guardada · abrir\'}))">'+
+      '<span class="pie-foto">'+esc([f.autor||'', f.creado?fechaCorta(f.creado):''].filter(Boolean).join(' · '))+'</span>'+
+      '<button data-act="foto-borrar" data-id="'+f.id+'" data-ruta="'+esc(f.ruta)+'" data-puerta="'+puertaId+'">Borrar</button></div>';
   }).join('');
 }
+const FOTOS = {};
+function dlgFoto(id){
+  const f = FOTOS[id];
+  if (!f) return;
+  abrirDlg('<h3>Foto de la puerta</h3>'+
+    '<div style="background:#000;border-radius:8px;display:grid;place-items:center;max-height:70vh;overflow:auto">'+
+    '<img src="'+esc(f.url)+'" alt="Foto de la puerta" style="max-width:100%;height:auto;display:block">'+
+    '</div>'+
+    '<p class="mini" style="margin:10px 0 0">'+esc([f.autor?('Subida por '+f.autor):'', f.creado?fechaHora(f.creado):''].filter(Boolean).join(' · '))+'</p>'+
+    '<div class="pie"><a class="btn plana" href="'+esc(f.url)+'" target="_blank" rel="noopener" style="text-decoration:none">Abrir aparte</a>'+
+    '<span class="sp"></span><button type="button" class="btn" data-cerrar>Cerrar</button></div>', null);
+}
 async function subirFotos(puertaId, ficheros){
+  let n = 0, tal = 0;
   for (const file of ficheros){
-    if (!file.type.startsWith('image/')) continue;
+    const esImagen = file.type.startsWith('image/') || /\.(jpe?g|png|heic|heif|webp|gif|tiff?)$/i.test(file.name||'');
+    if (!esImagen) continue;
     try {
-      const blob = await reducir(file);
-      const ruta = puertaId+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'.jpg';
-      const { error } = await sb.storage.from('fotos').upload(ruta, blob, { contentType:'image/jpeg' });
+      let blob, tipo = 'image/jpeg', ext = 'jpg';
+      try {
+        blob = await reducir(file);                      // caso normal: se reduce a 1600 px
+      } catch(_){
+        if (file.size > 25*1024*1024) throw new Error('La foto «'+(file.name||'')+'» pesa demasiado (más de 25 MB).');
+        blob = file;                                     // formatos que el navegador no sabe procesar (HEIC del iPhone): se sube tal cual
+        tipo = file.type || 'application/octet-stream';
+        ext = ((file.name||'').split('.').pop() || 'jpg').toLowerCase().slice(0,5);
+        tal++;
+      }
+      const ruta = puertaId+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'.'+ext;
+      const { error } = await sb.storage.from('fotos').upload(ruta, blob, { contentType: tipo });
       if (error) throw error;
       await sb.from('fotos').insert({ puerta_id: puertaId, ruta, autor: yo() });
+      n++;
     } catch(e){ fallo(e); }
   }
-  toast('Fotos subidas.');
+  if (n) toast(n === 1 ? 'Foto subida.' : n+' fotos subidas.');
+  if (tal) toast(tal+(tal===1?' foto se ha guardado en su formato original (HEIC): se ve desde el iPhone y con «abrir».':' fotos se han guardado en su formato original (HEIC).'));
   pintarFotos(puertaId);
 }
 function reducir(file, max=1600, calidad=0.82){
@@ -918,6 +950,7 @@ raiz.addEventListener('click', async e => {
   else if (a === 'estado') dlgEstado(b.dataset.id);
   else if (a === 'aviso-nuevo') dlgAviso(b.dataset.id, null);
   else if (a === 'aviso-editar') dlgAviso(null, b.dataset.id);
+  else if (a === 'foto-ver') dlgFoto(b.dataset.id);
   else if (a === 'ver-qr') dlgQR(b.dataset.cod);
   else if (a === 'generar') dlgGenerar();
   else if (a === 'hoja') hojaImprimible();
