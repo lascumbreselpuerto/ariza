@@ -241,7 +241,7 @@ const ESTADOS = {
   fuera_servicio:   {t:'Fuera de servicio',      c:'mal',   b:'#EE5A48'},
   mantenimiento:    {t:'Mantenimiento pendiente',c:'gris',  b:'#A49E99'}
 };
-const TIPOS_DOC = ['Manual de instrucciones','Esquema eléctrico','Declaración CE','Certificado','Informe técnico','Presupuesto','Fotos de obra','Otro'];
+const TIPOS_DOC = ['Manual de instrucciones','Desbloqueo de emergencia','Instrucciones de uso','Esquema eléctrico','Declaración CE','Certificado','Informe técnico','Presupuesto','Fotos de obra','Otro'];
 const EST_AVISO = {recibido:'Recibido', asignado:'Asignado', en_curso:'En curso', repuesto:'Esperando repuesto', cerrado:'Cerrado'};
 
 /* ================= Utilidades ================= */
@@ -261,7 +261,12 @@ function token(){ const abc='ACDEFHJKLMNPQRTUVWXY3479'; let s=''; for(let i=0;i<
 function estadoChip(e){ const x=ESTADOS[e]||ESTADOS.operativa; return '<span class="chip '+x.c+'">'+x.t+'</span>'; }
 
 /* ================= Estado ================= */
-const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etiquetas:[], equipo:[], ficha:null, cargando:true, busca:'' };
+const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etiquetas:[], equipo:[], ajustes:{}, ficha:null, cargando:true, busca:'', filtroTec:'' };
+/* Listas que el administrador puede cambiar desde la app; si no hay nada guardado, valen las de fábrica. */
+const lista = (clave, defecto) => (Array.isArray(S.ajustes[clave]) && S.ajustes[clave].length) ? S.ajustes[clave] : defecto;
+const esAdmin = () => !!(S.perfil && S.perfil.rol === 'admin');
+const activos = () => S.equipo.filter(t => t.activo);
+const nombreTec = id => { const t = S.equipo.find(x => x.id === id); return t ? (t.nombre || '') : ''; };
 
 /* ================= Vista pública por QR ================= */
 function codigoDeURL(){
@@ -330,18 +335,18 @@ async function vistaPublica(ref){
 /* ================= Datos ================= */
 async function cargar(){
   S.cargando = true; pintar();
-  const [p, a, e] = await Promise.all([
+  const [p, a, e, t, j] = await Promise.all([
     sb.from('puertas').select('*').order('codigo'),
     sb.from('avisos').select('*').order('creado', {ascending:false}),
-    sb.from('etiquetas').select('*').order('codigo')
+    sb.from('etiquetas').select('*').order('codigo'),
+    sb.from('perfiles').select('*').order('nombre'),
+    sb.from('ajustes').select('*')
   ]);
   if (p.error) fallo(p.error); else S.puertas = p.data || [];
   if (a.error) fallo(a.error); else S.avisos = a.data || [];
   if (e.error) fallo(e.error); else S.etiquetas = e.data || [];
-  if (S.perfil && S.perfil.rol === 'admin'){
-    const q = await sb.from('perfiles').select('*').order('nombre');
-    if (!q.error) S.equipo = q.data || [];
-  }
+  if (!t.error) S.equipo = t.data || [];
+  if (!j.error){ S.ajustes = {}; (j.data || []).forEach(x => { S.ajustes[x.clave] = x.valor; }); }
   S.cargando = false; pintar();
 }
 const puertaDe = id => S.puertas.find(x => x.id === id);
@@ -454,7 +459,7 @@ function vistaFicha(id){
 
   h += '<div class="panel"><div class="panel-h"><h3>Documentación</h3>'+
        '<span class="fila"><select id="doc-tipo-'+p.id+'" style="padding:6px 9px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:14px">'+
-       TIPOS_DOC.map(t => '<option>'+esc(t)+'</option>').join('')+'</select>'+
+       lista('tipos_doc', TIPOS_DOC).map(t => '<option>'+esc(t)+'</option>').join('')+'</select>'+
        '<label style="display:inline-flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="doc-pub-'+p.id+'" style="accent-color:var(--amarillo);width:16px;height:16px">Visible para el cliente</label>'+
        '<label class="btn sm">Subir PDF<input type="file" accept="application/pdf,.pdf" multiple hidden data-act="subir-doc" data-id="'+p.id+'"></label></span></div>'+
        '<div id="docs-'+p.id+'"><p class="mini" style="margin:0">Cargando documentación…</p></div>'+
@@ -470,7 +475,7 @@ function vistaFicha(id){
            '<span class="sp"></span>'+
            (a.cerrado ? '' : '<button class="btn sm" data-act="aviso-editar" data-id="'+a.id+'">Actualizar</button>')+'</div>'+
            (a.descripcion ? '<p style="margin:0">'+esc(a.descripcion)+'</p>' : '')+
-           '<p class="mini" style="margin:0">'+[a.tecnico?('Técnico: '+a.tecnico):'', a.fecha_prevista?('Previsto: '+fechaCorta(a.fecha_prevista)):'', a.contacto?('Contacto: '+a.contacto):''].filter(Boolean).map(esc).join(' · ')+'</p>'+
+           '<p class="mini" style="margin:0">'+[('Técnico: '+((a.tecnico_id?nombreTec(a.tecnico_id):a.tecnico)||'sin asignar')), a.fecha_prevista?('Previsto: '+fechaCorta(a.fecha_prevista)):'', a.contacto?('Contacto: '+a.contacto):''].filter(Boolean).map(esc).join(' · ')+'</p>'+
            '</div>';
     });
     h += '</div>';
@@ -481,23 +486,48 @@ function vistaFicha(id){
 }
 
 /* ---- Avisos (todos) ---- */
+const claveFecha = a => (a.fecha_prevista || (a.creado || '').slice(0, 10) || '9999-12-31');
+const porFecha = (a, b) => claveFecha(a) < claveFecha(b) ? -1 : (claveFecha(a) > claveFecha(b) ? 1 : 0);
+
+function tarjetaAviso(a){
+  const p = puertaDe(a.puerta_id) || {};
+  const tec = a.tecnico_id ? nombreTec(a.tecnico_id) : (a.tecnico || '');
+  return '<div class="aviso"><div class="cab"><span class="chip '+(a.tipo==='mantenimiento'?'gris':'aviso')+'">'+(EST_AVISO[a.estado]||a.estado)+'</span>'+
+    '<b>'+esc(p.cliente||'Sin cliente')+'</b><span class="mini">'+esc(p.codigo||'')+' · '+esc(p.direccion||'')+'</span><span class="sp"></span>'+
+    '<button class="btn sm plana" data-act="abrir" data-id="'+a.puerta_id+'">Ver puerta</button>'+
+    '<button class="btn sm" data-act="aviso-editar" data-id="'+a.id+'">Actualizar</button></div>'+
+    (a.descripcion?'<p style="margin:0">'+esc(a.descripcion)+'</p>':'')+
+    '<p class="mini" style="margin:0">'+
+      (a.fecha_prevista ? ('Visita: '+fechaCorta(a.fecha_prevista)+' · '+relativo(a.fecha_prevista)+' · ') : '')+
+      'Avisado el '+fechaHora(a.creado)+
+      (tec ? (' · '+esc(tec)) : ' · <b>sin asignar</b>')+
+      (a.origen==='cliente'?' · avisó el cliente':'')+(a.contacto?(' · '+esc(a.contacto)):'')+
+    '</p></div>';
+}
+
 function vistaAvisos(){
   const abiertos = S.avisos.filter(a => !a.cerrado);
-  let h = '<div class="stack"><div class="panel"><div class="panel-h"><h2>Avisos abiertos</h2><span class="mini">'+abiertos.length+'</span></div>';
-  if (!abiertos.length) h += '<p class="muted" style="margin:0">No hay avisos abiertos. Todo en orden.</p>';
-  else {
-    h += '<div class="avisos">';
-    abiertos.forEach(a => {
-      const p = puertaDe(a.puerta_id) || {};
-      h += '<div class="aviso"><div class="cab"><span class="chip aviso">'+(EST_AVISO[a.estado]||a.estado)+'</span>'+
-           '<b>'+esc(p.cliente||'Sin cliente')+'</b><span class="mini">'+esc(p.codigo||'')+' · '+esc(p.direccion||'')+'</span><span class="sp"></span>'+
-           '<button class="btn sm plana" data-act="abrir" data-id="'+a.puerta_id+'">Ver puerta</button>'+
-           '<button class="btn sm" data-act="aviso-editar" data-id="'+a.id+'">Actualizar</button></div>'+
-           (a.descripcion?'<p style="margin:0">'+esc(a.descripcion)+'</p>':'')+
-           '<p class="mini" style="margin:0">'+fechaHora(a.creado)+(a.origen==='cliente'?' · avisó el cliente':'')+(a.contacto?(' · '+esc(a.contacto)):'')+'</p></div>';
-    });
-    h += '</div>';
-  }
+  const yoId = S.perfil ? S.perfil.id : null;
+  const mios = abiertos.filter(a => a.tecnico_id === yoId).sort(porFecha);
+  const resto = abiertos.filter(a => a.tecnico_id !== yoId)
+                        .filter(a => !S.filtroTec || (S.filtroTec === 'sin' ? !a.tecnico_id : a.tecnico_id === S.filtroTec))
+                        .sort(porFecha);
+  let h = '<div class="stack">';
+
+  h += '<div class="panel"><div class="panel-h"><h2>Mis avisos</h2><span class="mini">'+mios.length+'</span></div>';
+  if (!mios.length) h += '<p class="muted" style="margin:0">No tienes ningún aviso asignado ahora mismo.</p>';
+  else h += '<div class="avisos">'+mios.map(tarjetaAviso).join('')+'</div>';
+  h += '</div>';
+
+  h += '<div class="panel"><div class="panel-h"><h2>'+(esAdmin()?'Resto de avisos abiertos':'Otros avisos del equipo')+'</h2>'+
+       '<span class="sp"></span>'+
+       (esAdmin() ? '<select id="f-tec" data-act="filtro-tec" style="padding:6px 9px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);font-size:14px">'+
+          '<option value="">Todos los técnicos</option><option value="sin"'+(S.filtroTec==='sin'?' selected':'')+'>Sin asignar</option>'+
+          activos().map(t => '<option value="'+t.id+'"'+(S.filtroTec===t.id?' selected':'')+'>'+esc(t.nombre||'—')+'</option>').join('')+
+          '</select>' : '<span class="mini">'+resto.length+'</span>')+
+       '</div>';
+  if (!resto.length) h += '<p class="muted" style="margin:0">'+(abiertos.length?'Nada más abierto con ese filtro.':'No hay avisos abiertos. Todo en orden.')+'</p>';
+  else h += '<div class="avisos">'+resto.map(tarjetaAviso).join('')+'</div>';
   h += '</div>';
 
   const rev = S.puertas.filter(p => p.proxima_revision).sort((a,b)=>a.proxima_revision<b.proxima_revision?-1:1).slice(0,15);
@@ -564,7 +594,31 @@ function vistaEquipo(){
        '<div class="campo"><label for="t-pass">Contraseña provisional</label><input id="t-pass" type="text" autocomplete="off" placeholder="Mínimo 6 caracteres"></div>'+
        '<div class="campo" style="align-content:end"><button class="btn pri" data-act="equipo-alta">Dar de alta</button></div>'+
        '</div><p class="err" id="t-err" role="alert" style="margin:10px 0 0"></p>'+
-       '<p class="mini" style="margin:8px 0 0">Dale la contraseña en persona. Él puede cambiarla desde la pantalla de entrada, con «He olvidado mi contraseña».</p></div></div>';
+       '<p class="mini" style="margin:8px 0 0">Dale la contraseña en persona. Él puede cambiarla desde la pantalla de entrada, con «He olvidado mi contraseña».</p></div>';
+  h += panelLista('seguridad', 'Elementos de seguridad', SEGURIDAD,
+        'Es la lista de casillas que sale al dar de alta o editar una puerta. Cada técnico puede añadir uno suelto en una puerta concreta sin tocar esta lista.');
+  h += panelLista('tipos_doc', 'Tipos de documento', TIPOS_DOC,
+        'Las opciones del desplegable al subir un PDF a una puerta.');
+  h += panelLista('tipos', 'Tipos de puerta', TIPOS, 'Desplegable «Tipo» de la ficha.');
+  h += '</div>';
+  return h;
+}
+
+/* Lista editable (añadir, quitar, ordenar) guardada en la tabla ajustes */
+function panelLista(clave, titulo, defecto, ayuda){
+  const arr = lista(clave, defecto);
+  let h = '<div class="panel"><div class="panel-h"><h3>'+esc(titulo)+'</h3><span class="mini">'+arr.length+'</span></div>';
+  h += '<div class="lista-simple">';
+  arr.forEach((s, i) => {
+    h += '<div class="fila" style="padding:6px 0;border-bottom:1px solid var(--line)">'+
+         '<span class="sp">'+esc(s)+'</span>'+
+         '<button class="btn sm plana" data-act="lista-subir" data-clave="'+clave+'" data-i="'+i+'"'+(i===0?' disabled':'')+'>↑</button>'+
+         '<button class="btn sm plana" data-act="lista-bajar" data-clave="'+clave+'" data-i="'+i+'"'+(i===arr.length-1?' disabled':'')+'>↓</button>'+
+         '<button class="btn sm" data-act="lista-quitar" data-clave="'+clave+'" data-i="'+i+'">Quitar</button></div>';
+  });
+  h += '</div><span class="fila" style="margin-top:10px"><input id="nuevo-'+clave+'" type="text" placeholder="Escribe el elemento nuevo" style="flex:1">'+
+       '<button class="btn pri" data-act="lista-anadir" data-clave="'+clave+'">Añadir</button></span>';
+  h += '<p class="mini" style="margin:8px 0 0">'+esc(ayuda)+'</p></div>';
   return h;
 }
 
@@ -685,6 +739,12 @@ dlgForm.addEventListener('click', e => { const b = e.target.closest('[data-cerra
 const val = id => { const e = document.getElementById(id); return e ? e.value.trim() : ''; };
 const setErr = m => { const e = dlgForm.querySelector('.err'); if (e) e.textContent = m; };
 const opts = (arr, sel) => ['<option value=""></option>'].concat(arr.map(o => '<option'+(o===sel?' selected':'')+'>'+esc(o)+'</option>')).join('');
+const casillaSeg = (s, marcado) => '<label><input type="checkbox" class="f-seg" value="'+esc(s)+'"'+(marcado?' checked':'')+'>'+esc(s)+'</label>';
+async function guardarLista(clave, arr){
+  const { error } = await sb.from('ajustes').upsert({ clave, valor: arr, actualizado: new Date().toISOString() }, { onConflict:'clave' });
+  if (error) throw error;
+  S.ajustes[clave] = arr;
+}
 
 function dlgPuerta(id){
   const p = id ? puertaDe(id) : null;
@@ -697,11 +757,11 @@ function dlgPuerta(id){
     '<div class="campo"><label for="f-cliente">Cliente</label><input id="f-cliente" type="text" value="'+esc(d.cliente||'')+'"></div>'+
     '<div class="campo full"><label for="f-dir">Dirección</label><input id="f-dir" type="text" value="'+esc(d.direccion||'')+'"></div>'+
     '<div class="campo full"><label for="f-ubi">Ubicación dentro del edificio</label><input id="f-ubi" type="text" value="'+esc(d.ubicacion||'')+'" placeholder="Ej.: garaje sótano -1, muelle 2"></div>'+
-    '<div class="campo"><label for="f-tcliente">Tipo de cliente</label><select id="f-tcliente">'+opts(CLIENTES, d.tipo_cliente)+'</select></div>'+
+    '<div class="campo"><label for="f-tcliente">Tipo de cliente</label><select id="f-tcliente">'+opts(lista('clientes', CLIENTES), d.tipo_cliente)+'</select></div>'+
     '</div></div>';
   h += '<div class="grupo"><h3>La puerta</h3><div class="campos">'+
-    '<div class="campo"><label for="f-tipo">Tipo</label><select id="f-tipo">'+opts(TIPOS, d.tipo)+'</select></div>'+
-    '<div class="campo"><label for="f-uso">Uso</label><select id="f-uso">'+opts(USOS, d.uso)+'</select></div>'+
+    '<div class="campo"><label for="f-tipo">Tipo</label><select id="f-tipo">'+opts(lista('tipos', TIPOS), d.tipo)+'</select></div>'+
+    '<div class="campo"><label for="f-uso">Uso</label><select id="f-uso">'+opts(lista('usos', USOS), d.uso)+'</select></div>'+
     '<div class="campo"><label for="f-marca">Marca</label><input id="f-marca" type="text" value="'+esc(d.marca||'')+'"></div>'+
     '<div class="campo"><label for="f-modelo">Modelo</label><input id="f-modelo" type="text" value="'+esc(d.modelo||'')+'"></div>'+
     '<div class="campo"><label for="f-cuadro">Cuadro de maniobra</label><input id="f-cuadro" type="text" value="'+esc(d.cuadro||'')+'"></div>'+
@@ -712,9 +772,16 @@ function dlgPuerta(id){
     '<div class="campo"><label for="f-alto">Alto (mm)</label><input id="f-alto" type="number" value="'+esc(d.alto_mm||'')+'"></div>'+
     '<div class="campo"><label for="f-peso">Peso hoja (kg)</label><input id="f-peso" type="number" step="0.1" value="'+esc(d.peso_kg||'')+'"></div>'+
     '</div></div>';
-  h += '<div class="grupo"><h3>Seguridad instalada</h3><div class="checks">'+
-    SEGURIDAD.map((s,i) => '<label><input type="checkbox" id="f-seg-'+i+'" value="'+esc(s)+'"'+((d.seguridad||[]).includes(s)?' checked':'')+'>'+esc(s)+'</label>').join('')+
-    '</div></div>';
+  const puestos = d.seguridad || [];
+  const maestra = lista('seguridad', SEGURIDAD);
+  const elementos = maestra.concat(puestos.filter(s => !maestra.includes(s)));
+  h += '<div class="grupo"><h3>Seguridad instalada</h3><div class="checks" id="f-segs">'+
+    elementos.map(s => casillaSeg(s, puestos.includes(s))).join('')+
+    '</div><div class="campos" style="margin-top:10px"><div class="campo full"><label for="f-seg-nuevo">Añadir un elemento que no esté en la lista</label>'+
+    '<span class="fila"><input id="f-seg-nuevo" type="text" placeholder="Ej.: bucle magnético, radar de apertura" style="flex:1">'+
+    '<button type="button" class="btn sm" data-act="seg-extra">Añadir</button></span>'+
+    (esAdmin() ? '<label class="mini" style="display:inline-flex;align-items:center;gap:6px;margin-top:8px"><input type="checkbox" id="f-seg-maestra" checked style="accent-color:var(--amarillo);width:16px;height:16px">Guardarlo también en la lista general, para todas las puertas</label>' : '')+
+    '</div></div></div>';
   h += '<div class="grupo"><h3>Revisiones y notas</h3><div class="campos">'+
     '<div class="campo"><label for="f-ult">Última revisión</label><input id="f-ult" type="date" value="'+esc(d.ultima_revision||'')+'"></div>'+
     '<div class="campo"><label for="f-prox">Próxima revisión</label><input id="f-prox" type="date" value="'+esc(d.proxima_revision||'')+'"></div>'+
@@ -724,7 +791,7 @@ function dlgPuerta(id){
     (p ? '<button type="button" class="btn" data-act="puerta-borrar" data-id="'+p.id+'">Borrar puerta</button>' : '')+
     '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button><button type="submit" class="btn pri">Guardar</button></div>';
   abrirDlg(h, async () => {
-    const seg = SEGURIDAD.filter((s,i) => { const e = document.getElementById('f-seg-'+i); return e && e.checked; });
+    const seg = Array.from(dlgForm.querySelectorAll('.f-seg')).filter(x => x.checked).map(x => x.value);
     const o = {
       codigo: val('f-cod') || null, cliente: val('f-cliente'), direccion: val('f-dir'), ubicacion: val('f-ubi'),
       tipo_cliente: val('f-tcliente'), tipo: val('f-tipo'), uso: val('f-uso'), marca: val('f-marca'), modelo: val('f-modelo'),
@@ -764,14 +831,19 @@ function dlgAviso(puertaId, avisoId){
   let h = '<h3>'+(a ? 'Actualizar aviso' : 'Nuevo aviso')+'</h3><div class="campos">'+
     '<div class="campo"><label for="a-tipo">Tipo</label><select id="a-tipo"><option value="averia"'+(d.tipo==='averia'?' selected':'')+'>Avería</option><option value="mantenimiento"'+(d.tipo==='mantenimiento'?' selected':'')+'>Mantenimiento</option></select></div>'+
     '<div class="campo"><label for="a-estado">Situación</label><select id="a-estado">'+Object.keys(EST_AVISO).map(k => '<option value="'+k+'"'+(d.estado===k?' selected':'')+'>'+EST_AVISO[k]+'</option>').join('')+'</select></div>'+
-    '<div class="campo"><label for="a-tec">Técnico</label><input id="a-tec" type="text" value="'+esc(d.tecnico||yo())+'"></div>'+
+    '<div class="campo"><label for="a-tec">Técnico asignado</label><select id="a-tec"><option value="">Sin asignar</option>'+
+      activos().map(t => '<option value="'+t.id+'"'+(d.tecnico_id===t.id?' selected':'')+'>'+esc(t.nombre||'—')+(t.rol==='admin'?' (admin)':'')+'</option>').join('')+
+      '</select><span class="pista">Lo verá en «Mis avisos» al entrar en la app</span></div>'+
     '<div class="campo"><label for="a-fecha">Visita prevista</label><input id="a-fecha" type="date" value="'+esc(d.fecha_prevista||'')+'"></div>'+
     '<div class="campo full"><label for="a-desc">Descripción</label><textarea id="a-desc" rows="3">'+esc(d.descripcion||'')+'</textarea></div>'+
     '</div><p class="mini" style="margin:0">Al cerrar un aviso, la puerta vuelve a quedar como operativa.</p><p class="err"></p>'+
     '<div class="pie">'+(a ? '<button type="button" class="btn" data-act="aviso-cerrar" data-id="'+a.id+'">Cerrar aviso</button>' : '')+
     '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button><button type="submit" class="btn pri">Guardar</button></div>';
   abrirDlg(h, async () => {
-    const o = { tipo: val('a-tipo'), estado: val('a-estado'), tecnico: val('a-tec'), fecha_prevista: val('a-fecha')||null, descripcion: val('a-desc'), actualizado: new Date().toISOString() };
+    const tid = val('a-tec') || null;
+    const o = { tipo: val('a-tipo'), estado: val('a-estado'), tecnico_id: tid, tecnico: tid ? nombreTec(tid) : '',
+                fecha_prevista: val('a-fecha')||null, descripcion: val('a-desc'), actualizado: new Date().toISOString() };
+    if (tid && o.estado === 'recibido') o.estado = 'asignado';   // al asignar técnico, el aviso pasa a asignado
     const mapa = { recibido:'aviso_recibido', asignado:'tecnico_asignado', en_curso:'en_reparacion', repuesto:'esperando_repuesto' };
     try {
       if (a){ const { error } = await sb.from('avisos').update(o).eq('id', a.id); if (error) throw error; }
@@ -878,6 +950,25 @@ raiz.addEventListener('click', async e => {
     } catch(e){ err.textContent = e.message || 'No se pudo dar de alta.'; }
     b.disabled = false; b.textContent = 'Dar de alta';
   }
+  else if (a === 'lista-anadir' || a === 'lista-quitar' || a === 'lista-subir' || a === 'lista-bajar'){
+    const clave = b.dataset.clave;
+    const base = { seguridad:SEGURIDAD, tipos_doc:TIPOS_DOC, tipos:TIPOS, usos:USOS, clientes:CLIENTES }[clave] || [];
+    const arr = lista(clave, base).slice();
+    if (a === 'lista-anadir'){
+      const campo = document.getElementById('nuevo-'+clave);
+      const v = (campo ? campo.value : '').trim();
+      if (!v) return;
+      if (arr.some(x => x.toLowerCase() === v.toLowerCase())) { toast('Ese elemento ya está en la lista.'); return; }
+      arr.push(v);
+    } else {
+      const i = +b.dataset.i;
+      if (a === 'lista-quitar'){ if (!armar(b, 'Confirmar')) return; arr.splice(i, 1); }
+      else if (a === 'lista-subir' && i > 0){ const t = arr[i-1]; arr[i-1] = arr[i]; arr[i] = t; }
+      else if (a === 'lista-bajar' && i < arr.length-1){ const t = arr[i+1]; arr[i+1] = arr[i]; arr[i] = t; }
+    }
+    try { await guardarLista(clave, arr); pintar(); toast('Lista guardada.'); }
+    catch(err){ fallo(err); }
+  }
   else if (a === 'equipo-activo'){
     try { const { error } = await sb.from('perfiles').update({ activo: b.dataset.v === '1' }).eq('id', b.dataset.id); if (error) throw error; await cargar(); }
     catch(err){ fallo(err); }
@@ -885,6 +976,7 @@ raiz.addEventListener('click', async e => {
 });
 raiz.addEventListener('input', e => { if (e.target.dataset.act === 'busca'){ S.busca = e.target.value; pintar(); } });
 raiz.addEventListener('change', e => {
+  if (e.target.dataset.act === 'filtro-tec'){ S.filtroTec = e.target.value; pintar(); return; }
   if (e.target.dataset.act === 'subir-foto' && e.target.files.length){ subirFotos(e.target.dataset.id, Array.from(e.target.files)); e.target.value=''; }
   if (e.target.dataset.act === 'subir-doc' && e.target.files.length){
     const sel = document.getElementById('doc-tipo-'+e.target.dataset.id);
@@ -895,6 +987,22 @@ raiz.addEventListener('change', e => {
 dlgForm.addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const a = b.dataset.act;
+  if (a === 'seg-extra'){
+    const campo = document.getElementById('f-seg-nuevo');
+    const cont = document.getElementById('f-segs');
+    const v = (campo ? campo.value : '').trim();
+    if (!v || !cont) return;
+    const ya = Array.from(cont.querySelectorAll('.f-seg')).find(x => x.value.toLowerCase() === v.toLowerCase());
+    if (ya){ ya.checked = true; campo.value = ''; return; }
+    cont.insertAdjacentHTML('beforeend', casillaSeg(v, true));
+    campo.value = '';
+    const maestra = document.getElementById('f-seg-maestra');
+    if (maestra && maestra.checked){
+      try { await guardarLista('seguridad', lista('seguridad', SEGURIDAD).concat([v])); }
+      catch(err){ setErr('El elemento se ha añadido a esta puerta, pero no a la lista general: '+err.message); }
+    }
+    return;
+  }
   if (a === 'puerta-borrar'){
     if (!armar(b, 'Confirmar borrado')) return;
     try { const { error } = await sb.from('puertas').delete().eq('id', b.dataset.id); if (error) throw error; cerrarDlg(); S.ficha = null; await cargar(); toast('Puerta borrada.'); }
