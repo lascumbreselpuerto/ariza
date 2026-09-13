@@ -1,5 +1,5 @@
 /* ARIZA SAT: guarda la app en el móvil para que abra rápido y sin cobertura. */
-const CACHE = 'ariza-sat-v1';
+const CACHE = 'ariza-sat-v2';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== CACHE).map(x => caches.delete(x)))).then(() => self.clients.claim())); });
@@ -8,7 +8,9 @@ self.addEventListener('fetch', e => {
   const url = new URL(req.url);
   if (url.hostname.endsWith('supabase.co')) return;            // datos y fotos: siempre en directo
   if (req.mode === 'navigate') {
-    e.respondWith(fetch(req).then(r => { const c = r.clone(); caches.open(CACHE).then(x => x.put('./index.html', c)); return r; })
+    // Siempre pide la versión nueva al servidor, saltándose la caché del navegador.
+    e.respondWith(fetch(new Request(req.url, { cache: 'reload', credentials: 'same-origin' }))
+      .then(r => { const c = r.clone(); caches.open(CACHE).then(x => x.put('./index.html', c)); return r; })
       .catch(() => caches.match('./index.html')));
     return;
   }

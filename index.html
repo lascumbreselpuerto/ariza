@@ -122,6 +122,11 @@ img{max-width:100%}
 .foto img{width:100%;height:100%;object-fit:cover;display:block}
 .foto button{position:absolute;top:4px;right:4px;border:0;background:rgba(28,24,23,.75);color:#fff;border-radius:4px;font-size:12px;padding:3px 7px;cursor:pointer}
 .pie-foto{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(transparent,rgba(0,0,0,.72));color:#fff;font-size:11px;line-height:1.3;padding:12px 6px 4px;pointer-events:none}
+.nota-oficina{margin:0;padding:8px 10px;border-left:3px solid var(--amarillo);background:rgba(252,186,29,.09);border-radius:0 6px 6px 0;font-size:14px;line-height:1.45}
+.firma-caja{border:1px solid var(--line);border-radius:8px;background:#fff;touch-action:none;width:100%;height:170px;display:block}
+.mat-fila{display:grid;grid-template-columns:1fr 76px 60px 34px;gap:6px;margin-bottom:6px;align-items:center}
+.mat-fila input,.mat-fila select{width:100%}
+@media (max-width:520px){ .mat-fila{grid-template-columns:1fr 64px 52px 32px} }
 .foto-rota{display:grid;place-items:center;width:100%;height:100%;font-size:12px;color:var(--muted);text-align:center;padding:8px;text-decoration:none}
 .linea{border-top:1px solid var(--line);padding-top:12px;margin-top:4px}
 .avisos{display:grid;gap:10px}
@@ -194,7 +199,8 @@ dialog::backdrop{background:rgba(20,18,17,.55)}
   </header>
   <nav class="tabs"><div class="tabs-in" id="tabs">
     <button data-tab="puertas" role="tab">Puertas</button>
-    <button data-tab="avisos" role="tab">Avisos</button>
+    <button data-tab="avisos" role="tab">Asistencias</button>
+    <button data-tab="clientes" role="tab">Clientes</button>
     <button data-tab="etiquetas" role="tab">Etiquetas</button>
     <button data-tab="equipo" role="tab" hidden>Equipo</button>
   </div></nav>
@@ -245,6 +251,24 @@ const ESTADOS = {
 };
 const TIPOS_DOC = ['Manual de instrucciones','Desbloqueo de emergencia','Instrucciones de uso','Esquema eléctrico','Declaración CE','Certificado','Informe técnico','Presupuesto','Fotos de obra','Otro'];
 const EST_AVISO = {recibido:'Recibido', asignado:'Asignado', en_curso:'En curso', repuesto:'Esperando repuesto', cerrado:'Cerrado'};
+/* Tipos de asistencia: clave interna y cómo se llama en pantalla */
+const ASISTENCIAS = {
+  averia:          'Correctiva (avería)',
+  mantenimiento:   'Preventiva (mantenimiento)',
+  comercial:       'Comercial (ofertar)',
+  instalacion:     'Instalación',
+  puesta_servicio: 'Puesta en servicio',
+  normativa:       'Normativa y adecuación',
+  garantia:        'Garantía',
+  falso:           'Desplazamiento en falso',
+  urgencia:        'Urgencia fuera de horario',
+};
+const ORIGENES = ['QR','Teléfono','Correo','WhatsApp','Interno','Cliente en oficina'];
+const COBROS = ['Efectivo','Datáfono','Bizum','Cheque','Transferencia'];
+const EST_FINAL = ['Operativa','Operativa con reservas','Fuera de servicio','Esperando repuesto'];
+const PRIORIDADES = ['normal','urgente','programada'];
+/* Tipos que no llevan cobro en obra ni cambian el estado de la puerta */
+const SIN_COBRO = ['comercial','falso'];
 
 /* ================= Utilidades ================= */
 const $ = s => document.querySelector(s);
@@ -263,7 +287,22 @@ function token(){ const abc='ACDEFHJKLMNPQRTUVWXY3479'; let s=''; for(let i=0;i<
 function estadoChip(e){ const x=ESTADOS[e]||ESTADOS.operativa; return '<span class="chip '+x.c+'">'+x.t+'</span>'; }
 
 /* ================= Estado ================= */
-const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etiquetas:[], equipo:[], ajustes:{}, ficha:null, cargando:true, busca:'', filtroTec:'' };
+const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etiquetas:[], equipo:[], clientes:[], ajustes:{},
+            ficha:null, fichaCliente:null, cargando:true, busca:'', buscaCli:'', filtroTec:'', sugerencias:[] };
+const clienteDe = id => S.clientes.find(c => c.id === id);
+const nombreCliente = a => {
+  if (a.cliente_id){ const c = clienteDe(a.cliente_id); if (c) return c.nombre; }
+  const p = a.puerta_id ? puertaDe(a.puerta_id) : null;
+  return (p && p.cliente) || a.contacto_nombre || 'Sin cliente';
+};
+const dondeAsistencia = a => {
+  const p = a.puerta_id ? puertaDe(a.puerta_id) : null;
+  if (p) return [p.direccion, p.ubicacion].filter(Boolean).join(' · ');
+  const c = a.cliente_id ? clienteDe(a.cliente_id) : null;
+  if (c) return [c.direccion, c.poblacion].filter(Boolean).join(' · ');
+  return a.direccion_libre || '';
+};
+const tipoAsis = t => (S.ajustes.etiquetas_tipo && S.ajustes.etiquetas_tipo[t]) || ASISTENCIAS[t] || t;
 /* Listas que el administrador puede cambiar desde la app; si no hay nada guardado, valen las de fábrica. */
 const lista = (clave, defecto) => (Array.isArray(S.ajustes[clave]) && S.ajustes[clave].length) ? S.ajustes[clave] : defecto;
 const esAdmin = () => !!(S.perfil && S.perfil.rol === 'admin');
@@ -378,18 +417,27 @@ async function vistaPublica(ref){
 /* ================= Datos ================= */
 async function cargar(){
   S.cargando = true; pintar();
-  const [p, a, e, t, j] = await Promise.all([
+  const [p, a, e, t, j, c] = await Promise.all([
     sb.from('puertas').select('*').order('codigo'),
     sb.from('avisos').select('*').order('creado', {ascending:false}),
     sb.from('etiquetas').select('*').order('codigo'),
     sb.from('perfiles').select('*').order('nombre'),
-    sb.from('ajustes').select('*')
+    sb.from('ajustes').select('*'),
+    sb.from('clientes').select('*').order('nombre')
   ]);
   if (p.error) fallo(p.error); else S.puertas = p.data || [];
   if (a.error) fallo(a.error); else S.avisos = a.data || [];
   if (e.error) fallo(e.error); else S.etiquetas = e.data || [];
   if (!t.error) S.equipo = t.data || [];
+  if (!c.error) S.clientes = c.data || [];
   if (!j.error){ S.ajustes = {}; (j.data || []).forEach(x => { S.ajustes[x.clave] = x.valor; }); }
+  // materiales ya usados, para ir sugiriéndolos al técnico
+  const m = await sb.from('materiales').select('descripcion, unidad').limit(500);
+  if (!m.error){
+    const vistos = new Map();
+    (m.data || []).forEach(x => { const k = (x.descripcion||'').toLowerCase(); if (k && !vistos.has(k)) vistos.set(k, x); });
+    S.sugerencias = Array.from(vistos.values());
+  }
   S.cargando = false; pintar();
 }
 const puertaDe = id => S.puertas.find(x => x.id === id);
@@ -435,6 +483,8 @@ function render(){
   let h = '';
   if (S.cargando) h = '<p class="cargando">Cargando datos…</p>';
   else if (S.ficha) h = vistaFicha(S.ficha);
+  else if (S.fichaCliente) h = vistaFichaCliente(S.fichaCliente);
+  else if (S.tab === 'clientes') h = vistaClientes();
   else if (S.tab === 'avisos') h = vistaAvisos();
   else if (S.tab === 'etiquetas') h = vistaEtiquetas();
   else if (S.tab === 'equipo') h = vistaEquipo();
@@ -519,7 +569,10 @@ function vistaFicha(id){
            '<span class="chip '+(a.cerrado?'gris':'aviso')+'">'+(a.cerrado?'Cerrado':(EST_AVISO[a.estado]||a.estado))+'</span>'+
            '<span class="mini">'+(TIPO_AVISO[a.tipo]||'Avería')+' · '+fechaHora(a.creado)+' · '+(a.origen==='cliente'?'lo pidió el cliente':'interno')+'</span>'+
            '<span class="sp"></span>'+
-           (a.cerrado ? '' : '<button class="btn sm" data-act="aviso-editar" data-id="'+a.id+'">Actualizar</button>')+'</div>'+
+           (a.cerrado
+             ? '<button class="btn sm plana" data-act="parte" data-id="'+a.id+'">Parte</button>'
+             : '<button class="btn sm" data-act="aviso-editar" data-id="'+a.id+'">Editar</button>'+
+               '<button class="btn sm pri" data-act="cerrar-asistencia" data-id="'+a.id+'">Cerrar visita</button>')+'</div>'+
            (a.descripcion ? '<p style="margin:0">'+esc(a.descripcion)+'</p>' : '')+
            '<p class="mini" style="margin:0">'+esc('Técnico: '+((a.tecnico_id?nombreTec(a.tecnico_id):a.tecnico)||'sin asignar'))+
              (a.fecha_prevista ? esc(' · Previsto: '+fechaCorta(a.fecha_prevista)) : '')+
@@ -537,7 +590,7 @@ function vistaFicha(id){
 const claveFecha = a => (a.fecha_prevista || (a.creado || '').slice(0, 10) || '9999-12-31');
 const porFecha = (a, b) => claveFecha(a) < claveFecha(b) ? -1 : (claveFecha(a) > claveFecha(b) ? 1 : 0);
 
-const TIPO_AVISO = { averia:'Avería', mantenimiento:'Mantenimiento', comercial:'Presupuesto' };
+const TIPO_AVISO = ASISTENCIAS;
 function contactoAviso(a){
   const tel = (a.contacto_telefono||'').trim();
   const mail = (a.contacto_email||'').trim();
@@ -548,21 +601,28 @@ function contactoAviso(a){
           mail ? '<a href="mailto:'+esc(mail)+'">'+esc(mail)+'</a>' : ''].filter(Boolean).join(' · ');
 }
 function tarjetaAviso(a){
-  const p = puertaDe(a.puerta_id) || {};
+  const p = a.puerta_id ? (puertaDe(a.puerta_id) || {}) : {};
   const tec = a.tecnico_id ? nombreTec(a.tecnico_id) : (a.tecnico || '');
   const cont = contactoAviso(a);
+  const donde = dondeAsistencia(a);
   return '<div class="aviso"><div class="cab">'+
-    (a.tipo==='comercial' ? '<span class="chip ok">Presupuesto</span>' : '')+
-    '<span class="chip '+(a.tipo==='mantenimiento'?'gris':'aviso')+'">'+(EST_AVISO[a.estado]||a.estado)+'</span>'+
-    '<b>'+esc(p.cliente||'Sin cliente')+'</b><span class="mini">'+esc(p.codigo||'')+' · '+esc(p.direccion||'')+'</span><span class="sp"></span>'+
-    '<button class="btn sm plana" data-act="abrir" data-id="'+a.puerta_id+'">Ver puerta</button>'+
-    '<button class="btn sm" data-act="aviso-editar" data-id="'+a.id+'">Actualizar</button></div>'+
+    '<span class="chip '+(a.tipo==='comercial'?'ok':(a.tipo==='mantenimiento'?'gris':'aviso'))+'">'+esc(tipoAsis(a.tipo))+'</span>'+
+    '<span class="chip gris sin">'+(EST_AVISO[a.estado]||a.estado)+'</span>'+
+    (a.prioridad==='urgente' ? '<span class="chip aviso sin">Urgente</span>' : '')+
+    '<b>'+esc(nombreCliente(a))+'</b>'+
+    '<span class="mini">'+esc([p.codigo, donde].filter(Boolean).join(' · '))+'</span><span class="sp"></span>'+
+    (a.puerta_id ? '<button class="btn sm plana" data-act="abrir" data-id="'+a.puerta_id+'">Ver puerta</button>' : '')+
+    '<button class="btn sm plana" data-act="aviso-editar" data-id="'+a.id+'">'+(a.cerrado?'Ver':'Editar')+'</button>'+
+    (a.cerrado
+      ? '<button class="btn sm" data-act="parte" data-id="'+a.id+'">Parte</button>'
+      : '<button class="btn sm pri" data-act="cerrar-asistencia" data-id="'+a.id+'">Cerrar visita</button>')+
+    '</div>'+
     (a.descripcion?'<p style="margin:0">'+esc(a.descripcion)+'</p>':'')+
+    (a.notas_oficina?'<p class="nota-oficina">Oficina: '+esc(a.notas_oficina)+'</p>':'')+
     '<p class="mini" style="margin:0">'+
       (a.fecha_prevista ? ('Visita: '+fechaCorta(a.fecha_prevista)+' · '+relativo(a.fecha_prevista)+' · ') : '')+
-      'Avisado el '+fechaHora(a.creado)+
+      'Entró el '+fechaHora(a.creado)+(a.origen==='cliente'?' por el QR':'')+
       (tec ? (' · '+esc(tec)) : ' · <b>sin asignar</b>')+
-      (a.origen==='cliente'?' · lo pidió el cliente':'')+
     '</p>'+
     (cont ? '<p class="mini" style="margin:0">'+cont+'</p>' : '')+
     '</div>';
@@ -577,9 +637,10 @@ function vistaAvisos(){
                         .filter(a => !S.filtroTec || (S.filtroTec === 'sin' ? !a.tecnico_id : a.tecnico_id === S.filtroTec))
                         .sort(porFecha);
   let h = '<div class="stack">';
+  h += '<div class="fila"><span class="sp"></span><button class="btn pri" data-act="asistencia-nueva">Nueva asistencia</button></div>';
 
-  h += '<div class="panel"><div class="panel-h"><h2>Mis avisos</h2><span class="mini">'+mios.length+'</span></div>';
-  if (!mios.length) h += '<p class="muted" style="margin:0">No tienes ningún aviso asignado ahora mismo.</p>';
+  h += '<div class="panel"><div class="panel-h"><h2>Mis asistencias</h2><span class="mini">'+mios.length+'</span></div>';
+  if (!mios.length) h += '<p class="muted" style="margin:0">No tienes ninguna asistencia asignada ahora mismo.</p>';
   else h += '<div class="avisos">'+mios.map(tarjetaAviso).join('')+'</div>';
   h += '</div>';
 
@@ -613,6 +674,69 @@ function vistaAvisos(){
     });
     h += '</tbody></table></div>';
   }
+  h += '</div></div>';
+  return h;
+}
+
+/* ---- Clientes ---- */
+function vistaClientes(){
+  const q = S.buscaCli.toLowerCase();
+  const lista = S.clientes.filter(c => !q || [c.nombre,c.nif,c.telefono,c.email,c.direccion,c.poblacion].join(' ').toLowerCase().includes(q));
+  let h = '<div class="stack">';
+  h += '<div class="fila"><div class="buscador sp"><input id="busca-cli" type="search" placeholder="Buscar cliente por nombre, NIF, teléfono o dirección" value="'+esc(S.buscaCli)+'" data-act="busca-cli"></div>'+
+       '<button class="btn pri" data-act="cliente-nuevo">Nuevo cliente</button></div>';
+  h += '<p class="mini" style="margin:0">'+S.clientes.length+' clientes · '+S.clientes.filter(c=>c.contrato).length+' con contrato de mantenimiento</p>';
+  if (!lista.length) h += '<div class="panel"><p class="muted" style="margin:0">'+(S.clientes.length?'Ningún cliente coincide con la búsqueda.':'Todavía no hay clientes. Se van creando solos al dar de alta puertas y asistencias.')+'</p></div>';
+  else {
+    h += '<div class="lista">';
+    lista.slice(0,300).forEach(c => {
+      const nP = S.puertas.filter(p => p.cliente_id === c.id).length;
+      const nA = S.avisos.filter(a => a.cliente_id === c.id || (a.puerta_id && (puertaDe(a.puerta_id)||{}).cliente_id === c.id)).length;
+      h += '<button class="item" data-act="abrir-cliente" data-id="'+c.id+'">'+
+           '<span class="qr">'+esc((c.nombre||'?').slice(0,2).toUpperCase())+'</span>'+
+           '<span><span class="tit">'+esc(c.nombre)+(c.contrato?' · contrato':'')+'</span>'+
+           '<span class="sub">'+esc([c.direccion,c.poblacion].filter(Boolean).join(' · ')||'Sin dirección')+'</span>'+
+           '<span class="sub">'+esc([c.telefono,c.email].filter(Boolean).join(' · '))+'</span></span>'+
+           '<span class="mini">'+nP+' puerta'+(nP===1?'':'s')+'<span style="display:block">'+nA+' asistencia'+(nA===1?'':'s')+'</span></span>'+
+           '</button>';
+    });
+    h += '</div>';
+  }
+  return h + '</div>';
+}
+
+function vistaFichaCliente(id){
+  const c = clienteDe(id);
+  if (!c) return '<p class="cargando">Cliente no encontrado.</p>';
+  const puertas = S.puertas.filter(p => p.cliente_id === c.id);
+  const asis = S.avisos.filter(a => a.cliente_id === c.id || (a.puerta_id && (puertaDe(a.puerta_id)||{}).cliente_id === c.id)).sort((x,y)=>x.creado<y.creado?1:-1);
+  let h = '<div class="stack">';
+  h += '<div class="fila"><button class="btn plana" data-act="volver-cliente">‹ Volver</button><span class="sp"></span>'+
+       '<button class="btn" data-act="cliente-editar" data-id="'+c.id+'">Editar cliente</button>'+
+       '<button class="btn pri" data-act="asistencia-nueva-cliente" data-id="'+c.id+'">Nueva asistencia</button></div>';
+  h += '<div class="panel"><div class="panel-h"><h2>'+esc(c.nombre)+'</h2>'+(c.contrato?'<span class="chip ok sin">Contrato</span>':'')+'</div><dl class="datos">';
+  [['NIF',c.nif],['Teléfono',c.telefono],['Correo',c.email],['Dirección',c.direccion],['Población',c.poblacion],['Tipo',c.tipo]]
+    .forEach(f => { if (f[1]) h += '<div><dt>'+f[0]+'</dt><dd>'+esc(f[1])+'</dd></div>'; });
+  h += '</dl>';
+  if (c.notas) h += '<p class="nota-oficina" style="margin-top:10px">'+esc(c.notas)+'</p>';
+  h += '</div>';
+
+  h += '<div class="panel"><div class="panel-h"><h3>Puertas</h3><span class="mini">'+puertas.length+'</span></div>';
+  if (!puertas.length) h += '<p class="muted" style="margin:0">Este cliente todavía no tiene puertas dadas de alta.</p>';
+  else {
+    h += '<div class="lista">';
+    puertas.forEach(p => h += '<button class="item" data-act="abrir" data-id="'+p.id+'">'+
+      '<span class="qr">'+esc((p.codigo||'—').replace(/^[A-Z]+-/,''))+'</span>'+
+      '<span><span class="tit">'+esc([p.tipo,p.marca,p.modelo].filter(Boolean).join(' · ')||'Puerta')+'</span>'+
+      '<span class="sub">'+esc([p.direccion,p.ubicacion].filter(Boolean).join(' · '))+'</span></span>'+
+      '<span>'+estadoChip(p.estado)+'</span></button>');
+    h += '</div>';
+  }
+  h += '</div>';
+
+  h += '<div class="panel"><div class="panel-h"><h3>Historial de asistencias</h3><span class="mini">'+asis.length+'</span></div>';
+  if (!asis.length) h += '<p class="muted" style="margin:0">Sin asistencias registradas.</p>';
+  else h += '<div class="avisos">'+asis.slice(0,30).map(tarjetaAviso).join('')+'</div>';
   h += '</div></div>';
   return h;
 }
@@ -846,7 +970,7 @@ async function guardarLista(clave, arr){
   S.ajustes[clave] = arr;
 }
 
-function dlgPuerta(id){
+function dlgPuerta(id, avisoId){
   const p = id ? puertaDe(id) : null;
   const usadas = new Set(S.puertas.filter(x => !p || x.id !== p.id).map(x => x.codigo));
   const libres = S.etiquetas.filter(e => !usadas.has(e.codigo)).map(e => e.codigo);
@@ -854,7 +978,10 @@ function dlgPuerta(id){
   let h = '<h3>'+(p ? 'Editar puerta '+esc(p.codigo||'') : 'Nueva puerta')+'</h3>';
   h += '<div class="grupo"><h3>Identificación</h3><div class="campos">'+
     '<div class="campo"><label for="f-cod">Etiqueta / código</label><select id="f-cod">'+opts(libres, d.codigo)+'</select><span class="pista">'+(libres.length?'Elige la etiqueta que acabas de pegar':'No quedan etiquetas libres: genera una serie')+'</span></div>'+
-    '<div class="campo"><label for="f-cliente">Cliente</label><input id="f-cliente" type="text" value="'+esc(d.cliente||'')+'"></div>'+
+    '<div class="campo"><label for="f-cliente">Cliente (nombre)</label><input id="f-cliente" type="text" value="'+esc(d.cliente||'')+'"></div>'+
+    '<div class="campo"><label for="f-clid">Ficha de cliente</label><select id="f-clid"><option value="">Sin ficha</option>'+
+      S.clientes.map(c => '<option value="'+c.id+'"'+(d.cliente_id===c.id?' selected':'')+'>'+esc(c.nombre)+'</option>').join('')+
+      '</select><span class="pista">Si lo dejas sin ficha, se crea una con el nombre de al lado</span></div>'+
     '<div class="campo full"><label for="f-dir">Dirección</label><input id="f-dir" type="text" value="'+esc(d.direccion||'')+'"></div>'+
     '<div class="campo full"><label for="f-ubi">Ubicación dentro del edificio</label><input id="f-ubi" type="text" value="'+esc(d.ubicacion||'')+'" placeholder="Ej.: garaje sótano -1, muelle 2"></div>'+
     '<div class="campo"><label for="f-tcliente">Tipo de cliente</label><select id="f-tcliente">'+opts(lista('clientes', CLIENTES), d.tipo_cliente)+'</select></div>'+
@@ -900,10 +1027,35 @@ function dlgPuerta(id){
       seguridad: seg, ultima_revision: val('f-ult')||null, proxima_revision: val('f-prox')||null, notas: val('f-notas')
     };
     if (!o.cliente && !o.direccion) return setErr('Pon al menos el cliente o la dirección.');
+    o.cliente_id = val('f-clid') || null;
     try {
+      // si no se eligió ficha de cliente pero hay nombre, se crea o se reutiliza
+      if (!o.cliente_id && o.cliente){
+        const ya = S.clientes.find(c => (c.nombre||'').toLowerCase() === o.cliente.toLowerCase());
+        if (ya) o.cliente_id = ya.id;
+        else {
+          const { data: nc } = await sb.from('clientes')
+            .insert({ nombre: o.cliente, direccion: o.direccion || null, tipo: o.tipo_cliente || null, creado_por: yo() })
+            .select().maybeSingle();
+          if (nc) o.cliente_id = nc.id;
+        }
+      }
+      let puertaId = p ? p.id : null;
       if (p){ const { error } = await sb.from('puertas').update(o).eq('id', p.id); if (error) throw error; }
-      else { o.creado_por = yo(); const { data, error } = await sb.from('puertas').insert(o).select().maybeSingle(); if (error) throw error; if (data) S.ficha = data.id; }
-      cerrarDlg(); await cargar(); toast(p ? 'Ficha actualizada.' : 'Puerta dada de alta.');
+      else {
+        o.creado_por = yo();
+        const { data, error } = await sb.from('puertas').insert(o).select().maybeSingle();
+        if (error) throw error;
+        if (data){ puertaId = data.id; S.ficha = data.id; }
+      }
+      // si venimos de una asistencia sin puerta, queda enganchada
+      if (avisoId && puertaId){
+        await sb.from('avisos').update({ puerta_id: puertaId, cliente_id: o.cliente_id || null }).eq('id', avisoId);
+        S.ficha = null;
+      }
+      cerrarDlg(); await cargar();
+      toast(p ? 'Ficha actualizada.' : (avisoId ? 'Puerta dada de alta y enganchada a la asistencia.' : 'Puerta dada de alta.'));
+      if (avisoId) dlgCierre(avisoId);
     } catch(e){ setErr(e.message || 'No se pudo guardar.'); }
   });
 }
@@ -924,48 +1076,320 @@ function dlgEstado(id){
   });
 }
 
-function dlgAviso(puertaId, avisoId){
+function dlgAviso(puertaId, avisoId, clienteId){
   const a = avisoId ? S.avisos.find(x => x.id === avisoId) : null;
-  const pid = a ? a.puerta_id : puertaId;
-  const d = a || { tipo:'averia', estado:'recibido' };
-  let h = '<h3>'+(a ? 'Actualizar aviso' : 'Nuevo aviso')+'</h3><div class="campos">'+
-    '<div class="campo"><label for="a-tipo">Tipo</label><select id="a-tipo">'+
-      '<option value="averia"'+(d.tipo==='averia'?' selected':'')+'>Avería</option>'+
-      '<option value="mantenimiento"'+(d.tipo==='mantenimiento'?' selected':'')+'>Mantenimiento</option>'+
-      '<option value="comercial"'+(d.tipo==='comercial'?' selected':'')+'>Presupuesto (comercial)</option>'+
+  const d = a || { tipo:'averia', estado:'recibido', prioridad:'normal', origen:'Teléfono',
+                   puerta_id: puertaId || null, cliente_id: clienteId || null };
+  const tipos = lista('tipos_asistencia', Object.keys(ASISTENCIAS));
+  const puertasOrd = S.puertas.slice().sort((x,y)=> (x.codigo||'') < (y.codigo||'') ? -1 : 1);
+  let h = '<h3>'+(a ? 'Asistencia '+esc(tipoAsis(d.tipo)) : 'Nueva asistencia')+'</h3>';
+
+  h += '<div class="grupo"><h3>Qué es y a quién</h3><div class="campos">'+
+    '<div class="campo"><label for="a-tipo">Tipo de asistencia</label><select id="a-tipo">'+
+      tipos.map(t => '<option value="'+esc(t)+'"'+(d.tipo===t?' selected':'')+'>'+esc(ASISTENCIAS[t]||t)+'</option>').join('')+
       '</select></div>'+
-    '<div class="campo"><label for="a-estado">Situación</label><select id="a-estado">'+Object.keys(EST_AVISO).map(k => '<option value="'+k+'"'+(d.estado===k?' selected':'')+'>'+EST_AVISO[k]+'</option>').join('')+'</select></div>'+
-    '<div class="campo"><label for="a-tec">Técnico asignado</label><select id="a-tec"><option value="">Sin asignar</option>'+
-      activos().map(t => '<option value="'+t.id+'"'+(d.tecnico_id===t.id?' selected':'')+'>'+esc(t.nombre||'—')+(t.rol==='admin'?' (admin)':'')+'</option>').join('')+
-      '</select><span class="pista">Lo verá en «Mis avisos» al entrar en la app</span></div>'+
-    '<div class="campo"><label for="a-fecha">Visita prevista</label><input id="a-fecha" type="date" value="'+esc(d.fecha_prevista||'')+'"></div>'+
-    '<div class="campo full"><label for="a-desc">Descripción</label><textarea id="a-desc" rows="3">'+esc(d.descripcion||'')+'</textarea></div>'+
+    '<div class="campo"><label for="a-origen">Cómo ha entrado</label><select id="a-origen">'+
+      opts(lista('origenes', ORIGENES), d.origen==='cliente' ? 'QR' : (d.origen||''))+'</select></div>'+
+    '<div class="campo full"><label for="a-puerta">Puerta</label><select id="a-puerta"><option value="">Sin puerta concreta</option>'+
+      puertasOrd.map(p => '<option value="'+p.id+'"'+(d.puerta_id===p.id?' selected':'')+'>'+
+        esc((p.codigo||'')+' · '+(p.cliente||'')+' · '+[p.direccion,p.ubicacion].filter(Boolean).join(' '))+'</option>').join('')+
+      '</select><span class="pista">Si aún no se sabe, déjalo vacío: el técnico puede darla de alta en obra</span></div>'+
+    '<div class="campo full"><label for="a-cliente">Cliente</label><select id="a-cliente"><option value="">Sin cliente en la ficha</option>'+
+      S.clientes.map(c => '<option value="'+c.id+'"'+(d.cliente_id===c.id?' selected':'')+'>'+esc(c.nombre+(c.poblacion?(' · '+c.poblacion):''))+'</option>').join('')+
+      '</select><span class="pista">Se rellena solo si eliges puerta. <a href="#" data-act="cliente-rapido">Crear cliente nuevo</a></span></div>'+
+    '<div class="campo full"><label for="a-dir">Dirección, si no hay puerta ni cliente</label><input id="a-dir" type="text" maxlength="200" value="'+esc(d.direccion_libre||'')+'" placeholder="Ej.: C/ Larga 4, El Puerto"></div>'+
+    '</div></div>';
+
+  h += '<div class="grupo"><h3>Lo que cuenta quien avisa</h3><div class="campos">'+
+    '<div class="campo full"><label for="a-desc">Qué dice que pasa</label><textarea id="a-desc" rows="3">'+esc(d.descripcion||'')+'</textarea></div>'+
     '<div class="campo"><label for="a-cnom">Contacto: nombre</label><input id="a-cnom" type="text" maxlength="80" value="'+esc(d.contacto_nombre||'')+'"></div>'+
     '<div class="campo"><label for="a-ctel">Contacto: teléfono</label><input id="a-ctel" type="tel" maxlength="20" value="'+esc(d.contacto_telefono||'')+'"></div>'+
     '<div class="campo"><label for="a-cmail">Contacto: correo</label><input id="a-cmail" type="email" maxlength="120" value="'+esc(d.contacto_email||'')+'"></div>'+
-    '</div><p class="mini" style="margin:0">'+(d.tipo==='comercial'
-        ? 'Una petición de presupuesto no cambia el estado de la puerta.'
-        : 'Al cerrar un aviso, la puerta vuelve a quedar como operativa.')+'</p><p class="err"></p>'+
-    '<div class="pie">'+(a ? '<button type="button" class="btn" data-act="aviso-cerrar" data-id="'+a.id+'">Cerrar aviso</button>' : '')+
+    '</div></div>';
+
+  h += '<div class="grupo"><h3>Instrucciones de oficina para el técnico</h3><div class="campos">'+
+    '<div class="campo full"><label for="a-notas">Lo que el técnico debe saber antes de ir</label>'+
+    '<textarea id="a-notas" rows="3" placeholder="Ej.: cliente con contrato, no cobrar. Preguntar por Manuel en portería. Llevar banda de seguridad de 2 m.">'+esc(d.notas_oficina||'')+'</textarea>'+
+    '<span class="pista">Esto lo ve el técnico en la asistencia, destacado</span></div>'+
+    '</div></div>';
+
+  h += '<div class="grupo"><h3>Planificación</h3><div class="campos">'+
+    '<div class="campo"><label for="a-estado">Situación</label><select id="a-estado">'+Object.keys(EST_AVISO).map(k => '<option value="'+k+'"'+(d.estado===k?' selected':'')+'>'+EST_AVISO[k]+'</option>').join('')+'</select></div>'+
+    '<div class="campo"><label for="a-prio">Prioridad</label><select id="a-prio">'+
+      PRIORIDADES.map(x => '<option value="'+x+'"'+(d.prioridad===x?' selected':'')+'>'+(x==='normal'?'Normal':(x==='urgente'?'Urgente':'Programada'))+'</option>').join('')+'</select></div>'+
+    '<div class="campo"><label for="a-tec">Técnico asignado</label><select id="a-tec"><option value="">Sin asignar</option>'+
+      activos().map(t => '<option value="'+t.id+'"'+(d.tecnico_id===t.id?' selected':'')+'>'+esc(t.nombre||'—')+(t.rol==='admin'?' (admin)':'')+'</option>').join('')+
+      '</select><span class="pista">Le llega un correo y lo ve en «Mis asistencias»</span></div>'+
+    '<div class="campo"><label for="a-fecha">Visita prevista</label><input id="a-fecha" type="date" value="'+esc(d.fecha_prevista||'')+'"></div>'+
+    '</div></div>';
+
+  h += '<p class="err"></p><div class="pie">'+
+    (a && !a.cerrado ? '<button type="button" class="btn" data-act="cerrar-asistencia" data-id="'+a.id+'">Cerrar visita</button>' : '')+
     '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button><button type="submit" class="btn pri">Guardar</button></div>';
+
   abrirDlg(h, async () => {
     const tid = val('a-tec') || null;
     const nom = val('a-cnom'), tel = val('a-ctel'), mail = val('a-cmail');
-    const o = { tipo: val('a-tipo'), estado: val('a-estado'), tecnico_id: tid, tecnico: tid ? nombreTec(tid) : '',
+    const pid = val('a-puerta') || null;
+    let cid = val('a-cliente') || null;
+    if (pid && !cid){ const pp = puertaDe(pid); if (pp && pp.cliente_id) cid = pp.cliente_id; }
+    const o = { tipo: val('a-tipo'), estado: val('a-estado'), prioridad: val('a-prio'),
+                origen: a ? (a.origen || val('a-origen')) : val('a-origen'),
+                puerta_id: pid, cliente_id: cid, direccion_libre: val('a-dir') || null,
+                tecnico_id: tid, tecnico: tid ? nombreTec(tid) : '',
                 fecha_prevista: val('a-fecha')||null, descripcion: val('a-desc'),
+                notas_oficina: val('a-notas') || null,
                 contacto_nombre: nom || null, contacto_telefono: tel || null, contacto_email: mail || null,
                 contacto: [nom, tel, mail].filter(Boolean).join(' · '),
                 actualizado: new Date().toISOString() };
-    if (tid && o.estado === 'recibido') o.estado = 'asignado';   // al asignar técnico, el aviso pasa a asignado
+    if (!o.puerta_id && !o.cliente_id && !o.direccion_libre && !o.contacto_nombre)
+      return setErr('Pon al menos la puerta, el cliente, una dirección o el nombre de quien avisa.');
+    if (tid && o.estado === 'recibido') o.estado = 'asignado';
     const mapa = { recibido:'aviso_recibido', asignado:'tecnico_asignado', en_curso:'en_reparacion', repuesto:'esperando_repuesto' };
     try {
       if (a){ const { error } = await sb.from('avisos').update(o).eq('id', a.id); if (error) throw error; }
-      else { o.puerta_id = pid; o.origen = 'tecnico'; const { error } = await sb.from('avisos').insert(o); if (error) throw error; }
-      // una petición comercial no toca el estado de la puerta
-      if (o.tipo !== 'comercial' && mapa[o.estado]) await sb.from('puertas').update({ estado: mapa[o.estado], estado_desde: new Date().toISOString() }).eq('id', pid);
-      cerrarDlg(); await cargar(); toast('Aviso guardado.');
+      else { const { error } = await sb.from('avisos').insert(o); if (error) throw error; }
+      if (o.puerta_id && !SIN_COBRO.includes(o.tipo) && mapa[o.estado])
+        await sb.from('puertas').update({ estado: mapa[o.estado], estado_desde: new Date().toISOString() }).eq('id', o.puerta_id);
+      cerrarDlg(); await cargar(); toast('Asistencia guardada.');
     } catch(e){ setErr(e.message); }
   });
+}
+
+/* Alta rápida de cliente */
+function dlgCliente(id, alGuardarExtra){
+  const c = id ? clienteDe(id) : null;
+  const d = c || {};
+  let h = '<h3>'+(c ? 'Editar cliente' : 'Nuevo cliente')+'</h3><div class="campos">'+
+    '<div class="campo full"><label for="c-nombre">Nombre o razón social</label><input id="c-nombre" type="text" maxlength="120" value="'+esc(d.nombre||'')+'"></div>'+
+    '<div class="campo"><label for="c-nif">NIF / CIF</label><input id="c-nif" type="text" maxlength="20" value="'+esc(d.nif||'')+'"></div>'+
+    '<div class="campo"><label for="c-tipo">Tipo</label><select id="c-tipo">'+opts(lista('clientes', CLIENTES), d.tipo)+'</select></div>'+
+    '<div class="campo"><label for="c-tel">Teléfono</label><input id="c-tel" type="tel" maxlength="20" value="'+esc(d.telefono||'')+'"></div>'+
+    '<div class="campo"><label for="c-mail">Correo</label><input id="c-mail" type="email" maxlength="120" value="'+esc(d.email||'')+'"></div>'+
+    '<div class="campo full"><label for="c-dir">Dirección</label><input id="c-dir" type="text" maxlength="200" value="'+esc(d.direccion||'')+'"></div>'+
+    '<div class="campo"><label for="c-pob">Población</label><input id="c-pob" type="text" maxlength="80" value="'+esc(d.poblacion||'')+'"></div>'+
+    '<div class="campo" style="align-content:end"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+      '<input type="checkbox" id="c-contrato"'+(d.contrato?' checked':'')+' style="accent-color:var(--amarillo);width:18px;height:18px">Tiene contrato de mantenimiento</label></div>'+
+    '<div class="campo full"><label for="c-notas">Notas internas</label><textarea id="c-notas" rows="2" placeholder="Ej.: facturar a nombre de la comunidad, llaves en portería">'+esc(d.notas||'')+'</textarea></div>'+
+    '</div><p class="err"></p><div class="pie">'+
+    '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button><button type="submit" class="btn pri">Guardar</button></div>';
+  abrirDlg(h, async () => {
+    const o = { nombre: val('c-nombre'), nif: val('c-nif')||null, tipo: val('c-tipo')||null,
+                telefono: val('c-tel')||null, email: val('c-mail')||null, direccion: val('c-dir')||null,
+                poblacion: val('c-pob')||null, notas: val('c-notas')||null,
+                contrato: !!(document.getElementById('c-contrato')||{}).checked };
+    if (!o.nombre) return setErr('El cliente necesita un nombre.');
+    try {
+      let nuevoId = id;
+      if (c){ const { error } = await sb.from('clientes').update(o).eq('id', c.id); if (error) throw error; }
+      else {
+        o.creado_por = yo();
+        const { data, error } = await sb.from('clientes').insert(o).select().maybeSingle();
+        if (error) throw error;
+        nuevoId = data ? data.id : null;
+      }
+      cerrarDlg(); await cargar();
+      toast(c ? 'Cliente actualizado.' : 'Cliente creado.');
+      if (alGuardarExtra) alGuardarExtra(nuevoId);
+    } catch(e){ setErr(e.message); }
+  });
+}
+
+/* ================= Cierre de la visita ================= */
+const FIRMA = { canvas:null, ctx:null, pintado:false };
+
+function filaMaterial(m){
+  m = m || { descripcion:'', cantidad:1, unidad:'ud' };
+  return '<div class="mat-fila">'+
+    '<input type="text" class="mat-desc" list="sugeridos" maxlength="120" placeholder="Material" value="'+esc(m.descripcion||'')+'">'+
+    '<input type="number" class="mat-cant" step="0.01" min="0" value="'+esc(m.cantidad!=null?m.cantidad:1)+'">'+
+    '<select class="mat-uni">'+['ud','m','kg','l','h'].map(u=>'<option'+(m.unidad===u?' selected':'')+'>'+u+'</option>').join('')+'</select>'+
+    '<button type="button" class="btn sm plana" data-act="mat-quitar">✕</button></div>';
+}
+
+function dlgCierre(avisoId){
+  const a = S.avisos.find(x => x.id === avisoId);
+  if (!a) return;
+  const p = a.puerta_id ? puertaDe(a.puerta_id) : null;
+  const cli = a.cliente_id ? clienteDe(a.cliente_id) : (p && p.cliente_id ? clienteDe(p.cliente_id) : null);
+  const conCobro = !SIN_COBRO.includes(a.tipo);
+  const mailCli = (a.contacto_email || (cli && cli.email) || '').trim();
+  const ahora = new Date();
+  const hhmm = d => d ? new Date(d).toTimeString().slice(0,5) : '';
+
+  let h = '<h3>Cerrar visita · '+esc(tipoAsis(a.tipo))+'</h3>';
+
+  // Lo que ya se sabía
+  h += '<div class="grupo"><h3>'+esc(nombreCliente(a))+(p?(' · '+esc(p.codigo||'')):'')+'</h3>';
+  if (a.descripcion) h += '<p class="mini" style="margin:0 0 8px"><b>Dijo el cliente:</b> '+esc(a.descripcion)+'</p>';
+  if (a.notas_oficina) h += '<p class="nota-oficina">Oficina: '+esc(a.notas_oficina)+'</p>';
+  if (!p) h += '<p class="mini" style="margin:8px 0 0">Esta asistencia no tiene puerta asignada. '+
+    '<button type="button" class="btn sm" data-act="alta-puerta-asis" data-id="'+a.id+'">Dar de alta la puerta</button></p>';
+  h += '</div>';
+
+  h += '<div class="grupo"><h3>Qué has encontrado y qué has hecho</h3><div class="campos">'+
+    '<div class="campo full"><label for="z-diag">Diagnóstico</label><textarea id="z-diag" rows="2" placeholder="Ej.: banda de seguridad cortada por roce con el marco">'+esc(a.diagnostico||'')+'</textarea></div>'+
+    '<div class="campo full"><label for="z-trab">Trabajo realizado</label><textarea id="z-trab" rows="3" placeholder="Ej.: sustituida banda, ajustado final de carrera y engrase general">'+esc(a.trabajo||'')+'</textarea></div>'+
+    '</div></div>';
+
+  h += '<div class="grupo"><h3>Materiales</h3>'+
+    '<datalist id="sugeridos">'+S.sugerencias.map(x=>'<option value="'+esc(x.descripcion)+'">').join('')+'</datalist>'+
+    '<div id="mats"></div>'+
+    '<button type="button" class="btn sm" data-act="mat-anadir">Añadir material</button>'+
+    '<p class="mini" style="margin:8px 0 0">Escribe y te irá sugiriendo los que ya se han usado otras veces.</p></div>';
+
+  h += '<div class="grupo"><h3>Tiempo y desplazamiento</h3><div class="campos">'+
+    '<div class="campo"><label for="z-ini">Hora de entrada</label><input id="z-ini" type="time" value="'+esc(hhmm(a.hora_inicio) || hhmm(ahora))+'"></div>'+
+    '<div class="campo"><label for="z-fin">Hora de salida</label><input id="z-fin" type="time" value="'+esc(hhmm(a.hora_fin))+'"></div>'+
+    '<div class="campo"><label for="z-horas">Horas a facturar</label><input id="z-horas" type="number" step="0.25" min="0" value="'+esc(a.horas!=null?a.horas:'')+'"><span class="pista">Se calcula solo con las horas de arriba; puedes corregirlo</span></div>'+
+    '<div class="campo"><label for="z-ntec">Técnicos</label><input id="z-ntec" type="number" min="1" max="6" value="'+esc(a.num_tecnicos||1)+'"></div>'+
+    '<div class="campo"><label for="z-km">Desplazamiento (km)</label><input id="z-km" type="number" step="1" min="0" value="'+esc(a.desplazamiento!=null?a.desplazamiento:'')+'"></div>'+
+    '</div></div>';
+
+  h += '<div class="grupo"><h3>Cómo queda</h3><div class="campos">'+
+    '<div class="campo"><label for="z-estado">Estado de la puerta</label><select id="z-estado">'+
+      opts(lista('estados_final', EST_FINAL), a.estado_final || 'Operativa')+'</select></div>'+
+    '<div class="campo" style="align-content:end"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+      '<input type="checkbox" id="z-pend"'+(a.pendiente?' checked':'')+' style="accent-color:var(--amarillo);width:18px;height:18px">Queda algo pendiente</label></div>'+
+    '<div class="campo full"><label for="z-pendt">Qué queda pendiente</label><input id="z-pendt" type="text" maxlength="200" value="'+esc(a.pendiente_texto||'')+'" placeholder="Ej.: pedir cuadro de maniobra, volver a montarlo"></div>'+
+    '</div></div>';
+
+  if (conCobro){
+    h += '<div class="grupo"><h3>Cobro en obra</h3><div class="campos">'+
+      '<div class="campo" style="align-content:end"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+        '<input type="checkbox" id="z-cobrado"'+(a.cobrado?' checked':'')+' style="accent-color:var(--amarillo);width:18px;height:18px">He cobrado en el momento</label></div>'+
+      '<div class="campo"><label for="z-imp">Importe cobrado (€)</label><input id="z-imp" type="number" step="0.01" min="0" value="'+esc(a.cobro_importe!=null?a.cobro_importe:'')+'"></div>'+
+      '<div class="campo"><label for="z-forma">Forma de cobro</label><select id="z-forma"><option value=""></option>'+
+        lista('formas_cobro', COBROS).map(f=>'<option'+(a.cobro_forma===f?' selected':'')+'>'+esc(f)+'</option>').join('')+'</select></div>'+
+      '<div class="campo full"><label for="z-ref">Referencia o quién paga</label><input id="z-ref" type="text" maxlength="120" value="'+esc(a.cobro_ref||'')+'" placeholder="Ej.: nº de operación del datáfono, o paga el presidente"></div>'+
+      '</div><p class="mini" style="margin:8px 0 0">Si no cobras, déjalo sin marcar: queda pendiente de facturar en oficina.</p></div>';
+  }
+
+  h += '<div class="grupo"><h3>Firma del cliente</h3>'+
+    '<canvas id="z-firma" class="firma-caja"></canvas>'+
+    '<div class="fila" style="margin-top:8px"><button type="button" class="btn sm plana" data-act="firma-borrar">Borrar firma</button><span class="sp"></span></div>'+
+    '<div class="campos" style="margin-top:8px">'+
+    '<div class="campo full"><label for="z-fnom">Nombre de quien firma</label><input id="z-fnom" type="text" maxlength="100" value="'+esc(a.firma_nombre||'')+'"></div>'+
+    '<div class="campo full"><label for="z-sin">Si no puede firmar, indica el motivo</label><input id="z-sin" type="text" maxlength="120" value="'+esc(a.firma_sin||'')+'" placeholder="Ej.: no había nadie en la comunidad"></div>'+
+    (mailCli ? '<div class="campo full"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+      '<input type="checkbox" id="z-enviar"'+(a.enviado_cliente?' checked':'')+' style="accent-color:var(--amarillo);width:18px;height:18px">Enviar copia del parte a '+esc(mailCli)+'</label></div>' : '')+
+    '</div></div>';
+
+  h += '<p class="err"></p><div class="pie">'+
+    '<button type="button" class="btn" data-act="guardar-avance" data-id="'+a.id+'">Guardar sin cerrar</button>'+
+    '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Cerrar visita</button></div>';
+
+  abrirDlg(h, () => guardarCierre(a, true));
+  setTimeout(() => prepararCierre(a), 0);
+}
+
+async function prepararCierre(a){
+  // materiales ya guardados
+  const cont = document.getElementById('mats');
+  if (cont){
+    const { data } = await sb.from('materiales').select('*').eq('aviso_id', a.id).order('creado');
+    cont.innerHTML = (data && data.length ? data : [null]).map(filaMaterial).join('');
+  }
+  // firma: lienzo para dibujar con el dedo
+  const c = document.getElementById('z-firma');
+  if (c){
+    const r = c.getBoundingClientRect();
+    c.width = Math.round(r.width * 2); c.height = Math.round(r.height * 2);
+    const ctx = c.getContext('2d');
+    ctx.scale(2,2); ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#111';
+    FIRMA.canvas = c; FIRMA.ctx = ctx; FIRMA.pintado = false;
+    let dibujando = false;
+    const punto = e => { const b = c.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; };
+    c.addEventListener('pointerdown', e => { dibujando = true; c.setPointerCapture(e.pointerId); const q = punto(e); ctx.beginPath(); ctx.moveTo(q.x, q.y); });
+    c.addEventListener('pointermove', e => { if (!dibujando) return; const q = punto(e); ctx.lineTo(q.x, q.y); ctx.stroke(); FIRMA.pintado = true; });
+    c.addEventListener('pointerup', () => { dibujando = false; });
+    c.addEventListener('pointerleave', () => { dibujando = false; });
+  }
+  // calcular horas al poner la hora de salida
+  const ini = document.getElementById('z-ini'), fin = document.getElementById('z-fin'), hs = document.getElementById('z-horas');
+  const calcular = () => {
+    if (!ini || !fin || !hs || !ini.value || !fin.value) return;
+    const [h1,m1] = ini.value.split(':').map(Number), [h2,m2] = fin.value.split(':').map(Number);
+    let mins = (h2*60+m2) - (h1*60+m1);
+    if (mins < 0) mins += 24*60;
+    if (!hs.value || hs.dataset.auto === '1'){ hs.value = (Math.round(mins/15)*15/60).toFixed(2); hs.dataset.auto = '1'; }
+  };
+  if (fin) fin.addEventListener('change', calcular);
+  if (hs) hs.addEventListener('input', () => { hs.dataset.auto = '0'; });
+}
+
+function materialesDelForm(){
+  return Array.from(dlgForm.querySelectorAll('.mat-fila')).map(f => ({
+    descripcion: (f.querySelector('.mat-desc')||{}).value?.trim() || '',
+    cantidad: parseFloat((f.querySelector('.mat-cant')||{}).value) || 0,
+    unidad: (f.querySelector('.mat-uni')||{}).value || 'ud',
+  })).filter(m => m.descripcion);
+}
+
+async function guardarCierre(a, cerrando){
+  const dia = new Date().toISOString().slice(0,10);
+  const hora = id => { const v = val(id); return v ? new Date(dia+'T'+v+':00').toISOString() : null; };
+  const chk = id => !!(document.getElementById(id)||{}).checked;
+  const conCobro = !SIN_COBRO.includes(a.tipo);
+  const o = {
+    diagnostico: val('z-diag') || null,
+    trabajo: val('z-trab') || null,
+    hora_inicio: hora('z-ini'), hora_fin: hora('z-fin'),
+    horas: val('z-horas') ? +val('z-horas') : null,
+    num_tecnicos: val('z-ntec') ? +val('z-ntec') : 1,
+    desplazamiento: val('z-km') ? +val('z-km') : null,
+    estado_final: val('z-estado') || null,
+    pendiente: chk('z-pend'), pendiente_texto: val('z-pendt') || null,
+    firma_nombre: val('z-fnom') || null, firma_sin: val('z-sin') || null,
+    enviado_cliente: chk('z-enviar'),
+    actualizado: new Date().toISOString(),
+  };
+  if (conCobro){
+    o.cobrado = chk('z-cobrado');
+    o.cobro_importe = val('z-imp') ? +val('z-imp') : null;
+    o.cobro_forma = val('z-forma') || null;
+    o.cobro_ref = val('z-ref') || null;
+    if (o.cobrado && !o.cobro_forma) return setErr('Di cómo has cobrado: efectivo, datáfono…');
+    if (o.cobrado && !o.cobro_importe) return setErr('Pon el importe que has cobrado.');
+  }
+  if (cerrando){
+    if (!o.trabajo) return setErr('Escribe al menos qué has hecho.');
+    if (!FIRMA.pintado && !a.firma_ruta && !o.firma_sin)
+      return setErr('Falta la firma del cliente. Si no hay nadie, escribe el motivo abajo.');
+    if (FIRMA.pintado && !o.firma_nombre) return setErr('Pon el nombre de quien firma.');
+    o.estado = 'cerrado';
+    o.cerrado = new Date().toISOString();
+    o.cerrado_por = yo();
+  }
+  try {
+    // firma
+    if (FIRMA.pintado && FIRMA.canvas){
+      const blob = await new Promise(r => FIRMA.canvas.toBlob(r, 'image/png'));
+      const ruta = a.id + '/' + Date.now() + '.png';
+      const { error } = await sb.storage.from('firmas').upload(ruta, blob, { contentType:'image/png' });
+      if (error) throw error;
+      o.firma_ruta = ruta;
+    }
+    // materiales: se rehacen
+    const mats = materialesDelForm();
+    await sb.from('materiales').delete().eq('aviso_id', a.id);
+    if (mats.length){
+      const { error } = await sb.from('materiales').insert(mats.map(m => ({ ...m, aviso_id: a.id })));
+      if (error) throw error;
+    }
+    const { error } = await sb.from('avisos').update(o).eq('id', a.id);
+    if (error) throw error;
+    // estado de la puerta según cómo queda
+    if (a.puerta_id && cerrando){
+      const mapa = { 'Operativa':'operativa', 'Operativa con reservas':'operativa', 'Fuera de servicio':'fuera_servicio', 'Esperando repuesto':'esperando_repuesto' };
+      const est = mapa[o.estado_final] || 'operativa';
+      await sb.from('puertas').update({ estado: est, estado_desde: new Date().toISOString(),
+        ultima_revision: (a.tipo==='mantenimiento' ? new Date().toISOString().slice(0,10) : undefined) }).eq('id', a.puerta_id);
+    }
+    cerrarDlg(); await cargar();
+    toast(cerrando ? 'Visita cerrada. La oficina ya tiene el parte.' : 'Guardado.');
+  } catch(e){ setErr(e.message || 'No se pudo guardar.'); }
 }
 
 function dlgQR(codigo){
@@ -995,6 +1419,65 @@ function dlgGenerar(){
   });
 }
 
+/* Parte de la asistencia, para imprimir o guardar en PDF */
+async function hojaParte(avisoId){
+  const a = S.avisos.find(x => x.id === avisoId);
+  if (!a) return;
+  const pu = a.puerta_id ? puertaDe(a.puerta_id) : null;
+  const cli = a.cliente_id ? clienteDe(a.cliente_id) : (pu && pu.cliente_id ? clienteDe(pu.cliente_id) : null);
+  const { data: mats } = await sb.from('materiales').select('*').eq('aviso_id', a.id).order('creado');
+  let firma = '';
+  if (a.firma_ruta){
+    const { data } = await sb.storage.from('firmas').createSignedUrl(a.firma_ruta, 3600);
+    if (data) firma = data.signedUrl;
+  }
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana.'); return; }
+  const fila = (k, v) => v ? '<tr><th>'+esc(k)+'</th><td>'+esc(v)+'</td></tr>' : '';
+  const dir = dondeAsistencia(a);
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Parte '+esc(pu?pu.codigo:'')+'</title><style>'+
+    'body{font:13px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#1C1817;max-width:800px;margin:0 auto;padding:24px}'+
+    'h1{font-size:20px;margin:0 0 2px}h2{font-size:14px;margin:22px 0 6px;border-bottom:1px solid #ddd;padding-bottom:4px}'+
+    '.cab{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #FCBA1D;padding-bottom:10px}'+
+    'table{border-collapse:collapse;width:100%;margin:4px 0}th,td{text-align:left;padding:4px 8px;vertical-align:top;border-bottom:1px solid #eee}'+
+    'th{width:170px;color:#6B6560;font-weight:500}'+
+    '.mats th{width:auto;background:#f6f5f3}.firma{border:1px solid #ddd;border-radius:6px;max-width:320px;margin-top:6px}'+
+    '@media print{body{padding:0}}</style></head><body>'+
+    '<div class="cab"><div><h1>Parte de asistencia</h1><div>'+esc(tipoAsis(a.tipo))+' · '+fechaHora(a.creado)+'</div></div>'+
+    '<div style="text-align:right"><b>ARIZA</b> puertas automáticas<br><span style="color:#6B6560">arizapa.es</span></div></div>'+
+    '<h2>Cliente y puerta</h2><table>'+
+      fila('Cliente', cli ? cli.nombre : nombreCliente(a))+
+      fila('NIF', cli && cli.nif)+
+      fila('Dirección', dir)+
+      fila('Puerta', pu ? [pu.codigo, pu.tipo, pu.marca, pu.modelo].filter(Boolean).join(' · ') : 'Sin puerta en ficha')+
+      fila('Contacto', [a.contacto_nombre, a.contacto_telefono].filter(Boolean).join(' · '))+
+    '</table>'+
+    '<h2>Asistencia</h2><table>'+
+      fila('Aviso', a.descripcion)+
+      fila('Diagnóstico', a.diagnostico)+
+      fila('Trabajo realizado', a.trabajo)+
+      fila('Estado en que queda', a.estado_final)+
+      (a.pendiente ? fila('Pendiente', a.pendiente_texto || 'Sí') : '')+
+    '</table>'+
+    ((mats && mats.length) ? ('<h2>Materiales</h2><table class="mats"><tr><th>Descripción</th><th style="width:90px">Cantidad</th></tr>'+
+      mats.map(m => '<tr><td>'+esc(m.descripcion)+'</td><td>'+esc(m.cantidad)+' '+esc(m.unidad||'')+'</td></tr>').join('')+'</table>') : '')+
+    '<h2>Tiempo</h2><table>'+
+      fila('Fecha', fechaCorta(a.cerrado || a.creado))+
+      fila('Horas', a.horas != null ? (a.horas + ' h') : '')+
+      fila('Técnicos', a.num_tecnicos)+
+      fila('Desplazamiento', a.desplazamiento != null ? (a.desplazamiento + ' km') : '')+
+      fila('Técnico', a.tecnico_id ? nombreTec(a.tecnico_id) : a.tecnico)+
+    '</table>'+
+    (a.cobrado ? ('<h2>Cobro</h2><table>'+fila('Importe cobrado', (a.cobro_importe||0) + ' €')+fila('Forma', a.cobro_forma)+fila('Referencia', a.cobro_ref)+'</table>') : '')+
+    '<h2>Conformidad del cliente</h2>'+
+    (firma ? ('<div>'+esc(a.firma_nombre||'')+'</div><img class="firma" src="'+firma+'">')
+           : ('<div>Sin firma. '+esc(a.firma_sin||'')+'</div>'))+
+    '<p style="margin-top:26px;color:#8A837D;font-size:11px">Ariza Puertas y Automatismos · Instalación, mantenimiento y reparación de puertas automáticas</p>'+
+    '</body></html>');
+  w.document.close();
+  setTimeout(() => w.print(), 400);
+}
+
 function hojaImprimible(){
   const usadas = new Set(S.puertas.map(p => p.codigo));
   const libres = S.etiquetas.filter(e => !usadas.has(e.codigo));
@@ -1020,13 +1503,21 @@ function hojaImprimible(){
 /* ================= Eventos ================= */
 $('#tabs').addEventListener('click', e => {
   const b = e.target.closest('button[data-tab]'); if (!b) return;
-  S.tab = b.dataset.tab; S.ficha = null; pintar(); window.scrollTo({top:0});
+  S.tab = b.dataset.tab; S.ficha = null; S.fichaCliente = null; pintar(); window.scrollTo({top:0});
 });
 raiz.addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b || b.tagName === 'INPUT') return;
   const a = b.dataset.act;
-  if (a === 'abrir'){ S.ficha = b.dataset.id; S.tab = 'puertas'; pintar(); window.scrollTo({top:0}); }
+  if (a === 'abrir'){ S.ficha = b.dataset.id; S.fichaCliente = null; S.tab = 'puertas'; pintar(); window.scrollTo({top:0}); }
   else if (a === 'volver'){ S.ficha = null; pintar(); }
+  else if (a === 'abrir-cliente'){ S.fichaCliente = b.dataset.id; S.ficha = null; pintar(); window.scrollTo({top:0}); }
+  else if (a === 'volver-cliente'){ S.fichaCliente = null; pintar(); }
+  else if (a === 'cliente-nuevo') dlgCliente(null);
+  else if (a === 'cliente-editar') dlgCliente(b.dataset.id);
+  else if (a === 'asistencia-nueva') dlgAviso(null, null, null);
+  else if (a === 'asistencia-nueva-cliente') dlgAviso(null, null, b.dataset.id);
+  else if (a === 'cerrar-asistencia') dlgCierre(b.dataset.id);
+  else if (a === 'parte') hojaParte(b.dataset.id);
   else if (a === 'puerta-nueva') dlgPuerta(null);
   else if (a === 'puerta-editar') dlgPuerta(b.dataset.id);
   else if (a === 'estado') dlgEstado(b.dataset.id);
@@ -1089,7 +1580,10 @@ raiz.addEventListener('click', async e => {
     catch(err){ fallo(err); }
   }
 });
-raiz.addEventListener('input', e => { if (e.target.dataset.act === 'busca'){ S.busca = e.target.value; pintar(); } });
+raiz.addEventListener('input', e => {
+  if (e.target.dataset.act === 'busca'){ S.busca = e.target.value; pintar(); }
+  if (e.target.dataset.act === 'busca-cli'){ S.buscaCli = e.target.value; pintar(); }
+});
 raiz.addEventListener('change', e => {
   if (e.target.dataset.act === 'filtro-tec'){ S.filtroTec = e.target.value; pintar(); return; }
   if (e.target.dataset.act === 'subir-foto' && e.target.files.length){ subirFotos(e.target.dataset.id, Array.from(e.target.files)); e.target.value=''; }
@@ -1102,6 +1596,36 @@ raiz.addEventListener('change', e => {
 dlgForm.addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const a = b.dataset.act;
+  if (a === 'mat-anadir'){
+    const cont = document.getElementById('mats');
+    if (cont) cont.insertAdjacentHTML('beforeend', filaMaterial());
+    return;
+  }
+  if (a === 'mat-quitar'){
+    const fila = b.closest('.mat-fila');
+    if (fila) fila.remove();
+    return;
+  }
+  if (a === 'firma-borrar'){
+    if (FIRMA.ctx && FIRMA.canvas){ FIRMA.ctx.clearRect(0,0,FIRMA.canvas.width,FIRMA.canvas.height); FIRMA.pintado = false; }
+    return;
+  }
+  if (a === 'guardar-avance'){
+    const av = S.avisos.find(x => x.id === b.dataset.id);
+    if (av) await guardarCierre(av, false);
+    return;
+  }
+  if (a === 'cliente-rapido'){
+    dlgCliente(null, async (id) => { if (id) toast('Cliente creado. Vuelve a abrir la asistencia para elegirlo.'); });
+    return;
+  }
+  if (a === 'alta-puerta-asis'){
+    const id = b.dataset.id;
+    cerrarDlg();
+    dlgPuerta(null, id);
+    return;
+  }
+  if (a === 'cerrar-asistencia'){ cerrarDlg(); dlgCierre(b.dataset.id); return; }
   if (a === 'seg-extra'){
     const campo = document.getElementById('f-seg-nuevo');
     const cont = document.getElementById('f-segs');
