@@ -93,8 +93,8 @@ img{max-width:100%}
 .lista{display:grid;gap:10px}
 .item{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;cursor:pointer;text-align:left;width:100%;font:inherit;color:inherit}
 .item:hover{border-color:var(--muted)}
-.item .tit{font-weight:600;overflow-wrap:anywhere}
-.item .sub{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.item .tit{display:block;font-weight:600;overflow-wrap:anywhere}
+.item .sub{display:block;font-size:13px;color:var(--muted);overflow-wrap:anywhere}
 .item .qr{width:38px;height:38px;display:grid;place-items:center;background:var(--negro);color:var(--amarillo);border-radius:6px;font:700 11px var(--mono)}
 
 /* Calendario de mantenimientos */
@@ -103,6 +103,7 @@ img{max-width:100%}
 .cifra b{font:700 26px var(--sans);line-height:1}
 .cifra span{font-size:12px;color:var(--muted)}
 .cifra.mal b{color:var(--mal)}
+.enlace{background:none;border:0;padding:0;font:inherit;color:var(--ink);text-decoration:underline;cursor:pointer}
 .item-plano{background:var(--surface);border:1px solid var(--line);border-radius:8px}
 .item-plano .item{border:0;background:none;padding-bottom:6px}
 .item-plano .item:hover{border-color:transparent}
@@ -210,6 +211,67 @@ dialog::backdrop{background:rgba(20,18,17,.55)}
 .login{max-width:380px;margin:8vh auto 0;display:grid;gap:14px}
 .login .panel{display:grid;gap:12px}
 .cargando{padding:40px 0;text-align:center;color:var(--muted)}
+.solo-movil{display:none}
+.filtros{display:flex;flex-wrap:wrap;gap:6px}
+.filtros .mini{opacity:.7}
+/* ---- Calendario navegable ---- */
+.cal-panel{display:grid;gap:12px}
+.cal-barra{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.cal-titulo{font:600 17px var(--sans);margin-left:4px}
+.cal-sel{font:inherit;font-size:14px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink)}
+.cal-cambio{display:inline-flex;gap:4px}
+.cal-rejilla{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.cal-cab{background:var(--surface-2);font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:center;padding:6px 2px}
+.cal-dia{background:var(--surface);min-height:92px;padding:4px;display:flex;flex-direction:column;gap:3px}
+.cal-dia.fuera{background:var(--surface-2);opacity:.6}
+.cal-dia.finde .cal-num{color:var(--muted)}
+.cal-dia.hoy{outline:2px solid var(--amarillo);outline-offset:-2px}
+.cal-num{align-self:flex-start;font:600 13px var(--sans);color:var(--ink);background:none;border:1px solid transparent;border-radius:6px;min-width:26px;padding:2px 5px;cursor:pointer;line-height:1.2}
+.cal-num:hover{border-color:var(--muted);background:var(--surface-2)}
+.cal-dia.hoy .cal-num{background:var(--amarillo);color:var(--negro)}
+.cal-cosas{display:flex;flex-direction:column;gap:2px;min-width:0}
+.cal-cosas .mas{font-size:11px;color:var(--muted);padding-left:2px}
+.cal-cosas .vacio{color:var(--muted);font-size:13px}
+.cal-semana{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.cal-col{background:var(--surface);min-height:150px;padding:6px;display:flex;flex-direction:column;gap:6px}
+.cal-col.finde{background:var(--surface-2)}
+.cal-col.hoy{outline:2px solid var(--amarillo);outline-offset:-2px}
+.cal-colcab{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:center}
+.cal-colcab b{font:600 15px var(--sans);color:var(--ink)}
+.cal-col .cal-cosas{flex:1}
+.cal-anadir{width:100%;justify-content:center;font-size:12px;padding:4px 6px}
+.pastilla{display:block;width:100%;text-align:left;font:500 11px var(--sans);line-height:1.25;padding:3px 5px;border:1px solid var(--line);border-left:3px solid var(--gris);border-radius:4px;background:var(--surface-2);color:var(--ink);cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pastilla:hover{border-color:var(--muted)}
+.pastilla.rev{border-left-color:var(--aviso);background:var(--aviso-bg)}
+.pastilla.urg{border-left-color:var(--mal);background:var(--mal-bg)}
+.pastilla.mto{border-left-color:var(--ok);background:var(--ok-bg)}
+.pastilla.com{border-left-color:var(--amarillo)}
+.pastilla .quien{display:block;font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pastilla .quien.sin{color:var(--mal)}
+@media (max-width:820px){
+  .solo-movil{display:inline}
+  .cal-semana{grid-template-columns:1fr;background:transparent;border:0;gap:6px}
+  .cal-col{min-height:0;border:1px solid var(--line);border-radius:8px;padding:8px 10px;gap:5px;
+    display:grid;grid-template-columns:auto 1fr auto;align-items:center}
+  .cal-colcab{text-align:left;white-space:nowrap}
+  .cal-col .cal-cosas{gap:4px}
+  .cal-col .vacio{display:none}
+  .cal-anadir{width:auto;padding:4px 10px}
+  .cal-dia{min-height:54px}
+  .cal-titulo{width:100%;margin:0;order:9}
+  .cal-col .pastilla{font-size:11px}
+  .cal-col .pastilla .quien{display:inline;margin-left:6px}
+  /* en el mes, en el móvil, no cabe el nombre: se ven puntos de color */
+  .cal-rejilla .cal-cosas{flex-direction:row;flex-wrap:wrap;gap:3px;padding-left:3px}
+  .cal-rejilla .pastilla{width:9px;height:9px;padding:0;border-radius:50%;border:0;
+    background:var(--gris);font-size:0;overflow:hidden;text-indent:-999px}
+  .cal-rejilla .pastilla.rev{background:var(--aviso)}
+  .cal-rejilla .pastilla.urg{background:var(--mal)}
+  .cal-rejilla .pastilla.mto{background:var(--ok)}
+  .cal-rejilla .pastilla.com{background:var(--amarillo)}
+  .cal-rejilla .pastilla .quien{display:none}
+  .cal-rejilla .mas{font-size:9px}
+}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -233,7 +295,9 @@ dialog::backdrop{background:rgba(20,18,17,.55)}
     <button data-tab="avisos" role="tab">Asistencias</button>
     <button data-tab="calendario" role="tab">Calendario</button>
     <button data-tab="clientes" role="tab">Clientes</button>
+    <button data-tab="contratos" role="tab">Contratos</button>
     <button data-tab="etiquetas" role="tab">Etiquetas</button>
+    <button data-tab="gestion" role="tab" hidden>Gestión</button>
     <button data-tab="equipo" role="tab" hidden>Equipo</button>
   </div></nav>
   <main class="wrap" id="vista"></main>
@@ -330,7 +394,21 @@ function estadoChip(e){ const x=ESTADOS[e]||ESTADOS.operativa; return '<span cla
 /* ================= Estado ================= */
 const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etiquetas:[], equipo:[], clientes:[], ajustes:{},
             contratos:[], ficha:null, fichaCliente:null, cargando:true, busca:'', buscaCli:'', filtroTec:'', sugerencias:[],
-            guionTipo:'' };
+            guionTipo:'', tarifas:null, catalogo:[], valoraciones:{}, resumen:null, mesGestion:'',
+            calVista:'mes', calAncla:null, calTec:'', buscaCon:'', conFiltro:'activos', borradorPuerta:null };
+/* Importes: solo existen para el administrador. Si no hay tarifas cargadas, no se enseña nada. */
+const valoracionDe = id => S.valoraciones[id] || null;
+const eur = n => (n == null || isNaN(n)) ? '—' :
+  new Intl.NumberFormat('es-ES', { style:'currency', currency:'EUR', maximumFractionDigits:2 }).format(n);
+const pct = (parte, total) => (!total) ? '—' : (Math.round(parte / total * 1000) / 10).toFixed(1).replace('.', ',') + '%';
+/* Mes en formato 2026-09, para los filtros de la pantalla de gestión */
+const mesDe = s => String(s || '').slice(0, 7);
+const mesActual = () => new Date().toISOString().slice(0, 7);
+const nombreMes = m => {
+  if (!m) return '';
+  const [a, x] = m.split('-');
+  return ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'][+x - 1] + ' ' + a;
+};
 const contratosDe = id => S.contratos.filter(c => c.cliente_id === id);
 const contratoVivo = id => contratosDe(id).find(c => c.estado === 'activo');
 /* Cada cuántos meses toca revisar esta puerta: manda la puerta, luego el contrato, luego lo general */
@@ -343,6 +421,20 @@ function periodicidadDe(p){
   return (typeof d === 'number' && d > 0) ? d : 12;
 }
 const nombrePeriodo = m => (PERIODOS.find(x => x[0] === m) || [m, 'Cada '+m+' meses'])[1];
+
+/* ---- Fechas, para el calendario ---- */
+const DIAS_SEM = ['L','M','X','J','V','S','D'];
+const iso = d => new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+const deIso = s => { const [a,m,d] = String(s).slice(0,10).split('-').map(Number); return new Date(a, m-1, d); };
+const sumaDias = (d, n) => { const x = new Date(d); x.setDate(x.getDate()+n); return x; };
+const sumaMeses = (d, n) => { const x = new Date(d); x.setDate(1); x.setMonth(x.getMonth()+n); return x; };
+/* lunes de la semana de una fecha */
+const lunesDe = d => { const x = new Date(d); const n = (x.getDay()+6)%7; x.setDate(x.getDate()-n); x.setHours(0,0,0,0); return x; };
+const mismoDia = (a, b) => iso(a) === iso(b);
+const esFinde = d => d.getDay() === 0 || d.getDay() === 6;
+const capital = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+const nombreMesAnio = d => capital(d.toLocaleDateString('es-ES', { month:'long', year:'numeric' }));
+const diaLargo = d => d.toLocaleDateString('es-ES', { weekday:'long', day:'numeric', month:'long' });
 /* Clave del guión de revisión de un tipo de puerta: "Peatonal automática" -> checklist_peatonal_automatica */
 const claveGuion = t => 'checklist_' + String(t||'Otro').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
 const guionDe = t => {
@@ -489,6 +581,17 @@ async function cargar(){
     sb.from('contratos').select('*').order('fecha_vencimiento')
   ]);
   if (!k.error) S.contratos = k.data || [];
+  // Tarifas, catálogo y valoraciones: las tarifas y el margen solo los deja ver
+  // la base de datos al administrador, así que aquí puede venir vacío y no pasa nada.
+  const [tf, cat, val] = await Promise.all([
+    sb.from('tarifas').select('*').limit(1).maybeSingle(),
+    sb.from('catalogo').select('*').order('descripcion'),
+    esAdmin() ? sb.from('valoraciones').select('*') : Promise.resolve({ data: [], error: null })
+  ]);
+  S.tarifas = (!tf.error && tf.data) ? tf.data : null;
+  S.catalogo = cat.error ? [] : (cat.data || []);
+  S.valoraciones = {};
+  if (!val.error) (val.data || []).forEach(v => { S.valoraciones[v.aviso_id] = v; });
   if (p.error) fallo(p.error); else S.puertas = p.data || [];
   if (a.error) fallo(a.error); else S.avisos = a.data || [];
   if (e.error) fallo(e.error); else S.etiquetas = e.data || [];
@@ -545,6 +648,7 @@ async function entrar(sesion){
   S.perfil = per;
   $('#quien').innerHTML = '<span class="dot"></span>' + esc(per.nombre || S.user.email) + (per.rol==='admin' ? ' · admin' : '');
   $('#tabs button[data-tab="equipo"]').hidden = per.rol !== 'admin';
+  $('#tabs button[data-tab="gestion"]').hidden = per.rol !== 'admin';
   await cargar();
 }
 const yo = () => (S.perfil && S.perfil.nombre) || (S.user && S.user.email) || 'Técnico';
@@ -562,9 +666,11 @@ function render(){
   else if (S.ficha) h = vistaFicha(S.ficha);
   else if (S.fichaCliente) h = vistaFichaCliente(S.fichaCliente);
   else if (S.tab === 'clientes') h = vistaClientes();
+  else if (S.tab === 'contratos') h = vistaContratos();
   else if (S.tab === 'calendario') h = vistaCalendario();
   else if (S.tab === 'avisos') h = vistaAvisos();
   else if (S.tab === 'etiquetas') h = vistaEtiquetas();
+  else if (S.tab === 'gestion') h = esAdmin() ? vistaGestion() : vistaPuertas();
   else if (S.tab === 'equipo') h = vistaEquipo();
   else h = vistaPuertas();
   raiz.innerHTML = h;
@@ -776,6 +882,86 @@ function vistaAvisos(){
   return h;
 }
 
+/* ---- Contratos de mantenimiento ---- */
+function chipContrato(c){
+  if (c.estado === 'baja') return '<span class="chip gris sin">De baja</span>';
+  if (c.estado === 'suspendido') return '<span class="chip aviso">Suspendido</span>';
+  if (!c.fecha_vencimiento) return '<span class="chip ok">Activo</span>';
+  const d = dias(c.fecha_vencimiento);
+  if (d < 0) return '<span class="chip mal">Vencido '+(-d)+' d</span>';
+  if (d <= (c.aviso_dias || 30)) return '<span class="chip aviso">Renovar en '+d+' d</span>';
+  return '<span class="chip ok">Activo</span>';
+}
+function estadoReal(c){
+  if (c.estado !== 'activo') return c.estado;
+  if (!c.fecha_vencimiento) return 'activo';
+  const d = dias(c.fecha_vencimiento);
+  if (d < 0) return 'vencido';
+  if (d <= (c.aviso_dias || 30)) return 'renovar';
+  return 'activo';
+}
+function vistaContratos(){
+  const q = (S.buscaCon || '').toLowerCase();
+  const todos = S.contratos.slice().sort((a,b) => {
+    const na = (clienteDe(a.cliente_id)||{}).nombre || '', nb = (clienteDe(b.cliente_id)||{}).nombre || '';
+    return na.localeCompare(nb, 'es');
+  });
+  const cuenta = f => todos.filter(c => f(estadoReal(c))).length;
+  const FILTROS = [
+    ['activos',  'Activos',       e => e === 'activo' || e === 'renovar'],
+    ['renovar',  'Por renovar',   e => e === 'renovar'],
+    ['vencidos', 'Vencidos',      e => e === 'vencido'],
+    ['bajas',    'Suspendidos y bajas', e => e === 'suspendido' || e === 'baja'],
+    ['todos',    'Todos',         () => true],
+  ];
+  const filtro = FILTROS.find(f => f[0] === (S.conFiltro || 'activos')) || FILTROS[0];
+  const lista = todos
+    .filter(c => filtro[2](estadoReal(c)))
+    .filter(c => { if (!q) return true;
+      const cli = clienteDe(c.cliente_id) || {};
+      return [c.referencia, cli.nombre, cli.poblacion, cli.nif].filter(Boolean).join(' ').toLowerCase().includes(q); });
+
+  let h = '<div class="stack">';
+  h += '<div class="fila"><div><h2 style="font-size:20px">Contratos de mantenimiento</h2>'+
+       '<p class="mini" style="margin:2px 0 0">'+cuenta(e => e==='activo'||e==='renovar')+
+       (cuenta(e => e==='activo'||e==='renovar')===1?' activo · ':' activos · ')+
+       cuenta(e => e==='renovar')+' por renovar · '+cuenta(e => e==='vencido')+
+       (cuenta(e => e==='vencido')===1?' vencido':' vencidos')+'</p></div>'+
+       '<span class="sp"></span><button class="btn pri" data-act="contrato-nuevo">Nuevo contrato</button></div>';
+
+  h += '<div class="fila"><div class="buscador sp"><input id="busca-con" type="search" placeholder="Buscar por cliente, referencia o NIF" value="'+esc(S.buscaCon||'')+'" data-act="busca-con"></div></div>';
+  h += '<div class="filtros">'+FILTROS.map(f =>
+        '<button class="btn sm'+(f[0]===filtro[0]?' pri':'')+'" data-act="con-filtro" data-f="'+f[0]+'">'+
+        f[1]+' <span class="mini">'+todos.filter(c => f[2](estadoReal(c))).length+'</span></button>').join('')+'</div>';
+
+  if (!lista.length){
+    h += '<div class="panel"><p class="muted" style="margin:0">'+
+      (S.contratos.length ? 'Ningún contrato en este filtro.' : 'Todavía no hay contratos. Da de alta el primero con «Nuevo contrato».')+
+      '</p></div>';
+  } else {
+    h += '<div class="lista">';
+    lista.forEach(c => {
+      const cli = clienteDe(c.cliente_id) || {};
+      const puertas = S.puertas.filter(p => p.cliente_id === c.cliente_id && !p.sin_mantenimiento);
+      const prox = puertas.map(p => p.proxima_revision).filter(Boolean).sort()[0] || null;
+      h += '<button class="item" data-act="contrato-editar" data-id="'+c.id+'">'+
+        '<span class="qr">'+(c.periodicidad_meses||12)+'m</span>'+
+        '<span><span class="tit">'+esc(cli.nombre || 'Cliente borrado')+'</span>'+
+        '<span class="sub">'+esc([c.referencia, cli.poblacion].filter(Boolean).join(' · ') || 'Sin referencia')+'</span>'+
+        '<span class="sub">'+esc(nombrePeriodo(c.periodicidad_meses||12))+' · '+puertas.length+' puerta'+(puertas.length===1?'':'s')+
+          (prox ? ' · próxima revisión '+esc(fechaCorta(prox)) : '')+
+          (esAdmin() && c.precio_anual != null ? ' · '+esc(eur(c.precio_anual))+'/año' : '')+'</span></span>'+
+        '<span>'+chipContrato(c)+
+        (c.fecha_vencimiento ? '<span class="mini" style="display:block;text-align:right;margin-top:4px">Vence '+esc(fechaCorta(c.fecha_vencimiento))+'</span>' : '')+
+        '</span></button>';
+    });
+    h += '</div>';
+  }
+  h += '<p class="mini" style="margin:0">Los contratos fijan cada cuánto se revisan las puertas del cliente. '+
+       'Cada puerta puede llevar su propia periodicidad desde su ficha.</p>';
+  return h + '</div>';
+}
+
 /* ---- Calendario de mantenimientos ---- */
 /* Puertas que entran en el plan de mantenimiento, con la fecha que les toca */
 function planMantenimiento(){
@@ -798,6 +984,80 @@ function chipRevision(d){
   if (d <= 30) return '<span class="chip gris">Este mes</span>';
   return '<span class="chip gris sin">'+fechaCorta(new Date(Date.now()+d*86400000).toISOString())+'</span>';
 }
+/* Lo que hay que hacer cada día: asistencias con fecha prevista y revisiones que vencen */
+function agendaPorDia(desde, hasta){
+  const dias_ = {};
+  const meter = (f, x) => { if (!f) return; const k = String(f).slice(0,10);
+    if (k < iso(desde) || k > iso(hasta)) return; (dias_[k] = dias_[k] || []).push(x); };
+
+  S.avisos.filter(a => !a.cerrado && a.fecha_prevista)
+    .filter(a => !S.calTec || (S.calTec === 'sin' ? !a.tecnico_id : a.tecnico_id === S.calTec))
+    .forEach(a => meter(a.fecha_prevista, { clase:'asis', aviso:a }));
+
+  // revisiones que vencen y todavía no tienen asistencia abierta
+  planMantenimiento().filter(x => x.fecha && !x.abierta)
+    .filter(() => !S.calTec || S.calTec === 'sin')
+    .forEach(x => meter(x.fecha, { clase:'rev', puerta:x.p, meses:x.meses }));
+
+  return dias_;
+}
+function pastillaAgenda(x){
+  if (x.clase === 'rev'){
+    const p = x.puerta;
+    return '<button class="pastilla rev" data-act="abrir-preventiva" data-id="'+p.id+'" '+
+      'title="Revisión pendiente de abrir">🔧 '+esc((p.codigo||'').replace(/^[A-Z]+-/,''))+' '+
+      esc(((p.cliente_id && (clienteDe(p.cliente_id)||{}).nombre) || p.cliente || '').slice(0,18))+'</button>';
+  }
+  const a = x.aviso;
+  const cl = a.prioridad === 'urgente' ? 'urg' : (a.tipo === 'mantenimiento' ? 'mto' : (a.tipo === 'comercial' ? 'com' : ''));
+  return '<button class="pastilla '+cl+'" data-act="cerrar-asistencia" data-id="'+a.id+'" '+
+    'title="'+esc(tipoAsis(a.tipo)+' · '+nombreCliente(a))+'">'+
+    esc(nombreCliente(a).slice(0,20))+
+    (a.tecnico ? '<span class="quien">'+esc(a.tecnico.slice(0,8))+'</span>' : '<span class="quien sin">sin asignar</span>')+
+    '</button>';
+}
+function rejillaMes(ancla){
+  const primero = new Date(ancla.getFullYear(), ancla.getMonth(), 1);
+  const ini = lunesDe(primero);
+  const fin = sumaDias(ini, 41);                 // seis semanas, siempre igual de alto
+  const agenda = agendaPorDia(ini, fin);
+  const hoyD = new Date(); hoyD.setHours(0,0,0,0);
+  let h = '<div class="cal-rejilla">';
+  DIAS_SEM.forEach(d => h += '<div class="cal-cab">'+d+'</div>');
+  for (let i = 0; i < 42; i++){
+    const d = sumaDias(ini, i), k = iso(d);
+    const fuera = d.getMonth() !== ancla.getMonth();
+    const cosas = agenda[k] || [];
+    h += '<div class="cal-dia'+(fuera?' fuera':'')+(esFinde(d)?' finde':'')+(mismoDia(d,hoyD)?' hoy':'')+'">'+
+      '<button class="cal-num" data-act="dia-nuevo" data-fecha="'+k+'" title="Nueva asistencia el '+esc(diaLargo(d))+'">'+d.getDate()+'</button>'+
+      '<div class="cal-cosas">'+cosas.slice(0,4).map(pastillaAgenda).join('')+
+      (cosas.length > 4 ? '<span class="mas">+'+(cosas.length-4)+'</span>' : '')+'</div></div>';
+  }
+  return h + '</div>';
+}
+function filaSemana(ancla){
+  const ini = lunesDe(ancla);
+  const agenda = agendaPorDia(ini, sumaDias(ini, 6));
+  const hoyD = new Date(); hoyD.setHours(0,0,0,0);
+  let h = '<div class="cal-semana">';
+  for (let i = 0; i < 7; i++){
+    const d = sumaDias(ini, i), k = iso(d);
+    const cosas = agenda[k] || [];
+    h += '<div class="cal-col'+(esFinde(d)?' finde':'')+(mismoDia(d,hoyD)?' hoy':'')+'">'+
+      '<div class="cal-colcab">'+DIAS_SEM[i]+' <b>'+d.getDate()+'</b></div>'+
+      '<div class="cal-cosas">'+cosas.map(pastillaAgenda).join('')+
+      (cosas.length ? '' : '<span class="vacio">—</span>')+'</div>'+
+      '<button class="btn sm plana cal-anadir" data-act="dia-nuevo" data-fecha="'+k+'">+ Añadir</button>'+
+      '</div>';
+  }
+  return h + '</div>';
+}
+
+function tituloSemana(ancla){
+  const ini = lunesDe(ancla), fin = sumaDias(ini, 6);
+  return 'Semana del ' + ini.toLocaleDateString('es-ES', { day:'numeric', month:'short' }) +
+         ' al ' + fin.toLocaleDateString('es-ES', { day:'numeric', month:'short', year:'numeric' });
+}
 function vistaCalendario(){
   const plan = planMantenimiento();
   const conFecha = plan.filter(x => x.fecha !== null);
@@ -806,13 +1066,40 @@ function vistaCalendario(){
   const mes      = conFecha.filter(x => x.d > 7 && x.d <= 30);
   const sinFecha = plan.filter(x => x.fecha === null);
   const porAbrir = conFecha.filter(x => x.d <= 21 && !x.abierta);
+  const ancla = S.calAncla ? deIso(S.calAncla) : new Date();
+  const porMes = S.calVista === 'mes';
 
   let h = '<div class="stack">';
-  h += '<div class="fila"><div><h2 style="font-size:20px">Calendario de revisiones</h2>'+
-       '<p class="mini" style="margin:2px 0 0">'+plan.length+' puertas en mantenimiento · '+S.contratos.filter(c=>c.estado==='activo').length+' contratos activos</p></div>'+
+  h += '<div class="fila"><div><h2 style="font-size:20px">Calendario</h2>'+
+       '<p class="mini" style="margin:2px 0 0">'+plan.length+' puerta'+(plan.length===1?'':'s')+' en mantenimiento · '+
+       (() => { const n = S.contratos.filter(c=>c.estado==='activo').length;
+                return n + ' contrato' + (n===1?' activo':'s activos'); })()+'</p></div>'+
        '<span class="sp"></span>'+
-       (porAbrir.length ? '<button class="btn pri" data-act="abrir-vencidas">Abrir las '+porAbrir.length+' que tocan</button>' : '')+
+       (porAbrir.length ? '<button class="btn pri" data-act="abrir-vencidas">'+
+          (porAbrir.length === 1 ? 'Abrir la revisión que toca' : 'Abrir las '+porAbrir.length+' revisiones que tocan')+'</button>' : '')+
        '</div>';
+
+  // ---- barra de navegación ----
+  h += '<div class="panel cal-panel"><div class="cal-barra">'+
+    '<button class="btn sm" data-act="cal-mover" data-n="-1" title="Anterior">‹</button>'+
+    '<button class="btn sm" data-act="cal-hoy">Hoy</button>'+
+    '<button class="btn sm" data-act="cal-mover" data-n="1" title="Siguiente">›</button>'+
+    '<b class="cal-titulo">'+esc(porMes ? nombreMesAnio(ancla) : tituloSemana(ancla))+'</b>'+
+    '<span class="sp"></span>'+
+    (esAdmin() ? '<select data-act="cal-tec" class="cal-sel">'+
+        '<option value="">Todo el equipo</option><option value="sin"'+(S.calTec==='sin'?' selected':'')+'>Sin asignar</option>'+
+        activos().map(t => '<option value="'+t.id+'"'+(S.calTec===t.id?' selected':'')+'>'+esc(t.nombre||'—')+'</option>').join('')+
+        '</select>' : '')+
+    '<span class="cal-cambio">'+
+      '<button class="btn sm'+(porMes?' pri':'')+'" data-act="cal-vista" data-v="mes">Mes</button>'+
+      '<button class="btn sm'+(porMes?'':' pri')+'" data-act="cal-vista" data-v="semana">Semana</button>'+
+    '</span></div>';
+  h += porMes ? rejillaMes(ancla) : filaSemana(ancla);
+  h += '<p class="mini" style="margin:10px 0 0">Toca el número de un día para abrir una asistencia con esa fecha. '+
+       'Las pastillas con llave inglesa son revisiones que tocan y todavía no se han abierto.'+
+       '<span class="solo-movil"> En el móvil el mes resume cada día con puntos de color: '+
+       'rojo urgencia, gris avería, verde revisión ya abierta, naranja revisión pendiente de abrir, amarillo comercial. '+
+       'Cambia a «Semana» para ver los nombres.</span></p></div>';
 
   h += '<div class="cifras">'+
     '<div class="cifra'+(vencidas.length?' mal':'')+'"><b>'+vencidas.length+'</b><span>Vencidas</span></div>'+
@@ -991,6 +1278,163 @@ function vistaEtiquetas(){
   }
   h += '</div></div>';
   return h;
+}
+
+/* ---- Gestión (solo administrador) ---- */
+function vistaGestion(){
+  const mes = S.mesGestion || mesActual();
+  const cerradas = S.avisos.filter(a => a.cerrado);
+  const delMes = cerradas.filter(a => mesDe(a.cerrado) === mes);
+  const meses = [...new Set(cerradas.map(a => mesDe(a.cerrado)))].sort().reverse().slice(0, 18);
+  if (!meses.includes(mes)) meses.unshift(mes);
+
+  const con = a => valoracionDe(a.id);
+  const suma = (arr, campo) => arr.reduce((t, a) => { const v = con(a); return t + (v ? +v[campo] : 0); }, 0);
+  const facturable = suma(delMes, 'imp_total');
+  const coste = suma(delMes, 'coste_total');
+  const margen = suma(delMes, 'margen');
+
+  // pendiente de facturar: cerradas, no cobradas en obra, no marcadas como facturadas
+  const pendientes = cerradas.filter(a => {
+    const v = con(a);
+    return v && !v.facturado && !a.cobrado && !a.sin_cargo && +v.imp_total > 0;
+  }).sort((x, y) => x.cerrado < y.cerrado ? -1 : 1);
+  const totalPendiente = pendientes.reduce((t, a) => t + (+con(a).imp_total), 0);
+  const sinValorar = cerradas.filter(a => !con(a));
+
+  let h = '<div class="stack">';
+  h += '<div class="fila"><div><h2 style="font-size:20px">Gestión</h2>'+
+       '<p class="mini" style="margin:2px 0 0">Lo que ves aquí no lo ven los técnicos.</p></div>'+
+       '<span class="sp"></span>'+
+       '<select id="g-mes" data-act="gestion-mes" style="padding:6px 9px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);font-size:14px">'+
+       meses.map(m => '<option value="'+m+'"'+(m===mes?' selected':'')+'>'+esc(nombreMes(m))+'</option>').join('')+'</select>'+
+       '<button class="btn" data-act="tarifas">Tarifas</button></div>';
+
+  if (!S.tarifas){
+    h += '<div class="panel"><p class="muted" style="margin:0">No se han podido leer las tarifas. '+
+         'Si acabas de instalar esta parte, ejecuta el SQL de la fase 4 y vuelve a entrar.</p></div>';
+    return h + '</div>';
+  }
+
+  // --- Cifras del mes ---
+  h += '<div class="cifras">'+
+    '<div class="cifra"><b>'+delMes.length+'</b><span>Visitas cerradas</span></div>'+
+    '<div class="cifra"><b>'+eur(facturable)+'</b><span>Facturable, sin IVA</span></div>'+
+    '<div class="cifra"><b>'+eur(coste)+'</b><span>Coste</span></div>'+
+    '<div class="cifra'+(margen < 0 ? ' mal' : '')+'"><b>'+eur(margen)+'</b><span>Margen · '+pct(margen, facturable)+'</span></div>'+
+    '</div>';
+  h += '<p class="mini" style="margin:0">El margen es sobre la venta: lo que queda de cada euro facturado, '+
+       'después de pagar las horas, el desplazamiento y el material. No confundir con el recargo sobre el coste del material.</p>';
+
+  // --- Pendiente de facturar ---
+  h += '<div class="panel"><div class="panel-h"><h3>Pendiente de facturar</h3>'+
+       '<span class="mini">'+pendientes.length+' · '+eur(totalPendiente)+'</span></div>';
+  if (!pendientes.length) h += '<p class="muted" style="margin:0">Nada pendiente. Todo lo cerrado está cobrado o facturado.</p>';
+  else {
+    h += '<p class="mini" style="margin:0 0 10px">Visitas cerradas que nadie ha cobrado todavía. Márcalas cuando emitas la factura.</p><div class="lista">';
+    pendientes.slice(0, 60).forEach(a => {
+      const v = con(a), p = a.puerta_id ? puertaDe(a.puerta_id) : null;
+      const dias_ = -dias(a.cerrado);
+      h += '<div class="item-plano">'+
+        '<button class="item sp" data-act="ver-valoracion" data-id="'+a.id+'">'+
+          '<span class="qr">'+esc(((p&&p.codigo)||'—').replace(/^[A-Z]+-/,''))+'</span>'+
+          '<span><span class="tit">'+esc(nombreCliente(a))+'</span>'+
+          '<span class="sub">'+esc(tipoAsis(a.tipo))+' · cerrada '+esc(fechaCorta(a.cerrado))+
+            (dias_ > 30 ? ' · <b style="color:var(--mal)">hace '+dias_+' días</b>' : ' · hace '+dias_+' días')+'</span>'+
+          '<span class="sub">'+esc(dondeAsistencia(a))+'</span></span>'+
+          '<span style="text-align:right"><span class="tit">'+eur(v.imp_total)+'</span>'+
+          '<span class="sub">margen '+eur(v.margen)+'</span></span>'+
+        '</button>'+
+        '<div class="fila" style="padding:0 12px 12px">'+
+          '<button class="btn sm pri" data-act="marcar-facturado" data-id="'+a.id+'">Marcar facturada</button>'+
+          '<button class="btn sm plana" data-act="parte" data-id="'+a.id+'">Parte</button>'+
+          '<span class="sp"></span>'+
+          '<button class="btn sm plana" data-act="revalorar" data-id="'+a.id+'">Volver a calcular</button>'+
+        '</div></div>';
+    });
+    h += '</div>';
+  }
+  h += '</div>';
+
+  // --- Margen de las visitas del mes ---
+  h += '<div class="panel"><div class="panel-h"><h3>Margen de '+esc(nombreMes(mes))+'</h3><span class="mini">'+delMes.length+'</span></div>';
+  if (!delMes.length) h += '<p class="muted" style="margin:0">No hay visitas cerradas en este mes.</p>';
+  else {
+    const orden = delMes.slice().sort((x, y) => {
+      const a1 = con(x), b1 = con(y);
+      return (a1 ? +a1.margen : 0) - (b1 ? +b1.margen : 0);
+    });
+    h += '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Cliente</th><th>Tipo</th>'+
+         '<th style="text-align:right">Factura</th><th style="text-align:right">Coste</th><th style="text-align:right">Margen</th></tr></thead><tbody>';
+    orden.forEach(a => {
+      const v = con(a);
+      const col = !v ? 'var(--muted)' : (+v.margen < 0 ? 'var(--mal)' : (+v.margen === 0 ? 'var(--muted)' : 'var(--ok)'));
+      h += '<tr><td>'+esc(nombreCliente(a))+
+           '<span class="sub mini" style="display:block">'+esc(fechaCorta(a.cerrado))+
+             (a.cobrado ? ' · cobrada en obra' : '')+(a.sin_cargo ? ' · sin cargo' : '')+'</span></td>'+
+           '<td>'+esc(tipoAsis(a.tipo))+'</td>'+
+           '<td class="num" style="text-align:right">'+(v ? eur(v.imp_total) : '—')+'</td>'+
+           '<td class="num" style="text-align:right">'+(v ? eur(v.coste_total) : '—')+'</td>'+
+           '<td class="num" style="text-align:right;color:'+col+'">'+(v ? eur(v.margen) : 'sin valorar')+'</td></tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+  h += '</div>';
+
+  // --- Rentabilidad de los contratos ---
+  const activos = S.contratos.filter(c => c.estado === 'activo');
+  if (activos.length){
+    h += '<div class="panel"><div class="panel-h"><h3>Contratos de mantenimiento</h3><span class="mini">últimos 12 meses</span></div>'+
+      '<p class="mini" style="margin:0 0 10px">En un contrato, la revisión no se factura: el ingreso es la cuota anual. '+
+      'Aquí ves si la cuota cubre lo que cuestan las visitas.</p>'+
+      '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Cliente</th>'+
+      '<th style="text-align:right">Cuota/año</th><th style="text-align:right">Coste visitas</th>'+
+      '<th style="text-align:right">Diferencia</th></tr></thead><tbody>';
+    activos.forEach(k => {
+      const cli = clienteDe(k.cliente_id);
+      const suyas = cerradas.filter(a => {
+        if (dias(a.cerrado) < -365) return false;
+        const pu = a.puerta_id ? puertaDe(a.puerta_id) : null;
+        return a.cliente_id === k.cliente_id || (pu && pu.cliente_id === k.cliente_id);
+      });
+      const cst = suyas.reduce((t, a) => { const v = con(a); return t + (v ? +v.coste_total : 0); }, 0);
+      const dif = (+k.precio_anual || 0) - cst;
+      h += '<tr><td>'+esc(cli ? cli.nombre : '—')+
+           '<span class="sub mini" style="display:block">'+suyas.length+' visita'+(suyas.length===1?'':'s')+' · '+esc(nombrePeriodo(k.periodicidad_meses))+'</span></td>'+
+           '<td class="num" style="text-align:right">'+eur(k.precio_anual)+'</td>'+
+           '<td class="num" style="text-align:right">'+eur(cst)+'</td>'+
+           '<td class="num" style="text-align:right;color:'+(dif < 0 ? 'var(--mal)' : 'var(--ok)')+'">'+eur(dif)+'</td></tr>';
+    });
+    h += '</tbody></table></div></div>';
+  }
+
+  // --- Avisos de cosas a corregir ---
+  if (sinValorar.length){
+    h += '<div class="panel"><div class="panel-h"><h3>Visitas sin valorar</h3><span class="mini">'+sinValorar.length+'</span></div>'+
+      '<p class="mini" style="margin:0 0 10px">Se cerraron antes de poner las tarifas, o el cálculo falló. '+
+      'Dale a recalcular y quedan valoradas.</p>'+
+      '<button class="btn pri" data-act="revalorar-todo">Recalcular las '+sinValorar.length+'</button></div>';
+  }
+  const sinCoste = S.catalogo.length ? [] : ['catalogo'];
+  if (sinCoste.length){
+    h += '<div class="panel"><div class="panel-h"><h3>Catálogo de materiales vacío</h3></div>'+
+      '<p class="mini" style="margin:0 0 10px">Mientras no haya materiales con su precio de compra, el material de las visitas '+
+      'no se valora y el margen sale más alto de lo real. Dale de alta los veinte o treinta que más usáis.</p>'+
+      '<button class="btn pri" data-act="articulo-nuevo">Añadir material al catálogo</button></div>';
+  } else {
+    h += '<div class="panel"><div class="panel-h"><h3>Catálogo de materiales</h3><span class="mini">'+S.catalogo.length+'</span>'+
+      '<button class="btn sm" data-act="articulo-nuevo">Añadir</button></div>'+
+      '<div class="lista-simple">';
+    S.catalogo.slice(0, 40).forEach(x => {
+      h += '<div class="fila" style="padding:6px 0;border-bottom:1px solid var(--line)">'+
+        '<span class="sp">'+esc(x.descripcion)+' <span class="mini">'+esc(x.unidad||'ud')+
+        (x.referencia ? ' · '+esc(x.referencia) : '')+'</span></span>'+
+        '<button class="btn sm plana" data-act="articulo-editar" data-id="'+x.id+'">Editar</button></div>';
+    });
+    h += '</div></div>';
+  }
+
+  return h + '</div>';
 }
 
 /* ---- Equipo ---- */
@@ -1283,6 +1727,41 @@ async function guardarLista(clave, arr){
   S.ajustes[clave] = arr;
 }
 
+/* Campos del alta de puerta, para poder recuperarlos si se sale a crear un cliente */
+const CAMPOS_PUERTA = ['f-cod','f-cliente','f-clid','f-dir','f-ubi','f-tcliente','f-tipo','f-uso',
+  'f-marca','f-modelo','f-cuadro','f-motor','f-anio','f-instalador','f-ancho','f-alto','f-peso',
+  'f-ult','f-prox','f-notas'];
+function guardarBorradorPuerta(){
+  const b = {};
+  CAMPOS_PUERTA.forEach(id => { const e = document.getElementById(id); if (e) b[id] = e.value; });
+  b.seguridad = Array.from(document.querySelectorAll('#f-segs .f-seg:checked')).map(x => x.value);
+  b.extras = Array.from(document.querySelectorAll('#f-segs .f-seg')).map(x => x.value);
+  S.borradorPuerta = b;
+}
+function aplicarBorradorPuerta(){
+  const b = S.borradorPuerta;
+  if (!b) return;
+  S.borradorPuerta = null;
+  // los elementos de seguridad que el técnico había añadido a mano
+  const cont = document.getElementById('f-segs');
+  if (cont){
+    const ya = Array.from(cont.querySelectorAll('.f-seg')).map(x => x.value.toLowerCase());
+    (b.extras || []).forEach(v => {
+      if (ya.includes(v.toLowerCase())) return;
+      cont.insertAdjacentHTML('beforeend',
+        '<label class="mini" style="display:flex;align-items:center;gap:8px">'+
+        '<input type="checkbox" class="f-seg" value="'+esc(v)+'" style="accent-color:var(--amarillo);width:18px;height:18px">'+esc(v)+'</label>');
+    });
+    cont.querySelectorAll('.f-seg').forEach(x => { x.checked = (b.seguridad || []).includes(x.value); });
+  }
+  CAMPOS_PUERTA.forEach(id => {
+    const e = document.getElementById(id);
+    if (!e || b[id] === undefined) return;
+    if (e.tagName === 'SELECT' && !Array.from(e.options).some(o => o.value === b[id])) return;
+    e.value = b[id];
+  });
+}
+
 function dlgPuerta(id, avisoId){
   const p = id ? puertaDe(id) : null;
   const usadas = new Set(S.puertas.filter(x => !p || x.id !== p.id).map(x => x.codigo));
@@ -1294,7 +1773,9 @@ function dlgPuerta(id, avisoId){
     '<div class="campo"><label for="f-cliente">Cliente (nombre)</label><input id="f-cliente" type="text" value="'+esc(d.cliente||'')+'"></div>'+
     '<div class="campo"><label for="f-clid">Ficha de cliente</label><select id="f-clid"><option value="">Sin ficha</option>'+
       S.clientes.map(c => '<option value="'+c.id+'"'+(d.cliente_id===c.id?' selected':'')+'>'+esc(c.nombre)+'</option>').join('')+
-      '</select><span class="pista">Si lo dejas sin ficha, se crea una con el nombre de al lado</span></div>'+
+      '</select><span class="pista">Si lo dejas sin ficha, se crea una con el nombre de al lado. '+
+      '<button type="button" class="enlace" data-act="cliente-desde-puerta"'+
+      (p?' data-puerta="'+p.id+'"':'')+(avisoId?' data-aviso="'+avisoId+'"':'')+'>Crear cliente nuevo</button></span></div>'+
     '<div class="campo full"><label for="f-dir">Dirección</label><input id="f-dir" type="text" value="'+esc(d.direccion||'')+'"></div>'+
     '<div class="campo full"><label for="f-ubi">Ubicación dentro del edificio</label><input id="f-ubi" type="text" value="'+esc(d.ubicacion||'')+'" placeholder="Ej.: garaje sótano -1, muelle 2"></div>'+
     '<div class="campo"><label for="f-tcliente">Tipo de cliente</label><select id="f-tcliente">'+opts(lista('clientes', CLIENTES), d.tipo_cliente)+'</select></div>'+
@@ -1330,6 +1811,7 @@ function dlgPuerta(id, avisoId){
   h += '<p class="err" role="alert"></p><div class="pie">'+
     (p ? '<button type="button" class="btn" data-act="puerta-borrar" data-id="'+p.id+'">Borrar puerta</button>' : '')+
     '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button><button type="submit" class="btn pri">Guardar</button></div>';
+  setTimeout(aplicarBorradorPuerta, 0);
   abrirDlg(h, async () => {
     const seg = Array.from(dlgForm.querySelectorAll('.f-seg')).filter(x => x.checked).map(x => x.value);
     const o = {
@@ -1389,10 +1871,11 @@ function dlgEstado(id){
   });
 }
 
-function dlgAviso(puertaId, avisoId, clienteId){
+function dlgAviso(puertaId, avisoId, clienteId, fecha){
   const a = avisoId ? S.avisos.find(x => x.id === avisoId) : null;
   const d = a || { tipo:'averia', estado:'recibido', prioridad:'normal', origen:'Teléfono',
-                   puerta_id: puertaId || null, cliente_id: clienteId || null };
+                   puerta_id: puertaId || null, cliente_id: clienteId || null,
+                   fecha_prevista: fecha || null };
   const tipos = lista('tipos_asistencia', Object.keys(ASISTENCIAS));
   const puertasOrd = S.puertas.slice().sort((x,y)=> (x.codigo||'') < (y.codigo||'') ? -1 : 1);
   let h = '<h3>'+(a ? 'Asistencia '+esc(tipoAsis(d.tipo)) : 'Nueva asistencia')+'</h3>';
@@ -1512,11 +1995,18 @@ function dlgCliente(id, alGuardarExtra){
 function dlgContrato(id, clienteId){
   const k = id ? S.contratos.find(x => x.id === id) : null;
   const d = k || {};
-  const cid = clienteId || d.cliente_id;
+  const cid = clienteId || d.cliente_id || null;
   const cli = clienteDe(cid);
   const enUnAnio = () => { const f = new Date(); f.setFullYear(f.getFullYear()+1); return f.toISOString().slice(0,10); };
+  const clisOrd = S.clientes.slice().sort((a,b) => (a.nombre||'').localeCompare(b.nombre||'', 'es'));
   let h = '<h3>'+(k ? 'Editar contrato' : 'Nuevo contrato de mantenimiento')+'</h3>'+
-    '<p class="mini" style="margin:0 0 12px">'+esc(cli ? cli.nombre : 'Cliente')+'</p><div class="campos">'+
+    (cid ? '<p class="mini" style="margin:0 0 12px">'+esc(cli ? cli.nombre : 'Cliente')+'</p>' : '')+
+    '<div class="campos">'+
+    (cid ? '' :
+      '<div class="campo full"><label for="k-cli">Cliente</label><select id="k-cli"><option value="">Elige el cliente</option>'+
+      clisOrd.map(c => '<option value="'+c.id+'">'+esc(c.nombre+(c.poblacion?(' · '+c.poblacion):''))+'</option>').join('')+
+      '</select><span class="pista">El contrato va a nombre del cliente y cubre sus puertas. '+
+      '<a href="#" data-act="cliente-desde-contrato">Crear cliente nuevo</a></span></div>')+
     '<div class="campo"><label for="k-ref">Referencia</label><input id="k-ref" type="text" maxlength="60" value="'+esc(d.referencia||'')+'" placeholder="Ej.: MTO-2026-014"></div>'+
     '<div class="campo"><label for="k-estado">Estado</label><select id="k-estado">'+
       Object.entries(EST_CONTRATO).map(([v,t])=>'<option value="'+v+'"'+((d.estado||'activo')===v?' selected':'')+'>'+t+'</option>').join('')+'</select></div>'+
@@ -1538,7 +2028,7 @@ function dlgContrato(id, clienteId){
     (k ? '<button type="button" class="btn plana" data-act="contrato-borrar" data-id="'+k.id+'">Borrar</button>' : '')+
     '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button><button type="submit" class="btn pri">Guardar</button></div>';
   abrirDlg(h, async () => {
-    const o = { cliente_id: cid, referencia: val('k-ref')||null, estado: val('k-estado')||'activo',
+    const o = { cliente_id: cid || val('k-cli') || null, referencia: val('k-ref')||null, estado: val('k-estado')||'activo',
                 fecha_alta: val('k-alta')||hoy(), fecha_vencimiento: val('k-venc')||null,
                 periodicidad_meses: +val('k-per') || 12,
                 precio_anual: val('k-precio') ? +val('k-precio') : null,
@@ -1553,10 +2043,10 @@ function dlgContrato(id, clienteId){
       else {
         o.creado_por = yo();
         const { error } = await sb.from('contratos').insert(o); if (error) throw error;
-        await sb.from('clientes').update({ contrato: true }).eq('id', cid);
+        await sb.from('clientes').update({ contrato: true }).eq('id', o.cliente_id);
       }
       // las puertas de este cliente que no tengan fecha, la reciben ahora
-      await planificarCliente(cid, o.periodicidad_meses);
+      await planificarCliente(o.cliente_id, o.periodicidad_meses);
       cerrarDlg(); await cargar();
       toast(k ? 'Contrato actualizado.' : 'Contrato dado de alta.');
     } catch(e){ setErr(e.message); }
@@ -1615,6 +2105,150 @@ async function abrirPreventiva(puertaId){
   } catch(e){ fallo(e); }
 }
 
+/* Tarifas: lo que cobras y lo que te cuesta */
+function dlgTarifas(){
+  const t = S.tarifas || {};
+  const campo = (id, eti, v, paso, pista) =>
+    '<div class="campo"><label for="'+id+'">'+eti+'</label>'+
+    '<input id="'+id+'" type="number" step="'+paso+'" min="0" value="'+esc(v != null ? v : '')+'">'+
+    (pista ? '<span class="pista">'+pista+'</span>' : '')+'</div>';
+  let h = '<h3>Tarifas y costes</h3>'+
+    '<p class="mini" style="margin:0 0 12px">Esto no lo ve nadie más que tú. Con estos números la aplicación valora '+
+    'cada visita y calcula el margen.</p>';
+
+  h += '<div class="grupo"><h3>Mano de obra</h3><div class="campos">'+
+    campo('t-ph', 'Precio hora de técnico (€)', t.precio_hora, '0.01', 'Lo que cobras al cliente') +
+    campo('t-ch', 'Coste hora de técnico (€)', t.coste_hora, '0.01', 'Sueldo, seguridad social y estructura') +
+    campo('t-min', 'Mínimo facturable (horas)', t.minimo_horas, '0.25', 'Aunque la visita dure menos') +
+    campo('t-urg', 'Recargo de urgencia (%)', t.recargo_urgencia, '1', 'Se aplica al tipo «Urgencia fuera de horario»') +
+    '</div></div>';
+
+  h += '<div class="grupo"><h3>Desplazamiento</h3><div class="campos">'+
+    campo('t-df', 'Importe fijo por salida (€)', t.desplazamiento_fijo, '0.01') +
+    campo('t-pkm', 'Precio por km (€)', t.precio_km, '0.01', 'Lo que cobras') +
+    campo('t-ckm', 'Coste por km (€)', t.coste_km, '0.01', 'Combustible, seguro y vehículo') +
+    '</div></div>';
+
+  h += '<div class="grupo"><h3>Materiales</h3><div class="campos">'+
+    campo('t-rm', 'Recargo sobre el coste (%)', t.recargo_material, '1',
+          'Si compras a 100 y pones 40, se vende a 140') +
+    campo('t-iva', 'IVA (%)', t.iva, '1') +
+    '</div>'+
+    '<p class="mini" style="margin:8px 0 0">Ojo con la diferencia: un recargo del 40% sobre el coste deja un margen del '+
+    '28,6% sobre la venta. No son lo mismo.</p></div>';
+
+  h += '<p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Guardar</button></div>';
+
+  abrirDlg(h, async () => {
+    const n = id => { const v = val(id); return v === '' ? null : +v; };
+    const o = { id:1, precio_hora:n('t-ph'), coste_hora:n('t-ch'), minimo_horas:n('t-min'),
+                recargo_urgencia:n('t-urg'), desplazamiento_fijo:n('t-df'), precio_km:n('t-pkm'),
+                coste_km:n('t-ckm'), recargo_material:n('t-rm'), iva:n('t-iva'),
+                actualizado:new Date().toISOString(), actualizado_por: yo() };
+    for (const [k, v] of Object.entries(o))
+      if (v === null && !['actualizado_por'].includes(k)) return setErr('Faltan campos por rellenar.');
+    if (o.coste_hora >= o.precio_hora)
+      return setErr('El coste por hora es mayor o igual que el precio: así se pierde dinero en cada visita. Revísalo.');
+    try {
+      const { error } = await sb.from('tarifas').upsert(o, { onConflict:'id' });
+      if (error) throw error;
+      cerrarDlg(); await cargar(); toast('Tarifas guardadas. Recalcula las visitas para aplicarlas.');
+    } catch(e){ setErr(e.message); }
+  });
+}
+
+/* Alta y edición de un material del catálogo */
+function dlgArticulo(id){
+  const a = id ? S.catalogo.find(x => x.id === id) : null;
+  let h = '<h3>'+(a ? 'Material del catálogo' : 'Nuevo material')+'</h3>'+
+    '<div class="campos">'+
+    '<div class="campo full"><label for="x-desc">Descripción</label><input id="x-desc" type="text" maxlength="120" value="'+esc(a?a.descripcion:'')+'" placeholder="Ej.: Banda de seguridad 2 m"></div>'+
+    '<div class="campo"><label for="x-uni">Unidad</label><select id="x-uni">'+
+      ['ud','m','kg','l','h'].map(u=>'<option'+(a&&a.unidad===u?' selected':'')+'>'+u+'</option>').join('')+'</select></div>'+
+    '<div class="campo"><label for="x-coste">Precio de compra (€)</label><input id="x-coste" type="number" step="0.01" min="0" placeholder="Sin IVA"></div>'+
+    '<div class="campo"><label for="x-rec">Recargo propio (%)</label><input id="x-rec" type="number" step="1" min="0" placeholder="Si lo dejas vacío, el general"></div>'+
+    '<div class="campo"><label for="x-ref">Referencia</label><input id="x-ref" type="text" maxlength="60" value="'+esc(a&&a.referencia?a.referencia:'')+'"></div>'+
+    '<div class="campo"><label for="x-prov">Proveedor</label><input id="x-prov" type="text" maxlength="80"></div>'+
+    '</div>'+
+    (a ? '<p class="mini" style="margin:10px 0 0">El precio de compra y el proveedor no se muestran aquí por seguridad. '+
+         'Si escribes uno nuevo, sustituye al anterior.</p>' : '')+
+    '<p class="err"></p><div class="pie">'+
+    (a ? '<button type="button" class="btn plana" data-act="articulo-baja" data-id="'+a.id+'">Dar de baja</button>' : '')+
+    '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Guardar</button></div>';
+  abrirDlg(h, async () => {
+    const o = { descripcion: val('x-desc'), unidad: val('x-uni') || 'ud',
+                referencia: val('x-ref') || null, proveedor: val('x-prov') || null };
+    if (val('x-coste') !== '') o.coste = +val('x-coste');
+    if (val('x-rec') !== '') o.recargo = +val('x-rec');
+    if (!o.descripcion) return setErr('Pon la descripción del material.');
+    if (!a && o.coste == null) return setErr('Pon el precio de compra: sin él no se puede calcular el margen.');
+    try {
+      if (a){ const { error } = await sb.from('articulos').update(o).eq('id', a.id); if (error) throw error; }
+      else { const { error } = await sb.from('articulos').insert(o); if (error) throw error; }
+      cerrarDlg(); await cargar(); toast('Material guardado.');
+    } catch(e){ setErr(e.message.includes('duplicate') ? 'Ya existe un material con esa descripción.' : e.message); }
+  });
+}
+
+/* Marcar una visita como facturada */
+function dlgFacturar(avisoId){
+  const a = S.avisos.find(x => x.id === avisoId);
+  const v = valoracionDe(avisoId);
+  if (!a || !v) return;
+  let h = '<h3>Marcar como facturada</h3>'+
+    '<p class="mini" style="margin:0 0 12px">'+esc(nombreCliente(a))+' · '+esc(fechaCorta(a.cerrado))+' · '+eur(v.imp_total)+'</p>'+
+    '<div class="campos">'+
+    '<div class="campo"><label for="fa-ref">Número de factura</label><input id="fa-ref" type="text" maxlength="60" value="'+esc(v.factura_ref||'')+'" placeholder="Ej.: F-2026-0184"></div>'+
+    '<div class="campo"><label for="fa-fecha">Fecha</label><input id="fa-fecha" type="date" value="'+esc(v.facturado_el||hoy())+'"></div>'+
+    '</div><p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Marcar facturada</button></div>';
+  abrirDlg(h, async () => {
+    try {
+      const { error } = await sb.from('valoraciones')
+        .update({ facturado:true, factura_ref: val('fa-ref') || null, facturado_el: val('fa-fecha') || hoy() })
+        .eq('aviso_id', avisoId);
+      if (error) throw error;
+      cerrarDlg(); await cargar(); toast('Marcada como facturada.');
+    } catch(e){ setErr(e.message); }
+  });
+}
+
+/* Detalle de lo que se factura en una visita */
+function dlgValoracion(avisoId){
+  const a = S.avisos.find(x => x.id === avisoId);
+  const v = valoracionDe(avisoId);
+  if (!a || !v) return;
+  const p = a.puerta_id ? puertaDe(a.puerta_id) : null;
+  const fila = (k, x, fuerte) => '<div><dt>'+k+'</dt><dd'+(fuerte?' style="font-weight:600"':'')+'>'+x+'</dd></div>';
+  let h = '<h3>'+esc(nombreCliente(a))+'</h3>'+
+    '<p class="mini" style="margin:0 0 12px">'+esc(tipoAsis(a.tipo))+' · '+esc(fechaCorta(a.cerrado))+
+    (p ? ' · '+esc(p.codigo||'') : '')+'</p>';
+  h += '<div class="grupo"><h3>Lo que se factura</h3><dl class="datos">'+
+    fila('Mano de obra', eur(v.imp_mano_obra) + (a.horas != null ? ' <span class="mini">('+a.horas+' h × '+(a.num_tecnicos||1)+')</span>' : '')) +
+    fila('Desplazamiento', eur(v.imp_desplazamiento) + (a.desplazamiento != null ? ' <span class="mini">('+a.desplazamiento+' km)</span>' : '')) +
+    fila('Materiales', eur(v.imp_materiales)) +
+    fila('Total sin IVA', eur(v.imp_total), true) +
+    (S.tarifas ? fila('Con IVA', eur(+v.imp_total * (1 + (+S.tarifas.iva || 21) / 100))) : '') +
+    '</dl></div>';
+  h += '<div class="grupo"><h3>Lo que cuesta</h3><dl class="datos">'+
+    fila('Coste total', eur(v.coste_total)) +
+    fila('Margen', '<span style="color:'+(+v.margen < 0 ? 'var(--mal)' : 'var(--ok)')+'">'+eur(v.margen)+'</span>', true) +
+    fila('Margen sobre venta', pct(+v.margen, +v.imp_total)) +
+    '</dl></div>';
+  if (a.cobrado) h += '<p class="mini" style="margin:0">Cobrada en obra: '+eur(a.cobro_importe)+' · '+esc(a.cobro_forma||'')+'</p>';
+  if (v.facturado) h += '<p class="mini" style="margin:0">Facturada el '+esc(fechaCorta(v.facturado_el))+(v.factura_ref?(' · '+esc(v.factura_ref)):'')+'</p>';
+  h += '<p class="err"></p><div class="pie">'+
+    '<button type="button" class="btn plana" data-act="revalorar" data-id="'+a.id+'">Volver a calcular</button>'+
+    '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cerrar</button>'+
+    (v.facturado ? '' : '<button type="button" class="btn pri" data-act="marcar-facturado" data-id="'+a.id+'">Marcar facturada</button>')+
+    '</div>';
+  abrirDlg(h, () => cerrarDlg());
+}
+
 /* ================= Cierre de la visita ================= */
 const FIRMA = { canvas:null, ctx:null, pintado:false };
 
@@ -1653,7 +2287,10 @@ function dlgCierre(avisoId){
     '</div></div>';
 
   h += '<div class="grupo"><h3>Materiales</h3>'+
-    '<datalist id="sugeridos">'+S.sugerencias.map(x=>'<option value="'+esc(x.descripcion)+'">').join('')+'</datalist>'+
+    '<datalist id="sugeridos">'+
+      [...new Map([...S.catalogo.map(x=>[x.descripcion.toLowerCase(), x.descripcion]),
+                   ...S.sugerencias.map(x=>[(x.descripcion||'').toLowerCase(), x.descripcion])]).values()]
+        .filter(Boolean).map(d=>'<option value="'+esc(d)+'">').join('')+'</datalist>'+
     '<div id="mats"></div>'+
     '<button type="button" class="btn sm" data-act="mat-anadir">Añadir material</button>'+
     '<p class="mini" style="margin:8px 0 0">Escribe y te irá sugiriendo los que ya se han usado otras veces.</p></div>';
@@ -1674,6 +2311,10 @@ function dlgCierre(avisoId){
     '<div class="campo" style="align-content:end"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
       '<input type="checkbox" id="z-pend"'+(a.pendiente?' checked':'')+' style="accent-color:var(--amarillo);width:18px;height:18px">Queda algo pendiente</label></div>'+
     '<div class="campo full"><label for="z-pendt">Qué queda pendiente</label><input id="z-pendt" type="text" maxlength="200" value="'+esc(a.pendiente_texto||'')+'" placeholder="Ej.: pedir cuadro de maniobra, volver a montarlo"></div>'+
+    '<div class="campo full" style="align-content:end"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+      '<input type="checkbox" id="z-sincargo"'+(a.sin_cargo?' checked':'')+' style="accent-color:var(--amarillo);width:18px;height:18px">Esta visita no se cobra</label>'+
+      '<span class="pista">Cortesía, error nuestro o entra en contrato</span></div>'+
+    '<div class="campo full"><label for="z-sincargom">Por qué no se cobra</label><input id="z-sincargom" type="text" maxlength="160" value="'+esc(a.sin_cargo_motivo||'')+'"></div>'+
     '</div></div>';
 
   if (conCobro){
@@ -1871,6 +2512,7 @@ async function guardarCierre(a, cerrando){
     desplazamiento: val('z-km') ? +val('z-km') : null,
     estado_final: val('z-estado') || null,
     pendiente: chk('z-pend'), pendiente_texto: val('z-pendt') || null,
+    sin_cargo: chk('z-sincargo'), sin_cargo_motivo: val('z-sincargom') || null,
     firma_nombre: val('z-fnom') || null, firma_sin: val('z-sin') || null,
     enviado_cliente: chk('z-enviar'),
     actualizado: new Date().toISOString(),
@@ -1953,6 +2595,8 @@ async function guardarCierre(a, cerrando){
       await sb.from('puertas').update({ estado: est, estado_desde: new Date().toISOString(),
         ultima_revision: (a.tipo==='mantenimiento' ? new Date().toISOString().slice(0,10) : undefined) }).eq('id', a.puerta_id);
     }
+    // la base de datos valora la visita: el técnico no ve tarifas ni costes
+    if (cerrando) { try { await sb.rpc('valorar_aviso', { p_aviso: a.id }); } catch(_){} }
     cerrarDlg(); await cargar();
     toast(cerrando ? 'Visita cerrada. La oficina ya tiene el parte.' : 'Guardado.');
   } catch(e){ setErr(e.message || 'No se pudo guardar.'); }
@@ -2110,10 +2754,38 @@ raiz.addEventListener('click', async e => {
   else if (a === 'asistencia-nueva-cliente') dlgAviso(null, null, b.dataset.id);
   else if (a === 'cerrar-asistencia') dlgCierre(b.dataset.id);
   else if (a === 'parte') hojaParte(b.dataset.id);
-  else if (a === 'contrato-nuevo') dlgContrato(null, b.dataset.id);
+  else if (a === 'con-filtro'){ S.conFiltro = b.dataset.f; pintar(); }
+  else if (a === 'contrato-nuevo') dlgContrato(null, b.dataset.id || null);
   else if (a === 'contrato-editar') dlgContrato(b.dataset.id);
   else if (a === 'planificar') dlgPlanificar(b.dataset.id);
   else if (a === 'ver-revision') dlgRevision(b.dataset.id);
+  else if (a === 'tarifas') dlgTarifas();
+  else if (a === 'articulo-nuevo') dlgArticulo(null);
+  else if (a === 'articulo-editar') dlgArticulo(b.dataset.id);
+  else if (a === 'ver-valoracion') dlgValoracion(b.dataset.id);
+  else if (a === 'revalorar'){
+    try { await sb.rpc('valorar_aviso', { p_aviso: b.dataset.id }); await cargar(); toast('Visita recalculada.'); }
+    catch(err){ fallo(err); }
+  }
+  else if (a === 'revalorar-todo'){
+    if (!armar(b, 'Confirmar')) return;
+    b.disabled = true; b.textContent = 'Calculando…';
+    try {
+      const sinValorar = S.avisos.filter(x => x.cerrado && !valoracionDe(x.id));
+      for (const x of sinValorar) await sb.rpc('valorar_aviso', { p_aviso: x.id });
+      await cargar(); toast(sinValorar.length + ' visitas valoradas.');
+    } catch(err){ fallo(err); b.disabled = false; b.textContent = 'Recalcular'; }
+  }
+  else if (a === 'marcar-facturado') dlgFacturar(b.dataset.id);
+  else if (a === 'cal-mover'){
+    const n = parseInt(b.dataset.n, 10) || 0;
+    const base = S.calAncla ? deIso(S.calAncla) : new Date();
+    S.calAncla = iso(S.calVista === 'mes' ? sumaMeses(base, n) : sumaDias(base, n * 7));
+    pintar();
+  }
+  else if (a === 'cal-hoy'){ S.calAncla = null; pintar(); }
+  else if (a === 'cal-vista'){ S.calVista = b.dataset.v; pintar(); }
+  else if (a === 'dia-nuevo') dlgAviso(null, null, null, b.dataset.fecha);
   else if (a === 'abrir-preventiva') await abrirPreventiva(b.dataset.id);
   else if (a === 'abrir-vencidas'){
     if (!armar(b, 'Confirmar')) return;
@@ -2123,7 +2795,7 @@ raiz.addEventListener('click', async e => {
       if (error) throw error;
       await cargar();
       toast((data || 0) + ' revisión' + ((data||0)===1?'':'es') + ' abierta' + ((data||0)===1?'':'s') + '. Asígnalas desde Asistencias.');
-    } catch(err){ fallo(err); b.disabled = false; b.textContent = 'Abrir las que tocan'; }
+    } catch(err){ fallo(err); b.disabled = false; b.textContent = 'Abrir las revisiones que tocan'; }
   }
   else if (a === 'puerta-nueva') dlgPuerta(null);
   else if (a === 'puerta-editar') dlgPuerta(b.dataset.id);
@@ -2221,10 +2893,13 @@ raiz.addEventListener('click', async e => {
 raiz.addEventListener('input', e => {
   if (e.target.dataset.act === 'busca'){ S.busca = e.target.value; pintar(); }
   if (e.target.dataset.act === 'busca-cli'){ S.buscaCli = e.target.value; pintar(); }
+  if (e.target.dataset.act === 'busca-con'){ S.buscaCon = e.target.value; pintar(); }
 });
 raiz.addEventListener('change', e => {
   if (e.target.dataset.act === 'filtro-tec'){ S.filtroTec = e.target.value; pintar(); return; }
+  if (e.target.dataset.act === 'cal-tec'){ S.calTec = e.target.value; pintar(); return; }
   if (e.target.dataset.act === 'guion-tipo'){ S.guionTipo = e.target.value; pintar(); return; }
+  if (e.target.dataset.act === 'gestion-mes'){ S.mesGestion = e.target.value; pintar(); return; }
   if (e.target.dataset.act === 'subir-foto' && e.target.files.length){ subirFotos(e.target.dataset.id, Array.from(e.target.files)); e.target.value=''; }
   if (e.target.dataset.act === 'subir-doc' && e.target.files.length){
     const sel = document.getElementById('doc-tipo-'+e.target.dataset.id);
@@ -2272,6 +2947,19 @@ dlgForm.addEventListener('click', async e => {
     if (av) await guardarCierre(av, false);
     return;
   }
+  if (a === 'cliente-desde-puerta'){
+    guardarBorradorPuerta();
+    const args = S.borradorPuerta.args = { id: b.dataset.puerta || null, aviso: b.dataset.aviso || null };
+    dlgCliente(null, async (nuevoId) => {
+      if (S.borradorPuerta && nuevoId) S.borradorPuerta['f-clid'] = nuevoId;
+      dlgPuerta(args.id, args.aviso);
+    });
+    return;
+  }
+  if (a === 'cliente-desde-contrato'){
+    dlgCliente(null, async (id) => { if (id) dlgContrato(null, id); });
+    return;
+  }
   if (a === 'cliente-rapido'){
     dlgCliente(null, async (id) => { if (id) toast('Cliente creado. Vuelve a abrir la asistencia para elegirlo.'); });
     return;
@@ -2289,6 +2977,19 @@ dlgForm.addEventListener('click', async e => {
     if (campo) campo.value = f.toISOString().slice(0,10);
     return;
   }
+  if (a === 'articulo-baja'){
+    if (!armar(b, 'Confirmar')) return;
+    try { await sb.from('articulos').update({ activo:false }).eq('id', b.dataset.id);
+          cerrarDlg(); await cargar(); toast('Material dado de baja.'); }
+    catch(err){ fallo(err); }
+    return;
+  }
+  if (a === 'revalorar'){
+    try { await sb.rpc('valorar_aviso', { p_aviso: b.dataset.id }); cerrarDlg(); await cargar(); toast('Visita recalculada.'); }
+    catch(err){ fallo(err); }
+    return;
+  }
+  if (a === 'marcar-facturado'){ cerrarDlg(); dlgFacturar(b.dataset.id); return; }
   if (a === 'contrato-borrar'){
     if (!armar(b, 'Confirmar')) return;
     try { await sb.from('contratos').delete().eq('id', b.dataset.id); cerrarDlg(); await cargar(); toast('Contrato borrado.'); }
