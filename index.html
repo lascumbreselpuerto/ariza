@@ -965,6 +965,46 @@ function chipTecnico(a){
   const i = Math.max(0, S.equipo.findIndex(t => t.id === a.tecnico_id)) % 6;
   return '<span class="chip tec t'+i+'">'+esc(nom)+'</span>';
 }
+/* Asignar en dos toques: técnico y fecha, sin abrir la asistencia entera */
+function dlgAsignar(id){
+  const a = S.avisos.find(x => x.id === id);
+  if (!a) return;
+  const h = '<h3>Asignar asistencia</h3>'+
+    '<p class="mini" style="margin:0 0 12px">'+esc(tipoAsis(a.tipo))+' · '+esc(nombreCliente(a))+
+    (dondeAsistencia(a) ? ' · '+esc(dondeAsistencia(a)) : '')+'</p><div class="campos">'+
+    '<div class="campo full"><label for="as-tec">Técnico</label><select id="as-tec"><option value="">Sin asignar</option>'+
+      activos().map(t => '<option value="'+t.id+'"'+(a.tecnico_id===t.id?' selected':'')+'>'+
+        esc(t.nombre||'—')+(t.rol==='admin'?' (admin)':'')+'</option>').join('')+
+      '</select><span class="pista">Le llega un correo y le aparece en «Mi trabajo»</span></div>'+
+    '<div class="campo full"><label for="as-fecha">Visita prevista</label>'+
+      '<input id="as-fecha" type="date" value="'+esc(a.fecha_prevista||'')+'">'+
+      '<div class="fila" style="margin-top:8px;gap:6px">'+
+        '<button type="button" class="btn sm" data-act="as-dia" data-n="0">Hoy</button>'+
+        '<button type="button" class="btn sm" data-act="as-dia" data-n="1">Mañana</button>'+
+        '<button type="button" class="btn sm" data-act="as-dia" data-n="2">Pasado</button>'+
+        '<button type="button" class="btn sm plana" data-act="as-dia" data-n="">Sin fecha</button>'+
+      '</div></div>'+
+    '</div><p class="err"></p><div class="pie">'+
+    '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Asignar</button></div>';
+  abrirDlg(h, async () => {
+    const tid = val('as-tec') || null;
+    const o = { tecnico_id: tid, tecnico: tid ? nombreTec(tid) : '',
+                fecha_prevista: val('as-fecha') || null,
+                actualizado: new Date().toISOString() };
+    if (tid && a.estado === 'recibido') o.estado = 'asignado';
+    try {
+      const { error } = await sb.from('avisos').update(o).eq('id', a.id);
+      if (error) throw error;
+      if (a.puerta_id && o.estado === 'asignado' && !SIN_COBRO.includes(a.tipo))
+        await sb.from('puertas').update({ estado:'tecnico_asignado', estado_desde: new Date().toISOString() })
+                .eq('id', a.puerta_id);
+      cerrarDlg(); await cargar();
+      toast(tid ? ('Asignada a ' + nombreTec(tid) + '.') : 'Asistencia sin asignar.');
+    } catch(e){ setErr(e.message); }
+  });
+}
+
 function tarjetaAviso(a){
   const p = a.puerta_id ? (puertaDe(a.puerta_id) || {}) : {};
   const cont = contactoAviso(a);
@@ -977,6 +1017,7 @@ function tarjetaAviso(a){
     '<b>'+esc(nombreCliente(a))+'</b>'+
     '<span class="mini">'+esc([p.codigo, donde].filter(Boolean).join(' · '))+'</span><span class="sp"></span>'+
     (a.puerta_id ? '<button class="btn sm plana" data-act="abrir" data-id="'+a.puerta_id+'">Ver puerta</button>' : '')+
+    (!a.cerrado && esGestion() ? '<button class="btn sm" data-act="asignar" data-id="'+a.id+'">Asignar</button>' : '')+
     '<button class="btn sm plana" data-act="aviso-editar" data-id="'+a.id+'">'+(a.cerrado?'Ver':'Editar')+'</button>'+
     (a.cerrado
       ? '<button class="btn sm" data-act="parte" data-id="'+a.id+'">Parte</button>'
@@ -3414,6 +3455,7 @@ raiz.addEventListener('click', async e => {
   else if (a === 'asistencia-nueva-cliente') dlgAviso(null, null, b.dataset.id);
   else if (a === 'cerrar-asistencia') dlgCierre(b.dataset.id);
   else if (a === 'parte') hojaParte(b.dataset.id);
+  else if (a === 'asignar') dlgAsignar(b.dataset.id);
   else if (a === 'ir-avisos'){ S.tab = 'avisos'; S.tabElegida = true; pintar(); window.scrollTo({top:0}); }
   else if (a === 'con-filtro'){ S.conFiltro = b.dataset.f; pintar(); }
   else if (a === 'contrato-hoja') await hojaContrato(b.dataset.id);
@@ -3595,6 +3637,11 @@ dlgForm.addEventListener('click', async e => {
   if (a === 'mat-anadir'){
     const cont = document.getElementById('mats');
     if (cont) cont.insertAdjacentHTML('beforeend', filaMaterial());
+    return;
+  }
+  if (a === 'as-dia'){
+    const campo = document.getElementById('as-fecha');
+    if (campo) campo.value = b.dataset.n === '' ? '' : iso(sumaDias(new Date(), +b.dataset.n));
     return;
   }
   if (a === 'cl-anadir'){
