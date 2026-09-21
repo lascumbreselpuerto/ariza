@@ -85,6 +85,13 @@ img{max-width:100%}
 .chip.mal{color:var(--mal);background:var(--mal-bg)}
 .chip.gris{color:var(--gris);background:var(--gris-bg)}
 .chip.sin::before{display:none}
+.chip.tec{color:var(--ink);background:var(--surface-2);border:1px solid var(--line)}
+.chip.tec.t0::before{background:#2E7D46}
+.chip.tec.t1::before{background:#1F6FB2}
+.chip.tec.t2::before{background:#8C4BB5}
+.chip.tec.t3::before{background:#C2571A}
+.chip.tec.t4::before{background:#0E8C8C}
+.chip.tec.t5::before{background:#A31D6B}
 .codigo{font:700 15px var(--mono);letter-spacing:.04em}
 .buscador{display:flex;gap:8px;align-items:center}
 .buscador input{flex:1;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:16px}
@@ -951,15 +958,22 @@ function contactoAviso(a){
           tel ? '<a href="tel:'+esc(tel.replace(/\s/g,''))+'">'+esc(tel)+'</a>' : '',
           mail ? '<a href="mailto:'+esc(mail)+'">'+esc(mail)+'</a>' : ''].filter(Boolean).join(' · ');
 }
+/* A cada técnico, un color fijo, para reconocerlo de un vistazo en las listas */
+function chipTecnico(a){
+  if (!a.tecnico_id) return '<span class="chip mal">Sin asignar</span>';
+  const nom = nombreTec(a.tecnico_id) || a.tecnico || 'Asignada';
+  const i = Math.max(0, S.equipo.findIndex(t => t.id === a.tecnico_id)) % 6;
+  return '<span class="chip tec t'+i+'">'+esc(nom)+'</span>';
+}
 function tarjetaAviso(a){
   const p = a.puerta_id ? (puertaDe(a.puerta_id) || {}) : {};
-  const tec = a.tecnico_id ? nombreTec(a.tecnico_id) : (a.tecnico || '');
   const cont = contactoAviso(a);
   const donde = dondeAsistencia(a);
   return '<div class="aviso"><div class="cab">'+
     '<span class="chip '+(a.tipo==='comercial'?'ok':(a.tipo==='mantenimiento'?'gris':'aviso'))+'">'+esc(tipoAsis(a.tipo))+'</span>'+
     '<span class="chip gris sin">'+(EST_AVISO[a.estado]||a.estado)+'</span>'+
     (a.prioridad==='urgente' ? '<span class="chip aviso sin">Urgente</span>' : '')+
+    chipTecnico(a)+
     '<b>'+esc(nombreCliente(a))+'</b>'+
     '<span class="mini">'+esc([p.codigo, donde].filter(Boolean).join(' · '))+'</span><span class="sp"></span>'+
     (a.puerta_id ? '<button class="btn sm plana" data-act="abrir" data-id="'+a.puerta_id+'">Ver puerta</button>' : '')+
@@ -973,7 +987,6 @@ function tarjetaAviso(a){
     '<p class="mini" style="margin:0">'+
       (a.fecha_prevista ? ('Visita: '+fechaCorta(a.fecha_prevista)+' · '+relativo(a.fecha_prevista)+' · ') : '')+
       'Entró el '+fechaHora(a.creado)+(a.origen==='cliente'?' por el QR':'')+
-      (tec ? (' · '+esc(tec)) : ' · <b>sin asignar</b>')+
     '</p>'+
     (cont ? '<p class="mini" style="margin:0">'+cont+'</p>' : '')+
     '</div>';
