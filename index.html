@@ -211,6 +211,22 @@ dialog::backdrop{background:rgba(20,18,17,.55)}
 .login{max-width:380px;margin:8vh auto 0;display:grid;gap:14px}
 .login .panel{display:grid;gap:12px}
 .cargando{padding:40px 0;text-align:center;color:var(--muted)}
+/* ---- Mi trabajo ---- */
+.trab{border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:var(--surface);display:grid;gap:6px}
+.trab.urg{border-left:4px solid var(--mal)}
+.trab .cab{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.trab-cli{font-size:17px;line-height:1.25;overflow-wrap:anywhere}
+.trab-dir{font-size:14px;color:var(--muted);overflow-wrap:anywhere}
+.trab-desc{margin:2px 0 0;font-size:14px}
+.trab-btns{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px}
+.trab-btns a.btn{text-decoration:none}
+.bloque-hoy{border-color:var(--amarillo);box-shadow:inset 0 0 0 1px var(--amarillo)}
+.bloque-mal .panel-h h2{color:var(--mal)}
+.bloque-sin .panel-h h2{color:var(--muted)}
+@media (max-width:640px){
+  .trab-btns .btn{flex:1 1 auto;justify-content:center;text-align:center}
+  .trab-btns .sp{display:none}
+}
 /* ---- Contrato: puertas cubiertas y cláusulas ---- */
 .k-puertas{display:grid;gap:8px}
 .k-puerta{display:grid;grid-template-columns:minmax(0,1fr) 120px 150px;gap:10px;align-items:center;
@@ -307,6 +323,7 @@ dialog::backdrop{background:rgba(20,18,17,.55)}
     </div>
   </header>
   <nav class="tabs"><div class="tabs-in" id="tabs">
+    <button data-tab="trabajo" role="tab">Mi trabajo</button>
     <button data-tab="puertas" role="tab">Puertas</button>
     <button data-tab="avisos" role="tab">Asistencias</button>
     <button data-tab="calendario" role="tab">Calendario</button>
@@ -773,6 +790,8 @@ async function entrar(sesion){
   }
   S.perfil = per;
   $('#quien').innerHTML = '<span class="dot"></span>' + esc(per.nombre || S.user.email) + (per.rol==='admin' ? ' · admin' : '');
+  // el técnico abre la app directamente en su trabajo del día
+  if (per.rol === 'tecnico' && !S.tabElegida) S.tab = 'trabajo';
   $('#tabs button[data-tab="equipo"]').hidden = per.rol !== 'admin';
   $('#tabs button[data-tab="gestion"]').hidden = !(per.rol === 'admin' || per.rol === 'oficina');
   await cargar();
@@ -792,6 +811,7 @@ function render(){
   else if (S.ficha) h = vistaFicha(S.ficha);
   else if (S.fichaCliente) h = vistaFichaCliente(S.fichaCliente);
   else if (S.tab === 'clientes') h = vistaClientes();
+  else if (S.tab === 'trabajo') h = vistaMiTrabajo();
   else if (S.tab === 'contratos') h = vistaContratos();
   else if (S.tab === 'calendario') h = vistaCalendario();
   else if (S.tab === 'avisos') h = vistaAvisos();
@@ -959,6 +979,103 @@ function tarjetaAviso(a){
     '</div>';
 }
 
+/* ---- Mi trabajo: la jornada del técnico ---- */
+const MAPA = d => 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(d);
+
+/* Tarjeta de trabajo: lo justo para salir a la calle y los atajos a un toque */
+function tarjetaTrabajo(a){
+  const p = a.puerta_id ? (puertaDe(a.puerta_id) || {}) : {};
+  const donde = dondeAsistencia(a);
+  const tel = (a.contacto_telefono || '').trim();
+  const cli = nombreCliente(a);
+  const vencida = a.fecha_prevista && dias(a.fecha_prevista) < 0;
+  return '<div class="trab'+(a.prioridad==='urgente'?' urg':'')+'">'+
+    '<div class="cab">'+
+      '<span class="chip '+(a.tipo==='comercial'?'ok':(a.tipo==='mantenimiento'?'gris':'aviso'))+'">'+esc(tipoAsis(a.tipo))+'</span>'+
+      (a.prioridad==='urgente' ? '<span class="chip mal sin">Urgente</span>' : '')+
+      (vencida ? '<span class="chip mal sin">Se pasó de fecha</span>' : '')+
+      '<span class="chip gris sin">'+(EST_AVISO[a.estado]||a.estado)+'</span>'+
+      '<span class="sp"></span>'+
+      (a.fecha_prevista ? '<span class="mini">'+esc(fechaCorta(a.fecha_prevista))+'</span>' : '<span class="mini">Sin fecha</span>')+
+    '</div>'+
+    '<b class="trab-cli">'+esc(cli)+'</b>'+
+    (donde ? '<div class="trab-dir">'+esc(donde)+'</div>' : '')+
+    (p.codigo ? '<div class="mini">'+esc([p.codigo, p.tipo, p.marca, p.modelo].filter(Boolean).join(' · '))+'</div>' : '')+
+    (a.descripcion ? '<p class="trab-desc">'+esc(a.descripcion)+'</p>' : '')+
+    (a.notas_oficina ? '<p class="nota-oficina">Oficina: '+esc(a.notas_oficina)+'</p>' : '')+
+    '<div class="trab-btns">'+
+      (tel ? '<a class="btn sm" href="tel:'+esc(tel.replace(/\s/g,''))+'">Llamar'+
+             (a.contacto_nombre ? ' a '+esc(a.contacto_nombre.split(' ')[0]) : '')+'</a>' : '')+
+      (donde ? '<a class="btn sm" target="_blank" rel="noopener" href="'+esc(MAPA(donde))+'">Cómo llegar</a>' : '')+
+      (a.puerta_id ? '<button class="btn sm" data-act="abrir" data-id="'+a.puerta_id+'">Ficha de la puerta</button>' : '')+
+      '<button class="btn sm plana" data-act="aviso-editar" data-id="'+a.id+'">Detalles</button>'+
+      '<span class="sp"></span>'+
+      '<button class="btn sm pri" data-act="cerrar-asistencia" data-id="'+a.id+'">Cerrar visita</button>'+
+    '</div></div>';
+}
+
+function vistaMiTrabajo(){
+  const yoId = S.perfil ? S.perfil.id : null;
+  const mias = S.avisos.filter(a => !a.cerrado && a.tecnico_id === yoId);
+  const hoyISO = iso(new Date());
+  const manana = iso(sumaDias(new Date(), 1));
+  const finSemana = iso(sumaDias(new Date(), 7));
+
+  const bloques = [
+    ['Se pasaron de fecha', mias.filter(a => a.fecha_prevista && a.fecha_prevista < hoyISO), 'mal'],
+    ['Hoy',                 mias.filter(a => a.fecha_prevista === hoyISO), 'hoy'],
+    ['Mañana',              mias.filter(a => a.fecha_prevista === manana), ''],
+    ['Esta semana',         mias.filter(a => a.fecha_prevista > manana && a.fecha_prevista <= finSemana), ''],
+    ['Más adelante',        mias.filter(a => a.fecha_prevista > finSemana), ''],
+    ['Sin fecha puesta',    mias.filter(a => !a.fecha_prevista), 'sin'],
+  ];
+  const orden = (x, y) => {
+    if (x.prioridad === 'urgente' && y.prioridad !== 'urgente') return -1;
+    if (y.prioridad === 'urgente' && x.prioridad !== 'urgente') return 1;
+    return (x.creado || '') < (y.creado || '') ? -1 : 1;
+  };
+
+  const hoyN = bloques[1][1].length, vencidasN = bloques[0][1].length;
+  let h = '<div class="stack">';
+  h += '<div class="fila"><div><h2 style="font-size:20px">Mi trabajo</h2>'+
+       '<p class="mini" style="margin:2px 0 0">'+
+       (mias.length
+         ? (hoyN ? ('<b>'+hoyN+' visita'+(hoyN===1?'':'s')+' para hoy</b>') : 'Nada señalado para hoy')+
+           ' · '+mias.length+' asistencia'+(mias.length===1?'':'s')+' abierta'+(mias.length===1?'':'s')+
+           (vencidasN ? ' · '+vencidasN+' se pasaron de fecha' : '')
+         : 'No tienes asistencias asignadas')+
+       '</p></div><span class="sp"></span>'+
+       '<button class="btn" data-act="asistencia-nueva">Nueva asistencia</button></div>';
+
+  if (!mias.length){
+    h += '<div class="panel"><p class="muted" style="margin:0">Ahora mismo no tienes ninguna asistencia asignada. '+
+         'Cuando la oficina te asigne un trabajo, aparecerá aquí y te llegará un correo.</p>'+
+         '<p class="mini" style="margin:8px 0 0">Mientras tanto puedes ver lo que tiene el resto del equipo en '+
+         '<button class="btn sm plana" data-act="ir-avisos">Asistencias</button></p></div>';
+  } else {
+    bloques.forEach(([titulo, lista, clase]) => {
+      if (!lista.length) return;
+      h += '<div class="panel bloque-'+(clase||'normal')+'"><div class="panel-h"><h2>'+titulo+'</h2>'+
+           '<span class="mini">'+lista.length+'</span></div>'+
+           '<div class="avisos">'+lista.sort(orden).map(tarjetaTrabajo).join('')+'</div></div>';
+    });
+  }
+
+  // revisiones que le tocan por sus puertas, como aviso suave
+  const sinAbrir = planMantenimiento().filter(x => x.fecha && !x.abierta && x.d <= 7);
+  if (sinAbrir.length && esGestion()){
+    h += '<div class="panel"><div class="panel-h"><h2>Revisiones que tocan</h2>'+
+         '<span class="mini">'+sinAbrir.length+'</span></div>'+
+         '<p class="mini" style="margin:0 0 10px">Todavía no se han abierto como asistencia.</p>'+
+         '<div class="lista">'+sinAbrir.slice(0,8).map(x =>
+           '<button class="item" data-act="abrir-preventiva" data-id="'+x.p.id+'">'+
+           '<span class="qr">'+esc((x.p.codigo||'').replace(/^[A-Z]+-/,''))+'</span>'+
+           '<span><span class="tit">'+esc(x.p.cliente||'')+'</span>'+
+           '<span class="sub">'+esc([x.p.direccion, x.p.ubicacion].filter(Boolean).join(' · '))+'</span></span>'+
+           '<span>'+chipRevision(x.d)+'</span></button>').join('')+'</div></div>';
+  }
+  return h + '</div>';
+}
 function vistaAvisos(){
   const abiertos = S.avisos.filter(a => !a.cerrado);
   const yoId = S.perfil ? S.perfil.id : null;
@@ -3269,7 +3386,7 @@ function hojaImprimible(){
 /* ================= Eventos ================= */
 $('#tabs').addEventListener('click', e => {
   const b = e.target.closest('button[data-tab]'); if (!b) return;
-  S.tab = b.dataset.tab; S.ficha = null; S.fichaCliente = null; pintar(); window.scrollTo({top:0});
+  S.tab = b.dataset.tab; S.tabElegida = true; S.ficha = null; S.fichaCliente = null; pintar(); window.scrollTo({top:0});
 });
 raiz.addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b || b.tagName === 'INPUT') return;
@@ -3284,6 +3401,7 @@ raiz.addEventListener('click', async e => {
   else if (a === 'asistencia-nueva-cliente') dlgAviso(null, null, b.dataset.id);
   else if (a === 'cerrar-asistencia') dlgCierre(b.dataset.id);
   else if (a === 'parte') hojaParte(b.dataset.id);
+  else if (a === 'ir-avisos'){ S.tab = 'avisos'; S.tabElegida = true; pintar(); window.scrollTo({top:0}); }
   else if (a === 'con-filtro'){ S.conFiltro = b.dataset.f; pintar(); }
   else if (a === 'contrato-hoja') await hojaContrato(b.dataset.id);
   else if (a === 'contrato-firmar') dlgFirmaContrato(b.dataset.id);
