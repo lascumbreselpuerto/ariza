@@ -842,7 +842,8 @@ function vistaFicha(id){
   h += '<div class="panel"><div class="ficha-h"><h2>'+esc(p.cliente||'Sin cliente')+'</h2><span class="codigo">'+esc(p.codigo||'')+'</span><span class="sp"></span>'+estadoChip(p.estado)+'</div>'+
        '<p class="mini" style="margin:6px 0 0">'+esc([p.direccion,p.ubicacion].filter(Boolean).join(' · '))+'</p>'+
        '<div class="fila" style="margin-top:12px"><button class="btn sm" data-act="estado" data-id="'+p.id+'">Cambiar estado</button>'+
-       (et ? '<button class="btn sm plana" data-act="ver-qr" data-cod="'+esc(p.codigo)+'">Ver QR</button>' : '')+
+       (et ? '<button class="btn sm plana" data-act="ver-qr" data-cod="'+esc(p.codigo)+'">Ver QR</button>'+
+             '<button class="btn sm plana" data-act="etiqueta-imprimir" data-cod="'+esc(p.codigo)+'">Imprimir etiqueta</button>' : '')+
        '<button class="btn sm pri" data-act="aviso-nuevo" data-id="'+p.id+'">Nuevo aviso</button></div>'+
        '<p class="mini" style="margin:10px 0 0">Estado desde '+fechaCorta(p.estado_desde)+'</p></div>';
 
@@ -1409,11 +1410,23 @@ function vistaEtiquetas(){
            '<td>'+(p?'<span class="chip gris sin">Asignada</span>':'<span class="chip ok sin">Libre</span>')+'</td>'+
            '<td>'+(p?esc([p.cliente,p.direccion].filter(Boolean).join(' · ')):'<span class="muted">—</span>')+'</td>'+
            '<td style="text-align:right"><button class="btn sm plana" data-act="ver-qr" data-cod="'+esc(e.codigo)+'">QR</button>'+
+           '<button class="btn sm plana" data-act="etiqueta-imprimir" data-cod="'+esc(e.codigo)+'">Imprimir</button>'+
            (p?'<button class="btn sm plana" data-act="abrir" data-id="'+p.id+'">Abrir</button>':'')+'</td></tr>';
     });
     h += '</tbody></table></div>';
   }
-  h += '</div></div>';
+  h += '</div>';
+  h += '<div class="panel"><div class="panel-h"><h2>Impresora térmica</h2></div>'+
+    '<p class="mini" style="margin:0 0 10px">El botón «Imprimir» de cada fila saca <b>una etiqueta suelta a tamaño real, 62 x 100 mm</b>, '+
+    'para la Brother QL-500 con rollo DK-11202. En el diálogo de impresión elige la QL-500, papel 62 mm x 100 mm y <b>escala 100 %</b>: '+
+    'si la dejas en «ajustar al papel», el QR sale más pequeño y pierde lectura.</p>'+
+    (esAdmin() ? ('<div class="campos"><div class="campo full"><label for="eti-tel">Teléfono que sale impreso en la etiqueta</label>'+
+      '<div class="fila"><input id="eti-tel" type="tel" maxlength="30" class="sp" value="'+esc(S.ajustes.telefono_avisos||'')+'" placeholder="Ej.: 956 00 00 00">'+
+      '<button class="btn" data-act="guardar-tel">Guardar</button></div>'+
+      '<span class="pista">Déjalo vacío si no quieres que salga ningún teléfono</span></div></div>') :
+      (S.ajustes.telefono_avisos ? '<p class="mini" style="margin:0">Teléfono impreso: <b>'+esc(S.ajustes.telefono_avisos)+'</b></p>' : ''))+
+    '</div>';
+  h += '</div>';
   return h;
 }
 
@@ -3037,7 +3050,8 @@ async function hojaContrato(id){
   const cuerpo =
     '<div class="cab"><div><h1>Contrato de mantenimiento</h1>'+
       '<div class="ref">'+esc(k.referencia||'')+'</div></div>'+
-      '<div class="marca"><b>ARIZA</b> puertas automáticas<br><span>arizapa.es</span></div></div>'+
+      '<div class="marca"><b>ARIZA</b> puertas automáticas<br><span>arizapa.es'+
+        (S.ajustes.telefono_avisos ? ' · '+esc(S.ajustes.telefono_avisos) : '')+'</span></div></div>'+
 
     '<h2>Las partes</h2><table>'+
       '<tr><th>Prestador del servicio</th><td>Ariza Puertas y Automatismos S.L.U.</td></tr>'+
@@ -3185,6 +3199,51 @@ async function enviarContrato(id, boton){
   } catch(e){ fallo(e); }
   if (boton) { boton.disabled = false; boton.textContent = 'Enviar al cliente'; }
 }
+/* ---- Etiqueta suelta para la Brother QL-500 (DK-11202, 62 x 100 mm) ----
+   Térmica directa: solo negro sobre blanco, sin grises ni colores. */
+function etiquetaTermica(codigo){
+  const e = S.etiquetas.find(x => x.codigo === codigo);
+  if (!e) return toast('No encuentro esa etiqueta.');
+  const url = enlaceQR(codigo);
+  const tel = (S.ajustes.telefono_avisos || '').toString().trim();
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana de impresión.'); return; }
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Etiqueta '+esc(codigo)+'</title><style>'+
+    '@page{size:62mm 100mm;margin:0}'+
+    'html,body{margin:0;padding:0;background:#fff;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
+    'body{font-family:"Barlow Condensed","Arial Narrow",Arial,sans-serif}'+
+    '.eti{width:62mm;height:100mm;box-sizing:border-box;padding:3.5mm 3mm;display:flex;flex-direction:column;'+
+      'align-items:center;justify-content:space-between;text-align:center;page-break-after:always}'+
+    '.cab{width:100%;background:#000;color:#fff;padding:1.6mm 0;border-radius:1mm}'+
+    '.cab b{font:700 6.4mm/1 "Barlow Condensed",Arial,sans-serif;letter-spacing:.3mm}'+
+    '.cab span{display:block;font:500 2.7mm/1.2 Arial,sans-serif;letter-spacing:.35mm;text-transform:uppercase;margin-top:.8mm}'+
+    '.qr{width:44mm;height:44mm;display:block}'+
+    '.qr svg{width:44mm;height:44mm;display:block}'+
+    '.cod{font:700 11mm/1 ui-monospace,"Courier New",monospace;letter-spacing:.6mm}'+
+    '.pie{width:100%;border-top:.4mm solid #000;padding-top:1.4mm}'+
+    '.tel{font:700 5.4mm/1.1 Arial,sans-serif;letter-spacing:.2mm}'+
+    '.tel small{display:block;font:500 2.6mm/1.2 Arial,sans-serif;letter-spacing:.3mm;text-transform:uppercase}'+
+    '.web{font:600 3.4mm/1.2 Arial,sans-serif;margin-top:.8mm}'+
+    '.barra{position:fixed;top:0;left:0;right:0;background:#1C1817;color:#fff;padding:10px 14px;'+
+      'font:14px -apple-system,Segoe UI,Roboto,sans-serif;display:flex;gap:10px;align-items:center;z-index:9}'+
+    '.barra button{font:inherit;font-weight:600;padding:7px 14px;border:0;border-radius:6px;background:#FCBA1D;color:#1C1817;cursor:pointer}'+
+    '.barra span{font-size:12px;color:#CFCAC6}'+
+    'body{padding-top:52px}'+
+    '@media print{.barra{display:none}body{padding-top:0}}</style></head><body>'+
+    '<div class="barra"><button onclick="window.print()">Imprimir etiqueta</button>'+
+    '<span>Elige la Brother QL-500, papel 62 mm x 100 mm y escala 100 %. No uses «ajustar al papel».</span></div>'+
+    '<div class="eti">'+
+      '<div class="cab"><b>ARIZA</b><span>puertas automáticas</span></div>'+
+      '<div class="qr">'+svgQR(url, '44mm')+'</div>'+
+      '<div class="cod">'+esc(codigo)+'</div>'+
+      '<div class="pie">'+
+        (tel ? '<div class="tel"><small>Avisos y urgencias</small>'+esc(tel)+'</div>' : '')+
+        '<div class="web">arizapa.es</div>'+
+      '</div>'+
+    '</div></body></html>');
+  w.document.close();
+}
+
 function hojaImprimible(){
   const usadas = new Set(S.puertas.map(p => p.codigo));
   const libres = S.etiquetas.filter(e => !usadas.has(e.codigo));
@@ -3281,6 +3340,21 @@ raiz.addEventListener('click', async e => {
   else if (a === 'aviso-editar') dlgAviso(null, b.dataset.id);
   else if (a === 'foto-ver') dlgFoto(b.dataset.id);
   else if (a === 'ver-qr') dlgQR(b.dataset.cod);
+  else if (a === 'etiqueta-imprimir') etiquetaTermica(b.dataset.cod);
+  else if (a === 'guardar-tel'){
+    const campo = document.getElementById('eti-tel');
+    if (!campo) return;
+    b.disabled = true;
+    try {
+      const v = campo.value.trim();
+      const { error } = await sb.from('ajustes').upsert({ clave:'telefono_avisos', valor: v,
+        actualizado: new Date().toISOString() }, { onConflict:'clave' });
+      if (error) throw error;
+      S.ajustes.telefono_avisos = v;
+      toast(v ? 'Teléfono guardado.' : 'Las etiquetas saldrán sin teléfono.');
+      pintar();
+    } catch(err){ fallo(err); b.disabled = false; }
+  }
   else if (a === 'generar') dlgGenerar();
   else if (a === 'hoja') hojaImprimible();
   else if (a === 'foto-borrar'){
