@@ -102,6 +102,18 @@ img{max-width:100%}
 .cara.c3{background:#C2571A}.cara.c4{background:#0E8C8C}.cara.c5{background:#A31D6B}
 .cara.vacia{background:var(--gris-bg);color:var(--gris)}
 .cara.gr.ini{font-size:17px}
+/* Expediente de documentación */
+.exp-item{border:1px solid var(--line);border-left:3px solid var(--line);border-radius:8px;
+          padding:10px 12px;margin:0 0 10px;background:var(--surface)}
+.exp-item.bien{border-left-color:var(--ok)}
+.exp-item.falta{border-left-color:var(--mal);background:var(--mal-bg)}
+.exp-fotos{margin-top:10px;padding-top:8px;border-top:1px dashed var(--line)}
+.tiras{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.tira{margin:0;width:150px}
+.tira img{width:150px;height:110px;object-fit:cover;border-radius:6px;border:1px solid var(--line);display:block}
+.tira figcaption{display:flex;flex-direction:column;gap:3px;margin-top:4px}
+.tira .pie{font-size:12px;padding:3px 5px;border:1px solid var(--line);border-radius:4px;
+           background:var(--surface);color:var(--ink);width:150px}
 .chip.anulada{color:var(--gris);background:var(--gris-bg);text-decoration:none}
 .aviso.anulada,.item.anulada{opacity:.72}
 .aviso.archivada{border-style:dashed}
@@ -481,6 +493,7 @@ const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etique
             contratos:[], contratoPuertas:[], ficha:null, fichaCliente:null, cargando:true, busca:'', buscaCli:'', filtroTec:'', sugerencias:[],
             guionTipo:'', tarifas:null, catalogo:[], valoraciones:{}, resumen:null, mesGestion:'',
             calVista:'mes', calAncla:null, calTec:'', buscaCon:'', conFiltro:'activos', borradorPuerta:null,
+            expedientes:[], expFotos:[], exp:null, expPaso:'obra', expSucio:false,
             fotosEquipo:{}, histBusca:'', histTec:'', histTipo:'', histDesde:'', histHasta:'', histArchivadas:false,
             cliArchivados:false };
 /* Importes: solo existen para el administrador. Si no hay tarifas cargadas, no se enseña nada. */
@@ -762,6 +775,8 @@ async function cargar(){
   if (!t.error) S.equipo = t.data || [];
   if (!c.error) S.clientes = c.data || [];
   await fotosDelEquipo();
+  const xp = await sb.from('expedientes').select('*').order('creado', {ascending:false});
+  S.expedientes = xp.error ? [] : (xp.data || []);
   if (!j.error){ S.ajustes = {}; (j.data || []).forEach(x => { S.ajustes[x.clave] = x.valor; }); }
   // materiales ya usados, para ir sugiriéndolos al técnico
   const m = await sb.from('materiales').select('descripcion, unidad').limit(500);
@@ -845,6 +860,7 @@ function render(){
   document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab===S.tab ? 'true':'false'));
   let h = '';
   if (S.cargando) h = '<p class="cargando">Cargando datos…</p>';
+  else if (S.exp) h = vistaExpediente(S.exp);
   else if (S.ficha) h = vistaFicha(S.ficha);
   else if (S.fichaCliente) h = vistaFichaCliente(S.fichaCliente);
   else if (S.tab === 'clientes') h = vistaClientes();
@@ -902,6 +918,7 @@ function vistaFicha(id){
        '<div class="fila" style="margin-top:12px"><button class="btn sm" data-act="estado" data-id="'+p.id+'">Cambiar estado</button>'+
        (et ? '<button class="btn sm plana" data-act="ver-qr" data-cod="'+esc(p.codigo)+'">Ver QR</button>'+
              '<button class="btn sm plana" data-act="etiqueta-imprimir" data-cod="'+esc(p.codigo)+'">Imprimir etiqueta</button>' : '')+
+       '<button class="btn sm" data-act="exp-nuevo" data-id="'+p.id+'">Documentación</button>'+
        '<button class="btn sm pri" data-act="aviso-nuevo" data-id="'+p.id+'">Nuevo aviso</button></div>'+
        '<p class="mini" style="margin:10px 0 0">Estado desde '+fechaCorta(p.estado_desde)+'</p></div>';
 
@@ -970,7 +987,36 @@ function vistaFicha(id){
     });
     h += '</div>';
   }
+  h += '</div>';
+
+  // Expedientes de documentación de esta puerta
+  const xs = S.expedientes.filter(x => x.puerta_id === p.id && !x.archivado);
+  h += '<div class="panel"><div class="panel-h"><h3>Documentación de normativa</h3>'+
+       '<span class="mini">'+xs.length+'</span><span class="sp"></span>'+
+       '<button class="btn sm" data-act="exp-nuevo" data-id="'+p.id+'">Nueva documentación</button></div>';
+  if (!xs.length)
+    h += '<p class="muted" style="margin:0">Esta puerta no tiene todavía expediente de documentación. '+
+         'Aquí se genera el libro que se entrega al cliente: declaraciones, comprobaciones de normativa, '+
+         'fotos de cada elemento y libro de mantenimiento.</p>';
+  else {
+    h += '<div class="lista">';
+    xs.forEach(x => {
+      const falta = expPendientes(x).length;
+      h += '<button class="item" data-act="exp-abrir" data-id="'+x.id+'">'+
+        '<span class="qr">DOC</span>'+
+        '<span><span class="tit">'+esc(x.referencia||'Expediente')+' · '+esc(EXP_SITUACION[x.situacion]||'')+'</span>'+
+        '<span class="sub">'+esc(EXP_FAMILIA[x.familia]||'')+' · '+
+          (x.fecha_puesta_servicio ? 'puesta en servicio '+esc(fechaCorta(x.fecha_puesta_servicio))
+                                   : 'sin fecha de puesta en servicio')+'</span></span>'+
+        '<span><span class="chip '+(x.estado==='emitido'?'ok':(x.estado==='completo'?'aviso':'gris'))+' sin">'+
+          (EXP_ESTADO[x.estado]||x.estado)+'</span>'+
+          (falta ? '<span class="mini" style="display:block;text-align:right;margin-top:4px">faltan '+falta+'</span>' : '')+
+        '</span></button>';
+    });
+    h += '</div>';
+  }
   h += '</div></div>';
+
   setTimeout(() => { pintarFotos(p.id); pintarDocs(p.id); pintarRevisiones(p.id); }, 0);
   return h;
 }
@@ -2019,6 +2065,7 @@ function vistaEquipo(){
        '<div class="campo" style="align-content:end"><button class="btn pri" data-act="equipo-alta">Dar de alta</button></div>'+
        '</div><p class="err" id="t-err" role="alert" style="margin:10px 0 0"></p>'+
        '<p class="mini" style="margin:8px 0 0">Dale la contraseña en persona. Él puede cambiarla desde la pantalla de entrada, con «He olvidado mi contraseña».</p></div>';
+  h += panelEmpresa();
   h += panelLista('seguridad', 'Elementos de seguridad', SEGURIDAD,
         'Es la lista de casillas que sale al dar de alta o editar una puerta. Cada técnico puede añadir uno suelto en una puerta concreta sin tocar esta lista.');
   h += panelLista('tipos_doc', 'Tipos de documento', TIPOS_DOC,
@@ -2026,6 +2073,60 @@ function vistaEquipo(){
   h += panelLista('tipos', 'Tipos de puerta', TIPOS, 'Desplegable «Tipo» de la ficha.');
   h += panelGuiones();
   h += '</div>';
+  return h;
+}
+
+/* Datos de la empresa: salen en las portadas y, sobre todo, en las declaraciones,
+   donde el NIF y el domicilio completo son obligatorios. */
+function panelEmpresa(){
+  const em = datosEmpresa(), lim = limitesFuerza();
+  const campo = (k, et, pista, ancho) =>
+    '<div class="campo'+(ancho?' full':'')+'"><label>'+esc(et)+'</label>'+
+    '<input type="text" data-emp="'+k+'" value="'+esc(em[k]||'')+'">'+
+    (pista?'<span class="pista">'+esc(pista)+'</span>':'')+'</div>';
+  const faltan = ['nif','domicilio','poblacion','cp'].filter(k => !em[k]);
+  let h = '<div class="panel"><div class="panel-h"><h3>Datos de la empresa</h3></div>'+
+    '<p class="mini" style="margin:0 0 10px">Van en la portada del libro de documentación y en las '+
+    'declaraciones de conformidad y de prestaciones, donde la razón social, el NIF y el domicilio completo '+
+    'son obligatorios.</p>';
+  if (faltan.length)
+    h += '<p class="nota-oficina" style="margin:0 0 10px">Faltan '+faltan.length+' datos obligatorios para '+
+         'poder firmar una declaración: '+esc(faltan.join(', '))+'.</p>';
+  h += '<div class="campos" style="max-width:860px">'+
+    campo('razon_social','Razón social','Tal cual figura en el registro mercantil',1)+
+    campo('nif','NIF o CIF')+
+    campo('nombre_comercial','Nombre comercial')+
+    campo('domicilio','Domicilio social','Calle y número',1)+
+    campo('cp','Código postal')+
+    campo('poblacion','Población')+
+    campo('provincia','Provincia')+
+    campo('telefono','Teléfono')+
+    campo('email','Correo')+
+    campo('web','Web')+
+    campo('registro','Datos registrales','Registro mercantil, tomo, folio y hoja, si quieres que salgan',1)+
+    campo('responsable_tecnico','Persona que elabora el expediente técnico',
+      'La Directiva de máquinas exige nombrarla en la declaración de conformidad',1)+
+    campo('cargo_firmante','Cargo de quien firma')+
+    '</div>'+
+    '<div class="fila" style="margin-top:12px"><span class="sp"></span>'+
+    '<button class="btn pri" data-act="guardar-empresa">Guardar datos de la empresa</button></div></div>';
+
+  h += '<div class="panel"><div class="panel-h"><h3>Límites de fuerza</h3></div>'+
+    '<p class="nota-oficina" style="margin:0 0 10px">Estos valores los tomé de reproducciones sectoriales de la '+
+    'UNE-EN 12453, no del texto de la norma, que es de pago. <b>Contrástalos con tu ejemplar</b> y corrígelos aquí '+
+    'si no cuadran: son los que la aplicación usa para decir si una puerta pasa el ensayo.</p>'+
+    '<div class="campos" style="max-width:860px">'+
+    [['fd_aplastamiento_n','Fuerza de aplastamiento (N)'],
+     ['fd_impacto_n','Fuerza de impacto (N)'],
+     ['fs_estatica_n','Fuerza estática (N)'],
+     ['fs_tiempo_s','Tiempo de la fuerza estática (s)'],
+     ['fe_residual_n','Fuerza residual (N)'],
+     ['td_dinamico_s','Tiempo por encima de la estática (s)']]
+    .map(([k, et]) => '<div class="campo"><label>'+esc(et)+'</label>'+
+      '<input type="number" step="any" data-lim="'+k+'" value="'+esc(lim[k])+'"></div>').join('')+
+    '</div>'+
+    '<div class="fila" style="margin-top:12px"><span class="sp"></span>'+
+    '<button class="btn" data-act="guardar-limites">Guardar límites</button></div></div>';
   return h;
 }
 
@@ -2320,6 +2421,1509 @@ function enlaceQR(codigo){
   const e = S.etiquetas.find(x => x.codigo === codigo);
   return BASE_QR + (codigo.replace('-','')) + (e ? e.token : '');
 }
+
+/* ================= Expediente de documentación de puerta =================
+   Genera la documentación obligatoria de una puerta: instalación nueva,
+   adecuación a normativa y modificación sustancial.
+
+   Marco legal manejado, verificado el 3 de octubre de 2026:
+     · Reglamento (UE) 305/2011 de productos de construcción → Declaración de
+       Prestaciones, con el modelo del Reglamento Delegado (UE) 574/2014.
+     · Directiva 2006/42/CE (RD 1644/2008) → Declaración CE de conformidad,
+       anexo II.1.A. Última fecha útil: 19 de enero de 2027.
+     · Reglamento (UE) 2023/1230 → Declaración UE de conformidad, anexo V.A.
+       Aplicable desde el 20 de enero de 2027.
+     · Directiva 2014/30/UE de compatibilidad electromagnética (RD 186/2016).
+   Lo que decide el marco no es la fecha de la firma, sino la de puesta en
+   servicio, así que la calcula la aplicación y no se deja a criterio de nadie. */
+
+const EXP_SITUACION = {
+  nueva_fabricante: 'Puerta nueva que montamos nosotros',
+  nueva_instalador: 'Puerta nueva de kit completo',
+  adecuacion:       'Adecuación a normativa',
+  modificacion:     'Motorización o modificación sustancial',
+};
+const EXP_SIT_AYUDA = {
+  nueva_fabricante: 'Ensamblamos la puerta combinando componentes de distintos proveedores. '+
+    'Somos fabricante: emitimos declaración de prestaciones, declaración de conformidad y marcado CE propios.',
+  nueva_instalador: 'Montamos un kit completo de un único fabricante siguiendo sus instrucciones. '+
+    'Somos mero instalador: no emitimos declaraciones, las recopilamos y transmitimos.',
+  adecuacion: 'Ponemos seguridades en una puerta existente sin tocar la lógica del cuadro. '+
+    'El documento es el informe de riesgos y deficiencias y la certificación en el libro de mantenimiento.',
+  modificacion: 'Motorizamos una puerta manual o cambiamos el cuadro por otro de tipo distinto. '+
+    'Es modificación sustancial: pasamos a ser fabricante de la máquina.',
+};
+const EXP_FAMILIA = {
+  industrial:  'Industrial, comercial o de garaje',
+  peatonal:    'Peatonal automática',
+  barrera:     'Barrera de vehículos',
+  cortafuegos: 'Resistente al fuego',
+};
+const EXP_ESTADO = { borrador:'Borrador', completo:'Lista para emitir', emitido:'Emitida' };
+
+/* Somos fabricante de la máquina en estas dos situaciones. Motorizar una puerta
+   manual es modificación sustancial y convierte al instalador en fabricante:
+   lo dice la nota informativa del Ministerio sobre automatización de puertas. */
+const EXP_ES_FABRICANTE = s => s === 'nueva_fabricante' || s === 'modificacion';
+const EXP_ES_NUEVA      = s => s === 'nueva_fabricante' || s === 'nueva_instalador';
+
+/* Normas de referencia por familia. Se imprimen en el libro y se citan en las
+   declaraciones. Las versiones son las que localicé vigentes en octubre de 2026. */
+const EXP_NORMAS = {
+  industrial: [
+    ['UNE-EN 13241:2004+A2:2017',    'Norma de producto armonizada. Base de la declaración de prestaciones y del marcado CE por el Reglamento de Productos de Construcción.'],
+    ['UNE-EN 12453:2017+A1:2021',    'Seguridad en el uso de puertas motorizadas: requisitos y métodos de ensayo de fuerzas. Absorbió la EN 12445.'],
+    ['UNE-EN 12604:2017+A1:2020',    'Aspectos mecánicos: requisitos y métodos de ensayo. Absorbió la EN 12605.'],
+    ['UNE-EN 12635:2002+A1:2009',    'Instalación y uso. Define el expediente de la instalación y el libro de mantenimiento.'],
+    ['UNE-EN 12978:2024',            'Dispositivos de protección para puertas motorizadas: requisitos y métodos de ensayo.'],
+    ['UNE 85635:2012',               'Norma española de requisitos de instalación, uso, mantenimiento y modificación.'],
+  ],
+  peatonal: [
+    ['UNE-EN 16361:2013+A1:2016',    'Norma de producto de puertas peatonales motorizadas. Base de la declaración de prestaciones.'],
+    ['UNE-EN 16005:2023+A1:2024',    'Seguridad en el uso de puertas peatonales motorizadas: requisitos y métodos de ensayo.'],
+    ['UNE-EN 12978:2024',            'Dispositivos de protección: requisitos y métodos de ensayo.'],
+  ],
+  barrera: [
+    ['UNE-EN 13241:2004+A2:2017',    'Norma de producto armonizada, en lo aplicable a barreras.'],
+    ['UNE-EN 12453:2017+A1:2021',    'Seguridad en el uso: limitación de fuerzas y detección de presencia.'],
+    ['UNE-EN 12978:2024',            'Dispositivos de protección.'],
+    ['UNE 85635:2012',               'Requisitos de instalación, uso, mantenimiento y modificación.'],
+  ],
+  cortafuegos: [
+    ['UNE-EN 16034:2015',            'Norma de producto para prestaciones de resistencia al fuego y control de humos. Se declara junto a la norma de producto que corresponda.'],
+    ['UNE-EN 13241:2004+A2:2017',    'Norma de producto, cuando se trata de puerta industrial, comercial o de garaje.'],
+    ['UNE-EN 12453:2017+A1:2021',    'Seguridad en el uso, si es motorizada.'],
+    ['UNE-EN 12635:2002+A1:2009',    'Instalación y uso.'],
+  ],
+};
+
+/* Legislación según el marco que toque por la fecha de puesta en servicio */
+const EXP_MARCO = {
+  directiva: {
+    nombre: 'Directiva 2006/42/CE de máquinas, transpuesta por el Real Decreto 1644/2008',
+    documento: 'Declaración CE de conformidad',
+    anexo: 'anexo II, parte 1, sección A del Real Decreto 1644/2008',
+    expediente: 'anexo VII, parte A de la Directiva 2006/42/CE',
+    hasta: 'Aplicable a puertas puestas en servicio hasta el 19 de enero de 2027.',
+  },
+  reglamento: {
+    nombre: 'Reglamento (UE) 2023/1230 relativo a las máquinas y los productos relacionados',
+    documento: 'Declaración UE de conformidad',
+    anexo: 'anexo V, parte A del Reglamento (UE) 2023/1230',
+    expediente: 'anexo IV, parte A del Reglamento (UE) 2023/1230',
+    hasta: 'Aplicable a puertas puestas en servicio a partir del 20 de enero de 2027.',
+  },
+};
+const marcoDeFecha = f => !f ? 'pendiente' : (f < '2027-01-20' ? 'directiva' : 'reglamento');
+
+/* ---- Componentes de la instalación, con foto de cada uno ----
+   clave, nombre, ayuda para el técnico, si lleva marca/modelo/serie. */
+const EXP_COMPONENTES = {
+  industrial: [
+    ['hoja',        'Hoja de la puerta',            'Paneles o bastidor. Retrata la puerta entera desde fuera.', 1],
+    ['guias',       'Guías, herrajes y rodamientos','Estado de guías, poleas y rodamientos.', 0],
+    ['equilibrado', 'Muelles o contrapesos',        'Sistema de equilibrado de la hoja.', 0],
+    ['paracaidas',  'Paracaídas o antirrotura',     'Dispositivo contra caída de la hoja por rotura de muelle o cable.', 1],
+    ['motor',       'Automatismo o motorreductor',  'Incluye la placa de características, legible.', 1],
+    ['cuadro',      'Cuadro de maniobra',           'Interior del cuadro, con las conexiones a la vista.', 1],
+    ['desbloqueo',  'Desbloqueo manual',            'Maniobra de emergencia y su señalización.', 1],
+    ['fotocelulas', 'Fotocélulas',                  'Cada pareja instalada, con su altura respecto al suelo.', 1],
+    ['banda',       'Banda de seguridad',           'Banda del canto de cierre y su cuadro de control.', 1],
+    ['limitador',   'Limitador de fuerza',          'Dispositivo o función del cuadro que limita la fuerza.', 1],
+    ['finales',     'Finales de carrera y topes',   'Finales eléctricos y topes mecánicos.', 0],
+    ['destellante', 'Destellante y señal acústica', 'Si la instalación lo lleva.', 0],
+    ['mandos',      'Mandos y pulsadores',          'Emisores, pulsador, selector de llave, columna.', 0],
+    ['paro',        'Parada de emergencia',         'Seta de parada, si procede por tratarse de centro de trabajo.', 0],
+    ['electrico',   'Protecciones eléctricas',      'Cuadro de alimentación, diferencial y magnetotérmico.', 0],
+    ['placa',       'Placa de características y marcado CE', 'Etiqueta colocada en la puerta, legible.', 0],
+    ['senal',       'Señalización de peligro',      'Señales de riesgo y de uso colocadas en la puerta.', 0],
+  ],
+  peatonal: [
+    ['hoja',        'Hojas de la puerta',           'Conjunto de la puerta desde el exterior.', 1],
+    ['operador',    'Operador',                     'Mecanismo y su placa de características.', 1],
+    ['cuadro',      'Electrónica de control',       'Cuadro o central con sus conexiones.', 1],
+    ['radar_ext',   'Radar exterior de apertura',   'Detector de apertura por el lado exterior.', 1],
+    ['radar_int',   'Radar interior de apertura',   'Detector de apertura por el lado interior.', 1],
+    ['presencia',   'Sensores de presencia',        'Sensores que vigilan el hueco de paso en ambos sentidos.', 1],
+    ['laterales',   'Protección lateral y de dedos','Protección de las zonas de arrastre y atrapamiento.', 0],
+    ['breakout',    'Apertura antipánico o breakout','Sistema de apertura manual en sentido de evacuación.', 1],
+    ['bateria',     'Batería de emergencia',        'Alimentación de apoyo para la apertura ante fallo de red.', 1],
+    ['pulsador',    'Pulsador de emergencia',       'Pulsador de apertura y parada, y su señalización.', 1],
+    ['selector',    'Selector de programa',         'Mando de modos de funcionamiento.', 1],
+    ['vinilos',     'Señalización en el vidrio',    'Marcas a la altura de la vista en superficies transparentes.', 0],
+    ['vidrio',      'Vidrio de seguridad',          'Marcado del vidrio donde se vea su clasificación.', 0],
+    ['placa',       'Placa de características y marcado CE', 'Etiqueta colocada en la puerta, legible.', 0],
+  ],
+  barrera: [
+    ['mastil',      'Mástil',                       'Barrera completa, en posición cerrada.', 1],
+    ['cuerpo',      'Cuerpo o armario',             'Conjunto motriz y su placa de características.', 1],
+    ['cuadro',      'Cuadro de maniobra',           'Interior del cuadro con sus conexiones.', 1],
+    ['bucle',       'Bucle magnético',              'Detector de masa metálica y su central.', 1],
+    ['fotocelulas', 'Fotocélulas',                  'Cada pareja instalada.', 1],
+    ['banda',       'Banda de seguridad del mástil','Protección del canto del mástil, si la lleva.', 1],
+    ['desbloqueo',  'Desbloqueo manual',            'Maniobra de emergencia y su señalización.', 1],
+    ['reflectante', 'Señalización reflectante',     'Bandas reflectantes del mástil.', 0],
+    ['semaforo',    'Semáforo o destellante',       'Si la instalación lo lleva.', 0],
+    ['mandos',      'Mandos y pulsadores',          'Emisores, lector, columna de acceso.', 0],
+    ['electrico',   'Protecciones eléctricas',      'Cuadro de alimentación y protecciones.', 0],
+    ['placa',       'Placa de características y marcado CE', 'Etiqueta colocada en la barrera, legible.', 0],
+  ],
+  cortafuegos: [
+    ['hoja',        'Hoja resistente al fuego',     'Puerta completa cerrada.', 1],
+    ['marco',       'Marco y sellado perimetral',   'Fijación al hueco y sellado.', 0],
+    ['juntas',      'Juntas intumescentes',         'Juntas del perímetro de la hoja.', 0],
+    ['cierrapuertas','Cierrapuertas',               'Mecanismo y su regulación.', 1],
+    ['retenedor',   'Retenedor electromagnético',   'Electroimán de retención, si lo lleva.', 1],
+    ['selector',    'Selector de cierre',           'Dispositivo de secuencia en puertas de dos hojas.', 1],
+    ['antipanico',  'Barra antipánico o manilla',   'Herraje de apertura en sentido de evacuación.', 1],
+    ['deteccion',   'Conexión a central de detección', 'Enlace con el sistema de detección de incendios.', 1],
+    ['motor',       'Automatismo',                  'Si la puerta es motorizada, con su placa.', 1],
+    ['etiqueta',    'Etiqueta de clasificación EI', 'Etiqueta con la clase de resistencia al fuego, legible.', 0],
+    ['placa',       'Placa de características y marcado CE', 'Etiqueta colocada en la puerta, legible.', 0],
+  ],
+};
+
+/* ---- Comprobaciones de cumplimiento ----
+   c: clave · t: qué se comprueba · n: de dónde sale la exigencia
+   f: pide foto · critico: si falla, la puerta no cumple */
+const EXP_COMPROBACIONES = {
+  industrial: [
+    ['limitacion',  'La fuerza de la puerta está limitada y medida dentro de los valores de la norma',
+       'UNE-EN 12453, anexo A', 0, 1],
+    ['presencia',   'Hay detección de presencia en todo el recorrido peligroso (fotocélulas, banda o cortina)',
+       'UNE-EN 12453 · UNE-EN 12978', 1, 1],
+    ['aplastamiento','Las zonas de aplastamiento, cizallamiento y arrastre están protegidas o fuera de alcance',
+       'UNE-EN 12604 · UNE-EN 12453', 1, 1],
+    ['caida',       'La hoja no puede caer ante rotura de muelle o cable (paracaídas o doble cable)',
+       'UNE-EN 12604 · RD 486/1997 anexo I.A.6.5.º', 1, 1],
+    ['manual',      'La puerta se puede abrir a mano si falla la corriente, y el desbloqueo está señalizado',
+       'UNE-EN 12453 · RD 486/1997 anexo I.A.6.6.º', 1, 1],
+    ['parada',      'Hay parada de emergencia identificable y accesible, cuando la puerta está en centro de trabajo',
+       'RD 486/1997 anexo I.A.6.6.º', 1, 0],
+    ['descarrile',  'La corredera lleva sistema que impide que se salga de las guías y caiga',
+       'RD 486/1997 anexo I.A.6.4.º', 1, 0],
+    ['paso',        'Los peatones pueden pasar sin riesgo, o hay puerta peatonal próxima y señalizada',
+       'RD 486/1997 anexo I.A.6.8.º', 1, 0],
+    ['finales',     'Finales de carrera y topes mecánicos correctamente puestos y fijados',
+       'UNE-EN 12604', 0, 0],
+    ['electrico',   'Instalación eléctrica con protección diferencial y magnetotérmica, y puesta a tierra',
+       'Reglamento Electrotécnico de Baja Tensión', 0, 1],
+    ['marcado',     'Marcado CE y placa de características colocados en la puerta y legibles',
+       'Reglamento (UE) 305/2011 · marco de máquinas vigente', 1, 1],
+    ['senal',       'Señalización de riesgos colocada y visible',
+       'UNE 85635:2012', 1, 0],
+    ['libro',       'Libro de mantenimiento entregado y cumplimentado',
+       'UNE-EN 12635', 0, 1],
+    ['manual_uso',  'Manual de uso y mantenimiento entregado al titular',
+       'UNE-EN 12635 · Código Técnico de la Edificación', 0, 1],
+  ],
+  peatonal: [
+    ['presencia',   'Sensores de presencia que vigilan el hueco de paso por los dos lados',
+       'UNE-EN 16005', 1, 1],
+    ['apertura',    'Sensores de apertura con cobertura suficiente a ambos lados',
+       'UNE-EN 16005', 1, 1],
+    ['laterales',   'Zonas de arrastre y atrapamiento lateral protegidas o con distancia de seguridad',
+       'UNE-EN 16005', 1, 1],
+    ['dedos',       'Protección contra atrapamiento de dedos en los cantos principales',
+       'UNE-EN 16005', 1, 0],
+    ['fuerzas',     'Fuerzas de la puerta dentro de los límites, medidas y registradas',
+       'UNE-EN 16005', 0, 1],
+    ['evacuacion',  'Si está en recorrido de evacuación: abre ante fallo de corriente y tiene apertura manual señalizada',
+       'UNE-EN 16005 · Código Técnico de la Edificación DB-SI', 1, 1],
+    ['breakout',    'Apertura antipánico en el sentido de evacuación, con la fuerza admisible',
+       'UNE-EN 16005', 1, 0],
+    ['pulsador',    'Pulsador de emergencia accesible y señalizado',
+       'UNE-EN 16005', 1, 0],
+    ['vidrio',      'Superficies transparentes señalizadas a la altura de la vista',
+       'RD 486/1997 anexo I.A.6.1.º', 1, 1],
+    ['rotura',      'Vidrio de seguridad o protegido contra rotura peligrosa',
+       'RD 486/1997 anexo I.A.6.2.º', 0, 1],
+    ['electrico',   'Instalación eléctrica con protecciones y puesta a tierra',
+       'Reglamento Electrotécnico de Baja Tensión', 0, 1],
+    ['marcado',     'Marcado CE y placa de características colocados y legibles',
+       'Reglamento (UE) 305/2011 · marco de máquinas vigente', 1, 1],
+    ['libro',       'Libro de mantenimiento entregado y cumplimentado',
+       'UNE-EN 16005', 0, 1],
+    ['manual_uso',  'Manual de uso y mantenimiento entregado al titular',
+       'UNE-EN 16005', 0, 1],
+  ],
+  barrera: [
+    ['limitacion',  'La fuerza del mástil está limitada y medida dentro de los valores de la norma',
+       'UNE-EN 12453, anexo A', 0, 1],
+    ['presencia',   'Detección de presencia en la zona de barrido del mástil',
+       'UNE-EN 12453 · UNE-EN 12978', 1, 1],
+    ['aplastamiento','Zona de aplastamiento bajo el mástil protegida o con distancia de seguridad',
+       'UNE-EN 12453', 1, 1],
+    ['manual',      'Desbloqueo manual accesible y señalizado',
+       'UNE-EN 12453', 1, 1],
+    ['reflectante', 'Mástil señalizado con bandas reflectantes visibles de día y de noche',
+       'UNE 85635:2012', 1, 0],
+    ['peaton',      'El paso de peatones está resuelto fuera de la zona de barrido del mástil',
+       'RD 486/1997 anexo I.A.6.8.º', 1, 0],
+    ['electrico',   'Instalación eléctrica con protecciones y puesta a tierra',
+       'Reglamento Electrotécnico de Baja Tensión', 0, 1],
+    ['marcado',     'Marcado CE y placa de características colocados y legibles',
+       'Reglamento (UE) 305/2011 · marco de máquinas vigente', 1, 1],
+    ['libro',       'Libro de mantenimiento entregado y cumplimentado',
+       'UNE-EN 12635', 0, 1],
+  ],
+  cortafuegos: [
+    ['clase',       'La clase de resistencia al fuego declarada es la que exige el proyecto',
+       'UNE-EN 16034 · Código Técnico de la Edificación DB-SI', 0, 1],
+    ['etiqueta',    'Etiqueta de clasificación colocada en la hoja y legible',
+       'UNE-EN 16034', 1, 1],
+    ['cierre',      'La puerta cierra por completo por sí sola desde cualquier posición',
+       'UNE-EN 16034 · DB-SI', 1, 1],
+    ['secuencia',   'En puertas de dos hojas, el selector de cierre ordena la secuencia correctamente',
+       'UNE-EN 16034', 1, 0],
+    ['retenedor',   'Los retenedores liberan la puerta al activarse la detección de incendios',
+       'UNE-EN 16034 · DB-SI', 1, 1],
+    ['evacuacion',  'Abre en el sentido de evacuación con el herraje y la fuerza admisibles',
+       'DB-SI · DB-SUA', 1, 1],
+    ['sellado',     'Marco sellado al hueco con material compatible con la clase declarada',
+       'UNE-EN 16034', 1, 1],
+    ['juntas',      'Juntas intumescentes completas y sin cortes',
+       'UNE-EN 16034', 1, 1],
+    ['organismo',   'Consta el organismo notificado que interviene en la evaluación',
+       'Reglamento (UE) 305/2011', 0, 1],
+    ['marcado',     'Marcado CE y declaración de prestaciones disponibles',
+       'Reglamento (UE) 305/2011', 1, 1],
+    ['libro',       'Libro de mantenimiento entregado y cumplimentado',
+       'UNE-EN 12635', 0, 0],
+  ],
+};
+
+/* ---- Prestaciones declaradas en la declaración de prestaciones ----
+   Las obligatorias no admiten "prestación no determinada". El desglose procede
+   de la tabla ZA.1 de la norma de producto: hay que contrastarlo con el
+   ejemplar de la UNE-EN 13241:2004+A2:2017, que es de pago. */
+const EXP_PRESTACIONES = {
+  industrial: [
+    ['resist_mec',  'Resistencia mecánica y estabilidad',        'UNE-EN 12604', 1],
+    ['vidrio_geo',  'Geometría segura de componentes de vidrio', 'UNE-EN 12604', 1],
+    ['fuerzas',     'Fuerzas de maniobra (puertas motorizadas)', 'UNE-EN 12453', 1],
+    ['apertura_seg','Apertura segura (puertas de movimiento vertical)', 'UNE-EN 12453', 1],
+    ['agua',        'Estanquidad al agua',                        'UNE-EN 12425', 0],
+    ['sustancias',  'Emisión de sustancias peligrosas',           '—', 0],
+    ['viento',      'Resistencia a la carga de viento',           'UNE-EN 12424', 0],
+    ['termica',     'Resistencia térmica',                        'UNE-EN 12428', 0],
+    ['aire',        'Permeabilidad al aire',                      'UNE-EN 12426', 0],
+    ['durabilidad', 'Durabilidad de las prestaciones (ciclos)',    'UNE-EN 12604', 0],
+  ],
+  peatonal: [
+    ['fuerzas',     'Fuerzas de maniobra',                        'UNE-EN 16005', 1],
+    ['resist_mec',  'Resistencia mecánica',                       'UNE-EN 16361', 1],
+    ['sustancias',  'Emisión de sustancias peligrosas',           '—', 0],
+    ['agua',        'Estanquidad al agua',                        'UNE-EN 16361', 0],
+    ['viento',      'Resistencia a la carga de viento',           'UNE-EN 16361', 0],
+    ['termica',     'Transmitancia térmica',                      'UNE-EN 16361', 0],
+    ['aire',        'Permeabilidad al aire',                      'UNE-EN 16361', 0],
+    ['durabilidad', 'Durabilidad (ciclos)',                       'UNE-EN 16361', 0],
+  ],
+  barrera: [
+    ['resist_mec',  'Resistencia mecánica y estabilidad',         'UNE-EN 12604', 1],
+    ['fuerzas',     'Fuerzas de maniobra',                        'UNE-EN 12453', 1],
+    ['durabilidad', 'Durabilidad (ciclos)',                       'UNE-EN 12604', 0],
+  ],
+  cortafuegos: [
+    ['fuego',       'Resistencia al fuego (clase EI)',            'UNE-EN 16034', 1],
+    ['humos',       'Control de humos (clase Sa / S200)',         'UNE-EN 16034', 0],
+    ['autocierre',  'Capacidad de cierre automático (ciclos)',    'UNE-EN 16034', 1],
+    ['resist_mec',  'Resistencia mecánica y estabilidad',         'UNE-EN 12604', 1],
+    ['fuerzas',     'Fuerzas de maniobra, si es motorizada',      'UNE-EN 12453', 0],
+    ['durabilidad', 'Durabilidad (ciclos)',                       'UNE-EN 12604', 0],
+  ],
+};
+
+/* Puntos donde la norma pide medir la fuerza. Para correderas y plegables son
+   tres alturas; para abatibles, el centro y los extremos. */
+const EXP_PUNTOS_FUERZA = {
+  industrial: ['Canto de cierre, a 50 mm del suelo', 'Canto de cierre, a 1,5 m', 'Canto de cierre, parte alta'],
+  peatonal:   ['Canto principal de cierre', 'Canto secundario', 'Zona de arrastre lateral'],
+  barrera:    ['Extremo del mástil', 'Centro del mástil', 'Zona próxima al eje'],
+  cortafuegos:['Canto de cierre, a 50 mm del suelo', 'Canto de cierre, a 1,5 m', 'Canto de cierre, parte alta'],
+};
+
+const LIM_FUERZA_FABRICA = { fd_aplastamiento_n:400, fd_impacto_n:1400, fs_estatica_n:150,
+                             fs_tiempo_s:5, fe_residual_n:25, td_dinamico_s:0.75 };
+const limitesFuerza = () => Object.assign({}, LIM_FUERZA_FABRICA, S.ajustes.limites_fuerza || {});
+const datosEmpresa = () => Object.assign({
+  razon_social:'Ariza Puertas y Automatismos S.L.U.', nombre_comercial:'ARIZA Puertas Automáticas',
+  nif:'', domicilio:'', poblacion:'', provincia:'', cp:'', telefono:'', email:'',
+  web:'arizapa.es', registro:'', responsable_tecnico:'', cargo_firmante:'Administrador único'
+}, S.ajustes.empresa || {});
+
+/* ---- Estado del expediente abierto ---- */
+const expDe = id => S.expedientes.find(x => x.id === id);
+const expFotos = (ap) => (S.expFotos || []).filter(f => f.apartado === ap)
+  .sort((a,b) => (a.orden||0) - (b.orden||0));
+
+function expVal(ruta, def){
+  const e = expDe(S.exp); if (!e) return def;
+  const partes = ruta.split('.');
+  let v = e.datos || {};
+  for (const p of partes){ if (v == null) return def; v = v[p]; }
+  return v === undefined || v === null ? def : v;
+}
+function expPon(ruta, valor){
+  const e = expDe(S.exp); if (!e) return;
+  const partes = ruta.split('.');
+  e.datos = e.datos || {};
+  let v = e.datos;
+  for (let i = 0; i < partes.length - 1; i++){
+    if (typeof v[partes[i]] !== 'object' || v[partes[i]] === null) v[partes[i]] = {};
+    v = v[partes[i]];
+  }
+  v[partes[partes.length-1]] = valor;
+  guardarExpediente();
+}
+let expGuardaT = 0;
+function guardarExpediente(){
+  const e = expDe(S.exp); if (!e) return;
+  S.expSucio = true;
+  clearTimeout(expGuardaT);
+  expGuardaT = setTimeout(async () => {
+    try {
+      const { error } = await sb.from('expedientes')
+        .update({ datos: e.datos, actualizado: new Date().toISOString() }).eq('id', e.id);
+      if (error) throw error;
+      S.expSucio = false;
+      const av = document.getElementById('exp-guardado');
+      if (av){ av.textContent = 'Guardado'; setTimeout(()=>{ if(av.isConnected) av.textContent=''; }, 1800); }
+    } catch(err){ fallo(err); }
+  }, 700);
+}
+
+/* Qué secciones tiene este expediente, según la situación y la familia */
+function expSecciones(e){
+  const s = [
+    ['obra',        'Dónde y para quién'],
+    ['puerta',      'La puerta'],
+    ['componentes', 'Elementos de la instalación'],
+    ['cumplimiento','Cumplimiento de normativa'],
+  ];
+  if (expVal('puerta.motorizada', 'si') === 'si') s.push(['fuerzas', 'Ensayo de fuerzas']);
+  if (EXP_ES_FABRICANTE(e.situacion)) s.push(['prestaciones', 'Prestaciones declaradas']);
+  s.push(['riesgos', e.situacion === 'adecuacion' ? 'Riesgos y deficiencias' : 'Riesgos residuales']);
+  s.push(['entrega', 'Entrega y firma']);
+  return s;
+}
+
+/* Lo que falta por rellenar, para que nadie emita un expediente a medias */
+function expPendientes(e){
+  const falta = [];
+  const d = e.datos || {};
+  if (!e.fecha_puesta_servicio) falta.push('la fecha de puesta en servicio, que decide el marco legal');
+  if (!(d.obra && d.obra.emplazamiento)) falta.push('el emplazamiento de la puerta');
+  if (!(d.puerta && d.puerta.tipo)) falta.push('el tipo de puerta');
+  const comps = EXP_COMPONENTES[e.familia] || [];
+  const sinResponder = comps.filter(c => !((d.comp||{})[c[0]]||{}).estado);
+  if (sinResponder.length) falta.push(sinResponder.length + ' elementos de la instalación sin contestar');
+  const chk = EXP_COMPROBACIONES[e.familia] || [];
+  const sinChk = chk.filter(c => !((d.cumple||{})[c[0]]||{}).v);
+  if (sinChk.length) falta.push(sinChk.length + ' comprobaciones de normativa sin contestar');
+  const incumple = chk.filter(c => c[4] && ((d.cumple||{})[c[0]]||{}).v === 'no');
+  if (incumple.length) falta.push('hay ' + incumple.length + ' incumplimiento(s) de los que impiden certificar');
+  if (EXP_ES_FABRICANTE(e.situacion) && !(d.entrega && d.entrega.firmante_ok))
+    falta.push('confirmar quién firma la declaración');
+  return falta;
+}
+function expIncumple(e){
+  const chk = EXP_COMPROBACIONES[e.familia] || [];
+  return chk.filter(c => c[4] && (((e.datos||{}).cumple||{})[c[0]]||{}).v === 'no');
+}
+
+/* ---- Pantalla del expediente ---- */
+function vistaExpediente(id){
+  const e = expDe(id);
+  if (!e) return '<p class="cargando">Expediente no encontrado.</p>';
+  const p = e.puerta_id ? (puertaDe(e.puerta_id) || {}) : {};
+  const c = e.cliente_id ? (clienteDe(e.cliente_id) || {}) : {};
+  const secs = expSecciones(e);
+  const actual = secs.some(x => x[0] === S.expPaso) ? S.expPaso : secs[0][0];
+  const marco = marcoDeFecha(e.fecha_puesta_servicio);
+  const falta = expPendientes(e);
+
+  let h = '<div class="stack">';
+  h += '<div class="fila"><button class="btn plana" data-act="exp-volver">‹ Volver</button>'+
+       '<span class="sp"></span><span class="mini" id="exp-guardado"></span>'+
+       '<button class="btn" data-act="exp-libro" data-id="'+e.id+'">Ver el libro</button>'+
+       (esGestion() && e.estado !== 'emitido'
+         ? '<button class="btn pri" data-act="exp-emitir" data-id="'+e.id+'">Emitir</button>' : '')+
+       '</div>';
+
+  h += '<div class="panel"><div class="panel-h"><h2>'+esc(e.referencia||'Expediente')+'</h2>'+
+       '<span class="chip '+(e.estado==='emitido'?'ok':(e.estado==='completo'?'aviso':'gris'))+' sin">'+
+       (EXP_ESTADO[e.estado]||e.estado)+'</span></div>'+
+       '<p class="mini" style="margin:0">'+esc(EXP_SITUACION[e.situacion]||'')+' · '+
+       esc(EXP_FAMILIA[e.familia]||'')+' · '+esc(c.nombre || p.cliente || 'Sin cliente')+
+       (p.codigo ? ' · '+esc(p.codigo) : '')+'</p>'+
+       '<p class="mini" style="margin:6px 0 0">'+esc(EXP_SIT_AYUDA[e.situacion]||'')+'</p>';
+
+  // El marco legal no se elige: lo decide la fecha de puesta en servicio
+  h += '<div class="campos" style="margin-top:12px">'+
+    '<div class="campo"><label for="exp-fps">Fecha de puesta en servicio</label>'+
+    '<input id="exp-fps" type="date" data-act="exp-fps" value="'+esc(e.fecha_puesta_servicio||'')+'">'+
+    '<span class="pista">Decide bajo qué norma se firma. No es la fecha de la firma.</span></div>'+
+    '<div class="campo"><label>Marco legal que corresponde</label>'+
+    (marco === 'pendiente'
+      ? '<p class="nota-oficina" style="margin:0">Pon la fecha y te digo qué documento toca.</p>'
+      : '<p class="nota-oficina" style="margin:0"><b>'+esc(EXP_MARCO[marco].documento)+'</b><br>'+
+        esc(EXP_MARCO[marco].nombre)+'</p>')+
+    '</div></div>';
+
+  // Aviso cuando la puesta en servicio queda cerca del cambio de marco
+  const alCambio = e.fecha_puesta_servicio
+    ? Math.round((new Date('2027-01-20') - new Date(e.fecha_puesta_servicio)) / 86400000) : null;
+  if (marco === 'directiva' && alCambio !== null && alCambio <= 180)
+    h += '<p class="nota-oficina" style="margin:10px 0 0">Quedan '+alCambio+' días para el '+
+         '<b>20 de enero de 2027</b>, cuando el Reglamento (UE) 2023/1230 deroga la Directiva 2006/42/CE. '+
+         'Si la puesta en servicio se retrasa a esa fecha o más allá, el documento deja de ser «Declaración CE» '+
+         'y pasa a ser «Declaración UE de conformidad», con apartados distintos. Revisa la fecha antes de firmar.</p>';
+  h += '</div>';
+
+  if (falta.length)
+    h += '<div class="panel bloque-sin"><div class="panel-h"><h3>Falta por rellenar</h3>'+
+         '<span class="mini">'+falta.length+'</span></div><ul class="mini" style="margin:0;padding-left:18px">'+
+         falta.map(x => '<li>'+esc(x)+'</li>').join('')+'</ul></div>';
+
+  // Navegación por secciones
+  h += '<div class="fila" style="gap:6px;flex-wrap:wrap">'+
+    secs.map(([k, t]) => '<button class="btn sm'+(k===actual?' pri':' plana')+'" data-act="exp-paso" data-v="'+k+'">'+esc(t)+'</button>').join('')+
+    '</div>';
+
+  h += '<div class="panel">';
+  if (actual === 'obra')          h += expSecObra(e, p, c);
+  else if (actual === 'puerta')   h += expSecPuerta(e, p);
+  else if (actual === 'componentes') h += expSecComponentes(e);
+  else if (actual === 'cumplimiento') h += expSecCumplimiento(e);
+  else if (actual === 'fuerzas')  h += expSecFuerzas(e);
+  else if (actual === 'prestaciones') h += expSecPrestaciones(e);
+  else if (actual === 'riesgos')  h += expSecRiesgos(e);
+  else if (actual === 'entrega')  h += expSecEntrega(e);
+  h += '</div>';
+
+  const i = secs.findIndex(x => x[0] === actual);
+  h += '<div class="fila">'+
+    (i > 0 ? '<button class="btn plana" data-act="exp-paso" data-v="'+secs[i-1][0]+'">‹ '+esc(secs[i-1][1])+'</button>' : '')+
+    '<span class="sp"></span>'+
+    (i < secs.length-1 ? '<button class="btn" data-act="exp-paso" data-v="'+secs[i+1][0]+'">'+esc(secs[i+1][1])+' ›</button>' : '')+
+    '</div>';
+
+  setTimeout(() => pintarFotosExp(), 0);
+  return h + '</div>';
+}
+
+/* Campos sueltos, para no repetir el mismo HTML cincuenta veces */
+const expTxt = (ruta, etiqueta, pista, ancho) =>
+  '<div class="campo'+(ancho?' full':'')+'"><label>'+esc(etiqueta)+'</label>'+
+  '<input type="text" data-exp="'+ruta+'" value="'+esc(expVal(ruta,''))+'">'+
+  (pista?'<span class="pista">'+esc(pista)+'</span>':'')+'</div>';
+const expNum = (ruta, etiqueta, pista, paso) =>
+  '<div class="campo"><label>'+esc(etiqueta)+'</label>'+
+  '<input type="number" step="'+(paso||'any')+'" data-exp="'+ruta+'" value="'+esc(expVal(ruta,''))+'">'+
+  (pista?'<span class="pista">'+esc(pista)+'</span>':'')+'</div>';
+const expArea = (ruta, etiqueta, pista, filas) =>
+  '<div class="campo full"><label>'+esc(etiqueta)+'</label>'+
+  '<textarea rows="'+(filas||3)+'" data-exp="'+ruta+'">'+esc(expVal(ruta,''))+'</textarea>'+
+  (pista?'<span class="pista">'+esc(pista)+'</span>':'')+'</div>';
+const expSel = (ruta, etiqueta, opciones, pista) =>
+  '<div class="campo"><label>'+esc(etiqueta)+'</label><select data-exp="'+ruta+'">'+
+  opciones.map(o => { const [v,t] = Array.isArray(o)?o:[o,o];
+    return '<option value="'+esc(v)+'"'+(String(expVal(ruta,''))===String(v)?' selected':'')+'>'+esc(t)+'</option>'; }).join('')+
+  '</select>'+(pista?'<span class="pista">'+esc(pista)+'</span>':'')+'</div>';
+
+function expSecObra(e, p, c){
+  return '<div class="panel-h"><h3>Dónde y para quién</h3></div>'+
+    '<p class="mini" style="margin:0 0 12px">Lo que irá en la portada y en el encabezado de cada documento.</p>'+
+    '<div class="campos">'+
+    expTxt('obra.emplazamiento', 'Emplazamiento de la puerta',
+      'Calle, número y población donde está instalada', 1)+
+    expTxt('obra.ubicacion', 'Situación dentro del edificio', 'Ej.: rampa de garaje, muelle 2, acceso principal')+
+    expSel('obra.uso_edificio', 'Uso del edificio',
+      ['', 'Vivienda', 'Comunidad de propietarios', 'Comercio', 'Industria', 'Oficinas', 'Hotel', 'Sanitario', 'Docente', 'Pública concurrencia', 'Otro'])+
+    expSel('obra.centro_trabajo', '¿Hay trabajadores en el lugar?',
+      [['', 'Sin contestar'], ['si','Sí, es centro de trabajo'], ['no','No hay trabajadores']],
+      'Si los hay se le exige además el Real Decreto 486/1997')+
+    expTxt('obra.titular', 'Titular de la instalación', 'Quien queda como responsable de conservarla')+
+    expTxt('obra.nif_titular', 'NIF o CIF del titular')+
+    expTxt('obra.contacto', 'Persona de contacto')+
+    expTxt('obra.referencia_obra', 'Referencia de obra o presupuesto')+
+    '</div>'+
+    (c && c.nombre ? '<p class="mini" style="margin:12px 0 0">Cliente de la ficha: <b>'+esc(c.nombre)+'</b>'+
+      (c.nif?(' · '+esc(c.nif)):'')+(c.direccion?(' · '+esc(c.direccion)):'')+'. '+
+      '<button class="btn sm plana" data-act="exp-copiar-cliente">Copiar estos datos</button></p>' : '');
+}
+
+function expSecPuerta(e, p){
+  const tipos = lista('tipos', TIPOS);
+  return '<div class="panel-h"><h3>La puerta</h3></div>'+
+    '<p class="mini" style="margin:0 0 12px">Identificación que irá en la declaración y en la placa de características.</p>'+
+    '<div class="campos">'+
+    expSel('puerta.tipo', 'Tipo de puerta', [''].concat(tipos))+
+    expTxt('puerta.denominacion', 'Denominación comercial', 'Como la llamas tú en el presupuesto')+
+    expTxt('puerta.marca', 'Marca')+
+    expTxt('puerta.modelo', 'Modelo')+
+    expTxt('puerta.serie', 'Número de serie o identificación única',
+      'El mismo que irá en el marcado CE')+
+    expNum('puerta.ancho', 'Ancho del hueco (mm)')+
+    expNum('puerta.alto', 'Alto del hueco (mm)')+
+    expNum('puerta.peso', 'Peso de la hoja (kg)')+
+    expNum('puerta.hojas', 'Número de hojas', '', '1')+
+    expSel('puerta.motorizada', '¿Es motorizada?',
+      [['si','Sí'], ['no','No, es manual']],
+      'Si es manual no hay declaración de conformidad de máquina')+
+    expSel('puerta.uso_puerta', 'Tipo de uso',
+      ['', 'Residencial, usuarios informados', 'Comercial, usuarios no informados', 'Industrial, personal formado', 'Público, usuarios no informados'],
+      'Determina qué nivel de protección exige la norma')+
+    expSel('puerta.activacion', 'Cómo se acciona',
+      ['', 'Mando a distancia sin ver la puerta', 'Pulsador a la vista de la puerta', 'Pulsador con presencia mantenida', 'Automática por detector', 'Lector o control de acceso'])+
+    expNum('puerta.ciclos_dia', 'Ciclos previstos al día')+
+    expTxt('puerta.alimentacion', 'Alimentación eléctrica', 'Ej.: 230 V monofásica, 400 V trifásica')+
+    '</div>'+
+    expFotoBloque('puerta:general', 'Fotos generales de la puerta',
+      'Una del conjunto cerrada, otra abierta, y una del hueco desde dentro.');
+}
+
+/* ---- Elementos de la instalación, con foto de cada uno ---- */
+function expSecComponentes(e){
+  const comps = EXP_COMPONENTES[e.familia] || [];
+  const d = (e.datos||{}).comp || {};
+  const hechos = comps.filter(c => (d[c[0]]||{}).estado).length;
+  let h = '<div class="panel-h"><h3>Elementos de la instalación</h3>'+
+    '<span class="mini">'+hechos+' de '+comps.length+'</span></div>'+
+    '<p class="mini" style="margin:0 0 14px">Contesta uno por uno y hazle una foto. '+
+    'Las fotos son las que hacen que el libro valga como documento y como prueba de lo que se dejó montado.</p>';
+  comps.forEach(([k, nombre, ayuda, pideDatos]) => {
+    const v = (d[k]||{}).estado || '';
+    h += '<div class="exp-item'+(v==='no'?' falta':'')+'">'+
+      '<div class="fila" style="gap:8px;flex-wrap:wrap;align-items:baseline">'+
+        '<b>'+esc(nombre)+'</b><span class="sp"></span>'+
+        '<select data-exp="comp.'+k+'.estado" class="cal-sel">'+
+          '<option value=""'  +(v===''  ?' selected':'')+'>Sin contestar</option>'+
+          '<option value="si"'+(v==='si'?' selected':'')+'>Instalado</option>'+
+          '<option value="no"'+(v==='no'?' selected':'')+'>No lo lleva</option>'+
+          '<option value="na"'+(v==='na'?' selected':'')+'>No aplica</option>'+
+        '</select></div>'+
+      '<p class="mini" style="margin:4px 0 0">'+esc(ayuda)+'</p>';
+    if (v === 'si'){
+      h += '<div class="campos" style="margin-top:8px">';
+      if (pideDatos){
+        h += expTxt('comp.'+k+'.marca', 'Marca')+
+             expTxt('comp.'+k+'.modelo', 'Modelo')+
+             expTxt('comp.'+k+'.serie', 'Nº de serie o lote');
+      }
+      h += expTxt('comp.'+k+'.nota', 'Observación', '', 1)+'</div>';
+      h += expFotoBloque('comp:'+k, 'Foto de ' + nombre.toLowerCase(), '');
+    }
+    if (v === 'no')
+      h += '<div class="campos" style="margin-top:8px">'+
+           expTxt('comp.'+k+'.nota', 'Por qué no lo lleva y qué consecuencia tiene', '', 1)+'</div>';
+    h += '</div>';
+  });
+  return h;
+}
+
+/* ---- Comprobaciones de normativa ---- */
+function expSecCumplimiento(e){
+  const chk = EXP_COMPROBACIONES[e.familia] || [];
+  const d = (e.datos||{}).cumple || {};
+  const hechos = chk.filter(c => (d[c[0]]||{}).v).length;
+  const mal = chk.filter(c => (d[c[0]]||{}).v === 'no');
+  let h = '<div class="panel-h"><h3>Cumplimiento de normativa</h3>'+
+    '<span class="mini">'+hechos+' de '+chk.length+'</span></div>'+
+    '<p class="mini" style="margin:0 0 14px">Cada línea dice de dónde sale la exigencia. '+
+    'Las marcadas como imprescindibles impiden certificar la puerta si no se cumplen.</p>';
+  if (mal.length)
+    h += '<p class="nota-oficina" style="margin:0 0 14px"><b>'+mal.length+' sin cumplir.</b> '+
+         'Lo que no se cumple sale en el libro como deficiencia, con su propuesta de arreglo. '+
+         'No se oculta: ese es el valor del documento.</p>';
+  chk.forEach(([k, texto, norma, pideFoto, critico]) => {
+    const v = (d[k]||{}).v || '';
+    h += '<div class="exp-item'+(v==='no'?' falta':(v==='si'?' bien':''))+'">'+
+      '<div class="fila" style="gap:8px;flex-wrap:wrap;align-items:baseline">'+
+        '<span style="flex:1 1 260px">'+esc(texto)+(critico?' <span class="chip mal sin">Imprescindible</span>':'')+'</span>'+
+        '<select data-exp="cumple.'+k+'.v" class="cal-sel">'+
+          '<option value=""'  +(v===''  ?' selected':'')+'>Sin contestar</option>'+
+          '<option value="si"'+(v==='si'?' selected':'')+'>Cumple</option>'+
+          '<option value="no"'+(v==='no'?' selected':'')+'>No cumple</option>'+
+          '<option value="na"'+(v==='na'?' selected':'')+'>No aplica</option>'+
+        '</select></div>'+
+      '<p class="mini" style="margin:4px 0 0">'+esc(norma)+'</p>';
+    if (v === 'no')
+      h += '<div class="campos" style="margin-top:8px">'+
+           expTxt('cumple.'+k+'.def', 'Qué se ha encontrado', '', 1)+
+           expTxt('cumple.'+k+'.sol', 'Qué hay que hacer para resolverlo', '', 1)+
+           expSel('cumple.'+k+'.grav', 'Gravedad',
+             [['', 'Sin valorar'], ['leve','Leve'], ['grave','Grave'], ['muy_grave','Muy grave, la puerta no debería usarse']])+
+           '</div>';
+    if (v === 'na')
+      h += '<div class="campos" style="margin-top:8px">'+
+           expTxt('cumple.'+k+'.nota', 'Por qué no aplica', '', 1)+'</div>';
+    if (pideFoto && (v === 'si' || v === 'no'))
+      h += expFotoBloque('cumple:'+k, 'Foto que lo acredita', '');
+    h += '</div>';
+  });
+  return h;
+}
+
+/* ---- Ensayo de fuerzas ---- */
+function expSecFuerzas(e){
+  const lim = limitesFuerza();
+  const puntos = EXP_PUNTOS_FUERZA[e.familia] || EXP_PUNTOS_FUERZA.industrial;
+  let h = '<div class="panel-h"><h3>Ensayo de fuerzas</h3></div>'+
+    '<p class="mini" style="margin:0 0 6px">Mide en cada punto y apunta lo que marque el instrumento. '+
+    'La aplicación compara sola con los límites y te dice si pasa.</p>'+
+    '<p class="nota-oficina" style="margin:0 0 14px">Los límites de abajo proceden de reproducciones '+
+    'sectoriales de la UNE-EN 12453, no del texto de la norma, que es de pago. '+
+    'Contrástalos con tu ejemplar antes de certificar con ellos. Se cambian en Equipo.</p>'+
+    '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Límite</th><th>Valor</th></tr></thead><tbody>'+
+    '<tr><td>Fuerza de aplastamiento (huecos reducidos)</td><td class="num">'+lim.fd_aplastamiento_n+' N</td></tr>'+
+    '<tr><td>Fuerza de impacto (sin riesgo de aplastamiento)</td><td class="num">'+lim.fd_impacto_n+' N</td></tr>'+
+    '<tr><td>Fuerza estática, máximo '+lim.fs_tiempo_s+' s</td><td class="num">'+lim.fs_estatica_n+' N</td></tr>'+
+    '<tr><td>Fuerza residual, tiempo ilimitado</td><td class="num">'+lim.fe_residual_n+' N</td></tr>'+
+    '<tr><td>Tiempo por encima de la fuerza estática</td><td class="num">'+lim.td_dinamico_s+' s</td></tr>'+
+    '</tbody></table></div>';
+
+  h += '<div class="campos" style="margin-top:14px">'+
+    expTxt('fuerzas.instrumento', 'Instrumento de medida', 'Marca y modelo del medidor de fuerzas')+
+    expTxt('fuerzas.calibracion', 'Calibración', 'Fecha o referencia del certificado de calibración')+
+    '<div class="campo"><label>Fecha del ensayo</label>'+
+      '<input type="date" data-exp="fuerzas.fecha" value="'+esc(expVal('fuerzas.fecha',''))+'"></div>'+
+    expSel('fuerzas.hueco', 'Tipo de hueco en el canto de cierre',
+      [['', 'Sin contestar'], ['aplastamiento','Puede aplastar: límite '+lim.fd_aplastamiento_n+' N'],
+       ['impacto','Sin riesgo de aplastamiento: límite '+lim.fd_impacto_n+' N']])+
+    '</div>';
+
+  const tope = expVal('fuerzas.hueco','') === 'impacto' ? lim.fd_impacto_n : lim.fd_aplastamiento_n;
+  h += '<div class="tabla-wrap" style="margin-top:14px"><table class="tabla"><thead><tr>'+
+    '<th>Punto de medida</th><th>Fd (N)</th><th>Fs (N)</th><th>Fe (N)</th><th>td (s)</th><th>Resultado</th>'+
+    '</tr></thead><tbody>';
+  puntos.forEach((pt, i) => {
+    const fd = +expVal('fuerzas.m'+i+'.fd', '') || 0, fs = +expVal('fuerzas.m'+i+'.fs', '') || 0;
+    const fe = +expVal('fuerzas.m'+i+'.fe', '') || 0, td = +expVal('fuerzas.m'+i+'.td', '') || 0;
+    const hay = fd || fs || fe || td;
+    const pasa = hay && fd <= tope && fs <= lim.fs_estatica_n && fe <= lim.fe_residual_n && td <= lim.td_dinamico_s;
+    h += '<tr><td>'+esc(pt)+'</td>'+
+      ['fd','fs','fe','td'].map(c =>
+        '<td><input type="number" step="any" style="width:72px" data-exp="fuerzas.m'+i+'.'+c+'" value="'+
+        esc(expVal('fuerzas.m'+i+'.'+c,''))+'"></td>').join('')+
+      '<td>'+(!hay ? '<span class="mini">Sin medir</span>'
+            : (pasa ? '<span class="chip ok sin">Pasa</span>' : '<span class="chip mal sin">No pasa</span>'))+'</td></tr>';
+  });
+  h += '</tbody></table></div>';
+  h += '<div class="campos" style="margin-top:12px">'+
+       expArea('fuerzas.observaciones', 'Observaciones del ensayo', '', 2)+'</div>';
+  h += expFotoBloque('fuerzas:medida', 'Fotos del ensayo',
+       'La pantalla del instrumento en cada punto, si puedes.');
+  return h;
+}
+
+/* ---- Prestaciones declaradas ---- */
+function expSecPrestaciones(e){
+  const pr = EXP_PRESTACIONES[e.familia] || [];
+  let h = '<div class="panel-h"><h3>Prestaciones declaradas</h3></div>'+
+    '<p class="mini" style="margin:0 0 6px">Lo que vas a declarar en la declaración de prestaciones. '+
+    'Las imprescindibles no admiten «prestación no determinada».</p>'+
+    '<p class="nota-oficina" style="margin:0 0 14px">No relleno yo ningún valor: lo que se declara aquí '+
+    'lo firmas tú y tiene que estar respaldado por tus ensayos o por los del fabricante de los componentes. '+
+    'El desglose de obligatorias procede de la tabla ZA.1 de la norma de producto; contrástalo con tu ejemplar.</p>'+
+    '<div class="campos">'+
+    expSel('prest.via', 'Por qué vía declaras las prestaciones',
+      [['', 'Sin contestar'],
+       ['ensayos','Ensayos iniciales de tipo de laboratorio notificado'],
+       ['cascada','Ensayos del fabricante del componente, en cascada (art. 36)'],
+       ['micro','Documentación Técnica Específica por microempresa (art. 37)'],
+       ['unidad','Documentación Técnica Específica por producto fabricado por unidad (art. 38)']],
+      'Los artículos son del Reglamento (UE) 305/2011')+
+    expTxt('prest.laboratorio', 'Laboratorio u organismo notificado', 'Nombre y número, si interviene')+
+    expTxt('prest.informe', 'Referencia del informe de ensayo')+
+    expTxt('prest.codigo_tipo', 'Código de identificación única del producto tipo',
+      'Apartado 1 de la declaración de prestaciones', 1)+
+    '</div>';
+  if (['micro','unidad'].includes(expVal('prest.via','')))
+    h += '<p class="nota-oficina" style="margin:14px 0 0">Has elegido un procedimiento simplificado. '+
+         'Antes de usarlo comprueba que cumples los requisitos: el artículo 37 es para microempresas '+
+         'y el 38 para producto fabricado por unidad. Si no los cumples, la declaración no es válida.</p>';
+
+  h += '<div class="tabla-wrap" style="margin-top:14px"><table class="tabla"><thead><tr>'+
+    '<th>Característica esencial</th><th>Prestación declarada</th><th>Norma de ensayo</th></tr></thead><tbody>';
+  pr.forEach(([k, nombre, norma, obligatoria]) => {
+    h += '<tr><td>'+esc(nombre)+(obligatoria?' <span class="chip mal sin">Obligatoria</span>':'')+'</td>'+
+      '<td><input type="text" data-exp="prest.v.'+k+'" style="width:100%" placeholder="'+
+        (obligatoria?'Clase, valor o «Conforme»':'Clase, valor o NPD')+'" value="'+esc(expVal('prest.v.'+k,''))+'"></td>'+
+      '<td class="mini">'+esc(norma)+'</td></tr>';
+  });
+  h += '</tbody></table></div>';
+  return h;
+}
+
+/* ---- Riesgos y deficiencias ---- */
+function expSecRiesgos(e){
+  const adec = e.situacion === 'adecuacion';
+  const d = (e.datos||{}).cumple || {};
+  const defs = (EXP_COMPROBACIONES[e.familia]||[]).filter(c => (d[c[0]]||{}).v === 'no');
+  let h = '<div class="panel-h"><h3>'+(adec?'Riesgos y deficiencias':'Riesgos residuales')+'</h3></div>';
+  if (adec)
+    h += '<p class="mini" style="margin:0 0 14px">Este es el documento con nombre propio de una adecuación: '+
+         'el informe de riesgos y deficiencias detectadas, que se entrega al titular y se deja junto a la puerta.</p>';
+  else
+    h += '<p class="mini" style="margin:0 0 14px">Los riesgos que quedan después de poner todas las protecciones. '+
+         'La norma de máquinas obliga a informar de ellos en el manual.</p>';
+
+  if (defs.length){
+    h += '<p class="mini" style="margin:0 0 8px"><b>Deficiencias que vienen de las comprobaciones:</b></p>'+
+      '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Deficiencia</th><th>Gravedad</th><th>Actuación</th></tr></thead><tbody>';
+    defs.forEach(([k, texto]) => {
+      const x = d[k] || {};
+      h += '<tr><td>'+esc(x.def || texto)+'</td>'+
+        '<td>'+esc({leve:'Leve',grave:'Grave',muy_grave:'Muy grave'}[x.grav] || 'Sin valorar')+'</td>'+
+        '<td>'+esc(x.sol || '—')+'</td></tr>';
+    });
+    h += '</tbody></table></div>';
+  } else {
+    h += '<p class="muted" style="margin:0 0 14px">No hay deficiencias marcadas en las comprobaciones.</p>';
+  }
+
+  h += '<div class="campos" style="margin-top:14px">'+
+    expArea('riesgos.residuales', 'Riesgos residuales que debe conocer el usuario',
+      'Lo que no se puede eliminar y hay que advertir', 3)+
+    expArea('riesgos.limitaciones', 'Limitaciones de este informe',
+      'Qué no se ha podido comprobar y por qué', 2)+
+    expArea('riesgos.recomendaciones', 'Recomendaciones al titular', '', 3)+
+    '</div>';
+  if (adec)
+    h += '<div class="campos">'+
+      expSel('riesgos.apta', '¿La puerta queda apta para el uso?',
+        [['', 'Sin contestar'], ['si','Sí, queda conforme'],
+         ['condicionada','Sí, con las limitaciones indicadas'],
+         ['no','No, no debería usarse hasta resolver lo señalado']])+
+      '</div>';
+  return h;
+}
+
+/* ---- Entrega y firma ---- */
+function expSecEntrega(e){
+  const fab = EXP_ES_FABRICANTE(e.situacion);
+  const marco = marcoDeFecha(e.fecha_puesta_servicio);
+  const em = datosEmpresa();
+  const docs = fab
+    ? [['ddp','Declaración de prestaciones'],
+       ['dc', marco === 'pendiente' ? 'Declaración de conformidad' : EXP_MARCO[marco].documento],
+       ['marcado','Marcado CE colocado en la puerta'],
+       ['manual','Manual de uso y mantenimiento'],
+       ['libro','Libro de mantenimiento'],
+       ['expediente','Expediente técnico archivado (se conserva 10 años, no se entrega)']]
+    : e.situacion === 'nueva_instalador'
+    ? [['ddp_fab','Declaración de prestaciones del fabricante, recopilada'],
+       ['dc_fab','Declaración de conformidad del fabricante, recopilada'],
+       ['marcado','Marcado CE comprobado en la puerta'],
+       ['manual','Manual del fabricante entregado'],
+       ['libro','Libro de mantenimiento entregado'],
+       ['cert_inst','Certificado de instalación firmado por nosotros']]
+    : [['informe','Informe de riesgos y deficiencias detectadas'],
+       ['libro','Certificación en el libro de mantenimiento'],
+       ['manual','Instrucciones de uso entregadas']];
+
+  let h = '<div class="panel-h"><h3>Entrega y firma</h3></div>'+
+    '<p class="mini" style="margin:0 0 14px">Lo que se entrega al titular y quién lo firma.</p>';
+  h += '<div class="lista">';
+  docs.forEach(([k, t]) => {
+    const v = expVal('entrega.docs.'+k, '') === 'si';
+    h += '<label class="item" style="cursor:pointer"><input type="checkbox" data-exp-chk="entrega.docs.'+k+'"'+
+      (v?' checked':'')+' style="margin-right:10px"><span><span class="tit">'+esc(t)+'</span></span></label>';
+  });
+  h += '</div>';
+
+  h += '<div class="campos" style="margin-top:14px">'+
+    expTxt('entrega.recibido_por', 'Recibido por', 'Nombre de quien recibe la documentación')+
+    '<div class="campo"><label>Fecha de entrega</label>'+
+      '<input type="date" data-exp="entrega.fecha" value="'+esc(expVal('entrega.fecha',''))+'"></div>'+
+    expTxt('entrega.firmante', 'Firma por la empresa', 'Quien firma las declaraciones')+
+    expTxt('entrega.cargo', 'Cargo')+
+    expArea('entrega.observaciones', 'Observaciones', '', 2)+
+    '</div>';
+
+  if (fab){
+    h += '<p class="nota-oficina" style="margin:14px 0 0"><b>Lo que estás firmando.</b> '+
+      'En esta situación la empresa es fabricante de la puerta a efectos legales: respondes de su conformidad, '+
+      'tienes que conservar el expediente técnico diez años y la declaración se emite bajo tu exclusiva responsabilidad.</p>';
+    if (!em.nif || !em.domicilio)
+      h += '<p class="nota-oficina" style="margin:10px 0 0">Faltan el NIF y el domicilio de la empresa, '+
+        'que son obligatorios en la declaración. Se rellenan en Equipo, en «Datos de la empresa».</p>';
+    h += '<div class="campos" style="margin-top:10px"><div class="campo full">'+
+      '<label style="cursor:pointer"><input type="checkbox" data-exp-chk="entrega.firmante_ok"'+
+      (expVal('entrega.firmante_ok','')==='si'?' checked':'')+' style="margin-right:8px">'+
+      'He leído lo anterior y asumo la firma de esta documentación</label></div></div>';
+  }
+  return h;
+}
+
+/* ---- Fotos del expediente ---- */
+function expFotoBloque(apartado, titulo, ayuda){
+  const id = apartado.replace(/[^a-z0-9]/gi, '_');
+  return '<div class="exp-fotos"><div class="fila" style="gap:8px;align-items:baseline">'+
+    '<b class="mini">'+esc(titulo)+'</b><span class="sp"></span>'+
+    '<label class="btn sm plana" style="cursor:pointer">Añadir foto'+
+    '<input type="file" accept="image/*" multiple hidden data-act="exp-subir-foto" data-ap="'+esc(apartado)+'"></label>'+
+    '</div>'+
+    (ayuda?'<p class="mini" style="margin:2px 0 0">'+esc(ayuda)+'</p>':'')+
+    '<div class="tiras" id="expf-'+id+'" data-ap="'+esc(apartado)+'"></div></div>';
+}
+
+async function pintarFotosExp(){
+  const e = expDe(S.exp); if (!e) return;
+  document.querySelectorAll('.tiras[data-ap]').forEach(async cont => {
+    const ap = cont.dataset.ap;
+    const fs = expFotos(ap);
+    if (!fs.length){ cont.innerHTML = '<p class="mini" style="margin:6px 0 0">Sin fotos todavía.</p>'; return; }
+    const rutas = fs.map(f => f.ruta);
+    let urls = {};
+    try {
+      const { data } = await sb.storage.from('expedientes').createSignedUrls(rutas, 7200);
+      (data||[]).forEach((x,i) => { if (x && x.signedUrl) urls[rutas[i]] = x.signedUrl; });
+    } catch(_){}
+    cont.innerHTML = fs.map(f =>
+      '<figure class="tira"><img src="'+esc(urls[f.ruta]||'')+'" alt="'+esc(f.pie||'')+'">'+
+      '<figcaption><input type="text" class="pie" placeholder="Pie de foto" value="'+esc(f.pie||'')+'" '+
+      'data-act="exp-pie" data-id="'+f.id+'">'+
+      '<button class="btn sm plana" data-act="exp-quitar-foto" data-id="'+f.id+'">Quitar</button>'+
+      '</figcaption></figure>').join('');
+  });
+}
+
+async function subirFotosExp(apartado, ficheros){
+  const e = expDe(S.exp); if (!e) return;
+  toast('Subiendo ' + ficheros.length + ' foto' + (ficheros.length===1?'':'s') + '…');
+  let n = 0;
+  for (const f of ficheros){
+    if (!/^image\//.test(f.type)) continue;
+    try {
+      const blob = await reducir(f, 1600, 0.8);
+      const ruta = e.id + '/' + apartado.replace(/[^a-z0-9]/gi,'_') + '-' + Date.now() + '-' + (n++) + '.jpg';
+      const { error } = await sb.storage.from('expedientes')
+        .upload(ruta, blob, { contentType:'image/jpeg', upsert:true });
+      if (error) throw error;
+      const { error: e2 } = await sb.from('expediente_fotos').insert({
+        expediente_id: e.id, apartado, ruta, orden: expFotos(apartado).length + n, autor: yo() });
+      if (e2) throw e2;
+    } catch(err){ fallo(err); }
+  }
+  await cargarFotosExp(e.id);
+  pintarFotosExp();
+  toast('Fotos añadidas.');
+}
+
+async function cargarFotosExp(id){
+  const { data, error } = await sb.from('expediente_fotos').select('*')
+    .eq('expediente_id', id).order('orden');
+  S.expFotos = error ? [] : (data || []);
+}
+
+/* Alta de expediente: lo único que hay que decidir al empezar es qué estamos
+   documentando y qué familia de puerta es, porque de ahí sale todo lo demás. */
+function dlgExpedienteNuevo(puertaId){
+  const p = puertaDe(puertaId) || {};
+  const sug = /peatonal/i.test(p.tipo||'') ? 'peatonal'
+            : /barrera/i.test(p.tipo||'')  ? 'barrera' : 'industrial';
+  const h = '<h3>Nueva documentación de normativa</h3>'+
+    '<p class="mini" style="margin:0 0 12px">'+esc([p.codigo, p.cliente, p.direccion].filter(Boolean).join(' · '))+'</p>'+
+    '<div class="campos">'+
+    '<div class="campo full"><label for="xp-sit">Qué estamos documentando</label><select id="xp-sit">'+
+      Object.entries(EXP_SITUACION).map(([k,v]) => '<option value="'+k+'">'+esc(v)+'</option>').join('')+
+      '</select><span class="pista" id="xp-ayuda">'+esc(EXP_SIT_AYUDA.nueva_fabricante)+'</span></div>'+
+    '<div class="campo full"><label for="xp-fam">Familia de puerta</label><select id="xp-fam">'+
+      Object.entries(EXP_FAMILIA).map(([k,v]) => '<option value="'+k+'"'+(k===sug?' selected':'')+'>'+esc(v)+'</option>').join('')+
+      '</select><span class="pista">Decide las normas y el cuestionario. Una peatonal automática no va por la '+
+      'EN 13241 sino por la EN 16361 y la EN 16005.</span></div>'+
+    '</div><p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Empezar</button></div>';
+  abrirDlg(h, async () => {
+    try {
+      const { data, error } = await sb.rpc('crear_expediente', {
+        p_puerta: puertaId, p_situacion: val('xp-sit'), p_familia: val('xp-fam'), p_aviso: null });
+      if (error) throw error;
+      if (!data || !data.ok) return setErr(textoFallo(data));
+      cerrarDlg(); await cargar();
+      S.exp = data.id; S.expPaso = 'obra'; S.ficha = null;
+      await cargarFotosExp(data.id);
+      pintar(); window.scrollTo({top:0});
+      toast('Expediente ' + (data.referencia||'') + ' abierto.');
+    } catch(err){ setErr(err.message); }
+  });
+  const sel = document.getElementById('xp-sit');
+  if (sel) sel.addEventListener('change', () => {
+    const a = document.getElementById('xp-ayuda');
+    if (a) a.textContent = EXP_SIT_AYUDA[sel.value] || '';
+  });
+}
+
+function dlgEmitirExpediente(id){
+  const e = expDe(id); if (!e) return;
+  const em = datosEmpresa();
+  const falta = expPendientes(e);
+  const incum = expIncumple(e);
+  let h = '<h3>Emitir el expediente</h3>';
+  if (falta.length)
+    h += '<p class="nota-oficina" style="margin:0 0 12px"><b>Ojo, falta por rellenar:</b><br>'+
+         falta.map(esc).join('<br>')+'</p>';
+  if (incum.length)
+    h += '<p class="nota-oficina" style="margin:0 0 12px"><b>Hay '+incum.length+
+         ' incumplimiento(s) de los imprescindibles.</b> Si emites, el libro los recoge como deficiencias '+
+         'y la puerta no queda certificada como conforme. Es correcto hacerlo así en una adecuación, '+
+         'pero no en una puerta nueva.</p>';
+  h += '<p class="mini" style="margin:0 0 12px">Al emitir se fija la fecha y quién firma. '+
+       'El expediente deja de poder borrarse, porque es documentación entregada.</p>'+
+    '<div class="campos">'+
+    '<div class="campo full"><label for="xe-firm">Quién firma</label>'+
+      '<input id="xe-firm" type="text" value="'+esc(e.firmante || (e.datos&&e.datos.entrega&&e.datos.entrega.firmante) || em.responsable_tecnico || '')+'"></div>'+
+    '<div class="campo full"><label for="xe-cargo">Cargo</label>'+
+      '<input id="xe-cargo" type="text" value="'+esc(e.firmante_cargo || em.cargo_firmante || '')+'"></div>'+
+    '</div><p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Emitir</button></div>';
+  abrirDlg(h, async () => {
+    try {
+      const { data, error } = await sb.rpc('emitir_expediente',
+        { p_exp: id, p_firmante: val('xe-firm'), p_cargo: val('xe-cargo') });
+      if (error) throw error;
+      if (!data || !data.ok) return setErr(data && data.motivo === 'sin_firmante'
+        ? 'Pon quién firma el documento.' : textoFallo(data));
+      cerrarDlg(); await cargar(); toast('Expediente emitido.');
+    } catch(err){ setErr(err.message); }
+  });
+}
+
+/* ---- El libro: documento imprimible en A4, a doble cara ---- */
+async function libroExpediente(id){
+  const e = expDe(id);
+  if (!e) return;
+  await cargarFotosExp(id);
+  const em = datosEmpresa();
+  const p = e.puerta_id ? (puertaDe(e.puerta_id) || {}) : {};
+  const c = e.cliente_id ? (clienteDe(e.cliente_id) || {}) : {};
+  const d = e.datos || {};
+  const marco = marcoDeFecha(e.fecha_puesta_servicio);
+  const M = EXP_MARCO[marco] || null;
+  const fab = EXP_ES_FABRICANTE(e.situacion);
+  const motor = (d.puerta||{}).motorizada !== 'no';
+  const lim = limitesFuerza();
+
+  // Enlaces firmados de todas las fotos de una vez
+  const rutas = (S.expFotos || []).map(f => f.ruta);
+  const url = {};
+  if (rutas.length){
+    try {
+      const { data } = await sb.storage.from('expedientes').createSignedUrls(rutas, 7200);
+      (data||[]).forEach((x,i) => { if (x && x.signedUrl) url[rutas[i]] = x.signedUrl; });
+    } catch(_){}
+  }
+  const fotosDe = ap => (S.expFotos||[]).filter(f => f.apartado === ap && url[f.ruta]);
+  const galeria = (ap, cols) => {
+    const fs = fotosDe(ap);
+    if (!fs.length) return '';
+    return '<div class="gal c'+(cols||2)+'">'+fs.map(f =>
+      '<figure><img src="'+url[f.ruta]+'">'+(f.pie?'<figcaption>'+esc(f.pie)+'</figcaption>':'')+'</figure>').join('')+'</div>';
+  };
+
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana.'); return; }
+
+  const campo = (k, v) => v ? '<tr><th>'+esc(k)+'</th><td>'+esc(v)+'</td></tr>' : '';
+  const dir = [ (d.obra||{}).emplazamiento, (d.obra||{}).ubicacion ].filter(Boolean).join(' · ')
+            || [p.direccion, p.ubicacion].filter(Boolean).join(' · ');
+  const titular = (d.obra||{}).titular || c.nombre || p.cliente || '';
+  const hoy = new Date().toISOString().slice(0,10);
+  const sello = em.razon_social + (em.nif ? ' · ' + em.nif : '');
+
+  let H = '';
+
+  /* ---------- PORTADA ---------- */
+  H += '<section class="portada">'+
+    '<div class="marca">ARIZA <span>puertas automáticas</span></div>'+
+    '<div class="tit">'+
+      '<h1>Documentación técnica</h1>'+
+      '<h2>'+esc(EXP_FAMILIA[e.familia]||'')+'</h2>'+
+      '<p class="sit">'+esc(EXP_SITUACION[e.situacion]||'')+'</p>'+
+    '</div>'+
+    (fotosDe('puerta:general')[0]
+      ? '<div class="portada-foto"><img src="'+fotosDe('puerta:general')[0].ruta.replace(/.*/, url[fotosDe('puerta:general')[0].ruta])+'"></div>'
+      : '<div class="portada-foto vacia"><span>Sin fotografía de portada</span></div>')+
+    '<table class="port-datos">'+
+      campo('Expediente', e.referencia)+
+      campo('Titular', titular)+
+      campo('Emplazamiento', dir)+
+      campo('Identificación de la puerta', [p.codigo, (d.puerta||{}).denominacion].filter(Boolean).join(' · '))+
+      campo('Fecha de puesta en servicio', e.fecha_puesta_servicio ? fechaCorta(e.fecha_puesta_servicio) : '')+
+    '</table>'+
+    '<div class="pie-portada">'+esc(sello)+(em.telefono?(' · '+esc(em.telefono)):'')+
+      (em.web?(' · '+esc(em.web)):'')+'</div>'+
+    '</section>';
+
+  /* ---------- ÍNDICE Y DATOS ---------- */
+  const secciones = [];
+  secciones.push('Objeto y alcance');
+  secciones.push('Identificación de la puerta');
+  secciones.push('Marco normativo aplicado');
+  secciones.push('Elementos de la instalación');
+  secciones.push('Comprobaciones de cumplimiento');
+  if (motor) secciones.push('Ensayo de fuerzas');
+  if (fab) secciones.push('Prestaciones declaradas');
+  if (fab) secciones.push('Declaración de prestaciones');
+  if (fab && M) secciones.push(M.documento);
+  secciones.push(e.situacion === 'adecuacion' ? 'Informe de riesgos y deficiencias' : 'Riesgos residuales');
+  secciones.push('Instrucciones de uso y seguridad');
+  secciones.push('Libro de mantenimiento');
+  secciones.push('Entrega y firmas');
+
+  H += '<section><h3 class="sec">Índice</h3><ol class="indice">'+
+    secciones.map(s => '<li>'+esc(s)+'</li>').join('')+'</ol>'+
+    '<h3 class="sec">Intervinientes</h3>'+
+    '<div class="dos">'+
+      '<div><h4>Empresa</h4><table class="datos">'+
+        campo('Razón social', em.razon_social)+ campo('NIF', em.nif)+
+        campo('Domicilio', [em.domicilio, em.cp, em.poblacion, em.provincia].filter(Boolean).join(', '))+
+        campo('Teléfono', em.telefono)+ campo('Correo', em.email)+ campo('Web', em.web)+
+        campo('Registro', em.registro)+
+      '</table></div>'+
+      '<div><h4>Titular de la instalación</h4><table class="datos">'+
+        campo('Titular', titular)+ campo('NIF o CIF', (d.obra||{}).nif_titular || c.nif)+
+        campo('Emplazamiento', dir)+ campo('Uso del edificio', (d.obra||{}).uso_edificio)+
+        campo('Contacto', (d.obra||{}).contacto)+
+        campo('Centro de trabajo', (d.obra||{}).centro_trabajo === 'si' ? 'Sí'
+              : ((d.obra||{}).centro_trabajo === 'no' ? 'No' : ''))+
+        campo('Referencia de obra', (d.obra||{}).referencia_obra)+
+      '</table></div>'+
+    '</div></section>';
+
+  /* ---------- 1. OBJETO ---------- */
+  H += '<section><h3 class="sec">1. Objeto y alcance</h3>'+
+    '<p>'+esc(EXP_SIT_AYUDA[e.situacion]||'')+'</p>'+
+    '<p>Este documento recoge la identificación de la puerta, los elementos que componen la instalación, '+
+    'las comprobaciones de cumplimiento realizadas y la documentación que se entrega al titular. '+
+    'Las fotografías forman parte del documento y reflejan el estado en que quedó la instalación '+
+    (e.fecha_puesta_servicio ? 'el '+fechaCorta(e.fecha_puesta_servicio) : 'en la fecha de la intervención')+'.</p>'+
+    (M ? '<p><b>Marco legal aplicado.</b> '+esc(M.nombre)+'. '+esc(M.hasta)+' '+
+         'El documento de conformidad que corresponde es la <b>'+esc(M.documento)+'</b>, '+
+         'con el contenido del '+esc(M.anexo)+'.</p>'
+       : '<p class="aviso">No se ha indicado la fecha de puesta en servicio, de la que depende el marco legal aplicable. '+
+         'El expediente no puede cerrarse sin ese dato.</p>')+
+    ((d.obra||{}).centro_trabajo === 'si'
+      ? '<p>La puerta se encuentra en un centro de trabajo, por lo que le son exigibles además el '+
+        'Real Decreto 486/1997 sobre lugares de trabajo, anexo I parte A punto 6, y el Real Decreto 1215/1997 '+
+        'sobre equipos de trabajo.</p>' : '')+
+    '</section>';
+
+  /* ---------- 2. IDENTIFICACIÓN ---------- */
+  const pu = d.puerta || {};
+  H += '<section><h3 class="sec">2. Identificación de la puerta</h3>'+
+    '<table class="datos">'+
+      campo('Código interno', p.codigo)+
+      campo('Tipo', pu.tipo || p.tipo)+
+      campo('Denominación comercial', pu.denominacion)+
+      campo('Marca', pu.marca || p.marca)+
+      campo('Modelo', pu.modelo || p.modelo)+
+      campo('Número de serie', pu.serie)+
+      campo('Dimensiones del hueco', [pu.ancho && (pu.ancho+' mm de ancho'), pu.alto && (pu.alto+' mm de alto')].filter(Boolean).join(' × '))+
+      campo('Peso de la hoja', pu.peso ? pu.peso+' kg' : '')+
+      campo('Número de hojas', pu.hojas)+
+      campo('Accionamiento', pu.motorizada === 'no' ? 'Manual' : 'Motorizada')+
+      campo('Tipo de uso', pu.uso_puerta)+
+      campo('Modo de accionamiento', pu.activacion)+
+      campo('Ciclos previstos al día', pu.ciclos_dia)+
+      campo('Alimentación eléctrica', pu.alimentacion)+
+    '</table>'+
+    galeria('puerta:general', 2)+
+    '</section>';
+
+  /* ---------- 3. NORMAS ---------- */
+  H += '<section><h3 class="sec">3. Marco normativo aplicado</h3>'+
+    '<h4>Legislación</h4><ul class="norm">'+
+    '<li><b>Reglamento (UE) 305/2011</b> de productos de construcción. Declaración de prestaciones conforme al modelo del Reglamento Delegado (UE) 574/2014.</li>'+
+    (motor && M ? '<li><b>'+esc(M.nombre)+'</b>. '+esc(M.documento)+', '+esc(M.anexo)+'.</li>' : '')+
+    (motor ? '<li><b>Directiva 2014/30/UE</b> de compatibilidad electromagnética, transpuesta por el Real Decreto 186/2016.</li>' : '')+
+    ((d.obra||{}).centro_trabajo === 'si'
+      ? '<li><b>Real Decreto 486/1997</b> sobre lugares de trabajo, anexo I parte A punto 6, puertas y portones.</li>'+
+        '<li><b>Real Decreto 1215/1997</b> sobre equipos de trabajo.</li>' : '')+
+    '<li><b>Reglamento Electrotécnico de Baja Tensión</b>, en lo relativo a la instalación eléctrica de la puerta.</li>'+
+    '</ul>'+
+    '<h4>Normas técnicas</h4><table class="datos norm-t">'+
+    (EXP_NORMAS[e.familia]||[]).map(([n, q]) => '<tr><th>'+esc(n)+'</th><td>'+esc(q)+'</td></tr>').join('')+
+    '</table></section>';
+
+  /* ---------- 4. COMPONENTES ---------- */
+  const comps = EXP_COMPONENTES[e.familia] || [];
+  const cd = d.comp || {};
+  H += '<section><h3 class="sec">4. Elementos de la instalación</h3>'+
+    '<p>Relación de los elementos que componen la puerta y de los dispositivos de seguridad instalados, '+
+    'con la fotografía de cada uno.</p>';
+  comps.forEach(([k, nombre, , pideDatos]) => {
+    const x = cd[k] || {};
+    if (!x.estado) return;
+    const et = x.estado === 'si' ? '<span class="ok">Instalado</span>'
+             : x.estado === 'no' ? '<span class="no">No lo lleva</span>'
+             : '<span class="na">No aplica</span>';
+    H += '<div class="comp"><h4>'+esc(nombre)+' '+et+'</h4>';
+    if (x.estado === 'si' && pideDatos && (x.marca || x.modelo || x.serie))
+      H += '<table class="datos">'+campo('Marca', x.marca)+campo('Modelo', x.modelo)+campo('Nº de serie', x.serie)+'</table>';
+    if (x.nota) H += '<p>'+esc(x.nota)+'</p>';
+    H += galeria('comp:'+k, 2) + '</div>';
+  });
+  H += '</section>';
+
+  /* ---------- 5. CUMPLIMIENTO ---------- */
+  const chk = EXP_COMPROBACIONES[e.familia] || [];
+  const kd = d.cumple || {};
+  const incum = chk.filter(x => (kd[x[0]]||{}).v === 'no');
+  H += '<section><h3 class="sec">5. Comprobaciones de cumplimiento</h3>'+
+    '<table class="datos chk"><thead><tr><th style="width:auto">Comprobación</th><th style="width:70px">Resultado</th><th style="width:150px">Exigencia</th></tr></thead><tbody>'+
+    chk.map(([k, texto, norma]) => {
+      const v = (kd[k]||{}).v;
+      const r = v === 'si' ? '<span class="ok">Cumple</span>' : v === 'no' ? '<span class="no">No cumple</span>'
+              : v === 'na' ? '<span class="na">No aplica</span>' : '<span class="na">Sin comprobar</span>';
+      return '<tr><td>'+esc(texto)+'</td><td>'+r+'</td><td class="min">'+esc(norma)+'</td></tr>';
+    }).join('')+'</tbody></table>';
+  chk.forEach(([k, texto]) => { const g = galeria('cumple:'+k, 2);
+    if (g) H += '<div class="comp"><h4>'+esc(texto)+'</h4>'+g+'</div>'; });
+  H += '</section>';
+
+  /* ---------- 6. FUERZAS ---------- */
+  if (motor){
+    const f = d.fuerzas || {};
+    const tope = f.hueco === 'impacto' ? lim.fd_impacto_n : lim.fd_aplastamiento_n;
+    const puntos = EXP_PUNTOS_FUERZA[e.familia] || EXP_PUNTOS_FUERZA.industrial;
+    H += '<section><h3 class="sec">6. Ensayo de fuerzas</h3>'+
+      '<table class="datos">'+
+        campo('Instrumento de medida', f.instrumento)+
+        campo('Calibración', f.calibracion)+
+        campo('Fecha del ensayo', f.fecha ? fechaCorta(f.fecha) : '')+
+        campo('Tipo de hueco', f.hueco === 'impacto' ? 'Sin riesgo de aplastamiento' :
+              (f.hueco === 'aplastamiento' ? 'Con riesgo de aplastamiento' : ''))+
+        campo('Límite de fuerza dinámica aplicado', tope + ' N')+
+      '</table>'+
+      '<table class="datos chk"><thead><tr><th>Punto de medida</th><th>Fd (N)</th><th>Fs (N)</th><th>Fe (N)</th><th>td (s)</th><th>Resultado</th></tr></thead><tbody>'+
+      puntos.map((pt, i) => {
+        const m = f['m'+i] || {};
+        const fd = +m.fd||0, fs = +m.fs||0, fe = +m.fe||0, td = +m.td||0;
+        const hay = fd||fs||fe||td;
+        const pasa = hay && fd<=tope && fs<=lim.fs_estatica_n && fe<=lim.fe_residual_n && td<=lim.td_dinamico_s;
+        return '<tr><td>'+esc(pt)+'</td><td>'+(m.fd||'—')+'</td><td>'+(m.fs||'—')+'</td>'+
+          '<td>'+(m.fe||'—')+'</td><td>'+(m.td||'—')+'</td><td>'+
+          (!hay?'<span class="na">Sin medir</span>':(pasa?'<span class="ok">Pasa</span>':'<span class="no">No pasa</span>'))+'</td></tr>';
+      }).join('')+'</tbody></table>'+
+      '<p class="min">Límites aplicados: fuerza de aplastamiento '+lim.fd_aplastamiento_n+' N; fuerza de impacto '+
+      lim.fd_impacto_n+' N; fuerza estática '+lim.fs_estatica_n+' N durante un máximo de '+lim.fs_tiempo_s+' s; '+
+      'fuerza residual '+lim.fe_residual_n+' N; tiempo por encima de la fuerza estática '+lim.td_dinamico_s+' s.</p>'+
+      (f.observaciones?'<p>'+esc(f.observaciones)+'</p>':'')+
+      galeria('fuerzas:medida', 3)+
+      '</section>';
+  }
+
+  /* ---------- 7 y 8. PRESTACIONES Y DdP ---------- */
+  if (fab){
+    const pr = EXP_PRESTACIONES[e.familia] || [];
+    const pv = (d.prest||{}).v || {};
+    const vias = { ensayos:'Ensayos iniciales de tipo de laboratorio notificado',
+      cascada:'Ensayos del fabricante de los componentes, en cascada, conforme al artículo 36 del Reglamento (UE) 305/2011',
+      micro:'Documentación Técnica Específica, procedimiento simplificado para microempresas del artículo 37 del Reglamento (UE) 305/2011',
+      unidad:'Documentación Técnica Específica, producto fabricado por unidad, artículo 38 del Reglamento (UE) 305/2011' };
+
+    H += '<section><h3 class="sec">7. Prestaciones declaradas</h3>'+
+      '<table class="datos">'+
+        campo('Vía de evaluación', vias[(d.prest||{}).via] || '')+
+        campo('Laboratorio u organismo notificado', (d.prest||{}).laboratorio)+
+        campo('Informe de ensayo', (d.prest||{}).informe)+
+      '</table>'+
+      '<table class="datos chk"><thead><tr><th>Característica esencial</th><th style="width:140px">Prestación</th><th style="width:130px">Norma</th></tr></thead><tbody>'+
+      pr.map(([k, nombre, norma]) => '<tr><td>'+esc(nombre)+'</td><td>'+esc(pv[k] || 'NPD')+'</td><td class="min">'+esc(norma)+'</td></tr>').join('')+
+      '</tbody></table></section>';
+
+    /* Declaración de prestaciones, con los apartados del Reglamento Delegado 574/2014 */
+    H += '<section class="decl"><h3 class="sec">8. Declaración de prestaciones</h3>'+
+      '<p class="decl-num">Nº '+esc(e.referencia||'')+'</p>'+
+      '<ol class="decl-l">'+
+      '<li><b>Código de identificación única del producto tipo:</b><br>'+
+        esc((d.prest||{}).codigo_tipo || pu.denominacion || pu.modelo || '—')+'</li>'+
+      '<li><b>Usos previstos:</b><br>'+esc(pu.uso_puerta || '—')+
+        '. Puerta destinada a '+esc((EXP_FAMILIA[e.familia]||'').toLowerCase())+'.</li>'+
+      '<li><b>Fabricante:</b><br>'+esc(em.razon_social)+(em.nif?(', NIF '+esc(em.nif)):'')+
+        '<br>'+esc([em.domicilio, em.cp, em.poblacion, em.provincia].filter(Boolean).join(', ') || '—')+'</li>'+
+      '<li><b>Representante autorizado:</b> no procede.</li>'+
+      '<li><b>Sistema de evaluación y verificación de la constancia de las prestaciones:</b><br>'+
+        esc(vias[(d.prest||{}).via] || 'Pendiente de indicar')+'</li>'+
+      '<li><b>Norma armonizada:</b><br>'+esc(((EXP_NORMAS[e.familia]||[])[0]||[''])[0])+
+        ((d.prest||{}).laboratorio ? '<br>Organismo notificado: '+esc((d.prest||{}).laboratorio) : '')+'</li>'+
+      '<li><b>Prestaciones declaradas:</b><table class="datos chk" style="margin-top:4px">'+
+        pr.map(([k, nombre, norma]) => '<tr><td>'+esc(nombre)+'</td><td style="width:130px">'+esc(pv[k]||'NPD')+
+          '</td><td class="min" style="width:130px">'+esc(norma)+'</td></tr>').join('')+'</table></li>'+
+      '<li><b>Documentación técnica específica:</b><br>'+
+        (['micro','unidad'].includes((d.prest||{}).via)
+          ? 'Se ha empleado la Documentación Técnica Específica referida en el apartado 5.'
+          : 'No procede.')+'</li>'+
+      '<li><b>Declaración:</b><br>Las prestaciones del producto identificado en los apartados 1 y 2 son '+
+        'conformes con las prestaciones declaradas en el apartado 7. La presente declaración de prestaciones '+
+        'se emite bajo la sola responsabilidad del fabricante identificado en el apartado 3.</li>'+
+      '</ol>'+ bloqueFirma(em, d, e) +'</section>';
+
+    /* Declaración de conformidad de máquina */
+    if (motor && M){
+      const esRegl = marco === 'reglamento';
+      H += '<section class="decl"><h3 class="sec">9. '+esc(M.documento)+'</h3>'+
+        '<p class="decl-num">Nº '+esc(e.referencia||'')+'-M</p><ol class="decl-l">';
+      if (esRegl){
+        H += '<li><b>Máquina:</b><br>'+esc([pu.denominacion, pu.modelo, pu.serie].filter(Boolean).join(' · ') || '—')+
+            (e.situacion === 'modificacion' ? '<br><i>Máquina sustancialmente modificada.</i>' : '')+'</li>'+
+          '<li><b>Fabricante:</b><br>'+esc(em.razon_social)+(em.nif?(', NIF '+esc(em.nif)):'')+'<br>'+
+            esc([em.domicilio, em.cp, em.poblacion, em.provincia].filter(Boolean).join(', ') || '—')+'</li>'+
+          '<li><b>Lugar de instalación:</b><br>'+esc(dir || '—')+'</li>'+
+          '<li>La presente declaración de conformidad se expide bajo la exclusiva responsabilidad del fabricante.</li>'+
+          '<li><b>Objeto de la declaración:</b><br>'+esc(EXP_FAMILIA[e.familia]||'')+
+            (p.codigo ? ', identificación '+esc(p.codigo) : '')+
+            (dir ? ', instalada en '+esc(dir) : '')+'</li>'+
+          '<li><b>El objeto descrito es conforme con la legislación de armonización de la Unión aplicable:</b><br>'+
+            'Reglamento (UE) 2023/1230, relativo a las máquinas y los productos relacionados.<br>'+
+            'Directiva 2014/30/UE de compatibilidad electromagnética.</li>'+
+          '<li><b>Normas armonizadas o especificaciones comunes aplicadas:</b><ul class="norm">'+
+            (EXP_NORMAS[e.familia]||[]).map(([n]) => '<li>'+esc(n)+'</li>').join('')+'</ul></li>'+
+          '<li><b>Organismo notificado:</b> '+esc((d.prest||{}).laboratorio || 'no interviene.')+'</li>'+
+          '<li><b>Procedimiento de evaluación de la conformidad:</b> control interno de la producción.</li>'+
+          '<li><b>Información adicional:</b><br>'+esc((d.entrega||{}).observaciones || '—')+'</li>';
+      } else {
+        H += '<li><b>Razón social y dirección completa del fabricante:</b><br>'+esc(em.razon_social)+
+            (em.nif?(', NIF '+esc(em.nif)):'')+'<br>'+
+            esc([em.domicilio, em.cp, em.poblacion, em.provincia].filter(Boolean).join(', ') || '—')+'</li>'+
+          '<li><b>Persona facultada para elaborar el expediente técnico, establecida en la Unión:</b><br>'+
+            esc(em.responsable_tecnico || (d.entrega||{}).firmante || '—')+', '+esc(em.razon_social)+'</li>'+
+          '<li><b>Descripción e identificación de la máquina:</b><br>'+
+            'Denominación genérica: '+esc(EXP_FAMILIA[e.familia]||'')+'. '+
+            'Función: cierre y apertura motorizada de un hueco de paso.<br>'+
+            'Modelo: '+esc(pu.modelo || '—')+'. Tipo: '+esc(pu.tipo || '—')+'. '+
+            'Número de serie: '+esc(pu.serie || '—')+'. '+
+            'Denominación comercial: '+esc(pu.denominacion || '—')+'.'+
+            (dir ? '<br>Instalada en '+esc(dir)+'.' : '')+'</li>'+
+          '<li>La máquina descrita <b>cumple todas las disposiciones aplicables</b> del Real Decreto 1644/2008, '+
+            'por el que se transpone la Directiva 2006/42/CE relativa a las máquinas, y del Real Decreto 186/2016, '+
+            'por el que se transpone la Directiva 2014/30/UE de compatibilidad electromagnética.</li>'+
+          '<li><b>Organismo notificado del examen CE de tipo:</b> '+esc((d.prest||{}).laboratorio || 'no procede.')+'</li>'+
+          '<li><b>Organismo notificado del aseguramiento de calidad total:</b> no procede.</li>'+
+          '<li><b>Normas armonizadas utilizadas:</b><ul class="norm">'+
+            (EXP_NORMAS[e.familia]||[]).map(([n]) => '<li>'+esc(n)+'</li>').join('')+'</ul></li>'+
+          '<li><b>Otras normas y especificaciones técnicas utilizadas:</b> '+
+            esc((d.entrega||{}).observaciones || 'no procede.')+'</li>';
+      }
+      H += '</ol>'+ bloqueFirma(em, d, e) +'</section>';
+    }
+  }
+
+  /* ---------- RIESGOS ---------- */
+  const r = d.riesgos || {};
+  H += '<section><h3 class="sec">'+(fab?(motor?'10':'9'):'6')+'. '+
+    (e.situacion === 'adecuacion' ? 'Informe de riesgos y deficiencias detectadas' : 'Riesgos residuales')+'</h3>';
+  if (incum.length){
+    H += '<h4>Deficiencias detectadas</h4><table class="datos chk"><thead><tr>'+
+      '<th>Deficiencia</th><th style="width:80px">Gravedad</th><th style="width:40%">Actuación propuesta</th></tr></thead><tbody>'+
+      incum.map(([k, texto]) => { const x = kd[k]||{};
+        return '<tr><td>'+esc(x.def || texto)+'</td><td>'+
+          esc({leve:'Leve',grave:'Grave',muy_grave:'Muy grave'}[x.grav] || 'Sin valorar')+
+          '</td><td>'+esc(x.sol || '—')+'</td></tr>'; }).join('')+
+      '</tbody></table>';
+  } else {
+    H += '<p>No se han detectado deficiencias en las comprobaciones realizadas.</p>';
+  }
+  if (r.residuales) H += '<h4>Riesgos residuales</h4><p>'+esc(r.residuales).replace(/\n/g,'<br>')+'</p>';
+  if (r.recomendaciones) H += '<h4>Recomendaciones</h4><p>'+esc(r.recomendaciones).replace(/\n/g,'<br>')+'</p>';
+  if (r.apta)
+    H += '<p class="veredicto '+(r.apta==='no'?'mal':(r.apta==='condicionada'?'med':'bien'))+'">'+
+      esc({si:'La puerta queda conforme para el uso previsto.',
+           condicionada:'La puerta queda conforme con las limitaciones indicadas en este informe.',
+           no:'La puerta NO debería utilizarse hasta resolver las deficiencias señaladas.'}[r.apta])+'</p>';
+  H += '<h4>Limitaciones de este informe</h4><p>'+
+    esc(r.limitaciones || 'El presente informe se refiere exclusivamente a lo que pudo comprobarse '+
+    'visual y funcionalmente en la fecha de la intervención, sin desmontaje de elementos ni ensayos destructivos.')
+    .replace(/\n/g,'<br>')+'</p></section>';
+
+  /* ---------- INSTRUCCIONES ---------- */
+  H += '<section><h3 class="sec">Instrucciones de uso y seguridad</h3>'+
+    '<h4>Uso previsto</h4><p>La puerta está prevista para '+esc(pu.uso_puerta || 'el uso indicado en este expediente')+
+    '. Cualquier uso distinto del previsto queda fuera de las condiciones en que se ha evaluado su seguridad.</p>'+
+    '<h4>Normas de uso</h4><ul class="norm">'+
+    '<li>No cruzar el hueco mientras la puerta está en movimiento.</li>'+
+    '<li>No permitir que los niños jueguen con los mandos ni en las proximidades de la puerta.</li>'+
+    '<li>Vigilar la puerta durante toda la maniobra cuando se accione sin verla.</li>'+
+    '<li>No forzar la puerta ni anular, tapar o desconectar ningún dispositivo de seguridad.</li>'+
+    '<li>Mantener limpias las ópticas de las fotocélulas y libre de obstáculos la zona de barrido.</li>'+
+    '<li>Ante cualquier ruido, golpe o funcionamiento anómalo, dejar de usar la puerta y avisar al mantenedor.</li>'+
+    '</ul>'+
+    '<h4>Maniobra manual</h4><p>'+
+    esc(((d.comp||{}).desbloqueo||{}).nota || 'El desbloqueo manual permite mover la puerta a mano cuando falta '+
+    'la corriente. Antes de accionarlo hay que cortar la alimentación y asegurarse de que la hoja no puede caer '+
+    'ni desplazarse de forma incontrolada.')+'</p>'+
+    '<h4>Qué hacer ante un fallo</h4><p>Cortar la alimentación, dejar la puerta fuera de servicio, señalizarla '+
+    'y avisar a la empresa mantenedora. No intentar repararla ni anular las seguridades para seguir usándola.</p>'+
+    '<h4>Contacto del mantenedor</h4><p>'+esc(em.razon_social)+
+    (em.telefono?(' · Teléfono '+esc(em.telefono)):'')+(em.email?(' · '+esc(em.email)):'')+'</p>'+
+    '</section>';
+
+  /* ---------- LIBRO DE MANTENIMIENTO ---------- */
+  H += '<section><h3 class="sec">Libro de mantenimiento</h3>'+
+    '<p class="min">Contenido conforme a la UNE-EN 12635. Este libro debe conservarse junto a la instalación '+
+    'y permanecer a disposición de quien realice el mantenimiento. Conservación mínima recomendada: diez años.</p>'+
+    '<table class="datos">'+
+      campo('Fabricante de la puerta', fab ? em.razon_social : (pu.marca || ''))+
+      campo('Instalador', em.razon_social + (em.telefono ? ' · '+em.telefono : ''))+
+      campo('Identificación de la puerta', [p.codigo, pu.tipo, pu.modelo].filter(Boolean).join(' · '))+
+      campo('Número único del marcado CE', pu.serie)+
+      campo('Ubicación', dir)+
+      campo('Fecha de instalación', e.fecha_puesta_servicio ? fechaCorta(e.fecha_puesta_servicio) : '')+
+      campo('Periodicidad de mantenimiento acordada', (d.entrega||{}).periodicidad || periodicidadSugerida(e, d))+
+    '</table>'+
+    '<h4>Registro de revisiones</h4>'+
+    '<table class="datos chk reg"><thead><tr><th style="width:80px">Fecha</th><th>Trabajo realizado</th>'+
+    '<th style="width:110px">Técnico</th><th style="width:90px">Firma</th></tr></thead><tbody>'+
+    Array.from({length:14}).map(() => '<tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>').join('')+
+    '</tbody></table></section>';
+
+  /* ---------- ENTREGA ---------- */
+  const en = d.entrega || {};
+  H += '<section><h3 class="sec">Entrega y firmas</h3>'+
+    '<p>Se hace entrega al titular de la instalación de la documentación que se relaciona, '+
+    'que deberá conservarse junto a la puerta.</p>'+
+    '<table class="datos chk"><tbody>'+
+    Object.entries(en.docs || {}).filter(([,v]) => v === 'si')
+      .map(([k]) => '<tr><td>'+esc(nombreDocEntrega(k, e, marco))+'</td><td style="width:60px"><span class="ok">Entregado</span></td></tr>').join('')+
+    '</tbody></table>'+
+    (en.observaciones ? '<p>'+esc(en.observaciones).replace(/\n/g,'<br>')+'</p>' : '')+
+    '<div class="firmas">'+
+      '<div><p class="min">Por la empresa</p><div class="linea"></div>'+
+        '<p>'+esc(en.firmante || em.responsable_tecnico || '')+'</p>'+
+        '<p class="min">'+esc(en.cargo || em.cargo_firmante || '')+' · '+esc(em.razon_social)+'</p></div>'+
+      '<div><p class="min">Recibí, el titular</p><div class="linea"></div>'+
+        '<p>'+esc(en.recibido_por || '')+'</p>'+
+        '<p class="min">'+esc(titular)+'</p></div>'+
+    '</div>'+
+    '<p class="min" style="margin-top:14px">'+esc([em.poblacion, en.fecha ? fechaCorta(en.fecha) : fechaCorta(hoy)].filter(Boolean).join(', '))+'</p>'+
+    '</section>';
+
+  /* ---------- CONTRAPORTADA ---------- */
+  H += '<section class="contra">'+
+    '<div class="marca">ARIZA <span>puertas automáticas</span></div>'+
+    '<p class="lema">Instalación, mantenimiento, reparación y adecuación a normativa de puertas automáticas</p>'+
+    '<table class="port-datos">'+
+      campo('Expediente', e.referencia)+
+      campo('Emitido', e.emitido_el ? fechaHora(e.emitido_el) : 'Borrador sin emitir')+
+      campo('Elaborado por', e.autor)+
+    '</table>'+
+    '<div class="contacto">'+esc(em.razon_social)+'<br>'+
+      esc([em.domicilio, em.cp, em.poblacion, em.provincia].filter(Boolean).join(', '))+'<br>'+
+      (em.nif?('NIF '+esc(em.nif)+'<br>'):'')+
+      (em.telefono?(esc(em.telefono)+'<br>'):'')+
+      (em.email?(esc(em.email)+'<br>'):'')+
+      (em.web?esc(em.web):'')+'</div>'+
+    '<p class="min pie-legal">Documento generado por ARIZA SAT. '+
+    'La conservación de este expediente corresponde al titular de la instalación. '+
+    'La empresa conserva su expediente técnico durante diez años.</p>'+
+    '</section>';
+
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
+    '<title>'+esc(e.referencia||'Expediente')+' · '+esc(titular)+'</title>'+
+    '<style>'+ cssLibro() +'</style></head><body>'+ H +'</body></html>');
+  w.document.close();
+}
+
+function bloqueFirma(em, d, e){
+  const en = d.entrega || {};
+  return '<div class="firma-decl">'+
+    '<p>'+esc([em.poblacion, en.fecha ? fechaCorta(en.fecha) : fechaCorta(new Date().toISOString().slice(0,10))]
+      .filter(Boolean).join(', '))+'</p>'+
+    '<div class="linea"></div>'+
+    '<p><b>'+esc(en.firmante || em.responsable_tecnico || '')+'</b></p>'+
+    '<p class="min">'+esc(en.cargo || em.cargo_firmante || '')+' · '+esc(em.razon_social)+'</p></div>';
+}
+function nombreDocEntrega(k, e, marco){
+  const M = EXP_MARCO[marco];
+  return ({ ddp:'Declaración de prestaciones', dc: M ? M.documento : 'Declaración de conformidad',
+    marcado:'Marcado CE colocado en la puerta', manual:'Manual de uso y mantenimiento',
+    libro:'Libro de mantenimiento', expediente:'Expediente técnico archivado',
+    ddp_fab:'Declaración de prestaciones del fabricante', dc_fab:'Declaración de conformidad del fabricante',
+    cert_inst:'Certificado de instalación', informe:'Informe de riesgos y deficiencias detectadas' })[k] || k;
+}
+/* Periodicidad orientativa. No es obligación legal: procede de la circular del
+   Colegio de Administradores de Fincas de Madrid elaborada con el Ministerio. */
+function periodicidadSugerida(e, d){
+  const u = (d.obra||{}).uso_edificio || '';
+  if (e.familia === 'peatonal') return 'Semestral, orientativa';
+  if (/Industria/i.test(u)) return 'Semestral, orientativa';
+  if (/Comercio|Hotel|Pública/i.test(u)) return 'Semestral, orientativa';
+  return 'Anual, orientativa';
+}
+
+function cssLibro(){
+  return '@page{size:A4;margin:18mm 16mm 16mm}'+
+  '*{box-sizing:border-box}'+
+  'body{font:11.5px/1.55 -apple-system,Segoe UI,Roboto,sans-serif;color:#1C1817;margin:0;counter-reset:pag}'+
+  'section{page-break-before:always;page-break-inside:auto}'+
+  'section:first-child{page-break-before:avoid}'+
+  'h3.sec{font-size:15px;margin:0 0 12px;padding-bottom:6px;border-bottom:2px solid #FCBA1D}'+
+  'h4{font-size:12px;margin:16px 0 5px;color:#6B6560;text-transform:uppercase;letter-spacing:.04em}'+
+  'p{margin:0 0 8px}'+
+  '.min{font-size:10px;color:#6B6560}'+
+  'table.datos{border-collapse:collapse;width:100%;margin:4px 0 10px}'+
+  'table.datos th,table.datos td{text-align:left;padding:4px 7px;border-bottom:1px solid #e8e5e1;vertical-align:top}'+
+  'table.datos th{width:34%;color:#6B6560;font-weight:500}'+
+  'table.chk th{width:auto;background:#f6f5f3;color:#1C1817;font-weight:600}'+
+  'table.chk td{border-bottom:1px solid #eee}'+
+  'table.reg td{height:20px}'+
+  '.ok{color:#2E7D46;font-weight:600}.no{color:#B3261E;font-weight:600}.na{color:#8A837D}'+
+  'ul.norm{margin:4px 0 8px;padding-left:18px}ul.norm li{margin:2px 0}'+
+  'ol.indice{margin:4px 0 0;padding-left:20px}ol.indice li{margin:3px 0}'+
+  '.dos{display:flex;gap:18px}.dos>div{flex:1}'+
+  '.comp{page-break-inside:avoid;margin:0 0 14px}'+
+  '.comp h4{margin-top:10px;color:#1C1817;text-transform:none;font-size:12.5px;letter-spacing:0}'+
+  '.gal{display:grid;gap:7px;margin:6px 0 4px}'+
+  '.gal.c2{grid-template-columns:1fr 1fr}.gal.c3{grid-template-columns:1fr 1fr 1fr}'+
+  '.gal figure{margin:0;page-break-inside:avoid}'+
+  '.gal img{width:100%;height:auto;max-height:78mm;object-fit:cover;border:1px solid #ddd;border-radius:3px;display:block}'+
+  '.gal figcaption{font-size:9.5px;color:#6B6560;margin-top:3px}'+
+  /* portada y contraportada */
+  '.portada,.contra{page-break-before:always;height:245mm;display:flex;flex-direction:column}'+
+  '.portada{page-break-before:avoid}'+
+  '.marca{font-weight:800;font-size:22px;letter-spacing:.02em}'+
+  '.marca span{color:#C98F08;font-weight:600}'+
+  '.portada .tit{margin-top:26mm}'+
+  '.portada h1{font-size:30px;margin:0;line-height:1.15}'+
+  '.portada h2{font-size:17px;margin:6px 0 0;font-weight:500;color:#6B6560}'+
+  '.portada .sit{margin:10px 0 0;font-size:13px}'+
+  '.portada-foto{margin:14mm 0 auto;border:1px solid #ddd;border-radius:4px;overflow:hidden;height:95mm}'+
+  '.portada-foto img{width:100%;height:100%;object-fit:cover;display:block}'+
+  '.portada-foto.vacia{display:flex;align-items:center;justify-content:center;color:#b5aea8;background:#f6f5f3}'+
+  'table.port-datos{border-collapse:collapse;width:100%;margin-top:10mm}'+
+  'table.port-datos th{text-align:left;padding:5px 8px;color:#6B6560;font-weight:500;width:42%;border-top:1px solid #e8e5e1}'+
+  'table.port-datos td{padding:5px 8px;border-top:1px solid #e8e5e1}'+
+  '.pie-portada{margin-top:auto;padding-top:8mm;border-top:3px solid #FCBA1D;font-size:10.5px;color:#6B6560}'+
+  '.contra{justify-content:space-between}'+
+  '.contra .lema{margin-top:8mm;font-size:13px;color:#6B6560;max-width:120mm}'+
+  '.contra .contacto{margin-top:auto;font-size:12px;line-height:1.7}'+
+  '.contra .pie-legal{margin-top:8mm;padding-top:6mm;border-top:3px solid #FCBA1D}'+
+  /* declaraciones */
+  '.decl .decl-num{font-size:12px;color:#6B6560;margin:-6px 0 10px}'+
+  'ol.decl-l{padding-left:18px;margin:0}'+
+  'ol.decl-l>li{margin:0 0 9px;page-break-inside:avoid}'+
+  '.firma-decl{margin-top:16mm;page-break-inside:avoid}'+
+  '.firma-decl .linea,.firmas .linea{border-bottom:1px solid #1C1817;height:16mm;margin:0 0 4px;max-width:70mm}'+
+  '.firmas{display:flex;gap:20mm;margin-top:14mm;page-break-inside:avoid}'+
+  '.firmas>div{flex:1}'+
+  '.veredicto{padding:8px 10px;border-radius:4px;font-weight:600;margin:10px 0}'+
+  '.veredicto.bien{background:#e8f3ec;color:#2E7D46}'+
+  '.veredicto.med{background:#fdf3e0;color:#8a5a06}'+
+  '.veredicto.mal{background:#fbeae9;color:#B3261E}'+
+  '.aviso{padding:8px 10px;background:#fbeae9;color:#B3261E;border-radius:4px}'+
+  '@media screen{body{max-width:195mm;margin:0 auto;padding:16px;background:#fff}'+
+  'section{border-top:2px dashed #ddd;padding-top:20px;margin-top:20px}'+
+  'section:first-child{border-top:0;margin-top:0;padding-top:0}'+
+  '.portada,.contra{height:auto;min-height:auto}}';
+}
+
 
 /* ================= Diálogos ================= */
 const dlg = $('#dlg'), dlgForm = $('#dlg-form');
@@ -3832,6 +5436,37 @@ raiz.addEventListener('click', async e => {
   else if (a === 'parte') hojaParte(b.dataset.id);
   else if (a === 'asignar') dlgAsignar(b.dataset.id);
   else if (a === 'aviso-anular') dlgAnular(b.dataset.id);
+  else if (a === 'exp-nuevo') dlgExpedienteNuevo(b.dataset.id);
+  else if (a === 'exp-abrir'){
+    S.exp = b.dataset.id; S.expPaso = 'obra'; S.ficha = null;
+    await cargarFotosExp(S.exp); pintar(); window.scrollTo({top:0});
+  }
+  else if (a === 'exp-volver'){ const e = expDe(S.exp); S.exp = null;
+    if (e && e.puerta_id) S.ficha = e.puerta_id; pintar(); window.scrollTo({top:0}); }
+  else if (a === 'exp-paso'){ S.expPaso = b.dataset.v; pintar(); window.scrollTo({top:0}); }
+  else if (a === 'exp-libro') libroExpediente(b.dataset.id);
+  else if (a === 'exp-emitir') dlgEmitirExpediente(b.dataset.id);
+  else if (a === 'exp-copiar-cliente'){
+    const e = expDe(S.exp); const c = e && e.cliente_id ? clienteDe(e.cliente_id) : null;
+    const p = e && e.puerta_id ? puertaDe(e.puerta_id) : null;
+    if (!c && !p) return;
+    expPon('obra.titular', (c && c.nombre) || (p && p.cliente) || '');
+    expPon('obra.nif_titular', (c && c.nif) || '');
+    expPon('obra.emplazamiento', [(p&&p.direccion) || (c&&c.direccion), (c&&c.poblacion)].filter(Boolean).join(', '));
+    expPon('obra.ubicacion', (p && p.ubicacion) || '');
+    expPon('obra.contacto', (c && c.telefono) ? ((c.nombre||'')+' · '+c.telefono) : '');
+    pintar(); toast('Datos del cliente copiados.');
+  }
+  else if (a === 'exp-quitar-foto'){
+    if (!armar(b, 'Confirmar')) return;
+    const f = (S.expFotos||[]).find(x => x.id === b.dataset.id);
+    try {
+      const { error } = await sb.from('expediente_fotos').delete().eq('id', b.dataset.id);
+      if (error) throw error;
+      if (f) { try { await sb.storage.from('expedientes').remove([f.ruta]); } catch(_){} }
+      await cargarFotosExp(S.exp); pintarFotosExp(); toast('Foto quitada.');
+    } catch(err){ fallo(err); }
+  }
   else if (a === 'filtra-tec'){ S.filtroTec = b.dataset.v || ''; pintar(); }
   else if (a === 'cli-archivados'){ S.cliArchivados = !S.cliArchivados; S.buscaCli = ''; pintar(); }
   else if (a === 'hist-archivadas'){ S.histArchivadas = !S.histArchivadas; pintar(); }
@@ -4068,6 +5703,22 @@ raiz.addEventListener('click', async e => {
     try { await guardarLista(clave, arr); pintar(); toast('Lista guardada.'); }
     catch(err){ fallo(err); }
   }
+  else if (a === 'guardar-empresa' || a === 'guardar-limites'){
+    const esEmp = a === 'guardar-empresa';
+    const clave = esEmp ? 'empresa' : 'limites_fuerza';
+    const base = esEmp ? datosEmpresa() : limitesFuerza();
+    const o = Object.assign({}, base);
+    document.querySelectorAll('[data-'+(esEmp?'emp':'lim')+']').forEach(x => {
+      const k = esEmp ? x.dataset.emp : x.dataset.lim;
+      o[k] = esEmp ? x.value.trim() : (x.value === '' ? base[k] : +x.value);
+    });
+    try {
+      const { error } = await sb.from('ajustes').upsert({ clave, valor: o }, { onConflict:'clave' });
+      if (error) throw error;
+      S.ajustes[clave] = o; pintar();
+      toast(esEmp ? 'Datos de la empresa guardados.' : 'Límites guardados.');
+    } catch(err){ fallo(err); }
+  }
   else if (a === 'equipo-activo'){
     try { const { error } = await sb.from('perfiles').update({ activo: b.dataset.v === '1' }).eq('id', b.dataset.id); if (error) throw error; await cargar(); }
     catch(err){ fallo(err); }
@@ -4078,6 +5729,8 @@ raiz.addEventListener('input', e => {
   if (e.target.dataset.act === 'busca-cli'){ S.buscaCli = e.target.value; pintar(); }
   if (e.target.dataset.act === 'busca-con'){ S.buscaCon = e.target.value; pintar(); }
   if (e.target.dataset.act === 'busca-hist'){ S.histBusca = e.target.value; pintar(); }
+  // Campos del expediente: se guardan solos y sin repintar, para no interrumpir al que escribe
+  if (e.target.dataset.exp && e.target.tagName !== 'SELECT') expPon(e.target.dataset.exp, e.target.value);
 });
 raiz.addEventListener('change', e => {
   if (e.target.dataset.act === 'equipo-rol'){
@@ -4098,6 +5751,38 @@ raiz.addEventListener('change', e => {
   if (e.target.dataset.act === 'hist-hasta'){ S.histHasta = e.target.value; pintar(); return; }
   if (e.target.dataset.act === 'subir-cara' && e.target.files.length){
     subirCara(e.target.dataset.id, e.target.files[0]); e.target.value = '';
+  }
+  /* ---- Expediente ---- */
+  if (e.target.dataset.exp && e.target.tagName === 'SELECT'){
+    const ruta = e.target.dataset.exp;
+    expPon(ruta, e.target.value);
+    // Solo repintamos cuando la respuesta cambia lo que hay que enseñar
+    if (/\.(estado|v)$|motorizada|hueco$|\.via$/.test(ruta)) pintar();
+    return;
+  }
+  if (e.target.dataset.expChk !== undefined){
+    expPon(e.target.dataset.expChk, e.target.checked ? 'si' : '');
+    return;
+  }
+  if (e.target.dataset.act === 'exp-fps'){
+    const f = e.target.value || null, ex = expDe(S.exp);
+    if (ex){ ex.fecha_puesta_servicio = f;
+      sb.from('expedientes').update({ fecha_puesta_servicio: f, actualizado: new Date().toISOString() })
+        .eq('id', ex.id).then(({error}) => { if (error) fallo(error); else pintar(); });
+    }
+    return;
+  }
+  if (e.target.dataset.act === 'exp-pie'){
+    const f = (S.expFotos||[]).find(x => x.id === e.target.dataset.id);
+    if (f){ f.pie = e.target.value;
+      sb.from('expediente_fotos').update({ pie: f.pie }).eq('id', f.id)
+        .then(({error}) => { if (error) fallo(error); });
+    }
+    return;
+  }
+  if (e.target.dataset.act === 'exp-subir-foto' && e.target.files.length){
+    subirFotosExp(e.target.dataset.ap, Array.from(e.target.files)); e.target.value = '';
+    return;
   }
   if (e.target.dataset.act === 'cal-tec'){ S.calTec = e.target.value; pintar(); return; }
   if (e.target.dataset.act === 'guion-tipo'){ S.guionTipo = e.target.value; pintar(); return; }
