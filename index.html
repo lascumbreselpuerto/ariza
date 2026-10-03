@@ -1765,18 +1765,29 @@ function vistaEquipo(){
   else {
     h += '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Nombre</th><th>Rol</th><th>Estado</th><th></th></tr></thead><tbody>';
     S.equipo.forEach(t => {
-      h += '<tr><td>'+esc(t.nombre||'—')+'</td><td>'+(t.rol==='admin'?'Administrador':'Técnico')+'</td>'+
+      const rolCelda = t.rol === 'admin'
+        ? 'Administrador'
+        : '<select class="cal-sel" data-act="equipo-rol" data-id="'+t.id+'">'+
+          '<option value="tecnico"'+(t.rol==='tecnico'?' selected':'')+'>Técnico</option>'+
+          '<option value="oficina"'+(t.rol==='oficina'?' selected':'')+'>Oficina</option></select>';
+      h += '<tr><td>'+esc(t.nombre||'—')+'</td><td>'+rolCelda+'</td>'+
            '<td>'+(t.activo?'<span class="chip ok sin">Activo</span>':'<span class="chip gris sin">Sin acceso</span>')+'</td>'+
            '<td style="text-align:right">'+(t.rol==='admin'?'':'<button class="btn sm" data-act="equipo-activo" data-id="'+t.id+'" data-v="'+(t.activo?'0':'1')+'">'+(t.activo?'Quitar acceso':'Dar acceso')+'</button>')+'</td></tr>';
     });
     h += '</tbody></table></div>';
   }
   h += '</div>';
-  h += '<div class="panel"><div class="panel-h"><h3>Dar de alta a un técnico</h3></div>'+
+  h += '<p class="mini" style="margin:-4px 0 0">'+
+       '<b>Técnico:</b> ve las puertas, sus asistencias y cierra visitas; no ve precios ni márgenes. '+
+       '<b>Oficina:</b> además expide contratos y ve precios, costes, margen y lo pendiente de facturar. '+
+       'Cambiar tarifas y tocar el equipo sigue siendo solo tuyo.</p>';
+  h += '<div class="panel"><div class="panel-h"><h3>Dar de alta a alguien del equipo</h3></div>'+
        '<div class="campos" style="max-width:640px">'+
        '<div class="campo"><label for="t-nombre">Nombre</label><input id="t-nombre" type="text" placeholder="Ej.: Juan"></div>'+
        '<div class="campo"><label for="t-mail">Correo</label><input id="t-mail" type="email" autocomplete="off" placeholder="juan@correo.com"></div>'+
        '<div class="campo"><label for="t-pass">Contraseña provisional</label><input id="t-pass" type="text" autocomplete="off" placeholder="Mínimo 6 caracteres"></div>'+
+       '<div class="campo"><label for="t-rol">Rol</label><select id="t-rol">'+
+         '<option value="tecnico">Técnico</option><option value="oficina">Oficina</option></select></div>'+
        '<div class="campo" style="align-content:end"><button class="btn pri" data-act="equipo-alta">Dar de alta</button></div>'+
        '</div><p class="err" id="t-err" role="alert" style="margin:10px 0 0"></p>'+
        '<p class="mini" style="margin:8px 0 0">Dale la contraseña en persona. Él puede cambiarla desde la pantalla de entrada, con «He olvidado mi contraseña».</p></div>';
@@ -3555,7 +3566,19 @@ raiz.addEventListener('click', async e => {
       const { data, error } = await sb.functions.invoke('crear-tecnico', { body: { nombre: nombre.trim(), email, password: pass } });
       if (error) throw new Error((data && data.error) || error.message);
       if (data && data.error) throw new Error(data.error);
-      await cargar(); toast(nombre.trim()+' dado de alta. Pásale el correo y la contraseña.');
+      const rol = (document.getElementById('t-rol')||{}).value || 'tecnico';
+      if (rol === 'oficina'){
+        // la función lo crea siempre como técnico; el rol lo cambia el administrador
+        const id = (data && (data.id || data.user_id)) || null;
+        if (id) await sb.from('perfiles').update({ rol:'oficina' }).eq('id', id);
+        else {
+          await cargar();
+          const nuevo = S.equipo.find(x => (x.nombre||'').trim() === nombre.trim());
+          if (nuevo) await sb.from('perfiles').update({ rol:'oficina' }).eq('id', nuevo.id);
+        }
+      }
+      await cargar();
+      toast(nombre.trim()+' dado de alta como '+(rol==='oficina'?'oficina':'técnico')+'. Pásale el correo y la contraseña.');
     } catch(e){ err.textContent = e.message || 'No se pudo dar de alta.'; }
     b.disabled = false; b.textContent = 'Dar de alta';
   }
@@ -3620,6 +3643,17 @@ raiz.addEventListener('input', e => {
   if (e.target.dataset.act === 'busca-con'){ S.buscaCon = e.target.value; pintar(); }
 });
 raiz.addEventListener('change', e => {
+  if (e.target.dataset.act === 'equipo-rol'){
+    const sel = e.target, id = sel.dataset.id, rol = sel.value;
+    sel.disabled = true;
+    sb.from('perfiles').update({ rol }).eq('id', id).then(async ({ error }) => {
+      if (error) { fallo(error); sel.disabled = false; return; }
+      await cargar();
+      toast(rol === 'oficina' ? 'Ahora es oficina: verá precios y podrá expedir contratos.'
+                              : 'Ahora es técnico: deja de ver precios y contratos.');
+    });
+    return;
+  }
   if (e.target.dataset.act === 'filtro-tec'){ S.filtroTec = e.target.value; pintar(); return; }
   if (e.target.dataset.act === 'cal-tec'){ S.calTec = e.target.value; pintar(); return; }
   if (e.target.dataset.act === 'guion-tipo'){ S.guionTipo = e.target.value; pintar(); return; }
