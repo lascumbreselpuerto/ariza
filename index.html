@@ -92,6 +92,19 @@ img{max-width:100%}
 .chip.tec.t3::before{background:#C2571A}
 .chip.tec.t4::before{background:#0E8C8C}
 .chip.tec.t5::before{background:#A31D6B}
+/* Cara del técnico: se reconoce de un vistazo quién lleva cada asistencia */
+.cara{width:28px;height:28px;border-radius:50%;object-fit:cover;flex:0 0 auto;
+      border:2px solid var(--surface);box-shadow:0 0 0 1px var(--line);background:var(--surface-2)}
+.cara.gr{width:46px;height:46px}
+.cara.ini{display:inline-flex;align-items:center;justify-content:center;
+           font:700 11px/1 var(--sans,inherit);color:#fff;letter-spacing:.02em}
+.cara.c0{background:#2E7D46}.cara.c1{background:#1F6FB2}.cara.c2{background:#8C4BB5}
+.cara.c3{background:#C2571A}.cara.c4{background:#0E8C8C}.cara.c5{background:#A31D6B}
+.cara.vacia{background:var(--gris-bg);color:var(--gris)}
+.cara.gr.ini{font-size:17px}
+.chip.anulada{color:var(--gris);background:var(--gris-bg);text-decoration:none}
+.aviso.anulada,.item.anulada{opacity:.72}
+.aviso.archivada{border-style:dashed}
 .codigo{font:700 15px var(--mono);letter-spacing:.04em}
 .buscador{display:flex;gap:8px;align-items:center}
 .buscador input{flex:1;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:16px}
@@ -333,6 +346,7 @@ dialog::backdrop{background:rgba(20,18,17,.55)}
     <button data-tab="trabajo" role="tab">Mi trabajo</button>
     <button data-tab="puertas" role="tab">Puertas</button>
     <button data-tab="avisos" role="tab">Asistencias</button>
+    <button data-tab="realizadas" role="tab">Realizadas</button>
     <button data-tab="calendario" role="tab">Calendario</button>
     <button data-tab="clientes" role="tab">Clientes</button>
     <button data-tab="contratos" role="tab">Contratos</button>
@@ -466,7 +480,9 @@ function estadoChip(e){ const x=ESTADOS[e]||ESTADOS.operativa; return '<span cla
 const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etiquetas:[], equipo:[], clientes:[], ajustes:{},
             contratos:[], contratoPuertas:[], ficha:null, fichaCliente:null, cargando:true, busca:'', buscaCli:'', filtroTec:'', sugerencias:[],
             guionTipo:'', tarifas:null, catalogo:[], valoraciones:{}, resumen:null, mesGestion:'',
-            calVista:'mes', calAncla:null, calTec:'', buscaCon:'', conFiltro:'activos', borradorPuerta:null };
+            calVista:'mes', calAncla:null, calTec:'', buscaCon:'', conFiltro:'activos', borradorPuerta:null,
+            fotosEquipo:{}, histBusca:'', histTec:'', histTipo:'', histDesde:'', histHasta:'', histArchivadas:false,
+            cliArchivados:false };
 /* Importes: solo existen para el administrador. Si no hay tarifas cargadas, no se enseña nada. */
 const valoracionDe = id => S.valoraciones[id] || null;
 const eur = n => (n == null || isNaN(n)) ? '—' :
@@ -745,6 +761,7 @@ async function cargar(){
   if (e.error) fallo(e.error); else S.etiquetas = e.data || [];
   if (!t.error) S.equipo = t.data || [];
   if (!c.error) S.clientes = c.data || [];
+  await fotosDelEquipo();
   if (!j.error){ S.ajustes = {}; (j.data || []).forEach(x => { S.ajustes[x.clave] = x.valor; }); }
   // materiales ya usados, para ir sugiriéndolos al técnico
   const m = await sb.from('materiales').select('descripcion, unidad').limit(500);
@@ -755,6 +772,19 @@ async function cargar(){
   }
   await sembrarGuiones();
   S.cargando = false; pintar();
+}
+
+/* Enlaces firmados de las fotos del equipo. El cubo es privado: la foto de un
+   trabajador no se publica en internet. Se renuevan en cada carga. */
+async function fotosDelEquipo(){
+  const con = S.equipo.filter(t => t.foto_ruta);
+  S.fotosEquipo = {};
+  if (!con.length) return;
+  try {
+    const { data } = await sb.storage.from('equipo')
+      .createSignedUrls(con.map(t => t.foto_ruta), 7200);
+    (data || []).forEach((x, i) => { if (x && x.signedUrl) S.fotosEquipo[con[i].id] = x.signedUrl; });
+  } catch(_){ /* sin foto se enseñan las iniciales, no pasa nada */ }
 }
 
 /* La primera vez, deja escritos en ajustes los guiones de revisión que falten */
@@ -822,6 +852,7 @@ function render(){
   else if (S.tab === 'contratos') h = vistaContratos();
   else if (S.tab === 'calendario') h = vistaCalendario();
   else if (S.tab === 'avisos') h = vistaAvisos();
+  else if (S.tab === 'realizadas') h = vistaRealizadas();
   else if (S.tab === 'etiquetas') h = vistaEtiquetas();
   else if (S.tab === 'gestion') h = esGestion() ? vistaGestion() : vistaPuertas();
   else if (S.tab === 'equipo') h = vistaEquipo();
@@ -965,6 +996,29 @@ function chipTecnico(a){
   const i = Math.max(0, S.equipo.findIndex(t => t.id === a.tecnico_id)) % 6;
   return '<span class="chip tec t'+i+'">'+esc(nom)+'</span>';
 }
+/* Color fijo por técnico, el mismo que usa el chip, para que cuadren */
+const colorTec = id => Math.max(0, S.equipo.findIndex(t => t.id === id)) % 6;
+const inicialesTec = n => String(n || '').trim().split(/\s+/).slice(0,2)
+  .map(x => x[0] || '').join('').toUpperCase() || '?';
+/* La cara del técnico: su foto si la tiene, y si no sus iniciales en su color.
+   Las fotos están en un cubo privado, así que se sirven con enlace firmado
+   que se renueva en cada carga. */
+function caraTec(id, grande){
+  const g = grande ? ' gr' : '';
+  if (!id) return '<span class="cara ini vacia'+g+'" title="Sin asignar">··</span>';
+  const t = S.equipo.find(x => x.id === id) || {};
+  const nom = t.nombre || 'Técnico';
+  const url = S.fotosEquipo[id];
+  if (url) return '<img class="cara'+g+'" src="'+esc(url)+'" alt="'+esc(nom)+'" title="'+esc(nom)+'">';
+  return '<span class="cara ini c'+colorTec(id)+g+'" title="'+esc(nom)+'">'+esc(inicialesTec(nom))+'</span>';
+}
+/* Marcas de una asistencia que ya no está en juego */
+function chipsEstadoAsis(a){
+  let h = '';
+  if (a.anulada) h += '<span class="chip anulada sin" title="'+esc(a.anulada_motivo||'')+'">Anulada</span>';
+  if (a.archivado) h += '<span class="chip gris sin">Archivada</span>';
+  return h;
+}
 /* Asignar en dos toques: técnico y fecha, sin abrir la asistencia entera */
 function dlgAsignar(id){
   const a = S.avisos.find(x => x.id === id);
@@ -1009,10 +1063,13 @@ function tarjetaAviso(a){
   const p = a.puerta_id ? (puertaDe(a.puerta_id) || {}) : {};
   const cont = contactoAviso(a);
   const donde = dondeAsistencia(a);
-  return '<div class="aviso"><div class="cab">'+
+  const firmada = !!a.firma_ruta;
+  return '<div class="aviso'+(a.anulada?' anulada':'')+(a.archivado?' archivada':'')+'"><div class="cab">'+
+    caraTec(a.tecnico_id)+
     '<span class="chip '+(a.tipo==='comercial'?'ok':(a.tipo==='mantenimiento'?'gris':'aviso'))+'">'+esc(tipoAsis(a.tipo))+'</span>'+
-    '<span class="chip gris sin">'+(EST_AVISO[a.estado]||a.estado)+'</span>'+
-    (a.prioridad==='urgente' ? '<span class="chip aviso sin">Urgente</span>' : '')+
+    (a.anulada ? '' : '<span class="chip gris sin">'+(EST_AVISO[a.estado]||a.estado)+'</span>')+
+    (a.prioridad==='urgente' && !a.cerrado ? '<span class="chip aviso sin">Urgente</span>' : '')+
+    chipsEstadoAsis(a)+
     chipTecnico(a)+
     '<b>'+esc(nombreCliente(a))+'</b>'+
     '<span class="mini">'+esc([p.codigo, donde].filter(Boolean).join(' · '))+'</span><span class="sp"></span>'+
@@ -1020,17 +1077,42 @@ function tarjetaAviso(a){
     (!a.cerrado && esGestion() ? '<button class="btn sm" data-act="asignar" data-id="'+a.id+'">Asignar</button>' : '')+
     '<button class="btn sm plana" data-act="aviso-editar" data-id="'+a.id+'">'+(a.cerrado?'Ver':'Editar')+'</button>'+
     (a.cerrado
-      ? '<button class="btn sm" data-act="parte" data-id="'+a.id+'">Parte</button>'
+      ? (a.anulada ? '' : '<button class="btn sm" data-act="parte" data-id="'+a.id+'">Parte</button>')
       : '<button class="btn sm pri" data-act="cerrar-asistencia" data-id="'+a.id+'">Cerrar visita</button>')+
     '</div>'+
     (a.descripcion?'<p style="margin:0">'+esc(a.descripcion)+'</p>':'')+
     (a.notas_oficina?'<p class="nota-oficina">Oficina: '+esc(a.notas_oficina)+'</p>':'')+
+    (a.anulada ? '<p class="mini" style="margin:0"><b>Anulada</b> el '+fechaHora(a.anulada_en)+
+       (a.anulada_por?(' por '+esc(a.anulada_por)):'')+': '+esc(a.anulada_motivo||'')+'</p>' : '')+
     '<p class="mini" style="margin:0">'+
       (a.fecha_prevista ? ('Visita: '+fechaCorta(a.fecha_prevista)+' · '+relativo(a.fecha_prevista)+' · ') : '')+
       'Entró el '+fechaHora(a.creado)+(a.origen==='cliente'?' por el QR':'')+
     '</p>'+
     (cont ? '<p class="mini" style="margin:0">'+cont+'</p>' : '')+
+    accionesAsis(a, firmada)+
     '</div>';
+}
+
+/* Segunda fila: duplicar, anular, archivar y borrar. Se separa de los botones
+   de trabajo para que nadie borre nada por querer cerrar una visita. */
+function accionesAsis(a, firmada){
+  const b = [];
+  b.push('<button class="btn sm plana" data-act="aviso-duplicar" data-id="'+a.id+'">Duplicar</button>');
+  if (!a.cerrado && esGestion())
+    b.push('<button class="btn sm plana" data-act="aviso-anular" data-id="'+a.id+'">Anular sin parte</button>');
+  if (a.anulada && esGestion())
+    b.push('<button class="btn sm plana" data-act="aviso-reabrir" data-id="'+a.id+'">Volver a abrirla</button>');
+  if (esAdmin()){
+    b.push('<button class="btn sm plana" data-act="aviso-archivar" data-id="'+a.id+'" data-v="'+(a.archivado?'0':'1')+'">'+
+           (a.archivado?'Sacar del archivo':'Archivar')+'</button>');
+    if (firmada)
+      b.push('<span class="mini" title="La firma del cliente es la prueba de que el trabajo se hizo y de que lo aceptó">Firmada: no se borra</span>');
+    else
+      b.push('<button class="btn sm plana" data-act="aviso-borrar" data-id="'+a.id+'">Borrar</button>');
+  }
+  if (!b.length) return '';
+  return '<div class="fila" style="gap:6px;flex-wrap:wrap;margin-top:2px;padding-top:6px;border-top:1px solid var(--line)">'+
+         '<span class="sp"></span>'+b.join('')+'</div>';
 }
 
 /* ---- Mi trabajo: la jornada del técnico ---- */
@@ -1070,7 +1152,7 @@ function tarjetaTrabajo(a){
 
 function vistaMiTrabajo(){
   const yoId = S.perfil ? S.perfil.id : null;
-  const mias = S.avisos.filter(a => !a.cerrado && a.tecnico_id === yoId);
+  const mias = S.avisos.filter(a => !a.cerrado && !a.archivado && a.tecnico_id === yoId);
   const hoyISO = iso(new Date());
   const manana = iso(sumaDias(new Date(), 1));
   const finSemana = iso(sumaDias(new Date(), 7));
@@ -1130,16 +1212,47 @@ function vistaMiTrabajo(){
   }
   return h + '</div>';
 }
+/* Reparto del trabajo: quién lleva qué, de un vistazo y en un toque.
+   Cada cara es también el filtro, así que se ve y se usa en el mismo sitio. */
+function tiraTecnicos(abiertos){
+  const cuenta = id => abiertos.filter(a => a.tecnico_id === id).length;
+  const sinAsignar = abiertos.filter(a => !a.tecnico_id).length;
+  const vencidas = id => abiertos.filter(a => a.tecnico_id === id && a.fecha_prevista && dias(a.fecha_prevista) < 0).length;
+  const sel = v => S.filtroTec === v ? ' pri' : ' plana';
+  let h = '<div class="panel"><div class="panel-h"><h2>Reparto del trabajo</h2>'+
+          '<span class="mini">'+abiertos.length+' abierta'+(abiertos.length===1?'':'s')+'</span></div>'+
+          '<div class="fila" style="gap:8px;flex-wrap:wrap">'+
+          '<button class="btn sm'+sel('')+'" data-act="filtra-tec" data-v="">Todas</button>';
+  activos().forEach(t => {
+    const n = cuenta(t.id), v = vencidas(t.id);
+    h += '<button class="btn sm'+sel(t.id)+'" data-act="filtra-tec" data-v="'+t.id+'" '+
+         'style="display:inline-flex;align-items:center;gap:7px">'+
+         caraTec(t.id)+'<span>'+esc((t.nombre||'—').split(' ')[0])+'</span>'+
+         '<b>'+n+'</b>'+(v?'<span class="chip mal sin" title="Se pasaron de fecha">'+v+'</span>':'')+
+         '</button>';
+  });
+  if (sinAsignar)
+    h += '<button class="btn sm'+sel('sin')+'" data-act="filtra-tec" data-v="sin">Sin asignar <b>'+sinAsignar+'</b></button>';
+  h += '</div>';
+  if (S.filtroTec)
+    h += '<p class="mini" style="margin:10px 0 0">Estás viendo solo '+
+         (S.filtroTec === 'sin' ? 'lo que no tiene técnico' : esc(nombreTec(S.filtroTec)||''))+
+         '. <button class="btn sm plana" data-act="filtra-tec" data-v="">Quitar el filtro</button></p>';
+  return h + '</div>';
+}
+
 function vistaAvisos(){
-  const abiertos = S.avisos.filter(a => !a.cerrado);
+  const abiertos = S.avisos.filter(a => !a.cerrado && !a.archivado);
   const yoId = S.perfil ? S.perfil.id : null;
-  const mios = abiertos.filter(a => a.tecnico_id === yoId).sort(porFecha);
-  const comerciales = abiertos.filter(a => a.tipo === 'comercial' && a.tecnico_id !== yoId).sort(porFecha);
-  const resto = abiertos.filter(a => a.tecnico_id !== yoId && a.tipo !== 'comercial')
-                        .filter(a => !S.filtroTec || (S.filtroTec === 'sin' ? !a.tecnico_id : a.tecnico_id === S.filtroTec))
-                        .sort(porFecha);
+  const pasa = a => !S.filtroTec || (S.filtroTec === 'sin' ? !a.tecnico_id : a.tecnico_id === S.filtroTec);
+  const vistos = abiertos.filter(pasa);
+  const mios = vistos.filter(a => a.tecnico_id === yoId).sort(porFecha);
+  const comerciales = vistos.filter(a => a.tipo === 'comercial' && a.tecnico_id !== yoId).sort(porFecha);
+  const resto = vistos.filter(a => a.tecnico_id !== yoId && a.tipo !== 'comercial').sort(porFecha);
   let h = '<div class="stack">';
   h += '<div class="fila"><span class="sp"></span><button class="btn pri" data-act="asistencia-nueva">Nueva asistencia</button></div>';
+
+  if (esGestion()) h += tiraTecnicos(abiertos);
 
   h += '<div class="panel"><div class="panel-h"><h2>Mis asistencias</h2><span class="mini">'+mios.length+'</span></div>';
   if (!mios.length) h += '<p class="muted" style="margin:0">No tienes ninguna asistencia asignada ahora mismo.</p>';
@@ -1153,12 +1266,7 @@ function vistaAvisos(){
   }
 
   h += '<div class="panel"><div class="panel-h"><h2>'+(esAdmin()?'Resto de avisos abiertos':'Otros avisos del equipo')+'</h2>'+
-       '<span class="sp"></span>'+
-       (esAdmin() ? '<select id="f-tec" data-act="filtro-tec" style="padding:6px 9px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);font-size:14px">'+
-          '<option value="">Todos los técnicos</option><option value="sin"'+(S.filtroTec==='sin'?' selected':'')+'>Sin asignar</option>'+
-          activos().map(t => '<option value="'+t.id+'"'+(S.filtroTec===t.id?' selected':'')+'>'+esc(t.nombre||'—')+'</option>').join('')+
-          '</select>' : '<span class="mini">'+resto.length+'</span>')+
-       '</div>';
+       '<span class="sp"></span><span class="mini">'+resto.length+'</span></div>';
   if (!resto.length) h += '<p class="muted" style="margin:0">'+(abiertos.length?'Nada más abierto con ese filtro.':'No hay avisos abiertos. Todo en orden.')+'</p>';
   else h += '<div class="avisos">'+resto.map(tarjetaAviso).join('')+'</div>';
   h += '</div>';
@@ -1178,6 +1286,93 @@ function vistaAvisos(){
   }
   h += '</div></div>';
   return h;
+}
+
+/* ---- Realizadas: el historial de lo que ya está hecho ---- */
+function vistaRealizadas(){
+  const q = S.histBusca.trim().toLowerCase();
+  const diaCierre = a => String(a.cerrado || '').slice(0, 10);
+  let filas = S.avisos.filter(a => a.cerrado);
+  if (!S.histArchivadas) filas = filas.filter(a => !a.archivado);
+  // Un técnico solo ve lo suyo; administración y oficina lo ven todo.
+  if (!esGestion()) filas = filas.filter(a => a.tecnico_id === (S.perfil ? S.perfil.id : null));
+  if (S.histTec)   filas = filas.filter(a => S.histTec === 'sin' ? !a.tecnico_id : a.tecnico_id === S.histTec);
+  if (S.histTipo)  filas = filas.filter(a => S.histTipo === 'anuladas' ? a.anulada
+                                           : (!a.anulada && a.tipo === S.histTipo));
+  if (S.histDesde) filas = filas.filter(a => diaCierre(a) >= S.histDesde);
+  if (S.histHasta) filas = filas.filter(a => diaCierre(a) <= S.histHasta);
+  if (q) filas = filas.filter(a => {
+    const p = a.puerta_id ? (puertaDe(a.puerta_id) || {}) : {};
+    return [nombreCliente(a), p.codigo, p.marca, p.modelo, dondeAsistencia(a),
+            a.descripcion, a.diagnostico, a.trabajo, a.contacto_nombre,
+            a.tecnico, nombreTec(a.tecnico_id), a.anulada_motivo]
+           .filter(Boolean).join(' ').toLowerCase().includes(q);
+  });
+  filas.sort((x, y) => (x.cerrado || '') < (y.cerrado || '') ? 1 : -1);
+
+  const hechas  = filas.filter(a => !a.anulada).length;
+  const anulada = filas.filter(a => a.anulada).length;
+  const tipos = lista('tipos_asistencia', Object.keys(ASISTENCIAS));
+
+  let h = '<div class="stack">';
+  h += '<div class="fila"><div><h2 style="font-size:20px">Asistencias realizadas</h2>'+
+       '<p class="mini" style="margin:2px 0 0">'+hechas+' visita'+(hechas===1?'':'s')+' cerrada'+(hechas===1?'':'s')+
+       (anulada ? ' · '+anulada+' anulada'+(anulada===1?'':'s') : '')+
+       '</p></div><span class="sp"></span></div>';
+
+  h += '<div class="panel"><div class="campos">'+
+    '<div class="campo full"><label for="h-busca">Buscar</label>'+
+      '<input id="h-busca" type="search" data-act="busca-hist" value="'+esc(S.histBusca)+'" '+
+      'placeholder="Cliente, puerta, dirección, avería, trabajo hecho o técnico"></div>'+
+    '<div class="campo"><label for="h-tec">Técnico</label><select id="h-tec" data-act="hist-tec">'+
+      '<option value="">Todos</option>'+
+      (esGestion() ? '<option value="sin"'+(S.histTec==='sin'?' selected':'')+'>Sin técnico</option>' : '')+
+      activos().map(t => '<option value="'+t.id+'"'+(S.histTec===t.id?' selected':'')+'>'+esc(t.nombre||'—')+'</option>').join('')+
+      '</select></div>'+
+    '<div class="campo"><label for="h-tipo">Tipo</label><select id="h-tipo" data-act="hist-tipo">'+
+      '<option value="">Todos los tipos</option>'+
+      tipos.map(t => '<option value="'+esc(t)+'"'+(S.histTipo===t?' selected':'')+'>'+esc(ASISTENCIAS[t]||t)+'</option>').join('')+
+      '<option value="anuladas"'+(S.histTipo==='anuladas'?' selected':'')+'>Solo las anuladas</option>'+
+      '</select></div>'+
+    '<div class="campo"><label for="h-desde">Cerradas desde</label>'+
+      '<input id="h-desde" type="date" data-act="hist-desde" value="'+esc(S.histDesde)+'"></div>'+
+    '<div class="campo"><label for="h-hasta">Hasta</label>'+
+      '<input id="h-hasta" type="date" data-act="hist-hasta" value="'+esc(S.histHasta)+'"></div>'+
+    '</div>'+
+    '<div class="fila" style="gap:6px;flex-wrap:wrap;margin-top:10px">'+
+      '<button class="btn sm plana" data-act="hist-rango" data-n="30">Último mes</button>'+
+      '<button class="btn sm plana" data-act="hist-rango" data-n="90">Último trimestre</button>'+
+      '<button class="btn sm plana" data-act="hist-rango" data-n="365">Último año</button>'+
+      '<button class="btn sm plana" data-act="hist-limpiar">Quitar filtros</button>'+
+      '<span class="sp"></span>'+
+      (esAdmin() ? '<button class="btn sm'+(S.histArchivadas?' pri':' plana')+'" data-act="hist-archivadas">'+
+         (S.histArchivadas?'Ocultar archivadas':'Ver también las archivadas')+'</button>' : '')+
+    '</div></div>';
+
+  if (!filas.length){
+    h += '<div class="panel"><p class="muted" style="margin:0">'+
+         (S.avisos.some(a => a.cerrado)
+           ? 'Ninguna asistencia cerrada coincide con lo que has puesto.'
+           : 'Todavía no hay ninguna asistencia cerrada. Aquí irán apareciendo a medida que se cierren las visitas.')+
+         '</p></div>';
+    return h + '</div>';
+  }
+
+  // Agrupadas por mes, que es como se consulta un historial
+  const meses = [];
+  filas.forEach(a => {
+    const m = mesDe(a.cerrado);
+    if (!meses.length || meses[meses.length-1][0] !== m) meses.push([m, []]);
+    meses[meses.length-1][1].push(a);
+  });
+  meses.forEach(([m, arr]) => {
+    h += '<div class="panel"><div class="panel-h"><h2 style="text-transform:capitalize">'+esc(nombreMes(m))+'</h2>'+
+         '<span class="mini">'+arr.length+'</span></div>'+
+         '<div class="avisos">'+arr.slice(0, 120).map(tarjetaAviso).join('')+'</div>'+
+         (arr.length > 120 ? '<p class="mini" style="margin:10px 0 0">Se enseñan las 120 primeras de este mes. Acota con el buscador o las fechas.</p>' : '')+
+         '</div>';
+  });
+  return h + '</div>';
 }
 
 /* ---- Contratos de mantenimiento ---- */
@@ -1299,7 +1494,7 @@ function agendaPorDia(desde, hasta){
   const meter = (f, x) => { if (!f) return; const k = String(f).slice(0,10);
     if (k < iso(desde) || k > iso(hasta)) return; (dias_[k] = dias_[k] || []).push(x); };
 
-  S.avisos.filter(a => !a.cerrado && a.fecha_prevista)
+  S.avisos.filter(a => !a.cerrado && !a.archivado && a.fecha_prevista)
     .filter(a => !S.calTec || (S.calTec === 'sin' ? !a.tecnico_id : a.tecnico_id === S.calTec))
     .forEach(a => meter(a.fecha_prevista, { clase:'asis', aviso:a }));
 
@@ -1477,12 +1672,22 @@ function vistaCalendario(){
 /* ---- Clientes ---- */
 function vistaClientes(){
   const q = S.buscaCli.toLowerCase();
-  const lista = S.clientes.filter(c => !q || [c.nombre,c.nif,c.telefono,c.email,c.direccion,c.poblacion].join(' ').toLowerCase().includes(q));
+  const enJuego = S.clientes.filter(c => S.cliArchivados ? c.archivado : !c.archivado);
+  const nArch = S.clientes.filter(c => c.archivado).length;
+  const lista = enJuego.filter(c => !q || [c.nombre,c.nif,c.telefono,c.email,c.direccion,c.poblacion].join(' ').toLowerCase().includes(q));
   let h = '<div class="stack">';
   h += '<div class="fila"><div class="buscador sp"><input id="busca-cli" type="search" placeholder="Buscar cliente por nombre, NIF, teléfono o dirección" value="'+esc(S.buscaCli)+'" data-act="busca-cli"></div>'+
        '<button class="btn pri" data-act="cliente-nuevo">Nuevo cliente</button></div>';
-  h += '<p class="mini" style="margin:0">'+S.clientes.length+' clientes · '+S.clientes.filter(c=>c.contrato).length+' con contrato de mantenimiento</p>';
-  if (!lista.length) h += '<div class="panel"><p class="muted" style="margin:0">'+(S.clientes.length?'Ningún cliente coincide con la búsqueda.':'Todavía no hay clientes. Se van creando solos al dar de alta puertas y asistencias.')+'</p></div>';
+  h += '<div class="fila" style="gap:8px;flex-wrap:wrap"><p class="mini" style="margin:0">'+
+       enJuego.length+(S.cliArchivados?' clientes archivados':' clientes')+' · '+
+       enJuego.filter(c=>c.contrato).length+' con contrato de mantenimiento</p><span class="sp"></span>'+
+       (nArch || S.cliArchivados
+         ? '<button class="btn sm'+(S.cliArchivados?' pri':' plana')+'" data-act="cli-archivados">'+
+           (S.cliArchivados?'Volver a los activos':'Ver los archivados ('+nArch+')')+'</button>' : '')+
+       '</div>';
+  if (!lista.length) h += '<div class="panel"><p class="muted" style="margin:0">'+
+       (S.cliArchivados ? 'No hay ningún cliente archivado.'
+         : (S.clientes.length?'Ningún cliente coincide con la búsqueda.':'Todavía no hay clientes. Se van creando solos al dar de alta puertas y asistencias.'))+'</p></div>';
   else {
     h += '<div class="lista">';
     lista.slice(0,300).forEach(c => {
@@ -1490,7 +1695,7 @@ function vistaClientes(){
       const nA = S.avisos.filter(a => a.cliente_id === c.id || (a.puerta_id && (puertaDe(a.puerta_id)||{}).cliente_id === c.id)).length;
       h += '<button class="item" data-act="abrir-cliente" data-id="'+c.id+'">'+
            '<span class="qr">'+esc((c.nombre||'?').slice(0,2).toUpperCase())+'</span>'+
-           '<span><span class="tit">'+esc(c.nombre)+(c.contrato?' · contrato':'')+'</span>'+
+           '<span><span class="tit">'+esc(c.nombre)+(c.contrato?' · contrato':'')+(c.archivado?' · archivado':'')+'</span>'+
            '<span class="sub">'+esc([c.direccion,c.poblacion].filter(Boolean).join(' · ')||'Sin dirección')+'</span>'+
            '<span class="sub">'+esc([c.telefono,c.email].filter(Boolean).join(' · '))+'</span></span>'+
            '<span class="mini">'+nP+' puerta'+(nP===1?'':'s')+'<span style="display:block">'+nA+' asistencia'+(nA===1?'':'s')+'</span></span>'+
@@ -1510,7 +1715,21 @@ function vistaFichaCliente(id){
   h += '<div class="fila"><button class="btn plana" data-act="volver-cliente">‹ Volver</button><span class="sp"></span>'+
        '<button class="btn" data-act="cliente-editar" data-id="'+c.id+'">Editar cliente</button>'+
        '<button class="btn pri" data-act="asistencia-nueva-cliente" data-id="'+c.id+'">Nueva asistencia</button></div>';
-  h += '<div class="panel"><div class="panel-h"><h2>'+esc(c.nombre)+'</h2>'+(c.contrato?'<span class="chip ok sin">Contrato</span>':'')+'</div><dl class="datos">';
+  if (esAdmin()){
+    const vacio = !puertas.length && !asis.length && !contratosDe(c.id).length;
+    h += '<div class="fila" style="gap:6px;flex-wrap:wrap"><span class="sp"></span>'+
+      '<button class="btn sm plana" data-act="cliente-archivar" data-id="'+c.id+'" data-v="'+(c.archivado?'0':'1')+'">'+
+        (c.archivado?'Sacar del archivo':'Archivar cliente')+'</button>'+
+      (vacio
+        ? '<button class="btn sm plana" data-act="cliente-borrar" data-id="'+c.id+'">Borrar cliente</button>'
+        : '<span class="mini" title="Tiene historial: se archiva, no se borra">No se puede borrar: tiene historial</span>')+
+      '</div>';
+  }
+  h += '<div class="panel"><div class="panel-h"><h2>'+esc(c.nombre)+'</h2>'+
+       (c.contrato?'<span class="chip ok sin">Contrato</span>':'')+
+       (c.archivado?'<span class="chip gris sin">Archivado</span>':'')+'</div><dl class="datos">';
+  if (c.archivado)
+    h += '<div><dt>Archivado</dt><dd>'+fechaHora(c.archivado_en)+(c.archivado_por?(' por '+esc(c.archivado_por)):'')+'</dd></div>';
   [['NIF',c.nif],['Teléfono',c.telefono],['Correo',c.email],['Dirección',c.direccion],['Población',c.poblacion],['Tipo',c.tipo]]
     .forEach(f => { if (f[1]) h += '<div><dt>'+f[0]+'</dt><dd>'+esc(f[1])+'</dd></div>'; });
   h += '</dl>';
@@ -1604,7 +1823,8 @@ function vistaEtiquetas(){
 /* ---- Gestión (solo administrador) ---- */
 function vistaGestion(){
   const mes = S.mesGestion || mesActual();
-  const cerradas = S.avisos.filter(a => a.cerrado);
+  // Una visita anulada no se hizo: no entra en facturación, coste ni margen.
+  const cerradas = S.avisos.filter(a => a.cerrado && !a.anulada);
   const delMes = cerradas.filter(a => mesDe(a.cerrado) === mes);
   const meses = [...new Set(cerradas.map(a => mesDe(a.cerrado)))].sort().reverse().slice(0, 18);
   if (!meses.includes(mes)) meses.unshift(mes);
@@ -1763,18 +1983,26 @@ function vistaEquipo(){
   let h = '<div class="stack"><div class="panel"><div class="panel-h"><h2>Técnicos con acceso</h2><span class="mini">'+S.equipo.length+'</span></div>';
   if (!S.equipo.length) h += '<p class="muted" style="margin:0">Todavía no hay técnicos dados de alta.</p>';
   else {
-    h += '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Nombre</th><th>Rol</th><th>Estado</th><th></th></tr></thead><tbody>';
+    h += '<div class="tabla-wrap"><table class="tabla"><thead><tr><th style="width:62px">Foto</th><th>Nombre</th><th>Rol</th><th>Estado</th><th></th></tr></thead><tbody>';
     S.equipo.forEach(t => {
       const rolCelda = t.rol === 'admin'
         ? 'Administrador'
         : '<select class="cal-sel" data-act="equipo-rol" data-id="'+t.id+'">'+
           '<option value="tecnico"'+(t.rol==='tecnico'?' selected':'')+'>Técnico</option>'+
           '<option value="oficina"'+(t.rol==='oficina'?' selected':'')+'>Oficina</option></select>';
-      h += '<tr><td>'+esc(t.nombre||'—')+'</td><td>'+rolCelda+'</td>'+
+      h += '<tr><td>'+caraTec(t.id, true)+
+           '<div style="margin-top:4px"><label class="btn sm plana" style="cursor:pointer;padding:3px 7px;font-size:12px">'+
+             (t.foto_ruta?'Cambiar':'Poner')+
+             '<input type="file" accept="image/*" hidden data-act="subir-cara" data-id="'+t.id+'"></label>'+
+             (t.foto_ruta?'<button class="btn sm plana" style="padding:3px 7px;font-size:12px" data-act="quitar-cara" data-id="'+t.id+'">Quitar</button>':'')+
+           '</div></td>'+
+           '<td>'+esc(t.nombre||'—')+'</td><td>'+rolCelda+'</td>'+
            '<td>'+(t.activo?'<span class="chip ok sin">Activo</span>':'<span class="chip gris sin">Sin acceso</span>')+'</td>'+
            '<td style="text-align:right">'+(t.rol==='admin'?'':'<button class="btn sm" data-act="equipo-activo" data-id="'+t.id+'" data-v="'+(t.activo?'0':'1')+'">'+(t.activo?'Quitar acceso':'Dar acceso')+'</button>')+'</td></tr>';
     });
     h += '</tbody></table></div>';
+    h += '<p class="mini" style="margin:10px 0 0">La foto sale junto a cada asistencia y en el parte que firma el cliente, '+
+         'así que conviene una foto de carné, de frente y con buena luz. Se recorta en cuadrado y se guarda reducida.</p>';
   }
   h += '</div>';
   h += '<p class="mini" style="margin:-4px 0 0">'+
@@ -1976,6 +2204,57 @@ function reducir(file, max=1600, calidad=0.82){
     img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Imagen no válida')); };
     img.src = url;
   });
+}
+
+/* Foto de carné: recorta el centro en cuadrado y la deja en 320 px. Así pesa
+   poco y se ve igual de bien en la lista, en el móvil y en el parte impreso. */
+function cuadrada(file, lado = 320, calidad = 0.85){
+  return new Promise((res, rej) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const l = Math.min(img.width, img.height);
+      const sx = Math.round((img.width - l) / 2), sy = Math.round((img.height - l) / 2);
+      const c = document.createElement('canvas');
+      c.width = c.height = lado;
+      const cx = c.getContext('2d');
+      cx.imageSmoothingQuality = 'high';
+      cx.drawImage(img, sx, sy, l, l, 0, 0, lado, lado);
+      URL.revokeObjectURL(url);
+      c.toBlob(b => b ? res(b) : rej(new Error('No se pudo procesar la imagen')), 'image/jpeg', calidad);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Imagen no válida')); };
+    img.src = url;
+  });
+}
+
+async function subirCara(tecnicoId, file){
+  if (!file) return;
+  if (!/^image\//.test(file.type)) { toast('Eso no es una imagen.'); return; }
+  toast('Subiendo la foto…');
+  try {
+    const blob = await cuadrada(file);
+    const ruta = tecnicoId + '/cara-' + Date.now() + '.jpg';
+    const { error } = await sb.storage.from('equipo')
+      .upload(ruta, blob, { contentType:'image/jpeg', upsert:true });
+    if (error) throw error;
+    const t = S.equipo.find(x => x.id === tecnicoId) || {};
+    const vieja = t.foto_ruta;
+    const { error: e2 } = await sb.from('perfiles').update({ foto_ruta: ruta }).eq('id', tecnicoId);
+    if (e2) throw e2;
+    if (vieja && vieja !== ruta) { try { await sb.storage.from('equipo').remove([vieja]); } catch(_){} }
+    await cargar(); toast('Foto puesta.');
+  } catch(e){ fallo(e); }
+}
+
+async function quitarCara(tecnicoId){
+  const t = S.equipo.find(x => x.id === tecnicoId);
+  if (!t || !t.foto_ruta) return;
+  try {
+    const { error } = await sb.from('perfiles').update({ foto_ruta: null }).eq('id', tecnicoId);
+    if (error) throw error;
+    try { await sb.storage.from('equipo').remove([t.foto_ruta]); } catch(_){}
+    await cargar(); toast('Foto quitada.');
+  } catch(e){ fallo(e); }
 }
 
 /* ================= Documentación ================= */
@@ -2222,9 +2501,12 @@ function dlgEstado(id){
 
 function dlgAviso(puertaId, avisoId, clienteId, fecha){
   const a = avisoId ? S.avisos.find(x => x.id === avisoId) : null;
-  const d = a || { tipo:'averia', estado:'recibido', prioridad:'normal', origen:'Teléfono',
+  // Una avería nueva nace asignada al administrador, para que no se quede sin
+  // dueño. Se puede cambiar aquí mismo antes de guardar.
+  const admin = (S.equipo.find(t => t.rol === 'admin' && t.activo) || {}).id || null;
+  const d = a || { tipo:'averia', estado: admin ? 'asignado' : 'recibido', prioridad:'normal', origen:'Teléfono',
                    puerta_id: puertaId || null, cliente_id: clienteId || null,
-                   fecha_prevista: fecha || null };
+                   tecnico_id: admin, fecha_prevista: fecha || null };
   const tipos = lista('tipos_asistencia', Object.keys(ASISTENCIAS));
   const puertasOrd = S.puertas.slice().sort((x,y)=> (x.codigo||'') < (y.codigo||'') ? -1 : 1);
   let h = '<h3>'+(a ? 'Asistencia '+esc(tipoAsis(d.tipo)) : 'Nueva asistencia')+'</h3>';
@@ -2268,8 +2550,13 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
     '<div class="campo"><label for="a-fecha">Visita prevista</label><input id="a-fecha" type="date" value="'+esc(d.fecha_prevista||'')+'"></div>'+
     '</div></div>';
 
+  if (a && a.anulada)
+    h += '<p class="nota-oficina" style="margin:0 0 10px"><b>Anulada</b> el '+fechaHora(a.anulada_en)+
+         (a.anulada_por?(' por '+esc(a.anulada_por)):'')+'. Motivo: '+esc(a.anulada_motivo||'')+'</p>';
+
   h += '<p class="err"></p><div class="pie">'+
     (a && !a.cerrado ? '<button type="button" class="btn" data-act="cerrar-asistencia" data-id="'+a.id+'">Cerrar visita</button>' : '')+
+    (a && !a.cerrado && esGestion() ? '<button type="button" class="btn plana" data-act="aviso-anular" data-id="'+a.id+'">Anular sin parte</button>' : '')+
     '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button><button type="submit" class="btn pri">Guardar</button></div>';
 
   abrirDlg(h, async () => {
@@ -2764,6 +3051,63 @@ function filaMaterial(m){
     '<button type="button" class="btn sm plana" data-act="mat-quitar">✕</button></div>';
 }
 
+/* Anular: cerrar una visita que no se va a hacer, sin rellenar el parte.
+   Queda el motivo escrito y no entra ni en facturación ni en el margen. */
+const MOTIVOS_ANULAR = [
+  'El cliente lo ha resuelto por su cuenta',
+  'El cliente no quiere repararla',
+  'Aviso duplicado',
+  'Creada por error',
+  'No hemos conseguido localizar al cliente',
+  'La puerta ya no es de este cliente',
+  'Se ha sustituido por otra asistencia',
+];
+function dlgAnular(id){
+  const a = S.avisos.find(x => x.id === id);
+  if (!a) return;
+  if (a.firma_ruta){ toast('Esta visita ya está firmada por el cliente: no se puede anular.'); return; }
+  const h = '<h3>Anular la asistencia</h3>'+
+    '<p class="mini" style="margin:0 0 12px">'+esc(tipoAsis(a.tipo))+' · '+esc(nombreCliente(a))+
+      (dondeAsistencia(a) ? ' · '+esc(dondeAsistencia(a)) : '')+'</p>'+
+    '<div class="campos">'+
+    '<div class="campo full"><label for="an-motivo">Por qué no se hace</label>'+
+      '<select id="an-motivo"><option value="">Elige el motivo</option>'+
+      MOTIVOS_ANULAR.map(m => '<option value="'+esc(m)+'">'+esc(m)+'</option>').join('')+
+      '<option value="otro">Otro motivo, lo escribo</option></select></div>'+
+    '<div class="campo full"><label for="an-texto">Detalle, si hace falta</label>'+
+      '<textarea id="an-texto" rows="2" maxlength="300" placeholder="Lo que quieras dejar anotado"></textarea>'+
+      '<span class="pista">Queda guardado con tu nombre y la fecha. La visita se cierra sin parte.</span></div>'+
+    '</div><p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Dejarla abierta</button>'+
+    '<button type="submit" class="btn pri">Anular la asistencia</button></div>';
+  abrirDlg(h, async () => {
+    const sel = val('an-motivo'), txt = val('an-texto').trim();
+    const motivo = sel === 'otro' ? txt : [sel, txt].filter(Boolean).join('. ');
+    if (!sel) return setErr('Elige el motivo por el que no se hace.');
+    if (motivo.trim().length < 3) return setErr('Escribe el motivo.');
+    try {
+      const { data, error } = await sb.rpc('anular_asistencia', { p_aviso: a.id, p_motivo: motivo });
+      if (error) throw error;
+      if (!data || !data.ok) return setErr(textoFallo(data));
+      cerrarDlg(); await cargar(); toast('Asistencia anulada.');
+    } catch(e){ setErr(e.message); }
+  });
+}
+
+/* Traduce a palabras lo que devuelven las funciones de la base de datos */
+function textoFallo(d){
+  const m = d && d.motivo;
+  if (m === 'permiso')         return 'Esto solo lo puede hacer el administrador.';
+  if (m === 'no_existe')       return 'Ya no existe: puede que lo haya borrado otra persona. Recarga la pantalla.';
+  if (m === 'firmada')         return 'Está firmada por el cliente, así que no se borra. Archívala.';
+  if (m === 'ya_firmada')      return 'Está firmada por el cliente: no se puede anular.';
+  if (m === 'sin_motivo')      return 'Falta el motivo.';
+  if (m === 'no_anulada')      return 'Esta asistencia no está anulada.';
+  if (m === 'tiene_historial') return 'Tiene '+(d.puertas||0)+' puerta(s), '+(d.avisos||0)+' asistencia(s) y '+
+                                      (d.contratos||0)+' contrato(s). No se borra: archívalo.';
+  return 'No se ha podido completar.';
+}
+
 function dlgCierre(avisoId){
   const a = S.avisos.find(x => x.id === avisoId);
   if (!a) return;
@@ -3156,6 +3500,17 @@ async function hojaParte(avisoId){
     const { data } = await sb.storage.from('firmas').createSignedUrl(a.firma_ruta, 3600);
     if (data) firma = data.signedUrl;
   }
+  // La cara del técnico que ha hecho la visita, para que el cliente sepa quién
+  // ha estado en su casa. Si no tiene foto puesta, el parte sale igual.
+  const tec = a.tecnico_id ? (S.equipo.find(t => t.id === a.tecnico_id) || null) : null;
+  const nomTec = (tec && tec.nombre) || a.tecnico || '';
+  let caraUrl = '';
+  if (tec && tec.foto_ruta){
+    try {
+      const { data } = await sb.storage.from('equipo').createSignedUrl(tec.foto_ruta, 3600);
+      if (data) caraUrl = data.signedUrl;
+    } catch(_){}
+  }
   const w = window.open('', '_blank');
   if (!w){ toast('El navegador ha bloqueado la ventana.'); return; }
   const fila = (k, v) => v ? '<tr><th>'+esc(k)+'</th><td>'+esc(v)+'</td></tr>' : '';
@@ -3167,9 +3522,18 @@ async function hojaParte(avisoId){
     'table{border-collapse:collapse;width:100%;margin:4px 0}th,td{text-align:left;padding:4px 8px;vertical-align:top;border-bottom:1px solid #eee}'+
     'th{width:170px;color:#6B6560;font-weight:500}'+
     '.mats th{width:auto;background:#f6f5f3}.firma{border:1px solid #ddd;border-radius:6px;max-width:320px;margin-top:6px}'+
+    '.quien{display:flex;align-items:center;gap:10px;margin:4px 0 0}'+
+    '.quien img{width:54px;height:54px;border-radius:50%;object-fit:cover;border:1px solid #ddd}'+
+    '.quien .ini{width:54px;height:54px;border-radius:50%;background:#f0eeec;color:#6B6560;'+
+      'display:flex;align-items:center;justify-content:center;font:700 18px sans-serif;border:1px solid #ddd}'+
     '@media print{body{padding:0}}</style></head><body>'+
     '<div class="cab"><div><h1>Parte de asistencia</h1><div>'+esc(tipoAsis(a.tipo))+' · '+fechaHora(a.creado)+'</div></div>'+
     '<div style="text-align:right"><b>ARIZA</b> puertas automáticas<br><span style="color:#6B6560">arizapa.es</span></div></div>'+
+    (nomTec ? ('<div class="quien">'+
+      (caraUrl ? '<img src="'+caraUrl+'" alt="'+esc(nomTec)+'">'
+               : '<div class="ini">'+esc(inicialesTec(nomTec))+'</div>')+
+      '<div><div style="color:#6B6560;font-size:11px;text-transform:uppercase;letter-spacing:.04em">Técnico que ha realizado la visita</div>'+
+      '<div style="font-weight:600;font-size:15px">'+esc(nomTec)+'</div></div></div>') : '')+
     '<h2>Cliente y puerta</h2><table>'+
       fila('Cliente', cli ? cli.nombre : nombreCliente(a))+
       fila('NIF', cli && cli.nif)+
@@ -3467,6 +3831,78 @@ raiz.addEventListener('click', async e => {
   else if (a === 'cerrar-asistencia') dlgCierre(b.dataset.id);
   else if (a === 'parte') hojaParte(b.dataset.id);
   else if (a === 'asignar') dlgAsignar(b.dataset.id);
+  else if (a === 'aviso-anular') dlgAnular(b.dataset.id);
+  else if (a === 'filtra-tec'){ S.filtroTec = b.dataset.v || ''; pintar(); }
+  else if (a === 'cli-archivados'){ S.cliArchivados = !S.cliArchivados; S.buscaCli = ''; pintar(); }
+  else if (a === 'hist-archivadas'){ S.histArchivadas = !S.histArchivadas; pintar(); }
+  else if (a === 'hist-limpiar'){
+    S.histBusca=''; S.histTec=''; S.histTipo=''; S.histDesde=''; S.histHasta=''; pintar();
+  }
+  else if (a === 'hist-rango'){
+    S.histDesde = iso(sumaDias(new Date(), -(+b.dataset.n))); S.histHasta = ''; pintar();
+  }
+  else if (a === 'aviso-duplicar'){
+    try {
+      const { data, error } = await sb.rpc('duplicar_asistencia', { p_aviso: b.dataset.id });
+      if (error) throw error;
+      await cargar();
+      toast('Copia creada. Repasa la fecha y lo que hay que hacer.');
+      if (data) dlgAviso(null, data);
+    } catch(err){ fallo(err); }
+  }
+  else if (a === 'aviso-reabrir'){
+    if (!armar(b, 'Confirmar')) return;
+    try {
+      const { data, error } = await sb.rpc('reabrir_asistencia', { p_aviso: b.dataset.id });
+      if (error) throw error;
+      if (!data || !data.ok) { toast(textoFallo(data)); return; }
+      await cargar(); toast('Vuelve a estar abierta.');
+    } catch(err){ fallo(err); }
+  }
+  else if (a === 'aviso-archivar'){
+    try {
+      const { data, error } = await sb.rpc('archivar_asistencia',
+        { p_aviso: b.dataset.id, p_archivar: b.dataset.v === '1' });
+      if (error) throw error;
+      if (!data || !data.ok) { toast(textoFallo(data)); return; }
+      await cargar(); toast(b.dataset.v === '1' ? 'Archivada.' : 'Fuera del archivo.');
+    } catch(err){ fallo(err); }
+  }
+  else if (a === 'aviso-borrar'){
+    if (!armar(b, 'Borrar de verdad')) return;
+    try {
+      const { data, error } = await sb.rpc('borrar_asistencia', { p_aviso: b.dataset.id });
+      if (error) throw error;
+      if (!data || !data.ok) { toast(textoFallo(data)); return; }
+      await cargar(); toast('Asistencia borrada.');
+    } catch(err){ fallo(err); }
+  }
+  else if (a === 'cliente-archivar'){
+    try {
+      const { data, error } = await sb.rpc('archivar_cliente',
+        { p_cliente: b.dataset.id, p_archivar: b.dataset.v === '1' });
+      if (error) throw error;
+      if (!data || !data.ok) { toast(textoFallo(data)); return; }
+      await cargar();
+      toast(b.dataset.v === '1'
+        ? 'Cliente archivado. Su historial se conserva.'
+        : 'Cliente otra vez activo.');
+    } catch(err){ fallo(err); }
+  }
+  else if (a === 'cliente-borrar'){
+    if (!armar(b, 'Borrar de verdad')) return;
+    try {
+      const { data, error } = await sb.rpc('borrar_cliente', { p_cliente: b.dataset.id });
+      if (error) throw error;
+      if (!data || !data.ok) { toast(textoFallo(data)); return; }
+      S.fichaCliente = null;
+      await cargar(); toast('Cliente borrado.');
+    } catch(err){ fallo(err); }
+  }
+  else if (a === 'quitar-cara'){
+    if (!armar(b, 'Confirmar')) return;
+    await quitarCara(b.dataset.id);
+  }
   else if (a === 'ir-avisos'){ S.tab = 'avisos'; S.tabElegida = true; pintar(); window.scrollTo({top:0}); }
   else if (a === 'con-filtro'){ S.conFiltro = b.dataset.f; pintar(); }
   else if (a === 'contrato-hoja') await hojaContrato(b.dataset.id);
@@ -3491,7 +3927,7 @@ raiz.addEventListener('click', async e => {
     if (!armar(b, 'Confirmar')) return;
     b.disabled = true; b.textContent = 'Calculando…';
     try {
-      const sinValorar = S.avisos.filter(x => x.cerrado && !valoracionDe(x.id));
+      const sinValorar = S.avisos.filter(x => x.cerrado && !x.anulada && !valoracionDe(x.id));
       for (const x of sinValorar) await sb.rpc('valorar_aviso', { p_aviso: x.id });
       await cargar(); toast(sinValorar.length + ' visitas valoradas.');
     } catch(err){ fallo(err); b.disabled = false; b.textContent = 'Recalcular'; }
@@ -3641,6 +4077,7 @@ raiz.addEventListener('input', e => {
   if (e.target.dataset.act === 'busca'){ S.busca = e.target.value; pintar(); }
   if (e.target.dataset.act === 'busca-cli'){ S.buscaCli = e.target.value; pintar(); }
   if (e.target.dataset.act === 'busca-con'){ S.buscaCon = e.target.value; pintar(); }
+  if (e.target.dataset.act === 'busca-hist'){ S.histBusca = e.target.value; pintar(); }
 });
 raiz.addEventListener('change', e => {
   if (e.target.dataset.act === 'equipo-rol'){
@@ -3655,6 +4092,13 @@ raiz.addEventListener('change', e => {
     return;
   }
   if (e.target.dataset.act === 'filtro-tec'){ S.filtroTec = e.target.value; pintar(); return; }
+  if (e.target.dataset.act === 'hist-tec'){ S.histTec = e.target.value; pintar(); return; }
+  if (e.target.dataset.act === 'hist-tipo'){ S.histTipo = e.target.value; pintar(); return; }
+  if (e.target.dataset.act === 'hist-desde'){ S.histDesde = e.target.value; pintar(); return; }
+  if (e.target.dataset.act === 'hist-hasta'){ S.histHasta = e.target.value; pintar(); return; }
+  if (e.target.dataset.act === 'subir-cara' && e.target.files.length){
+    subirCara(e.target.dataset.id, e.target.files[0]); e.target.value = '';
+  }
   if (e.target.dataset.act === 'cal-tec'){ S.calTec = e.target.value; pintar(); return; }
   if (e.target.dataset.act === 'guion-tipo'){ S.guionTipo = e.target.value; pintar(); return; }
   if (e.target.dataset.act === 'gestion-mes'){ S.mesGestion = e.target.value; pintar(); return; }
@@ -3755,6 +4199,7 @@ dlgForm.addEventListener('click', async e => {
     return;
   }
   if (a === 'cerrar-asistencia'){ cerrarDlg(); dlgCierre(b.dataset.id); return; }
+  if (a === 'aviso-anular'){ cerrarDlg(); dlgAnular(b.dataset.id); return; }
   if (a === 'pl-siguiente'){
     const f = new Date(); f.setMonth(f.getMonth() + (+b.dataset.meses || 12));
     const campo = document.getElementById('pl-fecha');
