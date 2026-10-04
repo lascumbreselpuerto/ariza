@@ -493,7 +493,7 @@ const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etique
             contratos:[], contratoPuertas:[], ficha:null, fichaCliente:null, cargando:true, busca:'', buscaCli:'', filtroTec:'', sugerencias:[],
             guionTipo:'', tarifas:null, catalogo:[], valoraciones:{}, resumen:null, mesGestion:'',
             calVista:'mes', calAncla:null, calTec:'', buscaCon:'', conFiltro:'activos', borradorPuerta:null,
-            expedientes:[], expFotos:[], exp:null, expPaso:'obra', expSucio:false,
+            expedientes:[], expFotos:[], expDocs:[], exp:null, expPaso:'obra', expSucio:false,
             fotosEquipo:{}, histBusca:'', histTec:'', histTipo:'', histDesde:'', histHasta:'', histArchivadas:false,
             cliArchivados:false };
 /* Importes: solo existen para el administrador. Si no hay tarifas cargadas, no se enseña nada. */
@@ -2804,6 +2804,7 @@ function expSecciones(e){
   ];
   if (expVal('puerta.motorizada', 'si') === 'si') s.push(['fuerzas', 'Ensayo de fuerzas']);
   if (EXP_ES_FABRICANTE(e.situacion)) s.push(['prestaciones', 'Prestaciones declaradas']);
+  s.push(['docs', 'Documentación de fabricantes']);
   s.push(['riesgos', e.situacion === 'adecuacion' ? 'Riesgos y deficiencias' : 'Riesgos residuales']);
   s.push(['entrega', 'Entrega y firma']);
   return s;
@@ -2847,6 +2848,8 @@ function vistaExpediente(id){
   let h = '<div class="stack">';
   h += '<div class="fila"><button class="btn plana" data-act="exp-volver">‹ Volver</button>'+
        '<span class="sp"></span><span class="mini" id="exp-guardado"></span>'+
+       '<button class="btn sm plana" data-act="exp-marcado" data-id="'+e.id+'">Marcado CE</button>'+
+       '<button class="btn sm plana" data-act="exp-libro-mant" data-id="'+e.id+'">Libro de mantenimiento</button>'+
        '<button class="btn" data-act="exp-libro" data-id="'+e.id+'">Ver el libro</button>'+
        (esGestion() && e.estado !== 'emitido'
          ? '<button class="btn pri" data-act="exp-emitir" data-id="'+e.id+'">Emitir</button>' : '')+
@@ -2899,6 +2902,7 @@ function vistaExpediente(id){
   else if (actual === 'cumplimiento') h += expSecCumplimiento(e);
   else if (actual === 'fuerzas')  h += expSecFuerzas(e);
   else if (actual === 'prestaciones') h += expSecPrestaciones(e);
+  else if (actual === 'docs')     h += expSecDocs(e);
   else if (actual === 'riesgos')  h += expSecRiesgos(e);
   else if (actual === 'entrega')  h += expSecEntrega(e);
   h += '</div>';
@@ -3021,6 +3025,45 @@ function expSecComponentes(e){
            expTxt('comp.'+k+'.nota', 'Por qué no lo lleva y qué consecuencia tiene', '', 1)+'</div>';
     h += '</div>';
   });
+
+  /* Elementos que no están en la lista de fábrica: se añaden aquí mismo */
+  const extras = Object.entries(((e.datos||{}).compx) || {});
+  extras.forEach(([k, x]) => {
+    h += '<div class="exp-item'+((x.estado==='no')?' falta':'')+'">'+
+      '<div class="fila" style="gap:8px;flex-wrap:wrap;align-items:baseline">'+
+        '<input type="text" list="cat-articulos" placeholder="Qué elemento es" '+
+          'style="flex:1 1 220px;font-weight:600" data-exp="compx.'+k+'.nombre" value="'+esc(x.nombre||'')+'">'+
+        '<select data-exp="compx.'+k+'.estado" class="cal-sel">'+
+          '<option value=""'  +(!x.estado    ?' selected':'')+'>Sin contestar</option>'+
+          '<option value="si"'+(x.estado==='si'?' selected':'')+'>Instalado</option>'+
+          '<option value="no"'+(x.estado==='no'?' selected':'')+'>No lo lleva</option>'+
+          '<option value="na"'+(x.estado==='na'?' selected':'')+'>No aplica</option>'+
+        '</select>'+
+        '<button class="btn sm plana" data-act="exp-comp-quitar" data-k="'+esc(k)+'">Quitar</button>'+
+      '</div>';
+    if (x.estado === 'si'){
+      h += '<div class="campos" style="margin-top:8px">'+
+        expTxt('compx.'+k+'.marca', 'Marca')+
+        expTxt('compx.'+k+'.modelo', 'Modelo')+
+        expTxt('compx.'+k+'.serie', 'Nº de serie o lote')+
+        expTxt('compx.'+k+'.nota', 'Observación', '', 1)+'</div>';
+      h += expFotoBloque('comp:'+k, 'Foto de ' + ((x.nombre||'este elemento').toLowerCase()), '');
+    }
+    if (x.estado === 'no')
+      h += '<div class="campos" style="margin-top:8px">'+
+           expTxt('compx.'+k+'.nota', 'Por qué no lo lleva y qué consecuencia tiene', '', 1)+'</div>';
+    h += '</div>';
+  });
+
+  // Sugerencias del catálogo de materiales, para no escribirlo todo a mano
+  h += '<datalist id="cat-articulos">'+
+    S.catalogo.slice(0, 300).map(a => '<option value="'+esc(a.descripcion)+'">').join('')+
+    '</datalist>'+
+    '<div class="fila" style="margin-top:4px"><span class="sp"></span>'+
+    '<button class="btn" data-act="exp-comp-anadir">Añadir otro elemento</button></div>'+
+    '<p class="mini" style="margin:8px 0 0">Para lo que no esté en la lista: un detector concreto, un '+
+    'accesorio, una protección que hayas tenido que fabricar. Al escribir te sugiere los materiales '+
+    'que ya tienes en el catálogo.</p>';
   return h;
 }
 
@@ -3071,7 +3114,21 @@ function expSecCumplimiento(e){
 function expSecFuerzas(e){
   const lim = limitesFuerza();
   const puntos = EXP_PUNTOS_FUERZA[e.familia] || EXP_PUNTOS_FUERZA.industrial;
-  let h = '<div class="panel-h"><h3>Ensayo de fuerzas</h3></div>'+
+  const incluir = expVal('fuerzas.incluir', 'si') !== 'no';
+  let h = '<div class="panel-h"><h3>Ensayo de fuerzas</h3>'+
+    (incluir ? '<span class="chip ok sin">Va en el libro</span>'
+             : '<span class="chip gris sin">Fuera del libro</span>')+'</div>'+
+    '<div class="campos" style="margin:0 0 14px">'+
+    expSel('fuerzas.incluir', '¿Se incluye el ensayo en el libro?',
+      [['si','Sí, se imprime en el libro'], ['no','No, no se imprime']],
+      'Lo que midas se guarda igualmente aunque no se imprima')+
+    '</div>'+
+    (!incluir
+      ? '<p class="nota-oficina" style="margin:0 0 14px">El ensayo no saldrá en el libro. '+
+        'Ten en cuenta que, en una puerta motorizada, las fuerzas de maniobra son una de las características '+
+        'que se declaran en la declaración de prestaciones, así que conviene tener el ensayo hecho aunque '+
+        'decidas no imprimirlo.</p>'
+      : '')+
     '<p class="mini" style="margin:0 0 6px">Mide en cada punto y apunta lo que marque el instrumento. '+
     'La aplicación compara sola con los límites y te dice si pasa.</p>'+
     '<p class="nota-oficina" style="margin:0 0 14px">Los límites de abajo proceden de reproducciones '+
@@ -3347,7 +3404,7 @@ function dlgExpedienteNuevo(puertaId){
       if (!data || !data.ok) return setErr(textoFallo(data));
       cerrarDlg(); await cargar();
       S.exp = data.id; S.expPaso = 'obra'; S.ficha = null;
-      await cargarFotosExp(data.id);
+      await cargarFotosExp(data.id); await cargarDocsExp(data.id);
       pintar(); window.scrollTo({top:0});
       toast('Expediente ' + (data.referencia||'') + ' abierto.');
     } catch(err){ setErr(err.message); }
@@ -3395,6 +3452,371 @@ function dlgEmitirExpediente(id){
   });
 }
 
+/* ---- Documentación de los fabricantes de los elementos instalados ---- */
+const TIPOS_DOC_FAB = ['Declaración de conformidad', 'Declaración de prestaciones',
+  'Manual de instrucciones', 'Certificado de ensayo', 'Ficha técnica',
+  'Certificado de organismo notificado', 'Otro'];
+
+async function cargarDocsExp(id){
+  const { data, error } = await sb.from('expediente_docs').select('*')
+    .eq('expediente_id', id).order('orden');
+  S.expDocs = error ? [] : (data || []);
+}
+
+async function subirDocsExp(ficheros){
+  const e = expDe(S.exp); if (!e) return;
+  toast('Subiendo ' + ficheros.length + ' documento' + (ficheros.length===1?'':'s') + '…');
+  let n = S.expDocs.length;
+  for (const f of ficheros){
+    try {
+      const limpio = (f.name || 'documento').replace(/[^a-zA-Z0-9._-]/g, '_').slice(-60);
+      const ruta = e.id + '/docs/' + Date.now() + '-' + (n++) + '-' + limpio;
+      const { error } = await sb.storage.from('expedientes')
+        .upload(ruta, f, { contentType: f.type || 'application/octet-stream', upsert:true });
+      if (error) throw error;
+      const { error: e2 } = await sb.from('expediente_docs').insert({
+        expediente_id: e.id, ruta, nombre: f.name || limpio, mime: f.type || '',
+        tipo_doc: 'Declaración de conformidad', orden: n, autor: yo() });
+      if (e2) throw e2;
+    } catch(err){ fallo(err); }
+  }
+  await cargarDocsExp(e.id);
+  pintar();
+  toast('Documentos añadidos.');
+}
+
+function expSecDocs(e){
+  const comps = EXP_COMPONENTES[e.familia] || [];
+  const extras = Object.entries(((e.datos||{}).compx) || {});
+  const nombres = comps.map(c => c[1]).concat(extras.map(([, x]) => x.nombre || '').filter(Boolean));
+  const docs = S.expDocs || [];
+  let h = '<div class="panel-h"><h3>Documentación de los fabricantes</h3>'+
+    '<span class="mini">'+docs.length+'</span>'+
+    '<span class="sp"></span><label class="btn sm pri" style="cursor:pointer">Subir documentos'+
+    '<input type="file" multiple hidden accept=".pdf,image/*" data-act="exp-subir-doc"></label></div>'+
+    '<p class="mini" style="margin:0 0 6px">Las declaraciones de conformidad, declaraciones de prestaciones '+
+    'y manuales de los fabricantes de cada elemento que has instalado. El libro del cliente lleva un anexo '+
+    'que los relaciona uno a uno.</p>'+
+    '<p class="nota-oficina" style="margin:0 0 14px">Un PDF no se puede meter dentro del libro que genera la '+
+    'aplicación. Lo que hace el libro es listarlos en el anexo con su fabricante, elemento y referencia; '+
+    'los PDF se imprimen aparte con el botón de abajo y se encuadernan detrás.</p>';
+
+  if (!docs.length){
+    h += '<p class="muted" style="margin:0">Todavía no has subido ninguno. Sube los PDF tal cual te los '+
+         'manda el fabricante: luego les pones a qué elemento corresponden.</p>';
+    return h;
+  }
+
+  h += '<div class="lista-docs">';
+  docs.forEach(d => {
+    const esPdf = /pdf/i.test(d.mime || '') || /\.pdf$/i.test(d.nombre || '');
+    h += '<div class="exp-item"><div class="fila" style="gap:8px;flex-wrap:wrap;align-items:baseline">'+
+      '<span class="chip '+(esPdf?'gris':'ok')+' sin">'+(esPdf?'PDF':'Imagen')+'</span>'+
+      '<b style="flex:1 1 200px;word-break:break-all">'+esc(d.nombre||'documento')+'</b>'+
+      '<button class="btn sm plana" data-act="exp-ver-doc" data-id="'+d.id+'">Abrir</button>'+
+      '<button class="btn sm plana" data-act="exp-quitar-doc" data-id="'+d.id+'">Quitar</button>'+
+      '</div><div class="campos" style="margin-top:8px">'+
+      '<div class="campo"><label>Elemento al que corresponde</label>'+
+        '<input type="text" list="lista-elementos" data-doc="elemento" data-id="'+d.id+'" value="'+esc(d.elemento||'')+'"></div>'+
+      '<div class="campo"><label>Fabricante</label>'+
+        '<input type="text" data-doc="fabricante" data-id="'+d.id+'" value="'+esc(d.fabricante||'')+'"></div>'+
+      '<div class="campo"><label>Tipo de documento</label>'+
+        '<select data-doc="tipo_doc" data-id="'+d.id+'">'+
+        TIPOS_DOC_FAB.map(t => '<option value="'+esc(t)+'"'+(d.tipo_doc===t?' selected':'')+'>'+esc(t)+'</option>').join('')+
+        '</select></div>'+
+      '<div class="campo"><label>Referencia o número</label>'+
+        '<input type="text" data-doc="referencia" data-id="'+d.id+'" value="'+esc(d.referencia||'')+'"></div>'+
+      '<div class="campo"><label>Fecha del documento</label>'+
+        '<input type="date" data-doc="fecha_doc" data-id="'+d.id+'" value="'+esc(d.fecha_doc||'')+'"></div>'+
+      '</div></div>';
+  });
+  h += '</div>'+
+    '<datalist id="lista-elementos">'+nombres.map(n => '<option value="'+esc(n)+'">').join('')+'</datalist>'+
+    '<div class="fila" style="margin-top:12px"><span class="sp"></span>'+
+    '<button class="btn" data-act="exp-abrir-docs">Abrir todos para imprimir</button></div>'+
+    '<p class="mini" style="margin:8px 0 0">Se abren en pestañas aparte. Imprímelos y colócalos detrás del '+
+    'anexo del libro, en el mismo orden en que aparecen en la lista.</p>';
+  return h;
+}
+
+async function abrirDocsExp(){
+  const docs = S.expDocs || [];
+  if (!docs.length) return;
+  try {
+    const { data } = await sb.storage.from('expedientes')
+      .createSignedUrls(docs.map(d => d.ruta), 7200);
+    let n = 0;
+    (data||[]).forEach(x => { if (x && x.signedUrl){ window.open(x.signedUrl, '_blank'); n++; } });
+    toast(n + ' documento' + (n===1?'':'s') + ' abierto' + (n===1?'':'s') + '.');
+  } catch(err){ fallo(err); }
+}
+
+async function verDocExp(id){
+  const d = (S.expDocs||[]).find(x => x.id === id);
+  if (!d) return;
+  try {
+    const { data } = await sb.storage.from('expedientes').createSignedUrl(d.ruta, 3600);
+    if (data && data.signedUrl) window.open(data.signedUrl, '_blank');
+  } catch(err){ fallo(err); }
+}
+
+/* ---- Etiqueta de marcado CE ----
+   El marcado sigue siendo CE con el Reglamento (UE) 2023/1230: lo que cambia
+   de nombre es el documento, que pasa de «Declaración CE» a «Declaración UE».
+   Las inscripciones de abajo son las que exige el Reglamento (UE) 305/2011
+   para el producto y la legislación de máquinas para el accionamiento. */
+function etiquetaCE(expId){
+  const e = expDe(expId); if (!e) return;
+  const p = e.puerta_id ? (puertaDe(e.puerta_id) || {}) : {};
+  const et = S.etiquetas.find(x => x.codigo === p.codigo);
+  if (!et){ dlgAsignarQR(expId); return; }
+
+  const em = datosEmpresa();
+  const d = e.datos || {};
+  const pu = d.puerta || {};
+  const marco = marcoDeFecha(e.fecha_puesta_servicio);
+  const M = EXP_MARCO[marco];
+  const motor = pu.motorizada !== 'no';
+  const norma = ((EXP_NORMAS[e.familia]||[])[0]||[''])[0];
+  const anio = (e.fecha_puesta_servicio || new Date().toISOString().slice(0,10)).slice(0,4);
+  const pr = (EXP_PRESTACIONES[e.familia] || []).filter(x => x[3]);
+  const pv = (d.prest||{}).v || {};
+  const url = enlaceQR(p.codigo);
+
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana de impresión.'); return; }
+  const fila = (k, v) => v ? '<tr><th>'+esc(k)+'</th><td>'+esc(v)+'</td></tr>' : '';
+
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
+    '<title>Marcado CE '+esc(p.codigo||'')+'</title><style>'+
+    '@page{size:62mm 100mm;margin:0}'+
+    'html,body{margin:0;padding:0;background:#fff;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
+    'body{font-family:Arial,Helvetica,sans-serif}'+
+    '.eti{width:62mm;height:100mm;box-sizing:border-box;padding:2.6mm 2.6mm;display:flex;'+
+      'flex-direction:column;page-break-after:always}'+
+    '.cab{display:flex;align-items:center;gap:2mm;border-bottom:.5mm solid #000;padding-bottom:1.4mm}'+
+    '.ce{font:700 8mm/1 Arial,sans-serif;letter-spacing:.4mm}'+
+    '.anio{font:700 5mm/1 Arial,sans-serif;margin-left:auto}'+
+    '.emp{font:700 2.9mm/1.2 Arial,sans-serif;margin-top:1mm}'+
+    '.emp small{display:block;font:400 2.3mm/1.3 Arial,sans-serif}'+
+    'table{border-collapse:collapse;width:100%;margin-top:1.4mm}'+
+    'th,td{font:2.3mm/1.25 Arial,sans-serif;text-align:left;padding:.3mm 0;vertical-align:top}'+
+    'th{width:17mm;font-weight:400;color:#333;padding-right:1mm}'+
+    'td{font-weight:700}'+
+    '.sep{border-top:.3mm solid #000;margin:1.2mm 0 0}'+
+    '.pie{margin-top:auto;display:flex;gap:2mm;align-items:flex-end}'+
+    '.qr{width:21mm;height:21mm;flex:0 0 auto;overflow:hidden}'+
+    '.qr svg{width:21mm;height:21mm;display:block}'+
+    '.cod{font:700 4.4mm/1 ui-monospace,"Courier New",monospace;letter-spacing:.2mm}'+
+    '.leg{font:2mm/1.25 Arial,sans-serif;margin-top:.8mm}'+
+    '.barra{position:fixed;top:0;left:0;right:0;background:#1C1817;color:#fff;padding:10px 14px;'+
+      'font:14px -apple-system,Segoe UI,Roboto,sans-serif;display:flex;gap:10px;align-items:center;z-index:9}'+
+    '.barra button{font:inherit;font-weight:600;padding:7px 14px;border:0;border-radius:6px;'+
+      'background:#FCBA1D;color:#1C1817;cursor:pointer}'+
+    '.barra span{font-size:12px;color:#CFCAC6}'+
+    'body{padding-top:52px}@media print{.barra{display:none}body{padding-top:0}}</style></head><body>'+
+    '<div class="barra"><button onclick="window.print()">Imprimir marcado CE</button>'+
+    '<span>Brother QL-500, papel 62 mm x 100 mm, escala 100 %. La forma gráfica exacta del marcado CE '+
+    'está definida en la legislación: esto es una reproducción legible.</span></div>'+
+    '<div class="eti">'+
+      '<div class="cab"><span class="ce">CE</span><span class="anio">'+esc(anio.slice(2))+'</span></div>'+
+      '<div class="emp">'+esc(em.razon_social)+
+        '<small>'+esc([em.nif && ('NIF '+em.nif), em.domicilio, em.cp, em.poblacion].filter(Boolean).join(' · '))+'</small></div>'+
+      '<table>'+
+        fila('Producto', EXP_FAMILIA[e.familia])+
+        fila('Tipo', (d.prest||{}).codigo_tipo || pu.denominacion || pu.modelo)+
+        fila('Modelo', pu.modelo)+
+        fila('Nº serie', pu.serie || p.codigo)+
+        fila('Año fabric.', anio)+
+        fila('Uso previsto', pu.uso_puerta)+
+      '</table><div class="sep"></div><table>'+
+        fila('Norma', norma)+
+        fila('DdP nº', e.referencia)+
+        // Las prestaciones obligatorias van en una sola línea: en 62 mm no caben en tabla
+        fila('Prestaciones', pr.map(([k, nombre]) =>
+          nombre.replace(/ \(.*\)/,'').replace('Resistencia mecánica y estabilidad','Resist. mecánica')
+                .replace('Geometría segura de componentes de vidrio','Vidrio')
+                .replace('Fuerzas de maniobra','Fuerzas').replace('Apertura segura','Apertura seg.')
+                .replace('Capacidad de cierre automático','Autocierre')
+                .replace('Resistencia al fuego','Fuego')
+          + ' ' + (pv[k] || 'NPD')).join(' · '))+
+        fila('Org. notif.', (d.prest||{}).laboratorio)+
+      '</table>'+
+      '<div class="pie"><div class="qr">'+svgQR(url, '21mm')+'</div>'+
+        '<div><div class="cod">'+esc(p.codigo||'')+'</div>'+
+        '<div class="leg">Reglamento (UE) 305/2011'+
+        (motor && M ? '<br>'+esc(M.nombre.split(',')[0]) : '')+
+        (motor ? '<br>Directiva 2014/30/UE' : '')+
+        '<br>'+esc(em.web || 'arizapa.es')+'</div></div></div>'+
+    '</div></body></html>');
+  w.document.close();
+}
+
+/* Si la puerta no tiene QR asignado, se le pone uno de los que estén libres */
+function dlgAsignarQR(expId){
+  const e = expDe(expId); if (!e) return;
+  const p = e.puerta_id ? (puertaDe(e.puerta_id) || {}) : {};
+  const usadas = new Set(S.puertas.map(x => x.codigo).filter(Boolean));
+  const libres = S.etiquetas.filter(x => !usadas.has(x.codigo));
+  if (!libres.length){
+    toast('No quedan etiquetas libres. Genera más en la pestaña Etiquetas.');
+    return;
+  }
+  const h = '<h3>Esta puerta todavía no tiene QR</h3>'+
+    '<p class="mini" style="margin:0 0 12px">El marcado CE lleva el QR de la puerta, que es lo que permite '+
+    'al cliente dar un aviso y consultar su ficha. Asígnale uno de los que tienes libres y seguimos.</p>'+
+    '<div class="campos"><div class="campo full"><label for="qr-cod">Etiqueta libre</label>'+
+    '<select id="qr-cod">'+libres.slice(0,200).map(x => '<option value="'+esc(x.codigo)+'">'+esc(x.codigo)+'</option>').join('')+
+    '</select><span class="pista">Quedan '+libres.length+' sin asignar</span></div></div>'+
+    '<p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Asignar e imprimir</button></div>';
+  abrirDlg(h, async () => {
+    const cod = val('qr-cod');
+    try {
+      const { error } = await sb.from('puertas').update({ codigo: cod }).eq('id', p.id);
+      if (error) throw error;
+      cerrarDlg(); await cargar();
+      toast('Etiqueta ' + cod + ' asignada.');
+      setTimeout(() => etiquetaCE(expId), 150);
+    } catch(err){ setErr(err.message); }
+  });
+}
+
+/* ---- Libro de mantenimiento suelto, para dejarlo junto a la puerta ---- */
+function dlgLibroMantenimiento(expId){
+  const e = expDe(expId); if (!e) return;
+  const hechas = asistenciasDeLibro(e).length;
+  const h = '<h3>Libro de mantenimiento</h3>'+
+    '<p class="mini" style="margin:0 0 12px">Documento aparte, para dejarlo junto a la puerta. '+
+    'Lleva 30 líneas de asistencia.</p>'+
+    '<div class="campos"><div class="campo full">'+
+    '<label style="cursor:pointer"><input type="checkbox" id="lm-hist" checked style="margin-right:8px">'+
+    'Incluir las '+hechas+' visita'+(hechas===1?'':'s')+' ya hechas de esta puerta</label>'+
+    '<span class="pista">Si lo desmarcas salen las 30 líneas en blanco</span></div></div>'+
+    '<div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Generar</button></div>';
+  abrirDlg(h, async () => {
+    const con = document.getElementById('lm-hist').checked;
+    cerrarDlg();
+    libroMantenimiento(expId, con);
+  });
+}
+
+/* Las visitas cerradas de esa puerta, de la más antigua a la más reciente */
+function asistenciasDeLibro(e){
+  if (!e.puerta_id) return [];
+  return S.avisos.filter(a => a.puerta_id === e.puerta_id && a.cerrado && !a.anulada)
+    .sort((x, y) => (x.cerrado||'') < (y.cerrado||'') ? -1 : 1)
+    .slice(-30);
+}
+
+const LIBRO_MAX = 30;
+
+function libroMantenimiento(expId, conHistorial){
+  const e = expDe(expId); if (!e) return;
+  const em = datosEmpresa();
+  const p = e.puerta_id ? (puertaDe(e.puerta_id) || {}) : {};
+  const c = e.cliente_id ? (clienteDe(e.cliente_id) || {}) : {};
+  const d = e.datos || {};
+  const pu = d.puerta || {};
+  const dir = [(d.obra||{}).emplazamiento, (d.obra||{}).ubicacion].filter(Boolean).join(' · ')
+            || [p.direccion, p.ubicacion].filter(Boolean).join(' · ');
+  const titular = (d.obra||{}).titular || c.nombre || p.cliente || '';
+  const visitas = conHistorial ? asistenciasDeLibro(e) : [];
+  const fab = EXP_ES_FABRICANTE(e.situacion);
+
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana.'); return; }
+  const fila = (k, v) => v ? '<tr><th>'+esc(k)+'</th><td>'+esc(v)+'</td></tr>' : '';
+
+  let filas = '';
+  for (let i = 0; i < LIBRO_MAX; i++){
+    const a = visitas[i];
+    if (a){
+      const t = [a.trabajo, a.diagnostico].filter(Boolean).join('. ') || a.descripcion || '';
+      filas += '<tr><td class="n">'+(i+1)+'</td><td>'+esc(fechaCorta(a.cerrado))+'</td>'+
+        '<td>'+esc(tipoAsis(a.tipo))+'</td><td>'+esc(t)+'</td>'+
+        '<td>'+esc((a.tecnico_id ? nombreTec(a.tecnico_id) : a.tecnico) || '')+'</td><td></td></tr>';
+    } else {
+      filas += '<tr><td class="n">'+(i+1)+'</td><td></td><td></td><td></td><td></td><td></td></tr>';
+    }
+  }
+
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
+    '<title>Libro de mantenimiento '+esc(p.codigo||'')+'</title><style>'+
+    '@page{size:A4;margin:14mm 12mm}'+
+    '*{box-sizing:border-box}'+
+    'body{font:11px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#1C1817;margin:0}'+
+    '.cab{display:flex;align-items:flex-start;justify-content:space-between;'+
+      'border-bottom:3px solid #FCBA1D;padding-bottom:8px;margin-bottom:12px}'+
+    '.marca{font-weight:800;font-size:19px}.marca span{color:#C98F08;font-weight:600}'+
+    'h1{font-size:19px;margin:0}'+
+    'h2{font-size:12px;margin:14px 0 5px;color:#6B6560;text-transform:uppercase;letter-spacing:.04em}'+
+    'table.datos{border-collapse:collapse;width:100%}'+
+    'table.datos th,table.datos td{text-align:left;padding:3px 6px;border-bottom:1px solid #e8e5e1;vertical-align:top}'+
+    'table.datos th{width:32%;color:#6B6560;font-weight:500}'+
+    '.dos{display:flex;gap:16px}.dos>div{flex:1}'+
+    'ul{margin:3px 0;padding-left:16px}li{margin:1px 0}'+
+    'table.reg{border-collapse:collapse;width:100%;margin-top:4px}'+
+    'table.reg th{background:#f6f5f3;font-size:10px;text-align:left;padding:4px 5px;border:1px solid #ddd}'+
+    'table.reg td{border:1px solid #ddd;height:16px;padding:2px 5px;font-size:10px}'+
+    'table.reg td.n{width:8mm;text-align:center;color:#8A837D}'+
+    'tr{page-break-inside:avoid}'+
+    '.pie{margin-top:12px;padding-top:7px;border-top:1px solid #e8e5e1;font-size:9.5px;color:#6B6560}'+
+    '.aviso{background:#f6f5f3;padding:7px 9px;border-radius:4px;font-size:10px}'+
+    '@media screen{body{max-width:200mm;margin:0 auto;padding:16px}}'+
+    '</style></head><body>'+
+    '<div class="cab"><div><h1>Libro de mantenimiento</h1>'+
+      '<div style="color:#6B6560">Conservar junto a la puerta · '+esc(e.referencia||'')+'</div></div>'+
+      '<div style="text-align:right"><div class="marca">ARIZA <span>puertas automáticas</span></div>'+
+      '<div style="color:#6B6560;font-size:10px">'+esc([em.telefono, em.web].filter(Boolean).join(' · '))+'</div></div></div>'+
+
+    '<div class="dos"><div>'+
+      '<h2>La puerta</h2><table class="datos">'+
+        fila('Identificación', p.codigo)+
+        fila('Tipo', pu.tipo || p.tipo)+
+        fila('Marca y modelo', [pu.marca || p.marca, pu.modelo || p.modelo].filter(Boolean).join(' '))+
+        fila('Nº único del marcado CE', pu.serie)+
+        fila('Ubicación', dir)+
+        fila('Fecha de instalación', e.fecha_puesta_servicio ? fechaCorta(e.fecha_puesta_servicio) : '')+
+      '</table></div><div>'+
+      '<h2>Intervinientes</h2><table class="datos">'+
+        fila('Titular', titular)+
+        fila('Fabricante de la puerta', fab ? em.razon_social : (pu.marca || ''))+
+        fila('Instalador', em.razon_social)+
+        fila('Mantenedor', em.razon_social)+
+        fila('Avisos', em.telefono)+
+        fila('Periodicidad', (d.entrega||{}).periodicidad || periodicidadSugerida(e, d))+
+      '</table></div></div>'+
+
+    '<h2>Antes de usar la puerta</h2>'+
+    '<div class="aviso"><ul>'+
+      '<li>No cruzar el hueco mientras la puerta está en movimiento.</li>'+
+      '<li>No anular, tapar ni desconectar ningún dispositivo de seguridad.</li>'+
+      '<li>Mantener limpias las ópticas de las fotocélulas y libre la zona de barrido.</li>'+
+      '<li>Ante cualquier ruido, golpe o funcionamiento anómalo, dejar de usar la puerta y avisar.</li>'+
+      '<li>El desbloqueo manual solo se acciona con la puerta parada y sin tensión.</li>'+
+    '</ul></div>'+
+
+    '<h2>Registro de asistencias y revisiones</h2>'+
+    '<p style="margin:0 0 2px;font-size:10px;color:#6B6560">Cada intervención sobre la puerta se anota aquí. '+
+    'Contenido conforme a la UNE-EN 12635. Conservación mínima recomendada: diez años.</p>'+
+    '<table class="reg"><thead><tr>'+
+      '<th class="n">Nº</th><th style="width:20mm">Fecha</th><th style="width:28mm">Tipo</th>'+
+      '<th>Trabajo realizado</th><th style="width:26mm">Técnico</th><th style="width:24mm">Firma</th>'+
+    '</tr></thead><tbody>'+filas+'</tbody></table>'+
+
+    '<div class="pie">'+esc(em.razon_social)+
+      (em.nif?(' · NIF '+esc(em.nif)):'')+
+      (em.domicilio?(' · '+esc([em.domicilio, em.cp, em.poblacion, em.provincia].filter(Boolean).join(', '))):'')+
+      '<br>Cuando se complete la última línea, solicitar un libro nuevo a la empresa mantenedora '+
+      'y conservar el anterior junto a la documentación de la puerta.</div>'+
+    '</body></html>');
+  w.document.close();
+}
+
 /* ---- El libro: documento imprimible en A4, a doble cara ---- */
 async function libroExpediente(id){
   const e = expDe(id);
@@ -3410,8 +3832,10 @@ async function libroExpediente(id){
   const motor = (d.puerta||{}).motorizada !== 'no';
   const lim = limitesFuerza();
 
-  // Enlaces firmados de todas las fotos de una vez
-  const rutas = (S.expFotos || []).map(f => f.ruta);
+  // Enlaces firmados de las fotos y de los documentos de fabricante, de una vez
+  await cargarDocsExp(id);
+  const rutas = (S.expFotos || []).map(f => f.ruta)
+    .concat((S.expDocs || []).filter(x => /^image\//i.test(x.mime||'')).map(x => x.ruta));
   const url = {};
   if (rutas.length){
     try {
@@ -3468,11 +3892,12 @@ async function libroExpediente(id){
   secciones.push('Marco normativo aplicado');
   secciones.push('Elementos de la instalación');
   secciones.push('Comprobaciones de cumplimiento');
-  if (motor) secciones.push('Ensayo de fuerzas');
+  if (motor && ((d.fuerzas||{}).incluir !== 'no')) secciones.push('Ensayo de fuerzas');
   if (fab) secciones.push('Prestaciones declaradas');
   if (fab) secciones.push('Declaración de prestaciones');
   if (fab && M) secciones.push(M.documento);
   secciones.push(e.situacion === 'adecuacion' ? 'Informe de riesgos y deficiencias' : 'Riesgos residuales');
+  if ((S.expDocs||[]).length) secciones.push('Anexo: documentación de los fabricantes');
   secciones.push('Instrucciones de uso y seguridad');
   secciones.push('Libro de mantenimiento');
   secciones.push('Entrega y firmas');
@@ -3570,6 +3995,18 @@ async function libroExpediente(id){
     if (x.nota) H += '<p>'+esc(x.nota)+'</p>';
     H += galeria('comp:'+k, 2) + '</div>';
   });
+  // Elementos que se añadieron a mano porque no estaban en la lista
+  Object.entries((d.compx)||{}).forEach(([k, x]) => {
+    if (!x.estado || !(x.nombre||'').trim()) return;
+    const et = x.estado === 'si' ? '<span class="ok">Instalado</span>'
+             : x.estado === 'no' ? '<span class="no">No lo lleva</span>'
+             : '<span class="na">No aplica</span>';
+    H += '<div class="comp"><h4>'+esc(x.nombre)+' '+et+'</h4>';
+    if (x.estado === 'si' && (x.marca || x.modelo || x.serie))
+      H += '<table class="datos">'+campo('Marca', x.marca)+campo('Modelo', x.modelo)+campo('Nº de serie', x.serie)+'</table>';
+    if (x.nota) H += '<p>'+esc(x.nota)+'</p>';
+    H += galeria('comp:'+k, 2) + '</div>';
+  });
   H += '</section>';
 
   /* ---------- 5. CUMPLIMIENTO ---------- */
@@ -3589,7 +4026,8 @@ async function libroExpediente(id){
   H += '</section>';
 
   /* ---------- 6. FUERZAS ---------- */
-  if (motor){
+  const conFuerzas = motor && ((d.fuerzas||{}).incluir !== 'no');
+  if (conFuerzas){
     const f = d.fuerzas || {};
     const tope = f.hueco === 'impacto' ? lim.fd_impacto_n : lim.fd_aplastamiento_n;
     const puntos = EXP_PUNTOS_FUERZA[e.familia] || EXP_PUNTOS_FUERZA.industrial;
@@ -3743,6 +4181,33 @@ async function libroExpediente(id){
     'visual y funcionalmente en la fecha de la intervención, sin desmontaje de elementos ni ensayos destructivos.')
     .replace(/\n/g,'<br>')+'</p></section>';
 
+  /* ---------- ANEXO: DOCUMENTACIÓN DE LOS FABRICANTES ---------- */
+  const anexo = S.expDocs || [];
+  if (anexo.length){
+    H += '<section><h3 class="sec">Anexo: documentación de los fabricantes</h3>'+
+      '<p>Relación de la documentación aportada por los fabricantes de los elementos instalados. '+
+      'Los documentos originales se adjuntan a continuación de esta hoja, en el mismo orden.</p>'+
+      '<table class="datos chk"><thead><tr><th style="width:26px">Nº</th><th>Documento</th>'+
+      '<th style="width:28%">Elemento</th><th style="width:22%">Fabricante</th>'+
+      '<th style="width:70px">Fecha</th></tr></thead><tbody>'+
+      anexo.map((x, i) => '<tr><td>'+(i+1)+'</td>'+
+        '<td>'+esc(x.tipo_doc || 'Documento')+
+          (x.referencia ? '<br><span class="min">Ref. '+esc(x.referencia)+'</span>' : '')+
+          '<br><span class="min">'+esc(x.nombre||'')+'</span></td>'+
+        '<td>'+esc(x.elemento || '—')+'</td>'+
+        '<td>'+esc(x.fabricante || '—')+'</td>'+
+        '<td>'+esc(x.fecha_doc ? fechaCorta(x.fecha_doc) : '—')+'</td></tr>').join('')+
+      '</tbody></table>'+
+      '<p class="min">Total: '+anexo.length+' documento'+(anexo.length===1?'':'s')+'. '+
+      'Si alguno de ellos falta tras esta hoja, solicítelo a la empresa instaladora.</p>'+
+      // Las imágenes sí se pueden incrustar; los PDF van detrás, impresos aparte
+      anexo.filter(x => /^image\//i.test(x.mime||'') && url[x.ruta]).map(x =>
+        '<div class="comp"><h4>'+esc([x.tipo_doc, x.fabricante].filter(Boolean).join(' · '))+'</h4>'+
+        '<div class="gal c1"><figure><img src="'+url[x.ruta]+'">'+
+        '<figcaption>'+esc(x.nombre||'')+'</figcaption></figure></div></div>').join('')+
+      '</section>';
+  }
+
   /* ---------- INSTRUCCIONES ---------- */
   H += '<section><h3 class="sec">Instrucciones de uso y seguridad</h3>'+
     '<h4>Uso previsto</h4><p>La puerta está prevista para '+esc(pu.uso_puerta || 'el uso indicado en este expediente')+
@@ -3881,7 +4346,9 @@ function cssLibro(){
   '.comp{page-break-inside:avoid;margin:0 0 14px}'+
   '.comp h4{margin-top:10px;color:#1C1817;text-transform:none;font-size:12.5px;letter-spacing:0}'+
   '.gal{display:grid;gap:7px;margin:6px 0 4px}'+
+  '.gal.c1{grid-template-columns:1fr}'+
   '.gal.c2{grid-template-columns:1fr 1fr}.gal.c3{grid-template-columns:1fr 1fr 1fr}'+
+  '.gal.c1 img{max-height:200mm;object-fit:contain;background:#fff}'+
   '.gal figure{margin:0;page-break-inside:avoid}'+
   '.gal img{width:100%;height:auto;max-height:78mm;object-fit:cover;border:1px solid #ddd;border-radius:3px;display:block}'+
   '.gal figcaption{font-size:9.5px;color:#6B6560;margin-top:3px}'+
@@ -5439,13 +5906,40 @@ raiz.addEventListener('click', async e => {
   else if (a === 'exp-nuevo') dlgExpedienteNuevo(b.dataset.id);
   else if (a === 'exp-abrir'){
     S.exp = b.dataset.id; S.expPaso = 'obra'; S.ficha = null;
-    await cargarFotosExp(S.exp); pintar(); window.scrollTo({top:0});
+    await cargarFotosExp(S.exp); await cargarDocsExp(S.exp); pintar(); window.scrollTo({top:0});
   }
   else if (a === 'exp-volver'){ const e = expDe(S.exp); S.exp = null;
     if (e && e.puerta_id) S.ficha = e.puerta_id; pintar(); window.scrollTo({top:0}); }
   else if (a === 'exp-paso'){ S.expPaso = b.dataset.v; pintar(); window.scrollTo({top:0}); }
   else if (a === 'exp-libro') libroExpediente(b.dataset.id);
   else if (a === 'exp-emitir') dlgEmitirExpediente(b.dataset.id);
+  else if (a === 'exp-marcado') etiquetaCE(b.dataset.id);
+  else if (a === 'exp-libro-mant') dlgLibroMantenimiento(b.dataset.id);
+  else if (a === 'exp-abrir-docs') abrirDocsExp();
+  else if (a === 'exp-ver-doc') verDocExp(b.dataset.id);
+  else if (a === 'exp-comp-anadir'){
+    const e = expDe(S.exp); if (!e) return;
+    const ya = Object.keys(((e.datos||{}).compx) || {});
+    const n = ya.reduce((m, k) => Math.max(m, +String(k).replace(/\D/g,'') || 0), 0) + 1;
+    expPon('compx.x'+n+'.nombre', '');
+    pintar();
+  }
+  else if (a === 'exp-comp-quitar'){
+    if (!armar(b, 'Confirmar')) return;
+    const e = expDe(S.exp); if (!e) return;
+    if (e.datos && e.datos.compx) delete e.datos.compx[b.dataset.k];
+    guardarExpediente(); pintar(); toast('Elemento quitado.');
+  }
+  else if (a === 'exp-quitar-doc'){
+    if (!armar(b, 'Confirmar')) return;
+    const x = (S.expDocs||[]).find(y => y.id === b.dataset.id);
+    try {
+      const { error } = await sb.from('expediente_docs').delete().eq('id', b.dataset.id);
+      if (error) throw error;
+      if (x) { try { await sb.storage.from('expedientes').remove([x.ruta]); } catch(_){} }
+      await cargarDocsExp(S.exp); pintar(); toast('Documento quitado.');
+    } catch(err){ fallo(err); }
+  }
   else if (a === 'exp-copiar-cliente'){
     const e = expDe(S.exp); const c = e && e.cliente_id ? clienteDe(e.cliente_id) : null;
     const p = e && e.puerta_id ? puertaDe(e.puerta_id) : null;
@@ -5757,7 +6251,7 @@ raiz.addEventListener('change', e => {
     const ruta = e.target.dataset.exp;
     expPon(ruta, e.target.value);
     // Solo repintamos cuando la respuesta cambia lo que hay que enseñar
-    if (/\.(estado|v)$|motorizada|hueco$|\.via$/.test(ruta)) pintar();
+    if (/\.(estado|v|incluir)$|motorizada|hueco$|\.via$/.test(ruta)) pintar();
     return;
   }
   if (e.target.dataset.expChk !== undefined){
@@ -5782,6 +6276,20 @@ raiz.addEventListener('change', e => {
   }
   if (e.target.dataset.act === 'exp-subir-foto' && e.target.files.length){
     subirFotosExp(e.target.dataset.ap, Array.from(e.target.files)); e.target.value = '';
+    return;
+  }
+  if (e.target.dataset.act === 'exp-subir-doc' && e.target.files.length){
+    subirDocsExp(Array.from(e.target.files)); e.target.value = '';
+    return;
+  }
+  // Fichas del anexo de fabricantes: se guardan al salir del campo
+  if (e.target.dataset.doc){
+    const campo = e.target.dataset.doc, id = e.target.dataset.id;
+    const x = (S.expDocs||[]).find(y => y.id === id);
+    if (x){ x[campo] = e.target.value || null;
+      sb.from('expediente_docs').update({ [campo]: x[campo] }).eq('id', id)
+        .then(({error}) => { if (error) fallo(error); });
+    }
     return;
   }
   if (e.target.dataset.act === 'cal-tec'){ S.calTec = e.target.value; pintar(); return; }
