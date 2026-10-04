@@ -2066,6 +2066,7 @@ function vistaEquipo(){
        '</div><p class="err" id="t-err" role="alert" style="margin:10px 0 0"></p>'+
        '<p class="mini" style="margin:8px 0 0">Dale la contraseña en persona. Él puede cambiarla desde la pantalla de entrada, con «He olvidado mi contraseña».</p></div>';
   h += panelEmpresa();
+  h += panelCPF();
   h += panelLista('seguridad', 'Elementos de seguridad', SEGURIDAD,
         'Es la lista de casillas que sale al dar de alta o editar una puerta. Cada técnico puede añadir uno suelto en una puerta concreta sin tocar esta lista.');
   h += panelLista('tipos_doc', 'Tipos de documento', TIPOS_DOC,
@@ -2827,6 +2828,21 @@ function expPendientes(e){
   if (incumple.length) falta.push('hay ' + incumple.length + ' incumplimiento(s) de los que impiden certificar');
   if (EXP_ES_FABRICANTE(e.situacion) && !(d.entrega && d.entrega.firmante_ok))
     falta.push('confirmar quién firma la declaración');
+  // Con la vía simplificada, la declaración de prestaciones se apoya en la DTE:
+  // si la DTE no está, la declaración queda coja y hay que decirlo.
+  const pz = d.prest || {};
+  if (['micro','unidad'].includes(pz.via)){
+    if (!pz.dte_codigo) falta.push('el código de la Documentación Técnica Específica');
+    if (pz.dte_ok !== 'si') falta.push('confirmar que se cumplen las condiciones del artículo '+
+      (pz.via === 'micro' ? '37' : '38'));
+    const sinMetodo = (EXP_PRESTACIONES[e.familia]||[]).filter(([k,, , obl]) => {
+      const v = (pz.v||{})[k] || '';
+      const declarada = obl || (v && !/^npd$/i.test(v.trim()));
+      return declarada && !((pz.dte||{})[k]||{}).metodo;
+    });
+    if (sinMetodo.length) falta.push(sinMetodo.length +
+      ' prestación(es) declaradas sin decir en la DTE cómo se han demostrado');
+  }
   return falta;
 }
 function expIncumple(e){
@@ -3193,15 +3209,21 @@ function expSecPrestaciones(e){
        ['micro','Documentación Técnica Específica por microempresa (art. 37)'],
        ['unidad','Documentación Técnica Específica por producto fabricado por unidad (art. 38)']],
       'Los artículos son del Reglamento (UE) 305/2011')+
+    expSel('prest.sistema', 'Sistema de evaluación del producto',
+      [['3','Sistema 3'], ['4','Sistema 4'], ['1','Sistema 1'], ['1+','Sistema 1+'], ['2+','Sistema 2+']],
+      'Apartado 5 de la declaración. Para estas puertas el más habitual es el sistema 3')+
     expTxt('prest.laboratorio', 'Laboratorio u organismo notificado', 'Nombre y número, si interviene')+
     expTxt('prest.informe', 'Referencia del informe de ensayo')+
     expTxt('prest.codigo_tipo', 'Código de identificación única del producto tipo',
       'Apartado 1 de la declaración de prestaciones', 1)+
     '</div>';
+  if (e.situacion === 'modificacion')
+    h += '<p class="nota-oficina" style="margin:14px 0 0">Esto es una modificación sustancial. Que obliga a '+
+         'nueva declaración de conformidad de máquina y nuevo marcado está confirmado. Que obligue además a '+
+         'una declaración de prestaciones nueva es discutible, porque la hoja no la has fabricado tú: '+
+         'consúltalo con tu asesoría. Si te dicen que no procede, deja este apartado sin rellenar.</p>';
   if (['micro','unidad'].includes(expVal('prest.via','')))
-    h += '<p class="nota-oficina" style="margin:14px 0 0">Has elegido un procedimiento simplificado. '+
-         'Antes de usarlo comprueba que cumples los requisitos: el artículo 37 es para microempresas '+
-         'y el 38 para producto fabricado por unidad. Si no los cumples, la declaración no es válida.</p>';
+    h += expBloqueDTE(e, pr);
 
   h += '<div class="tabla-wrap" style="margin-top:14px"><table class="tabla"><thead><tr>'+
     '<th>Característica esencial</th><th>Prestación declarada</th><th>Norma de ensayo</th></tr></thead><tbody>';
@@ -3450,6 +3472,349 @@ function dlgEmitirExpediente(id){
       cerrarDlg(); await cargar(); toast('Expediente emitido.');
     } catch(err){ setErr(err.message); }
   });
+}
+
+/* ================= Documentación Técnica Específica =================
+   El artículo 37 del Reglamento (UE) 305/2011 permite a una microempresa
+   sustituir los ensayos iniciales de tipo por una Documentación Técnica
+   Específica, y el 38 hace lo mismo para el producto fabricado por unidad.
+   Esa DTE es un documento con contenido propio y código propio: tiene que
+   decir con qué método distinto del de la norma se ha demostrado cada
+   prestación y en qué se apoya. Sin ella, la declaración de prestaciones
+   por la vía simplificada está incompleta. */
+
+const DTE_METODOS = [
+  'Ensayo inicial de tipo del fabricante del componente',
+  'Documentación técnica y ensayos del fabricante de la hoja',
+  'Documentación técnica y ensayos del fabricante del automatismo',
+  'Medición en obra con instrumento calibrado',
+  'Cálculo a partir de los datos del fabricante',
+  'Inspección y comprobación funcional documentada',
+  'Ensayo propio documentado',
+  'Prestación no determinada: no se declara',
+];
+
+const codigoDTE = e => (e.datos && e.datos.prest && e.datos.prest.dte_codigo)
+  || ((e.referencia || 'DTE') + '-DTE');
+
+function expBloqueDTE(e, pr){
+  const via = expVal('prest.via', '');
+  const art = via === 'micro' ? '37' : '38';
+  const nDocs = (S.expDocs || []).length;
+  let h = '<div class="panel" style="margin-top:16px;border:2px solid var(--line)">'+
+    '<div class="panel-h"><h3>Documentación Técnica Específica</h3>'+
+    '<span class="chip aviso sin">Artículo '+art+'</span></div>'+
+    '<p class="mini" style="margin:0 0 6px">Este es el documento que sustituye a los ensayos de laboratorio. '+
+    'Es obligatorio: la declaración de prestaciones lo cita por su código, y si no existe, la declaración '+
+    'queda coja.</p>'+
+    '<p class="nota-oficina" style="margin:0 0 14px">'+
+    (via === 'micro'
+      ? 'El artículo 37 es solo para microempresas. Antes de firmar, confirma con tu asesoría que Ariza lo es '+
+        'teniendo en cuenta las empresas vinculadas o asociadas, si las hay.'
+      : 'El artículo 38 es solo para producto fabricado por unidad o a medida, no en serie. '+
+        'Confirma con tu asesoría que tus puertas encajan.')+
+    '</p>'+
+    '<div class="campos">'+
+    expTxt('prest.dte_codigo', 'Código de identificación de la DTE',
+      'Si usas la misma DTE para varias puertas del mismo tipo, repite aquí el mismo código', 1)+
+    '<div class="campo"><label>Fecha de la DTE</label>'+
+      '<input type="date" data-exp="prest.dte_fecha" value="'+esc(expVal('prest.dte_fecha',''))+'"></div>'+
+    expTxt('prest.dte_tipo', 'Producto tipo que ampara',
+      'A qué conjunto de puertas se aplica esta DTE', 1)+
+    expArea('prest.dte_base', 'En qué documentación te apoyas',
+      'Informes de ensayo de tus proveedores, fichas técnicas, certificados de componentes', 3)+
+    expArea('prest.dte_motivo', 'Por qué el método empleado es válido',
+      'Por qué lo que has hecho demuestra el cumplimiento igual que el ensayo de la norma', 3)+
+    '</div>';
+
+  if (!expVal('prest.dte_codigo','')) {
+    h += '<p class="mini" style="margin:4px 0 10px">Sugerencia de código: <b>'+esc((e.referencia||'')+'-DTE')+
+         '</b>. <button class="btn sm plana" data-act="exp-dte-codigo">Ponerlo</button></p>';
+  }
+
+  h += '<h4 style="font-size:13px;margin:16px 0 6px">Cómo se ha demostrado cada prestación</h4>'+
+    '<p class="mini" style="margin:0 0 8px">Solo hace falta rellenar las que declares con un valor. '+
+    'Las que dejes como prestación no determinada no hay que justificarlas.</p>'+
+    '<datalist id="dte-metodos">'+DTE_METODOS.map(m => '<option value="'+esc(m)+'">').join('')+'</datalist>'+
+    '<div class="tabla-wrap"><table class="tabla"><thead><tr>'+
+    '<th style="width:26%">Característica</th><th style="width:22%">Declarado</th>'+
+    '<th style="width:26%">Método empleado</th><th>En qué se apoya</th></tr></thead><tbody>';
+  pr.forEach(([k, nombre, , obligatoria]) => {
+    const v = expVal('prest.v.'+k, '');
+    const npd = !v || /^npd$/i.test(v.trim());
+    h += '<tr'+(npd && !obligatoria ? ' style="opacity:.55"' : '')+'>'+
+      '<td>'+esc(nombre)+(obligatoria?' <span class="chip mal sin">Obl.</span>':'')+'</td>'+
+      '<td class="mini">'+esc(v || 'NPD')+'</td>'+
+      '<td><input type="text" list="dte-metodos" style="width:100%" data-exp="prest.dte.'+k+'.metodo" '+
+        'value="'+esc(expVal('prest.dte.'+k+'.metodo',''))+'"></td>'+
+      '<td><input type="text" style="width:100%" placeholder="Informe, ficha o medición concreta" '+
+        'data-exp="prest.dte.'+k+'.just" value="'+esc(expVal('prest.dte.'+k+'.just',''))+'"></td></tr>';
+  });
+  h += '</tbody></table></div>';
+
+  h += '<p class="mini" style="margin:10px 0 0">Documentación de fabricantes adjunta al expediente: <b>'+
+    nDocs+'</b>. '+(nDocs ? 'Se relaciona sola en la DTE como prueba documental.'
+      : 'Súbela en el apartado «Documentación de fabricantes» y se relacionará sola aquí.')+'</p>';
+
+  h += '<div class="campos" style="margin-top:12px"><div class="campo full">'+
+    '<label style="cursor:pointer"><input type="checkbox" data-exp-chk="prest.dte_ok"'+
+    (expVal('prest.dte_ok','')==='si'?' checked':'')+' style="margin-right:8px">'+
+    'Confirmo que cumplimos las condiciones del artículo '+art+' y que esta documentación es cierta</label>'+
+    '</div></div>'+
+    '<div class="fila" style="margin-top:10px"><span class="sp"></span>'+
+    '<button class="btn pri" data-act="exp-dte">Ver la Documentación Técnica Específica</button></div>'+
+    '<p class="mini" style="margin:8px 0 0">Es documentación tuya, no del cliente: no va dentro del libro '+
+    'que le entregas. Se imprime, se firma y se guarda diez años.</p>'+
+    '</div>';
+  return h;
+}
+
+/* La DTE impresa */
+async function documentoDTE(expId){
+  const e = expDe(expId); if (!e) return;
+  await cargarDocsExp(expId);
+  const em = datosEmpresa();
+  const d = e.datos || {};
+  const pu = d.puerta || {};
+  const p = e.puerta_id ? (puertaDe(e.puerta_id) || {}) : {};
+  const pr = EXP_PRESTACIONES[e.familia] || [];
+  const pv = (d.prest||{}).v || {};
+  const via = (d.prest||{}).via;
+  if (!['micro','unidad'].includes(via)){
+    toast('La DTE solo tiene sentido con el procedimiento simplificado de los artículos 37 o 38.');
+    return;
+  }
+  const art = via === 'micro' ? '37' : '38';
+  const norma = ((EXP_NORMAS[e.familia]||[])[0]||[''])[0];
+  const docs = S.expDocs || [];
+  const hoy = new Date().toISOString().slice(0,10);
+
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana.'); return; }
+  const fila = (k, v) => v ? '<tr><th>'+esc(k)+'</th><td>'+esc(v)+'</td></tr>' : '';
+
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
+    '<title>DTE '+esc(codigoDTE(e))+'</title><style>'+
+    '@page{size:A4;margin:16mm 15mm}*{box-sizing:border-box}'+
+    'body{font:11.5px/1.55 -apple-system,Segoe UI,Roboto,sans-serif;color:#1C1817;margin:0}'+
+    '.cab{display:flex;justify-content:space-between;align-items:flex-start;'+
+      'border-bottom:3px solid #FCBA1D;padding-bottom:9px;margin-bottom:14px}'+
+    '.marca{font-weight:800;font-size:19px}.marca span{color:#C98F08;font-weight:600}'+
+    'h1{font-size:20px;margin:0}h2{font-size:12px;margin:16px 0 5px;color:#6B6560;'+
+      'text-transform:uppercase;letter-spacing:.04em}'+
+    'p{margin:0 0 8px}.min{font-size:10px;color:#6B6560}'+
+    'table{border-collapse:collapse;width:100%;margin:4px 0 10px}'+
+    'th,td{text-align:left;padding:4px 7px;border-bottom:1px solid #e8e5e1;vertical-align:top}'+
+    'th{color:#6B6560;font-weight:500}table.datos th{width:34%}'+
+    'table.m th{background:#f6f5f3;color:#1C1817;font-weight:600;width:auto}'+
+    '.firma{margin-top:18mm;page-break-inside:avoid}'+
+    '.firma .linea{border-bottom:1px solid #1C1817;height:16mm;margin:0 0 4px;max-width:70mm}'+
+    '.marco{background:#f6f5f3;padding:9px 11px;border-radius:4px}'+
+    'tr{page-break-inside:avoid}'+
+    '@media screen{body{max-width:200mm;margin:0 auto;padding:16px}}'+
+    '</style></head><body>'+
+
+    '<div class="cab"><div><h1>Documentación Técnica Específica</h1>'+
+      '<div style="color:#6B6560">Nº '+esc(codigoDTE(e))+' · Documento interno del fabricante</div></div>'+
+      '<div style="text-align:right"><div class="marca">ARIZA <span>puertas automáticas</span></div>'+
+      '<div class="min">'+esc([em.telefono, em.web].filter(Boolean).join(' · '))+'</div></div></div>'+
+
+    '<h2>Objeto y base legal</h2>'+
+    '<div class="marco"><p>Este documento constituye la Documentación Técnica Específica prevista en el '+
+    '<b>artículo '+art+' del Reglamento (UE) nº 305/2011</b> del Parlamento Europeo y del Consejo, por el que '+
+    'se establecen condiciones armonizadas para la comercialización de productos de construcción.</p>'+
+    '<p style="margin:0">'+
+    (art === '37'
+      ? 'Al amparo de dicho artículo, el fabricante, que tiene la condición de <b>microempresa</b>, sustituye los '+
+        'ensayos iniciales de tipo por los métodos que se describen más abajo, y trata el producto, sujeto al '+
+        'sistema de evaluación y verificación de la constancia de las prestaciones indicado, conforme a lo '+
+        'dispuesto para el sistema 4.'
+      : 'Al amparo de dicho artículo, tratándose de un <b>producto fabricado por unidad</b> y no en serie, '+
+        'el fabricante sustituye los ensayos iniciales de tipo por los métodos que se describen más abajo.')+
+    '</p></div>'+
+
+    '<h2>Fabricante</h2><table class="datos">'+
+      fila('Razón social', em.razon_social)+
+      fila('NIF', em.nif)+
+      fila('Domicilio', [em.domicilio, em.cp, em.poblacion, em.provincia].filter(Boolean).join(', '))+
+      fila('Responsable técnico', em.responsable_tecnico)+
+    '</table>'+
+
+    '<h2>Producto tipo al que se aplica</h2><table class="datos">'+
+      fila('Código de identificación única', (d.prest||{}).codigo_tipo || pu.denominacion || pu.modelo)+
+      fila('Producto tipo', (d.prest||{}).dte_tipo)+
+      fila('Familia', EXP_FAMILIA[e.familia])+
+      fila('Norma armonizada de referencia', norma)+
+      fila('Uso previsto', pu.uso_puerta)+
+      fila('Expediente asociado', e.referencia + (p.codigo ? ' · puerta ' + p.codigo : ''))+
+      fila('Fecha', fechaCorta((d.prest||{}).dte_fecha || hoy))+
+    '</table>'+
+
+    '<h2>Métodos empleados y prestaciones demostradas</h2>'+
+    '<table class="m"><thead><tr><th style="width:24%">Característica esencial</th>'+
+    '<th style="width:16%">Prestación declarada</th><th style="width:28%">Método empleado</th>'+
+    '<th>En qué se apoya</th></tr></thead><tbody>'+
+    pr.map(([k, nombre, , obligatoria]) => {
+      const v = pv[k] || 'NPD';
+      const m = ((d.prest||{}).dte||{})[k] || {};
+      if (/^npd$/i.test(v) && !obligatoria && !m.metodo) return '';
+      return '<tr><td>'+esc(nombre)+'</td><td>'+esc(v)+'</td>'+
+        '<td>'+esc(m.metodo || 'Pendiente de indicar')+'</td>'+
+        '<td>'+esc(m.just || '—')+'</td></tr>';
+    }).join('')+
+    '</tbody></table>'+
+
+    ((d.prest||{}).dte_motivo
+      ? '<h2>Justificación de la validez del método</h2><p>'+
+        esc((d.prest||{}).dte_motivo).replace(/\n/g,'<br>')+'</p>' : '')+
+    ((d.prest||{}).dte_base
+      ? '<h2>Documentación en que se apoya</h2><p>'+
+        esc((d.prest||{}).dte_base).replace(/\n/g,'<br>')+'</p>' : '')+
+
+    (docs.length
+      ? '<h2>Pruebas documentales archivadas</h2><table class="m"><thead><tr>'+
+        '<th style="width:26px">Nº</th><th>Documento</th><th style="width:26%">Elemento</th>'+
+        '<th style="width:22%">Fabricante</th><th style="width:70px">Fecha</th></tr></thead><tbody>'+
+        docs.map((x, i) => '<tr><td>'+(i+1)+'</td><td>'+esc(x.tipo_doc||'Documento')+
+          (x.referencia?('<br><span class="min">Ref. '+esc(x.referencia)+'</span>'):'')+'</td>'+
+          '<td>'+esc(x.elemento||'—')+'</td><td>'+esc(x.fabricante||'—')+'</td>'+
+          '<td>'+esc(x.fecha_doc ? fechaCorta(x.fecha_doc) : '—')+'</td></tr>').join('')+
+        '</tbody></table>' : '')+
+
+    '<h2>Declaración</h2>'+
+    '<p>El fabricante declara que las prestaciones del producto tipo identificado en este documento se han '+
+    'determinado por los métodos descritos, que estos sustituyen a los ensayos iniciales de tipo al amparo del '+
+    'artículo '+art+' del Reglamento (UE) nº 305/2011, y que la presente documentación se conserva a disposición '+
+    'de las autoridades de vigilancia del mercado durante diez años desde la última unidad fabricada.</p>'+
+    '<p class="min">Esta documentación da soporte a la declaración de prestaciones '+esc(e.referencia||'')+
+    ', apartado 8.</p>'+
+
+    '<div class="firma"><p>'+esc([em.poblacion, fechaCorta((d.prest||{}).dte_fecha || hoy)]
+      .filter(Boolean).join(', '))+'</p><div class="linea"></div>'+
+      '<p><b>'+esc(((d.entrega||{}).firmante) || em.responsable_tecnico || '')+'</b></p>'+
+      '<p class="min">'+esc(((d.entrega||{}).cargo) || em.cargo_firmante || '')+' · '+esc(em.razon_social)+'</p>'+
+    '</div></body></html>');
+  w.document.close();
+}
+
+/* ================= Control de producción en fábrica =================
+   El procedimiento simplificado del artículo 37 permite tratar el producto
+   conforme al sistema 4, pero el sistema 4 sigue incluyendo control de
+   producción en fábrica a cargo del fabricante. Es un documento de empresa,
+   no por puerta: se redacta una vez, se firma y se revisa. */
+
+const CPF_FABRICA = {
+  responsable: '', suplente: '', revision: 'Anual',
+  equipos: 'Medidor de fuerzas de impacto, calibrado anualmente.\nPolímetro.\nFlexómetro y nivel.',
+  recepcion: 'Comprobación de que cada componente recibido lleva su marcado, su declaración y su manual.\n'+
+    'Rechazo de componentes sin documentación o con daños de transporte.',
+  proceso: 'Montaje según las instrucciones del fabricante de cada componente.\n'+
+    'Comprobación de equilibrado, guías, fijaciones y pares de apriete antes de motorizar.',
+  final: 'Comprobación funcional completa de la puerta y de cada dispositivo de seguridad.\n'+
+    'Ensayo de fuerzas en los puntos que marca la norma.\n'+
+    'Colocación del marcado y entrega de la documentación.',
+  noconforme: 'La puerta no se pone en servicio hasta resolver la no conformidad.\n'+
+    'Se anota en el expediente qué se encontró y cómo se resolvió.',
+};
+const datosCPF = () => Object.assign({}, CPF_FABRICA, S.ajustes.cpf || {});
+
+function panelCPF(){
+  const c = datosCPF(), em = datosEmpresa();
+  const campo = (k, et, pista) =>
+    '<div class="campo"><label>'+esc(et)+'</label>'+
+    '<input type="text" data-cpf="'+k+'" value="'+esc(c[k]||'')+'">'+
+    (pista?'<span class="pista">'+esc(pista)+'</span>':'')+'</div>';
+  const area = (k, et, pista) =>
+    '<div class="campo full"><label>'+esc(et)+'</label>'+
+    '<textarea rows="3" data-cpf="'+k+'">'+esc(c[k]||'')+'</textarea>'+
+    (pista?'<span class="pista">'+esc(pista)+'</span>':'')+'</div>';
+  return '<div class="panel"><div class="panel-h"><h3>Control de producción en fábrica</h3></div>'+
+    '<p class="mini" style="margin:0 0 6px">Documento de empresa, no de cada puerta. Se redacta una vez, '+
+    'se firma y se revisa. Hace falta porque el procedimiento simplificado del artículo 37 permite tratar '+
+    'el producto como sistema 4, y el sistema 4 sigue exigiendo control de producción a cargo del fabricante.</p>'+
+    '<p class="nota-oficina" style="margin:0 0 14px">Lo que viene escrito es un borrador de partida redactado '+
+    'con lo que hace cualquier instalador serio. <b>Adáptalo a cómo trabajáis de verdad</b>: un procedimiento '+
+    'que no se cumple es peor que no tenerlo.</p>'+
+    '<div class="campos" style="max-width:900px">'+
+      campo('responsable', 'Responsable del control', 'Quien responde de que esto se cumpla')+
+      campo('suplente', 'Suplente')+
+      campo('revision', 'Periodicidad de revisión del procedimiento')+
+      area('equipos', 'Equipos de medida y su calibración')+
+      area('recepcion', 'Control de los componentes que llegan')+
+      area('proceso', 'Control durante el montaje')+
+      area('final', 'Comprobación final de cada puerta')+
+      area('noconforme', 'Qué se hace cuando algo no cumple')+
+    '</div>'+
+    '<div class="fila" style="margin-top:12px"><span class="sp"></span>'+
+    '<button class="btn" data-act="cpf-imprimir">Ver el procedimiento</button>'+
+    '<button class="btn pri" data-act="guardar-cpf">Guardar</button></div>'+
+    (!em.nif ? '<p class="mini" style="margin:10px 0 0">Rellena antes el NIF y el domicilio de la empresa, '+
+      'que salen en la cabecera del procedimiento.</p>' : '')+
+    '</div>';
+}
+
+function documentoCPF(){
+  const c = datosCPF(), em = datosEmpresa();
+  const hoy = new Date().toISOString().slice(0,10);
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana.'); return; }
+  const lista = t => '<ul>'+String(t||'').split('\n').filter(x => x.trim())
+    .map(x => '<li>'+esc(x.trim())+'</li>').join('')+'</ul>';
+
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
+    '<title>Control de producción en fábrica</title><style>'+
+    '@page{size:A4;margin:16mm 15mm}*{box-sizing:border-box}'+
+    'body{font:11.5px/1.55 -apple-system,Segoe UI,Roboto,sans-serif;color:#1C1817;margin:0}'+
+    '.cab{display:flex;justify-content:space-between;align-items:flex-start;'+
+      'border-bottom:3px solid #FCBA1D;padding-bottom:9px;margin-bottom:14px}'+
+    '.marca{font-weight:800;font-size:19px}.marca span{color:#C98F08;font-weight:600}'+
+    'h1{font-size:20px;margin:0}h2{font-size:13px;margin:16px 0 5px;'+
+      'border-bottom:1px solid #e8e5e1;padding-bottom:3px}'+
+    'p{margin:0 0 8px}ul{margin:4px 0 8px;padding-left:18px}li{margin:2px 0}'+
+    '.min{font-size:10px;color:#6B6560}'+
+    'table{border-collapse:collapse;width:100%;margin:4px 0 10px}'+
+    'th,td{text-align:left;padding:4px 7px;border-bottom:1px solid #e8e5e1;vertical-align:top}'+
+    'th{width:34%;color:#6B6560;font-weight:500}'+
+    '.firma{margin-top:16mm;page-break-inside:avoid}'+
+    '.firma .linea{border-bottom:1px solid #1C1817;height:16mm;margin:0 0 4px;max-width:70mm}'+
+    '@media screen{body{max-width:200mm;margin:0 auto;padding:16px}}'+
+    '</style></head><body>'+
+    '<div class="cab"><div><h1>Control de producción en fábrica</h1>'+
+      '<div style="color:#6B6560">Procedimiento interno · '+esc(em.razon_social)+'</div></div>'+
+      '<div style="text-align:right"><div class="marca">ARIZA <span>puertas automáticas</span></div>'+
+      '<div class="min">'+esc([em.telefono, em.web].filter(Boolean).join(' · '))+'</div></div></div>'+
+
+    '<h2>1. Objeto</h2>'+
+    '<p>Este procedimiento describe el control de producción en fábrica que '+esc(em.razon_social)+
+    ' aplica a las puertas que ensambla e instala, conforme al Reglamento (UE) nº 305/2011. '+
+    'Su finalidad es asegurar que cada puerta puesta en el mercado mantiene las prestaciones declaradas.</p>'+
+
+    '<h2>2. Responsabilidades</h2><table>'+
+    (c.responsable ? '<tr><th>Responsable del control</th><td>'+esc(c.responsable)+'</td></tr>' : '')+
+    (c.suplente ? '<tr><th>Suplente</th><td>'+esc(c.suplente)+'</td></tr>' : '')+
+    '<tr><th>Revisión del procedimiento</th><td>'+esc(c.revision||'Anual')+'</td></tr>'+
+    '</table>'+
+
+    '<h2>3. Equipos de medida</h2>'+lista(c.equipos)+
+    '<h2>4. Control de los componentes recibidos</h2>'+lista(c.recepcion)+
+    '<h2>5. Control durante el montaje</h2>'+lista(c.proceso)+
+    '<h2>6. Comprobación final de cada puerta</h2>'+lista(c.final)+
+    '<h2>7. Tratamiento de lo que no cumple</h2>'+lista(c.noconforme)+
+
+    '<h2>8. Registros</h2>'+
+    '<p>El registro de cada puerta es su expediente de documentación, generado por la aplicación ARIZA SAT, '+
+    'que recoge la identificación del producto, los elementos instalados con su fotografía, las comprobaciones '+
+    'de cumplimiento, el ensayo de fuerzas y la documentación de los fabricantes de los componentes.</p>'+
+    '<p>Los expedientes y la documentación técnica se conservan <b>diez años</b> desde la fabricación de la '+
+    'última unidad, a disposición de las autoridades de vigilancia del mercado.</p>'+
+
+    '<div class="firma"><p>'+esc([em.poblacion, fechaCorta(hoy)].filter(Boolean).join(', '))+'</p>'+
+      '<div class="linea"></div>'+
+      '<p><b>'+esc(c.responsable || em.responsable_tecnico || '')+'</b></p>'+
+      '<p class="min">'+esc(em.cargo_firmante || '')+' · '+esc(em.razon_social)+
+      (em.nif ? ' · NIF '+esc(em.nif) : '')+'</p></div>'+
+    '</body></html>');
+  w.document.close();
 }
 
 /* ---- Documentación de los fabricantes de los elementos instalados ---- */
@@ -4089,7 +4454,13 @@ async function libroExpediente(id){
         '<br>'+esc([em.domicilio, em.cp, em.poblacion, em.provincia].filter(Boolean).join(', ') || '—')+'</li>'+
       '<li><b>Representante autorizado:</b> no procede.</li>'+
       '<li><b>Sistema de evaluación y verificación de la constancia de las prestaciones:</b><br>'+
-        esc(vias[(d.prest||{}).via] || 'Pendiente de indicar')+'</li>'+
+        'Sistema ' + esc((d.prest||{}).sistema || '3') +
+        (['micro','unidad'].includes((d.prest||{}).via)
+          ? '.<br>Por aplicación del artículo ' + ((d.prest||{}).via === 'micro' ? '37' : '38') +
+            ' del Reglamento (UE) nº 305/2011, el fabricante sustituye los ensayos iniciales de tipo por la ' +
+            'Documentación Técnica Específica nº ' + esc(codigoDTE(e)) + ', y trata el producto conforme a lo ' +
+            'dispuesto para el sistema 4.'
+          : (vias[(d.prest||{}).via] ? '.<br>' + esc(vias[(d.prest||{}).via]) : '.'))+'</li>'+
       '<li><b>Norma armonizada:</b><br>'+esc(((EXP_NORMAS[e.familia]||[])[0]||[''])[0])+
         ((d.prest||{}).laboratorio ? '<br>Organismo notificado: '+esc((d.prest||{}).laboratorio) : '')+'</li>'+
       '<li><b>Prestaciones declaradas:</b><table class="datos chk" style="margin-top:4px">'+
@@ -4097,7 +4468,10 @@ async function libroExpediente(id){
           '</td><td class="min" style="width:130px">'+esc(norma)+'</td></tr>').join('')+'</table></li>'+
       '<li><b>Documentación técnica específica:</b><br>'+
         (['micro','unidad'].includes((d.prest||{}).via)
-          ? 'Se ha empleado la Documentación Técnica Específica referida en el apartado 5.'
+          ? 'Documentación Técnica Específica nº ' + esc(codigoDTE(e)) +
+            ((d.prest||{}).dte_fecha ? ', de ' + esc(fechaCorta((d.prest||{}).dte_fecha)) : '') +
+            ', elaborada al amparo del artículo ' + ((d.prest||{}).via === 'micro' ? '37' : '38') +
+            ' del Reglamento (UE) nº 305/2011 y conservada por el fabricante.'
           : 'No procede.')+'</li>'+
       '<li><b>Declaración:</b><br>Las prestaciones del producto identificado en los apartados 1 y 2 son '+
         'conformes con las prestaciones declaradas en el apartado 7. La presente declaración de prestaciones '+
@@ -5914,6 +6288,22 @@ raiz.addEventListener('click', async e => {
   else if (a === 'exp-libro') libroExpediente(b.dataset.id);
   else if (a === 'exp-emitir') dlgEmitirExpediente(b.dataset.id);
   else if (a === 'exp-marcado') etiquetaCE(b.dataset.id);
+  else if (a === 'exp-dte') documentoDTE(S.exp);
+  else if (a === 'exp-dte-codigo'){
+    const e = expDe(S.exp); if (!e) return;
+    expPon('prest.dte_codigo', (e.referencia||'') + '-DTE');
+    pintar();
+  }
+  else if (a === 'cpf-imprimir') documentoCPF();
+  else if (a === 'guardar-cpf'){
+    const o = Object.assign({}, datosCPF());
+    document.querySelectorAll('[data-cpf]').forEach(x => { o[x.dataset.cpf] = x.value; });
+    try {
+      const { error } = await sb.from('ajustes').upsert({ clave:'cpf', valor:o }, { onConflict:'clave' });
+      if (error) throw error;
+      S.ajustes.cpf = o; pintar(); toast('Procedimiento guardado.');
+    } catch(err){ fallo(err); }
+  }
   else if (a === 'exp-libro-mant') dlgLibroMantenimiento(b.dataset.id);
   else if (a === 'exp-abrir-docs') abrirDocsExp();
   else if (a === 'exp-ver-doc') verDocExp(b.dataset.id);
