@@ -475,10 +475,23 @@ const GUIONES_FABRICA = {"Corredera":[{"h":"Documentación e identificación"},{
 /* ================= Utilidades ================= */
 const $ = s => document.querySelector(s);
 const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const hoy = () => new Date().toISOString().slice(0,10);
+/* La fecha de hoy en hora local. Con toISOString, a partir de las 22:00 de
+   verano en España salía la fecha del día siguiente. */
+const hoy = () => { const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,10); };
 const fechaCorta = s => { if(!s) return '—'; const d=new Date(s); return d.toLocaleDateString('es-ES',{day:'numeric',month:'short',year:'numeric'}); };
 const fechaHora = s => { if(!s) return '—'; const d=new Date(s); return d.toLocaleDateString('es-ES',{day:'numeric',month:'short'})+' '+d.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}); };
-const dias = s => Math.round((new Date(s)-new Date())/86400000);
+/* Días de diferencia contando días de calendario, no horas. Restar fechas a pelo
+   daba -1 para el día de hoy a partir del mediodía, porque una fecha suelta se
+   lee como medianoche UTC: una visita de hoy salía marcada como pasada de fecha. */
+const dias = s => {
+  if (!s) return 0;
+  const [a, m, d] = String(s).slice(0,10).split('-').map(Number);
+  if (!a || !m || !d) return 0;
+  const cuando = new Date(a, m-1, d);
+  const hoyCero = new Date(); hoyCero.setHours(0,0,0,0);
+  return Math.round((cuando - hoyCero) / 86400000);
+};
 function relativo(s){ const n=dias(s); if(n===0)return 'hoy'; if(n===1)return 'mañana'; if(n===-1)return 'ayer'; return n>0?('en '+n+' días'):('hace '+(-n)+' días'); }
 let toastT=0;
 function toast(m){ const t=$('#toast'); t.textContent=m; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,3400); }
