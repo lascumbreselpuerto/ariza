@@ -2099,7 +2099,8 @@ function panelEmpresa(){
     '<div class="campo'+(ancho?' full':'')+'"><label>'+esc(et)+'</label>'+
     '<input type="text" data-emp="'+k+'" value="'+esc(em[k]||'')+'">'+
     (pista?'<span class="pista">'+esc(pista)+'</span>':'')+'</div>';
-  const faltan = ['nif','domicilio','poblacion','cp'].filter(k => !em[k]);
+  const faltan = ['nif','domicilio','poblacion','cp','representante','responsable_tecnico']
+    .filter(k => !em[k]);
   let h = '<div class="panel"><div class="panel-h"><h3>Datos de la empresa</h3></div>'+
     '<p class="mini" style="margin:0 0 10px">Van en la portada del libro de documentación y en las '+
     'declaraciones de conformidad y de prestaciones, donde la razón social, el NIF y el domicilio completo '+
@@ -2119,9 +2120,12 @@ function panelEmpresa(){
     campo('email','Correo')+
     campo('web','Web')+
     campo('registro','Datos registrales','Registro mercantil, tomo, folio y hoja, si quieres que salgan',1)+
-    campo('responsable_tecnico','Persona que elabora el expediente técnico',
-      'La Directiva de máquinas exige nombrarla en la declaración de conformidad',1)+
+    campo('representante','Representante que firma las declaraciones',
+      'Nombre y apellidos de quien firma en nombre de la empresa',1)+
     campo('cargo_firmante','Cargo de quien firma')+
+    campo('responsable_tecnico','Persona facultada para reunir el expediente técnico',
+      'La Directiva de máquinas exige nombrarla en la declaración de conformidad. '+
+      'Puede ser la misma persona que firma o no serlo',1)+
     '</div>'+
     '<div class="fila" style="margin-top:12px"><span class="sp"></span>'+
     '<button class="btn pri" data-act="guardar-empresa">Guardar datos de la empresa</button></div></div>';
@@ -2570,6 +2574,18 @@ const EXP_REGIMEN = {
 
 /* El régimen que toca, mirando también la respuesta a la pregunta de la que depende
    (hoy solo las barreras: cambia según estén o no al alcance de personas). */
+/* Reparte las normas del expediente entre europeas y nacionales. Que una norma
+   esté vigente en UNE no demuestra que esté citada en el DOUE bajo un acto concreto:
+   la condición de armonizada queda marcada como pendiente de verificar, en vez de
+   darse por supuesta. UNE 85635 es norma española y no puede figurar como europea. */
+function normasDe(e){
+  const todas = EXP_NORMAS[e.familia] || [];
+  return {
+    europeas: todas.filter(([n]) => /^UNE-EN /.test(n)),
+    nacionales: todas.filter(([n]) => !/^UNE-EN /.test(n)),
+  };
+}
+
 function regimenDe(e){
   const r = EXP_REGIMEN[e && e.familia] || EXP_REGIMEN.industrial;
   if (r.depende && r.sinDdp){
@@ -2844,10 +2860,67 @@ const EXP_PUNTOS_FUERZA = {
 const LIM_FUERZA_FABRICA = { fd_aplastamiento_n:400, fd_impacto_n:1400, fs_estatica_n:150,
                              fs_tiempo_s:5, fe_residual_n:25, td_dinamico_s:0.75 };
 const limitesFuerza = () => Object.assign({}, LIM_FUERZA_FABRICA, S.ajustes.limites_fuerza || {});
+
+/* ===== Perfiles de ensayo de fuerzas =====
+   Una puerta industrial, una peatonal y una barrera no se ensayan igual: cambian la
+   norma, los puntos de medida y los límites. Hasta ahora la aplicación aplicaba a
+   todas el mismo juego de límites, que además procede de reproducciones sectoriales
+   y no del texto de la norma.
+
+   Por eso cada perfil nace con validado:false. Mientras un perfil no esté contrastado
+   con el ejemplar de la norma y marcado como validado en Equipo, la aplicación registra
+   las medidas pero NO dictamina: imprime «Pendiente de evaluación» en lugar de «Pasa».
+   Esto no es una limitación provisional del programa, es lo que corresponde: sin fuente
+   verificada no hay dictamen. */
+const PERFILES_FUERZA = {
+  industrial: {
+    nombre: 'Puertas industriales, comerciales y de garaje',
+    norma: 'UNE-EN 12453:2017+A1:2021', apartado: 'pendiente de concretar',
+    magnitudes: 'Fd fuerza dinámica máxima (N), Fs fuerza estática (N), '+
+                'Fe fuerza residual (N), td tiempo por encima de la fuerza estática (s)',
+    validado: false,
+  },
+  peatonal: {
+    nombre: 'Puertas peatonales automáticas',
+    norma: 'UNE-EN 16005+A1:2024', apartado: 'pendiente de concretar',
+    magnitudes: 'Fd fuerza dinámica máxima (N), Fs fuerza estática (N), '+
+                'Fe fuerza residual (N), td tiempo por encima de la fuerza estática (s)',
+    validado: false,
+  },
+  barrera: {
+    nombre: 'Barreras de vehículos',
+    norma: 'UNE-EN 12453:2017+A1:2021', apartado: 'pendiente de concretar',
+    magnitudes: 'Fd fuerza dinámica máxima (N), Fs fuerza estática (N), '+
+                'Fe fuerza residual (N), td tiempo por encima de la fuerza estática (s)',
+    validado: false,
+  },
+  cortafuegos: {
+    nombre: 'Puertas con función de resistencia al fuego',
+    norma: 'UNE-EN 12453:2017+A1:2021 para el funcionamiento ordinario',
+    apartado: 'pendiente de concretar',
+    magnitudes: 'Fd fuerza dinámica máxima (N), Fs fuerza estática (N), '+
+                'Fe fuerza residual (N), td tiempo por encima de la fuerza estática (s)',
+    nota: 'El cierre en caso de incendio se rige por el diseño del conjunto certificado '+
+          'y no se evalúa con este perfil.',
+    validado: false,
+  },
+};
+/* El perfil que toca, con lo que el usuario haya guardado en ajustes encima. */
+function perfilFuerza(e){
+  const base = PERFILES_FUERZA[(e||{}).familia] || PERFILES_FUERZA.industrial;
+  const guardado = (S.ajustes.perfiles_fuerza || {})[(e||{}).familia] || {};
+  return Object.assign({}, base, guardado);
+}
+/* Datos de la empresa. Los que vienen de serie son los que David confirmó; el resto
+   se dejan vacíos a propósito, porque un dato inventado en una declaración firmada es
+   peor que un hueco. El código postal y la web no constan: no se rellenan solos. */
 const datosEmpresa = () => Object.assign({
-  razon_social:'Ariza Puertas y Automatismos S.L.U.', nombre_comercial:'ARIZA Puertas Automáticas',
-  nif:'', domicilio:'', poblacion:'', provincia:'', cp:'', telefono:'', email:'',
-  web:'arizapa.es', registro:'', responsable_tecnico:'', cargo_firmante:'Administrador único'
+  razon_social:'Ariza p y automatismos S.L.U.', nombre_comercial:'ARIZA Puertas Automáticas',
+  nif:'B72004849', domicilio:'Calle Orilla 19', poblacion:'El Puerto de Santa María',
+  provincia:'Cádiz', cp:'', telefono:'661 352 795 · 610 411 032',
+  email:'arizapuertasautomaticas@gmail.com', web:'', registro:'',
+  representante:'David Ariza Arana', cargo_firmante:'Administrador único',
+  responsable_tecnico:''
 }, S.ajustes.empresa || {});
 
 /* ---- Estado del expediente abierto ---- */
@@ -2927,6 +3000,31 @@ function expPendientes(e){
   if (incumple.length) falta.push('hay ' + incumple.length + ' incumplimiento(s) de los que impiden certificar');
   if (EXP_ES_FABRICANTE(e.situacion) && !(d.entrega && d.entrega.firmante_ok))
     falta.push('confirmar quién firma la declaración');
+
+  /* Quién firma y quién reúne el expediente son datos de la empresa, no del
+     expediente: sin ellos la declaración sale incompleta. */
+  if (EXP_ES_FABRICANTE(e.situacion)){
+    const em = datosEmpresa();
+    if (!((d.entrega||{}).firmante || em.representante))
+      falta.push('el nombre del representante que firma, en Equipo → Datos de la empresa');
+    if (!em.responsable_tecnico)
+      falta.push('la persona facultada para reunir el expediente técnico, en Equipo → Datos de la empresa');
+  }
+
+  /* Una declaración de prestaciones en la que todas las características van como NPD
+     no declara nada. El artículo 6.3.c del Reglamento (UE) 305/2011 exige declarar la
+     prestación de al menos una característica esencial. */
+  if (EXP_ES_FABRICANTE(e.situacion) && regimenDe(e).ddp){
+    const pv = ((d.prest||{}).v) || {};
+    const lista = EXP_PRESTACIONES[e.familia] || [];
+    const declaradas = lista.filter(([k]) => {
+      const v = (pv[k] || '').trim();
+      return v && !/^npd$/i.test(v) && !/^pendiente$/i.test(v);
+    });
+    if (lista.length && !declaradas.length)
+      falta.push('declarar la prestación de al menos una característica esencial: '+
+        'con todas en NPD la declaración de prestaciones no declara nada');
+  }
   // Con la vía simplificada, la declaración de prestaciones se apoya en la DTE:
   // si la DTE no está, la declaración queda coja y hay que decirlo.
   const pz = d.prest || {};
@@ -3071,6 +3169,9 @@ function expSecObra(e, p, c){
   return '<div class="panel-h"><h3>Dónde y para quién</h3></div>'+
     '<p class="mini" style="margin:0 0 12px">Lo que irá en la portada y en el encabezado de cada documento.</p>'+
     '<div class="campos">'+
+    expSel('ficticio', '¿Es un caso de prueba?',
+      [['', 'No, es una instalación real'], ['si','Sí, datos y mediciones ficticios']],
+      'Un caso de prueba sale marcado en todas las páginas y nunca se confunde con una instalación real')+
     expTxt('obra.emplazamiento', 'Emplazamiento de la puerta',
       'Calle, número y población donde está instalada', 1)+
     expTxt('obra.ubicacion', 'Situación dentro del edificio', 'Ej.: rampa de garaje, muelle 2, acceso principal')+
@@ -3454,7 +3555,10 @@ function expSecEntrega(e){
     expTxt('entrega.recibido_por', 'Recibido por', 'Nombre de quien recibe la documentación')+
     '<div class="campo"><label>Fecha de entrega</label>'+
       '<input type="date" data-exp="entrega.fecha" value="'+esc(expVal('entrega.fecha',''))+'"></div>'+
-    expTxt('entrega.firmante', 'Firma por la empresa', 'Quien firma las declaraciones')+
+    expTxt('entrega.tecnico', 'Técnico que ha ejecutado la intervención',
+      'Quien ha hecho el trabajo y las pruebas. Puede no ser quien firma')+
+    expTxt('entrega.firmante', 'Firma por la empresa',
+      'Quien firma las declaraciones en nombre de Ariza. No es la persona del cliente que recibe')+
     expTxt('entrega.cargo', 'Cargo')+
     expArea('entrega.observaciones', 'Observaciones', '', 2)+
     '</div>';
@@ -4400,6 +4504,12 @@ async function libroExpediente(id){
   const sello = em.razon_social + (em.nif ? ' · ' + em.nif : '');
 
   const reg = regimenDe(e);
+  /* Un expediente que no está emitido es un borrador, y tiene que decirlo en todas
+     las páginas: si no, un PDF a medias acaba en manos del cliente como si fuera
+     la documentación definitiva. La marca de datos ficticios sirve para los casos
+     de prueba, que no deben confundirse nunca con una instalación real. */
+  const esBorrador = e.estado !== 'emitido';
+  const esFicticio = (e.datos||{}).ficticio === 'si';
   let H = '';
 
   /* ---------- PORTADA ---------- */
@@ -4420,29 +4530,29 @@ async function libroExpediente(id){
       campo('Identificación de la puerta', [p.codigo, (d.puerta||{}).denominacion].filter(Boolean).join(' · '))+
       campo('Fecha de puesta en servicio', e.fecha_puesta_servicio ? fechaCorta(e.fecha_puesta_servicio) : '')+
     '</table>'+
+    (esBorrador
+      ? '<p class="aviso-borrador">BORRADOR. NO VÁLIDO PARA DECLARAR CONFORMIDAD. '+
+        'Documento de trabajo para revisión interna.</p>' : '')+
+    (esFicticio
+      ? '<p class="aviso-borrador">DATOS Y MEDICIONES FICTICIOS. Caso de prueba: '+
+        'no corresponde a ninguna instalación real.</p>' : '')+
     '<div class="pie-portada">'+esc(sello)+(em.telefono?(' · '+esc(em.telefono)):'')+
       (em.web?(' · '+esc(em.web)):'')+'</div>'+
     '</section>';
 
-  /* ---------- ÍNDICE Y DATOS ---------- */
+  /* ---------- ÍNDICE Y DATOS ----------
+     El índice no se escribe a mano: cada sección que de verdad se emite se apunta
+     en «secciones» al abrirla, y al final se sustituye el marcador de abajo por la
+     lista. Así el índice, la numeración del cuerpo y lo que se exporta salen todos
+     del mismo sitio y no pueden discrepar. */
   const secciones = [];
-  secciones.push('Objeto y alcance');
-  secciones.push('Identificación de la puerta');
-  secciones.push('Marco normativo aplicado');
-  secciones.push('Elementos de la instalación');
-  secciones.push('Comprobaciones de cumplimiento');
-  if (motor && ((d.fuerzas||{}).incluir !== 'no')) secciones.push('Ensayo de fuerzas');
-  if (fab && regimenDe(e).ddp) secciones.push('Prestaciones declaradas');
-  if (fab && regimenDe(e).ddp) secciones.push('Declaración de prestaciones');
-  if (fab && M) secciones.push(M.documento);
-  secciones.push(e.situacion === 'adecuacion' ? 'Informe de riesgos y deficiencias' : 'Riesgos residuales');
-  if ((S.expDocs||[]).length) secciones.push('Anexo: documentación de los fabricantes');
-  secciones.push('Instrucciones de uso y seguridad');
-  secciones.push('Libro de mantenimiento');
-  secciones.push('Entrega y firmas');
+  const abreSec = (titulo, clase) => {
+    secciones.push(titulo);
+    return '<section'+(clase ? ' class="'+clase+'"' : '')+'>'+
+           '<h3 class="sec">'+secciones.length+'. '+esc(titulo)+'</h3>';
+  };
 
-  H += '<section><h3 class="sec">Índice</h3><ol class="indice">'+
-    secciones.map(s => '<li>'+esc(s)+'</li>').join('')+'</ol>'+
+  H += '<section><h3 class="sec">Índice</h3><!--MARCADOR-INDICE-->'+
     '<h3 class="sec">Intervinientes</h3>'+
     '<div class="dos">'+
       '<div><h4>Empresa</h4><table class="datos">'+
@@ -4469,7 +4579,7 @@ async function libroExpediente(id){
         'emitimos declaración de prestaciones, declaración de conformidad y marcado CE propios',
         'emitimos declaración de conformidad y marcado CE propios')
     : (EXP_SIT_AYUDA[e.situacion]||'');
-  H += '<section><h3 class="sec">1. Objeto y alcance</h3>'+
+  H += abreSec('Objeto y alcance')+
     '<p>'+esc(objeto)+'</p>'+
     (!reg.ddp ? '<p>'+esc(reg.nota)+'</p>' : '')+
     '<p>Este documento recoge la identificación de la puerta, los elementos que componen la instalación, '+
@@ -4489,7 +4599,7 @@ async function libroExpediente(id){
 
   /* ---------- 2. IDENTIFICACIÓN ---------- */
   const pu = d.puerta || {};
-  H += '<section><h3 class="sec">2. Identificación de la puerta</h3>'+
+  H += abreSec('Identificación de la puerta')+
     '<table class="datos">'+
       campo('Código interno', p.codigo)+
       campo('Tipo', pu.tipo || p.tipo)+
@@ -4510,7 +4620,7 @@ async function libroExpediente(id){
     '</section>';
 
   /* ---------- 3. NORMAS ---------- */
-  H += '<section><h3 class="sec">3. Marco normativo aplicado</h3>'+
+  H += abreSec('Marco normativo aplicado')+
     '<h4>Legislación</h4><ul class="norm">'+
     /* Quién emite qué depende de dos cosas: si de esta familia sale declaración de
        prestaciones, y de qué papel tenemos en esta intervención. En una adecuación no
@@ -4542,7 +4652,7 @@ async function libroExpediente(id){
   /* ---------- 4. COMPONENTES ---------- */
   const comps = EXP_COMPONENTES[e.familia] || [];
   const cd = d.comp || {};
-  H += '<section><h3 class="sec">4. Elementos de la instalación</h3>'+
+  H += abreSec('Elementos de la instalación')+
     '<p>Relación de los elementos que componen la puerta y de los dispositivos de seguridad instalados, '+
     'con la fotografía de cada uno.</p>';
   comps.forEach(([k, nombre, , pideDatos]) => {
@@ -4575,7 +4685,7 @@ async function libroExpediente(id){
   const chk = EXP_COMPROBACIONES[e.familia] || [];
   const kd = d.cumple || {};
   const incum = chk.filter(x => (kd[x[0]]||{}).v === 'no');
-  H += '<section><h3 class="sec">5. Comprobaciones de cumplimiento</h3>'+
+  H += abreSec('Comprobaciones de cumplimiento')+
     '<table class="datos chk"><thead><tr><th style="width:auto">Comprobación</th><th style="width:70px">Resultado</th><th style="width:150px">Exigencia</th></tr></thead><tbody>'+
     chk.map(([k, texto, norma]) => {
       const v = (kd[k]||{}).v;
@@ -4593,8 +4703,14 @@ async function libroExpediente(id){
     const f = d.fuerzas || {};
     const tope = f.hueco === 'impacto' ? lim.fd_impacto_n : lim.fd_aplastamiento_n;
     const puntos = EXP_PUNTOS_FUERZA[e.familia] || EXP_PUNTOS_FUERZA.industrial;
-    H += '<section><h3 class="sec">6. Ensayo de fuerzas</h3>'+
+    const perfil = perfilFuerza(e);
+    H += abreSec('Ensayo de fuerzas')+
       '<table class="datos">'+
+        campo('Perfil de ensayo aplicado', perfil.nombre)+
+        campo('Norma de referencia', perfil.norma)+
+        campo('Apartado', perfil.apartado)+
+        campo('Magnitudes', perfil.magnitudes)+
+        campo('Técnico que ejecuta el ensayo', (d.entrega||{}).tecnico)+
         campo('Instrumento de medida', f.instrumento)+
         campo('Calibración', f.calibracion)+
         campo('Fecha del ensayo', f.fecha ? fechaCorta(f.fecha) : '')+
@@ -4602,6 +4718,11 @@ async function libroExpediente(id){
               (f.hueco === 'aplastamiento' ? 'Con riesgo de aplastamiento' : ''))+
         campo('Límite de fuerza dinámica aplicado', tope + ' N')+
       '</table>'+
+      (perfil.nota ? '<p class="min">'+esc(perfil.nota)+'</p>' : '')+
+      (!perfil.validado
+        ? '<p class="aviso-borrador">PERFIL DE ENSAYO SIN VALIDAR. Los límites y el método '+
+          'de este perfil no se han contrastado con el texto de la norma. Las medidas quedan '+
+          'registradas, pero la aplicación no dictamina si la puerta pasa el ensayo.</p>' : '')+
       '<table class="datos chk"><thead><tr><th>Punto de medida</th><th>Fd (N)</th><th>Fs (N)</th><th>Fe (N)</th><th>td (s)</th><th>Resultado</th></tr></thead><tbody>'+
       puntos.map((pt, i) => {
         const m = f['m'+i] || {};
@@ -4610,7 +4731,13 @@ async function libroExpediente(id){
         const pasa = hay && fd<=tope && fs<=lim.fs_estatica_n && fe<=lim.fe_residual_n && td<=lim.td_dinamico_s;
         return '<tr><td>'+esc(pt)+'</td><td>'+(m.fd||'—')+'</td><td>'+(m.fs||'—')+'</td>'+
           '<td>'+(m.fe||'—')+'</td><td>'+(m.td||'—')+'</td><td>'+
-          (!hay?'<span class="na">Sin medir</span>':(pasa?'<span class="ok">Pasa</span>':'<span class="no">No pasa</span>'))+'</td></tr>';
+          (!hay ? '<span class="na">Sin medir</span>'
+            /* Sin perfil validado no se dictamina. Un «No pasa» sí se mantiene:
+               si una medida supera el límite de referencia, eso hay que verlo
+               aunque el perfil esté pendiente de contrastar. */
+            : (!pasa ? '<span class="no">No pasa</span>'
+              : (perfil.validado ? '<span class="ok">Pasa</span>'
+                : '<span class="na">Pendiente de evaluación</span>')))+'</td></tr>';
       }).join('')+'</tbody></table>'+
       '<p class="min">Límites aplicados: fuerza de aplastamiento '+lim.fd_aplastamiento_n+' N; fuerza de impacto '+
       lim.fd_impacto_n+' N; fuerza estática '+lim.fs_estatica_n+' N durante un máximo de '+lim.fs_tiempo_s+' s; '+
@@ -4631,7 +4758,7 @@ async function libroExpediente(id){
       micro:'Documentación Técnica Específica, procedimiento simplificado para microempresas del artículo 37 del Reglamento (UE) 305/2011',
       unidad:'Documentación Técnica Específica, producto fabricado por unidad, artículo 38 del Reglamento (UE) 305/2011' };
 
-    H += '<section><h3 class="sec">7. Prestaciones declaradas</h3>'+
+    H += abreSec('Prestaciones declaradas')+
       '<table class="datos">'+
         campo('Vía de evaluación', vias[(d.prest||{}).via] || '')+
         campo('Laboratorio u organismo notificado', (d.prest||{}).laboratorio)+
@@ -4642,7 +4769,7 @@ async function libroExpediente(id){
       '</tbody></table></section>';
 
     /* Declaración de prestaciones, con los apartados del Reglamento Delegado 574/2014 */
-    H += '<section class="decl"><h3 class="sec">8. Declaración de prestaciones</h3>'+
+    H += abreSec('Declaración de prestaciones', 'decl')+
       '<p class="decl-num">Nº '+esc(e.referencia||'')+'</p>'+
       '<ol class="decl-l">'+
       '<li><b>Código de identificación única del producto tipo:</b><br>'+
@@ -4677,10 +4804,17 @@ async function libroExpediente(id){
         'se emite bajo la sola responsabilidad del fabricante identificado en el apartado 3.</li>'+
       '</ol>'+ bloqueFirma(em, d, e) +'</section>';
 
-    /* Declaración de conformidad de máquina */
-    if (motor && M){
+    /* cierre del bloque de prestaciones */
+  }
+
+  /* ---------- DECLARACIÓN DE CONFORMIDAD DE MÁQUINA ----------
+     Depende de que la puerta sea una máquina motorizada y de que seamos nosotros
+     su fabricante. NO depende de que haya declaración de prestaciones: una peatonal
+     automática o una puerta motorizada sin declaración de prestaciones sigue siendo
+     una máquina y necesita su declaración de conformidad. */
+  if (fab && motor && M){
       const esRegl = marco === 'reglamento';
-      H += '<section class="decl"><h3 class="sec">9. '+esc(M.documento)+'</h3>'+
+      H += abreSec(M.documento, 'decl')+
         '<p class="decl-num">Nº '+esc(e.referencia||'')+'-M</p><ol class="decl-l">';
       if (esRegl){
         H += '<li><b>Máquina:</b><br>'+esc([pu.denominacion, pu.modelo, pu.serie].filter(Boolean).join(' · ') || '—')+
@@ -4695,8 +4829,13 @@ async function libroExpediente(id){
           '<li><b>El objeto descrito es conforme con la legislación de armonización de la Unión aplicable:</b><br>'+
             'Reglamento (UE) 2023/1230, relativo a las máquinas y los productos relacionados.<br>'+
             'Directiva 2014/30/UE de compatibilidad electromagnética.</li>'+
-          '<li><b>Normas armonizadas o especificaciones comunes aplicadas:</b><ul class="norm">'+
-            (EXP_NORMAS[e.familia]||[]).map(([n]) => '<li>'+esc(n)+'</li>').join('')+'</ul></li>'+
+          '<li><b>Normas y especificaciones técnicas aplicadas:</b><ul class="norm">'+
+            normasDe(e).europeas.map(([n]) => '<li>'+esc(n)+'</li>').join('')+'</ul>'+
+            (normasDe(e).nacionales.length
+              ? '<p class="min">Otras normas nacionales aplicadas: '+
+                normasDe(e).nacionales.map(([n]) => esc(n)).join('; ')+'.</p>' : '')+
+            '<p class="min">La condición de norma armonizada citada en el Diario Oficial '+
+            'bajo este acto está pendiente de verificar para cada una de las normas listadas.</p></li>'+
           '<li><b>Organismo notificado:</b> '+esc((d.prest||{}).laboratorio || 'no interviene.')+'</li>'+
           '<li><b>Procedimiento de evaluación de la conformidad:</b> control interno de la producción.</li>'+
           '<li><b>Información adicional:</b><br>'+esc((d.entrega||{}).observaciones || '—')+'</li>';
@@ -4705,7 +4844,10 @@ async function libroExpediente(id){
             (em.nif?(', NIF '+esc(em.nif)):'')+'<br>'+
             esc([em.domicilio, em.cp, em.poblacion, em.provincia].filter(Boolean).join(', ') || '—')+'</li>'+
           '<li><b>Persona facultada para elaborar el expediente técnico, establecida en la Unión:</b><br>'+
-            esc(em.responsable_tecnico || (d.entrega||{}).firmante || '—')+', '+esc(em.razon_social)+'</li>'+
+            (em.responsable_tecnico
+              ? esc(em.responsable_tecnico)+', '+esc(em.razon_social)+
+                (em.domicilio ? '<br>'+esc([em.domicilio, em.cp, em.poblacion, em.provincia].filter(Boolean).join(', ')) : '')
+              : '<span class="pendiente">PENDIENTE DE DESIGNAR</span>')+'</li>'+
           '<li><b>Descripción e identificación de la máquina:</b><br>'+
             'Denominación genérica: '+esc(EXP_FAMILIA[e.familia]||'')+'. '+
             'Función: cierre y apertura motorizada de un hueco de paso.<br>'+
@@ -4718,19 +4860,22 @@ async function libroExpediente(id){
             'por el que se transpone la Directiva 2014/30/UE de compatibilidad electromagnética.</li>'+
           '<li><b>Organismo notificado del examen CE de tipo:</b> '+esc((d.prest||{}).laboratorio || 'no procede.')+'</li>'+
           '<li><b>Organismo notificado del aseguramiento de calidad total:</b> no procede.</li>'+
-          '<li><b>Normas armonizadas utilizadas:</b><ul class="norm">'+
-            (EXP_NORMAS[e.familia]||[]).map(([n]) => '<li>'+esc(n)+'</li>').join('')+'</ul></li>'+
+          '<li><b>Normas y especificaciones técnicas aplicadas:</b><ul class="norm">'+
+            normasDe(e).europeas.map(([n]) => '<li>'+esc(n)+'</li>').join('')+'</ul>'+
+            '<p class="min">La condición de norma armonizada citada en el Diario Oficial '+
+            'bajo esta Directiva está pendiente de verificar para cada una de ellas.</p></li>'+
           '<li><b>Otras normas y especificaciones técnicas utilizadas:</b> '+
-            esc((d.entrega||{}).observaciones || 'no procede.')+'</li>';
+            (normasDe(e).nacionales.length
+              ? normasDe(e).nacionales.map(([n]) => esc(n)).join('; ')+'. ' : '')+
+            esc((d.entrega||{}).observaciones || '')+'</li>';
       }
-      H += '</ol>'+ bloqueFirma(em, d, e) +'</section>';
-    }
+    H += '</ol>'+ bloqueFirma(em, d, e) +'</section>';
   }
 
   /* ---------- RIESGOS ---------- */
   const r = d.riesgos || {};
-  H += '<section><h3 class="sec">'+(fab?(motor?'10':'9'):'6')+'. '+
-    (e.situacion === 'adecuacion' ? 'Informe de riesgos y deficiencias detectadas' : 'Riesgos residuales')+'</h3>';
+  H += abreSec(e.situacion === 'adecuacion'
+    ? 'Informe de riesgos y deficiencias detectadas' : 'Riesgos residuales');
   if (incum.length){
     H += '<h4>Deficiencias detectadas</h4><table class="datos chk"><thead><tr>'+
       '<th>Deficiencia</th><th style="width:80px">Gravedad</th><th style="width:40%">Actuación propuesta</th></tr></thead><tbody>'+
@@ -4757,7 +4902,7 @@ async function libroExpediente(id){
   /* ---------- ANEXO: DOCUMENTACIÓN DE LOS FABRICANTES ---------- */
   const anexo = S.expDocs || [];
   if (anexo.length){
-    H += '<section><h3 class="sec">Anexo: documentación de los fabricantes</h3>'+
+    H += abreSec('Anexo: documentación de los fabricantes')+
       '<p>Relación de la documentación aportada por los fabricantes de los elementos instalados. '+
       'Los documentos originales se adjuntan a continuación de esta hoja, en el mismo orden.</p>'+
       '<table class="datos chk"><thead><tr><th style="width:26px">Nº</th><th>Documento</th>'+
@@ -4782,7 +4927,7 @@ async function libroExpediente(id){
   }
 
   /* ---------- INSTRUCCIONES ---------- */
-  H += '<section><h3 class="sec">Instrucciones de uso y seguridad</h3>'+
+  H += abreSec('Instrucciones de uso y seguridad')+
     '<h4>Uso previsto</h4><p>La puerta está prevista para '+esc(pu.uso_puerta || 'el uso indicado en este expediente')+
     '. Cualquier uso distinto del previsto queda fuera de las condiciones en que se ha evaluado su seguridad.</p>'+
     '<h4>Normas de uso</h4><ul class="norm">'+
@@ -4804,7 +4949,7 @@ async function libroExpediente(id){
     '</section>';
 
   /* ---------- LIBRO DE MANTENIMIENTO ---------- */
-  H += '<section><h3 class="sec">Libro de mantenimiento</h3>'+
+  H += abreSec('Libro de mantenimiento')+
     '<p class="min">Contenido conforme a la UNE-EN 12635. Este libro debe conservarse junto a la instalación '+
     'y permanecer a disposición de quien realice el mantenimiento. Conservación mínima recomendada: diez años.</p>'+
     '<table class="datos">'+
@@ -4824,7 +4969,7 @@ async function libroExpediente(id){
 
   /* ---------- ENTREGA ---------- */
   const en = d.entrega || {};
-  H += '<section><h3 class="sec">Entrega y firmas</h3>'+
+  H += abreSec('Entrega y firmas')+
     '<p>Se hace entrega al titular de la instalación de la documentación que se relaciona, '+
     'que deberá conservarse junto a la puerta.</p>'+
     '<table class="datos chk"><tbody>'+
@@ -4865,18 +5010,35 @@ async function libroExpediente(id){
 
   w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
     '<title>'+esc(e.referencia||'Expediente')+' · '+esc(titular)+'</title>'+
-    '<style>'+ cssLibro() +'</style></head><body>'+ H +'</body></html>');
+    '<style>'+ cssLibro() +
+      marcaDeAgua([].concat(
+        esBorrador ? ['BORRADOR', 'NO VÁLIDO PARA DECLARAR CONFORMIDAD'] : [],
+        esFicticio ? ['DATOS Y MEDICIONES FICTICIOS'] : []))+
+    '</style></head><body>'+
+    /* Ahora que el cuerpo está montado, ya se sabe qué secciones se han emitido
+       de verdad: el índice se escribe con esa lista, no con una previsión. */
+    H.replace('<!--MARCADOR-INDICE-->',
+      '<ol class="indice">'+ secciones.map(x => '<li>'+esc(x)+'</li>').join('') +'</ol>')+
+    '</body></html>');
   w.document.close();
 }
 
+/* Quien firma una declaración es el representante de la empresa, nunca la persona
+   del cliente que recibe la documentación ni el técnico que hizo el trabajo. Si no
+   consta, el documento lo dice: no se rellena con otro nombre que haya a mano. */
 function bloqueFirma(em, d, e){
   const en = d.entrega || {};
+  const quien = en.firmante || em.representante || '';
   return '<div class="firma-decl">'+
-    '<p>'+esc([em.poblacion, en.fecha ? fechaCorta(en.fecha) : fechaCorta(new Date().toISOString().slice(0,10))]
+    '<p>'+esc([em.poblacion, en.fecha ? fechaCorta(en.fecha) : fechaCorta(hoy())]
       .filter(Boolean).join(', '))+'</p>'+
     '<div class="linea"></div>'+
-    '<p><b>'+esc(en.firmante || em.responsable_tecnico || '')+'</b></p>'+
-    '<p class="min">'+esc(en.cargo || em.cargo_firmante || '')+' · '+esc(em.razon_social)+'</p></div>';
+    (quien
+      ? '<p><b>'+esc(quien)+'</b></p>'+
+        '<p class="min">'+esc(en.cargo || em.cargo_firmante || '')+' · '+esc(em.razon_social)+'</p>'
+      : '<p class="pendiente"><b>PENDIENTE DE FIRMA</b></p>'+
+        '<p class="min">No consta el representante que firma esta declaración.</p>')+
+    '</div>';
 }
 function nombreDocEntrega(k, e, marco){
   const M = EXP_MARCO[marco];
@@ -4896,8 +5058,36 @@ function periodicidadSugerida(e, d){
   return 'Anual, orientativa';
 }
 
+/* Marca de agua de página. Se devuelve como regla CSS lista para pegar: un SVG
+   del tamaño exacto de un A4 puesto como fondo del body y repetido en vertical,
+   que es lo que Chrome sí imprime en todas las páginas. */
+function marcaDeAgua(lineas){
+  if (!lineas.length) return '';
+  const alto = 1123, ancho = 794;            // A4 a 96 ppp
+  const filas = lineas.map((t, i) =>
+    '<text x="50%" y="' + (alto/2 - (lineas.length-1)*26 + i*52) + '" ' +
+    'text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="42" ' +
+    'font-weight="bold" fill="#B3271E" fill-opacity="0.13" ' +
+    'transform="rotate(-32 ' + (ancho/2) + ' ' + (alto/2) + ')">' + t + '</text>').join('');
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + ancho + '" height="' + alto + '">' +
+              filas + '</svg>';
+  return 'body{background-image:url("data:image/svg+xml;utf8,' +
+         encodeURIComponent(svg) + '");background-repeat:repeat-y;' +
+         'background-size:' + ancho + 'px ' + alto + 'px;background-position:top center}';
+}
+
 function cssLibro(){
   return '@page{size:A4;margin:18mm 16mm 16mm}'+
+  /* Lo que falta se ve a simple vista: en rojo y en mayúsculas, para que nadie
+     firme un documento creyendo que está completo. */
+  '.pendiente{color:#B3271E;letter-spacing:.04em}'+
+  '.marca-agua{position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:9999;'+
+    'display:flex;align-items:center;justify-content:center}'+
+  '.marca-agua span{transform:rotate(-32deg);font-size:46px;font-weight:800;letter-spacing:.06em;'+
+    'color:rgba(179,39,30,.13);text-align:center;line-height:1.3;white-space:pre-line}'+
+  '.cinta{position:running(cinta)}'+
+  '.aviso-borrador{background:#F8E1DF;border:1.5px solid #B3271E;color:#7a1a14;'+
+    'border-radius:4px;padding:8px 10px;margin:0 0 14px;font-weight:700;font-size:12px}'+
   '*{box-sizing:border-box}'+
   'body{font:11.5px/1.55 -apple-system,Segoe UI,Roboto,sans-serif;color:#1C1817;margin:0;counter-reset:pag}'+
   'section{page-break-before:always;page-break-inside:auto}'+
