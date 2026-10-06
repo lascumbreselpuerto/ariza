@@ -2130,6 +2130,32 @@ function panelEmpresa(){
     '<div class="fila" style="margin-top:12px"><span class="sp"></span>'+
     '<button class="btn pri" data-act="guardar-empresa">Guardar datos de la empresa</button></div></div>';
 
+  /* Tabla de protección exigida por combinación. Vacía de fábrica: la rellena quien
+     tiene la norma delante. La aplicación no inventa qué exige cada casilla. */
+  {
+    const tabla = S.ajustes.proteccion || {};
+    h += '<div class="panel"><div class="panel-h"><h3>Protección exigida según accionamiento y usuario</h3></div>'+
+      '<p class="nota-oficina" style="margin:0 0 10px">Esta tabla está <b>vacía de serie</b> y no la relleno yo: '+
+      'el nivel de protección que exige cada combinación está en la UNE-EN 12453, que es de pago y no tengo. '+
+      'Escribe aquí, con tu ejemplar delante, qué dispositivos exige cada caso. Mientras una casilla esté vacía, '+
+      'los expedientes con esa combinación avisarán de que no se puede contrastar lo instalado con lo exigible.</p>'+
+      '<div class="tabla-wrap"><table class="tabla"><thead><tr><th style="width:220px">Cómo se acciona</th>'+
+      '<th style="width:200px">Quién la usa</th><th>Protección exigida</th></tr></thead><tbody>';
+    Object.entries(MODOS_ACCIONAMIENTO).forEach(([mk, mv]) => {
+      Object.entries(TIPOS_USUARIO).forEach(([uk, ut]) => {
+        const clave = mk + '|' + uk;
+        h += '<tr><td>'+esc(mv.nombre)+'</td><td>'+esc(ut)+'</td>'+
+          '<td><input type="text" data-prot="'+esc(clave)+'" value="'+esc(tabla[clave]||'')+'" '+
+          'placeholder="Ej.: limitación de fuerza y detección de presencia en todo el recorrido" '+
+          'style="width:100%;padding:5px 7px;border:1px solid var(--line);border-radius:5px;'+
+          'background:var(--surface);color:var(--ink);font-size:13px"></td></tr>';
+      });
+    });
+    h += '</tbody></table></div>'+
+      '<div class="fila" style="margin-top:12px"><span class="sp"></span>'+
+      '<button class="btn pri" data-act="guardar-proteccion">Guardar la tabla de protección</button></div></div>';
+  }
+
   h += '<div class="panel"><div class="panel-h"><h3>Límites de fuerza</h3></div>'+
     '<p class="nota-oficina" style="margin:0 0 10px">Estos valores los tomé de reproducciones sectoriales de la '+
     'UNE-EN 12453, no del texto de la norma, que es de pago. <b>Contrástalos con tu ejemplar</b> y corrígelos aquí '+
@@ -2631,6 +2657,55 @@ const marcoDeFecha = f => !f ? 'pendiente' : (f < '2027-01-20' ? 'directiva' : '
 
 /* ---- Componentes de la instalación, con foto de cada uno ----
    clave, nombre, ayuda para el técnico, si lleva marca/modelo/serie. */
+/* ===== Modo de accionamiento y tipo de usuario =====
+   La UNE-EN 12453 hace depender el nivel de protección exigido de dos cosas: cómo se
+   da la orden de maniobra y quién usa la puerta. Hasta ahora la aplicación guardaba
+   las dos como texto y no las usaba para nada.
+
+   Lo que se modela aquí es la combinación, no la tabla de la norma. Los requisitos
+   concretos los rellena la empresa en Equipo, contrastándolos con su ejemplar: la
+   tabla nace vacía a propósito. Poner aquí de memoria qué protección exige cada
+   casilla sería inventarse el contenido de una norma que no tengo. */
+const MODOS_ACCIONAMIENTO = {
+  hombre_presente: {
+    nombre: 'Hombre presente',
+    ayuda: 'La maniobra solo avanza mientras se mantiene pulsado el mando, y se detiene '+
+           'al soltarlo. Quien acciona tiene el hueco de paso a la vista.',
+    exigeVista: true,
+  },
+  impulso_vista: {
+    nombre: 'Impulso con el hueco a la vista',
+    ayuda: 'Un toque lanza la maniobra completa. Quien acciona ve el hueco de paso.',
+    exigeVista: true,
+  },
+  impulso_sin_vista: {
+    nombre: 'Impulso sin ver el hueco',
+    ayuda: 'Un toque lanza la maniobra completa y quien acciona no ve el hueco: mando a '+
+           'distancia desde el coche, pulsador en otra estancia, control de accesos.',
+    exigeVista: false,
+  },
+  automatico: {
+    nombre: 'Funcionamiento automático',
+    ayuda: 'La puerta se mueve sola: detector de presencia, bucle, temporizador de cierre '+
+           'automático. Nadie da una orden consciente en cada maniobra.',
+    exigeVista: false,
+  },
+};
+const TIPOS_USUARIO = {
+  informados_privado: 'Personas informadas, uso privado',
+  informados_publico: 'Personas informadas, uso público',
+  no_informados:      'Personas no informadas, uso público',
+};
+
+/* Lo que la empresa haya registrado para esta combinación. Vacío mientras no se
+   rellene en Equipo, y entonces la aplicación lo dice en vez de suponer. */
+function exigenciaProteccion(e){
+  const pu = ((e||{}).datos||{}).puerta || {};
+  const clave = (pu.modo || '') + '|' + (pu.usuarios || '');
+  const tabla = S.ajustes.proteccion || {};
+  return { clave, modo: pu.modo, usuarios: pu.usuarios, ficha: tabla[clave] || null };
+}
+
 const EXP_COMPONENTES = {
   industrial: [
     ['hoja',        'Hoja de la puerta',            'Paneles o bastidor. Retrata la puerta entera desde fuera.', 1],
@@ -2699,6 +2774,44 @@ const EXP_COMPONENTES = {
 /* ---- Comprobaciones de cumplimiento ----
    c: clave · t: qué se comprueba · n: de dónde sale la exigencia
    f: pide foto · critico: si falla, la puerta no cumple */
+/* ===== Cuándo procede cada comprobación =====
+   Una puerta de una hoja no tiene selector de secuencia, y una seccional no se sale
+   de las guías como una corredera. Marcar esas comprobaciones como conformes sería
+   inventar un resultado favorable. Aquí se decide si procede preguntarlas.
+
+   Cada regla devuelve true (procede), false (no procede, con su motivo) o null
+   (no se sabe todavía, porque falta el dato de configuración: entonces se pregunta). */
+const APLICA_COMPROBACION = {
+  descarrile: (pu) => !pu.tipo ? null
+    : /corredera/i.test(pu.tipo) ? true
+    : { no:'La puerta no es corredera: no tiene guías de las que descarrilar.' },
+  secuencia: (pu) => !pu.hojas ? null
+    : (+pu.hojas >= 2) ? true
+    : { no:'La puerta tiene una sola hoja: no hay secuencia de cierre que ordenar.' },
+  caida: (pu) => !pu.tipo ? null
+    : /corredera|barrera/i.test(pu.tipo)
+      ? { no:'La hoja no se sostiene por muelle ni cable sobre el hueco de paso.' }
+      : true,
+};
+/* Lo mismo para los elementos de la instalación. */
+const APLICA_COMPONENTE = {
+  selector: (pu) => !pu.hojas ? null
+    : (+pu.hojas >= 2) ? true
+    : { no:'Puerta de una sola hoja.' },
+  paracaidas: (pu) => !pu.tipo ? null
+    : /corredera|barrera/i.test(pu.tipo)
+      ? { no:'La hoja no cuelga de muelle ni cable sobre el hueco de paso.' }
+      : true,
+};
+/* Devuelve true, false o null según la regla y los datos de la puerta. */
+function procede(mapa, clave, e){
+  const regla = mapa[clave];
+  if (!regla) return true;
+  const pu = ((e||{}).datos||{}).puerta || {};
+  const r = regla(pu);
+  return r === null ? null : (r === true ? true : r);
+}
+
 const EXP_COMPROBACIONES = {
   industrial: [
     ['limitacion',  'La fuerza de la puerta está limitada y medida dentro de los valores de la norma',
@@ -2988,14 +3101,71 @@ function expPendientes(e){
   const falta = [];
   const d = e.datos || {};
   if (!e.fecha_puesta_servicio) falta.push('la fecha de puesta en servicio, que decide el marco legal');
+  /* Un documento no puede dar por hecho lo que todavía no ha pasado. */
+  {
+    const f = (d.fuerzas||{}).fecha, ps = e.fecha_puesta_servicio;
+    const hoyStr = hoy();
+    if (ps && ps > hoyStr && (d.entrega||{}).firmante_ok)
+      falta.push('la puesta en servicio está fechada en el futuro ('+fechaCorta(ps)+'): '+
+        'no se puede emitir como realizada una intervención que aún no ha ocurrido');
+    if (f && f > hoyStr)
+      falta.push('el ensayo de fuerzas está fechado en el futuro');
+  }
   if (!(d.obra && d.obra.emplazamiento)) falta.push('el emplazamiento de la puerta');
   if (!(d.puerta && d.puerta.tipo)) falta.push('el tipo de puerta');
   const comps = EXP_COMPONENTES[e.familia] || [];
   const sinResponder = comps.filter(c => !((d.comp||{})[c[0]]||{}).estado);
   if (sinResponder.length) falta.push(sinResponder.length + ' elementos de la instalación sin contestar');
   const chk = EXP_COMPROBACIONES[e.familia] || [];
-  const sinChk = chk.filter(c => !((d.cumple||{})[c[0]]||{}).v);
+  const sinChk = chk.filter(c => {
+    const ap = procede(APLICA_COMPROBACION, c[0], e);
+    if (ap && ap.no) return false;            // no procede: no es un hueco
+    const x = (d.cumple||{})[c[0]] || {};
+    return !x.v;
+  });
   if (sinChk.length) falta.push(sinChk.length + ' comprobaciones de normativa sin contestar');
+  /* De cómo se acciona la puerta y quién la usa depende qué protección exige la
+     norma: sin esas dos respuestas no se puede certificar nada. */
+  {
+    const pu = d.puerta || {};
+    if (pu.motorizada !== 'no'){
+      if (!pu.modo) falta.push('cómo se da la orden de maniobra, en el paso «La puerta»');
+      if (!pu.usuarios) falta.push('quién usa la puerta, en el paso «La puerta»');
+      if (pu.modo === 'hombre_presente' && pu.hp_comprobado !== 'si')
+        falta.push('comprobar que la puerta se detiene al soltar el mando: sin eso no es '+
+          'hombre presente y la protección exigible es otra');
+      if (pu.modo && pu.usuarios && !((S.ajustes.proteccion||{})[pu.modo+'|'+pu.usuarios]))
+        falta.push('definir en Equipo qué protección exige la combinación «'+
+          ((MODOS_ACCIONAMIENTO[pu.modo]||{}).nombre||'')+' · '+
+          (TIPOS_USUARIO[pu.usuarios]||'')+'», contrastándola con la UNE-EN 12453');
+    }
+  }
+
+  /* Si se marca que se entrega documentación del fabricante, tiene que estar
+     subida: si no, el libro anuncia un anexo que no existe. */
+  const marcadosFab = ['ddp_fab','dc_fab','manual'].filter(k => ((d.entrega||{}).docs||{})[k] === 'si');
+  if (marcadosFab.length && !(S.expDocs||[]).length)
+    falta.push('subir la documentación del fabricante que se ha marcado como entregada: '+
+      'ahora mismo el anexo quedaría anunciado pero vacío');
+
+  /* El tipo y la denominación tienen que hablar de la misma puerta. No se corrige
+     sola: se avisa para que lo arregle quien sabe cuál de los dos está mal. */
+  {
+    const pu = d.puerta || {};
+    const MOV = ['corredera','seccional','batiente','enrollable','basculante','plegable'];
+    const enTipo = MOV.find(m => new RegExp(m,'i').test(pu.tipo||''));
+    const enDen  = MOV.find(m => new RegExp(m,'i').test(pu.denominacion||''));
+    if (enTipo && enDen && enTipo !== enDen)
+      falta.push('aclarar la identificación: el tipo dice «'+pu.tipo+'» y la denominación '+
+        'comercial dice «'+pu.denominacion+'». No pueden ser las dos');
+  }
+
+  const sinMotivo = chk.filter(c => {
+    const x = (d.cumple||{})[c[0]] || {};
+    return (x.v === 'na' || x.v === 'nc') && !x.motivo;
+  });
+  if (sinMotivo.length) falta.push('el motivo de '+sinMotivo.length+
+    ' comprobación(es) marcadas como no aplicables o no comprobadas');
   const incumple = chk.filter(c => c[4] && ((d.cumple||{})[c[0]]||{}).v === 'no');
   if (incumple.length) falta.push('hay ' + incumple.length + ' incumplimiento(s) de los que impiden certificar');
   if (EXP_ES_FABRICANTE(e.situacion) && !(d.entrega && d.entrega.firmante_ok))
@@ -3203,6 +3373,21 @@ function expSecPuerta(e, p){
   /* Motorizar una puerta existente nos hace fabricante de la máquina, pero si además
      arrastra declaración de prestaciones nueva está sin confirmar. Se pregunta en vez
      de decidirlo por su cuenta la aplicación. */
+  /* En una puerta que ya existía hay dos momentos: cómo estaba la identificación
+     cuando llegamos y cómo queda al terminar. Sin separarlos, el documento dice a la
+     vez «sin placa» y «placa legible», que fue lo que pasó. */
+  const previa = (e.situacion === 'adecuacion' || e.situacion === 'modificacion')
+    ? expSel('puerta.placa_antes', 'Identificación que tenía al llegar',
+        [['', 'Sin contestar'],
+         ['completa','Placa y marcado CE legibles'],
+         ['ilegible','Placa presente pero ilegible o incompleta'],
+         ['sin','Sin placa ni número de serie'],
+         ['desconocido','No se ha podido determinar']],
+        'Lo que había antes de nuestra intervención')+
+      expTxt('puerta.placa_despues', 'Qué hemos hecho con la identificación',
+        'Ej.: se ha repuesto la placa del fabricante; se ha añadido etiqueta de identificación '+
+        'de la instalación. Si no se ha tocado, dilo', 1)
+    : '';
   const modif = (e.situacion === 'modificacion' && (EXP_REGIMEN[e.familia]||{}).ddp)
     ? expSel('prest.emitir_ddp', '¿Emitimos declaración de prestaciones nueva?',
         [['si','Sí, hemos alterado las prestaciones de la puerta'],
@@ -3215,7 +3400,7 @@ function expSecPuerta(e, p){
     '<p class="mini" style="margin:0 0 12px">Identificación que irá en la declaración y en la placa de características.</p>'+
     '<div class="campos">'+
     expSel('puerta.tipo', 'Tipo de puerta', [''].concat(tipos))+
-    barrera + modif+
+    previa + barrera + modif+
     expTxt('puerta.denominacion', 'Denominación comercial', 'Como la llamas tú en el presupuesto')+
     expTxt('puerta.marca', 'Marca')+
     expTxt('puerta.modelo', 'Modelo')+
@@ -3228,11 +3413,25 @@ function expSecPuerta(e, p){
     expSel('puerta.motorizada', '¿Es motorizada?',
       [['si','Sí'], ['no','No, es manual']],
       'Si es manual no hay declaración de conformidad de máquina')+
-    expSel('puerta.uso_puerta', 'Tipo de uso',
-      ['', 'Residencial, usuarios informados', 'Comercial, usuarios no informados', 'Industrial, personal formado', 'Público, usuarios no informados'],
-      'Determina qué nivel de protección exige la norma')+
-    expSel('puerta.activacion', 'Cómo se acciona',
-      ['', 'Mando a distancia sin ver la puerta', 'Pulsador a la vista de la puerta', 'Pulsador con presencia mantenida', 'Automática por detector', 'Lector o control de acceso'])+
+    expSel('puerta.uso_puerta', 'Destino de la puerta',
+      ['', 'Residencial', 'Comercial', 'Industrial', 'Pública concurrencia'],
+      'Dónde está instalada. Quién la usa se pregunta aparte')+
+    expSel('puerta.usuarios', 'Quién usa la puerta',
+      [['', 'Sin contestar']].concat(Object.entries(TIPOS_USUARIO)),
+      'Una persona informada conoce la puerta y sus riesgos: vive o trabaja allí y se le '+
+      'ha instruido. Un visitante, un cliente o quien pasa por la calle no está informado')+
+    expSel('puerta.modo', 'Cómo se da la orden de maniobra',
+      [['', 'Sin contestar']].concat(Object.entries(MODOS_ACCIONAMIENTO).map(([k,v]) => [k, v.nombre])),
+      'De esto depende qué protección exige la norma')+
+    /* Hombre presente no se deduce de que haya un pulsador: hay que comprobar que la
+       maniobra se para al soltar. Un pulsador que lanza el ciclo completo es impulso. */
+    (expVal('puerta.modo','') === 'hombre_presente'
+      ? expSel('puerta.hp_comprobado', '¿Se ha comprobado que la puerta se para al soltar?',
+          [['', 'Sin contestar'], ['si','Sí, comprobado en obra'], ['no','No se ha comprobado']],
+          'Si no se para al soltar, no es hombre presente aunque lo ponga el cuadro')
+      : '')+
+    expTxt('puerta.activacion', 'Dispositivos de accionamiento instalados',
+      'Ej.: emisor a distancia, pulsador de llave en la entrada, lector de matrícula', 1)+
     expNum('puerta.ciclos_dia', 'Ciclos previstos al día')+
     expTxt('puerta.alimentacion', 'Alimentación eléctrica', 'Ej.: 230 V monofásica, 400 V trifásica')+
     '</div>'+
@@ -3322,10 +3521,39 @@ function expSecComponentes(e){
 function expSecCumplimiento(e){
   const chk = EXP_COMPROBACIONES[e.familia] || [];
   const d = (e.datos||{}).cumple || {};
-  const hechos = chk.filter(c => (d[c[0]]||{}).v).length;
+  const aplicables = chk.filter(c => { const ap = procede(APLICA_COMPROBACION, c[0], e);
+                                        return !(ap && ap.no); });
+  const hechos = aplicables.filter(c => (d[c[0]]||{}).v).length;
   const mal = chk.filter(c => (d[c[0]]||{}).v === 'no');
+  /* Antes de las comprobaciones, la combinación que decide el nivel de protección.
+     Si falta algún dato o la tabla de la empresa no está rellena, se dice. */
+  const ex = exigenciaProteccion(e);
+  const pu2 = (e.datos||{}).puerta || {};
+  let cab = '';
+  if (!ex.modo || !ex.usuarios){
+    cab = '<div class="aviso-caja" style="margin:0 0 14px"><b>Falta decir cómo se acciona la puerta '+
+      'y quién la usa.</b><br>De esas dos respuestas depende qué dispositivos de seguridad exige la '+
+      'norma. Están en el paso «La puerta».</div>';
+  } else {
+    const m = MODOS_ACCIONAMIENTO[ex.modo] || {};
+    const hpMal = ex.modo === 'hombre_presente' && pu2.hp_comprobado !== 'si';
+    cab = '<div class="'+(ex.ficha ? 'aviso-caja' : 'mal-caja')+'" style="margin:0 0 14px">'+
+      '<b>'+esc(m.nombre||'')+' · '+esc(TIPOS_USUARIO[ex.usuarios]||'')+'</b><br>'+
+      (ex.ficha
+        ? 'Protección que la empresa tiene registrada para esta combinación:<br>'+esc(ex.ficha)
+        : 'No hay registrada ninguna exigencia de protección para esta combinación. '+
+          'Se rellena en Equipo, contrastándola con la UNE-EN 12453. Mientras no esté, la '+
+          'aplicación no puede decir si los dispositivos instalados son los que exige la norma.')+
+      '</div>';
+    if (hpMal)
+      cab += '<div class="mal-caja" style="margin:0 0 14px"><b>Hombre presente sin comprobar.</b><br>'+
+        'Has indicado hombre presente, pero no consta que se haya comprobado que la puerta se '+
+        'detiene al soltar el mando. Un pulsador que lanza el ciclo completo es impulso, no hombre '+
+        'presente, y la protección exigible es otra.</div>';
+  }
+
   let h = '<div class="panel-h"><h3>Cumplimiento de normativa</h3>'+
-    '<span class="mini">'+hechos+' de '+chk.length+'</span></div>'+
+    '<span class="mini">'+hechos+' de '+aplicables.length+'</span></div>'+ cab +
     '<p class="mini" style="margin:0 0 14px">Cada línea dice de dónde sale la exigencia. '+
     'Las marcadas como imprescindibles impiden certificar la puerta si no se cumplen.</p>';
   if (mal.length)
@@ -3334,16 +3562,35 @@ function expSecCumplimiento(e){
          'No se oculta: ese es el valor del documento.</p>';
   chk.forEach(([k, texto, norma, pideFoto, critico]) => {
     const v = (d[k]||{}).v || '';
+    /* Lo que no procede por la configuración de la puerta no se pregunta: se deja
+       dicho por qué no procede, y así queda en el documento sin fingir un resultado. */
+    const ap = procede(APLICA_COMPROBACION, k, e);
+    if (ap && ap.no){
+      h += '<div class="exp-item" style="opacity:.72">'+
+        '<div class="fila" style="gap:8px;flex-wrap:wrap;align-items:baseline">'+
+          '<span style="flex:1 1 260px">'+esc(texto)+'</span>'+
+          '<span class="chip gris sin">No aplicable</span></div>'+
+        '<p class="mini" style="margin:4px 0 0">'+esc(ap.no)+'</p></div>';
+      return;
+    }
     h += '<div class="exp-item'+(v==='no'?' falta':(v==='si'?' bien':''))+'">'+
       '<div class="fila" style="gap:8px;flex-wrap:wrap;align-items:baseline">'+
         '<span style="flex:1 1 260px">'+esc(texto)+(critico?' <span class="chip mal sin">Imprescindible</span>':'')+'</span>'+
         '<select data-exp="cumple.'+k+'.v" class="cal-sel">'+
-          '<option value=""'  +(v===''  ?' selected':'')+'>Sin contestar</option>'+
-          '<option value="si"'+(v==='si'?' selected':'')+'>Cumple</option>'+
-          '<option value="no"'+(v==='no'?' selected':'')+'>No cumple</option>'+
-          '<option value="na"'+(v==='na'?' selected':'')+'>No aplica</option>'+
+          '<option value=""'  +(v===''  ?' selected':'')+'>Pendiente</option>'+
+          '<option value="si"'+(v==='si'?' selected':'')+'>Conforme</option>'+
+          '<option value="no"'+(v==='no'?' selected':'')+'>No conforme</option>'+
+          '<option value="nc"'+(v==='nc'?' selected':'')+'>No comprobado</option>'+
+          '<option value="na"'+(v==='na'?' selected':'')+'>No aplicable</option>'+
         '</select></div>'+
-      '<p class="mini" style="margin:4px 0 0">'+esc(norma)+'</p>';
+      '<p class="mini" style="margin:4px 0 0">'+esc(norma)+'</p>'+
+      /* Un «no aplicable» o un «no comprobado» sin motivo no vale de nada: quien lea
+         el documento tiene que saber por qué esa comprobación no tiene resultado. */
+      (v === 'na' || v === 'nc'
+        ? '<div class="campos" style="margin-top:8px">'+
+          expTxt('cumple.'+k+'.motivo',
+            v === 'na' ? 'Por qué no aplica a esta puerta' : 'Por qué no se ha podido comprobar', '', 1)+
+          '</div>' : '');
     if (v === 'no')
       h += '<div class="campos" style="margin-top:8px">'+
            expTxt('cumple.'+k+'.def', 'Qué se ha encontrado', '', 1)+
@@ -4612,9 +4859,24 @@ async function libroExpediente(id){
       campo('Número de hojas', pu.hojas)+
       campo('Accionamiento', pu.motorizada === 'no' ? 'Manual' : 'Motorizada')+
       campo('Tipo de uso', pu.uso_puerta)+
-      campo('Modo de accionamiento', pu.activacion)+
+      campo('Cómo se da la orden de maniobra',
+        ((MODOS_ACCIONAMIENTO[pu.modo]||{}).nombre || '')+
+        (pu.modo === 'hombre_presente'
+          ? (pu.hp_comprobado === 'si'
+              ? ' (comprobado que se detiene al soltar)'
+              : ' (sin comprobar que se detiene al soltar)')
+          : ''))+
+      campo('Quién usa la puerta', TIPOS_USUARIO[pu.usuarios] || '')+
+      campo('Dispositivos de accionamiento', pu.activacion)+
       campo('Ciclos previstos al día', pu.ciclos_dia)+
       campo('Alimentación eléctrica', pu.alimentacion)+
+      campo('Identificación al llegar', ({
+        completa:'Placa y marcado CE legibles',
+        ilegible:'Placa presente pero ilegible o incompleta',
+        sin:'Sin placa ni número de serie',
+        desconocido:'No se ha podido determinar',
+      })[pu.placa_antes] || '')+
+      campo('Actuación sobre la identificación', pu.placa_despues)+
     '</table>'+
     galeria('puerta:general', 2)+
     '</section>';
@@ -4685,14 +4947,48 @@ async function libroExpediente(id){
   const chk = EXP_COMPROBACIONES[e.familia] || [];
   const kd = d.cumple || {};
   const incum = chk.filter(x => (kd[x[0]]||{}).v === 'no');
+  const exi = exigenciaProteccion(e);
   H += abreSec('Comprobaciones de cumplimiento')+
+    (exi.modo && exi.usuarios
+      ? '<h4>Nivel de protección aplicable</h4>'+
+        '<p>Esta puerta funciona en modo <b>'+esc((MODOS_ACCIONAMIENTO[exi.modo]||{}).nombre||'')+
+        '</b> y la usan <b>'+esc((TIPOS_USUARIO[exi.usuarios]||'').toLowerCase())+'</b>. '+
+        (exi.ficha
+          ? 'La protección exigida para esta combinación es: '+esc(exi.ficha)
+          : '<span class="pendiente">La exigencia de protección para esta combinación no está '+
+            'definida, de modo que las comprobaciones de este apartado no se han podido contrastar '+
+            'con el nivel que exige la norma para este caso.</span>')+'</p>'
+      : '<p class="pendiente">No consta cómo se acciona la puerta ni quién la usa, que es de lo que '+
+        'depende el nivel de protección exigible.</p>')+
     '<table class="datos chk"><thead><tr><th style="width:auto">Comprobación</th><th style="width:70px">Resultado</th><th style="width:150px">Exigencia</th></tr></thead><tbody>'+
     chk.map(([k, texto, norma]) => {
-      const v = (kd[k]||{}).v;
-      const r = v === 'si' ? '<span class="ok">Cumple</span>' : v === 'no' ? '<span class="no">No cumple</span>'
-              : v === 'na' ? '<span class="na">No aplica</span>' : '<span class="na">Sin comprobar</span>';
-      return '<tr><td>'+esc(texto)+'</td><td>'+r+'</td><td class="min">'+esc(norma)+'</td></tr>';
-    }).join('')+'</tbody></table>';
+      const ap = procede(APLICA_COMPROBACION, k, e);
+      const x = kd[k] || {};
+      const v = ap && ap.no ? 'na' : x.v;
+      const motivo = ap && ap.no ? ap.no : x.motivo;
+      const r = v === 'si' ? '<span class="ok">Conforme</span>'
+              : v === 'no' ? '<span class="no">No conforme</span>'
+              : v === 'na' ? '<span class="na">No aplicable</span>'
+              : v === 'nc' ? '<span class="no">No comprobado</span>'
+              : '<span class="pendiente">Pendiente</span>';
+      return '<tr><td>'+esc(texto)+
+        (motivo && (v === 'na' || v === 'nc')
+          ? '<span class="sub min" style="display:block">'+esc(motivo)+'</span>' : '')+
+        '</td><td>'+r+'</td><td class="min">'+esc(norma)+'</td></tr>';
+    }).join('')+'</tbody></table>'+
+    /* Lo que queda sin resultado se cuenta aparte: un documento con comprobaciones
+       pendientes no puede leerse como si todo estuviera revisado. */
+    (() => {
+      const sin = chk.filter(([k]) => {
+        const ap = procede(APLICA_COMPROBACION, k, e);
+        if (ap && ap.no) return false;
+        const v = (kd[k]||{}).v;
+        return !v || v === 'nc';
+      });
+      return sin.length
+        ? '<p class="aviso-borrador">'+sin.length+' comprobación(es) sin resultado. '+
+          'El alcance de este documento no incluye lo que no se ha comprobado.</p>' : '';
+    })();
   chk.forEach(([k, texto]) => { const g = galeria('cumple:'+k, 2);
     if (g) H += '<div class="comp"><h4>'+esc(texto)+'</h4>'+g+'</div>'; });
   H += '</section>';
@@ -4902,22 +5198,34 @@ async function libroExpediente(id){
   /* ---------- ANEXO: DOCUMENTACIÓN DE LOS FABRICANTES ---------- */
   const anexo = S.expDocs || [];
   if (anexo.length){
+    /* Cada documento dice en qué estado está respecto de ESTA exportación: una imagen
+       se incrusta y va adjunta de verdad; un PDF no se puede meter dentro de este
+       documento, así que consta como disponible, no como adjunto. Afirmar que algo
+       va adjunto cuando no está es justo lo que no puede hacer este anexo. */
+    const estadoDoc = x => (/^image\//i.test(x.mime||'') && url[x.ruta])
+      ? '<span class="ok">Adjunto aquí</span>'
+      : '<span class="na">Disponible, se entrega aparte</span>';
+    const adjuntos = anexo.filter(x => /^image\//i.test(x.mime||'') && url[x.ruta]).length;
     H += abreSec('Anexo: documentación de los fabricantes')+
       '<p>Relación de la documentación aportada por los fabricantes de los elementos instalados. '+
-      'Los documentos originales se adjuntan a continuación de esta hoja, en el mismo orden.</p>'+
+      'La columna «En esta exportación» dice si el documento va incluido en estas páginas o si '+
+      'se entrega como archivo aparte.</p>'+
       '<table class="datos chk"><thead><tr><th style="width:26px">Nº</th><th>Documento</th>'+
-      '<th style="width:28%">Elemento</th><th style="width:22%">Fabricante</th>'+
-      '<th style="width:70px">Fecha</th></tr></thead><tbody>'+
+      '<th style="width:22%">Elemento</th><th style="width:18%">Fabricante</th>'+
+      '<th style="width:70px">Fecha</th><th style="width:110px">En esta exportación</th></tr></thead><tbody>'+
       anexo.map((x, i) => '<tr><td>'+(i+1)+'</td>'+
         '<td>'+esc(x.tipo_doc || 'Documento')+
           (x.referencia ? '<br><span class="min">Ref. '+esc(x.referencia)+'</span>' : '')+
           '<br><span class="min">'+esc(x.nombre||'')+'</span></td>'+
         '<td>'+esc(x.elemento || '—')+'</td>'+
         '<td>'+esc(x.fabricante || '—')+'</td>'+
-        '<td>'+esc(x.fecha_doc ? fechaCorta(x.fecha_doc) : '—')+'</td></tr>').join('')+
+        '<td>'+esc(x.fecha_doc ? fechaCorta(x.fecha_doc) : '—')+'</td>'+
+        '<td>'+estadoDoc(x)+'</td></tr>').join('')+
       '</tbody></table>'+
-      '<p class="min">Total: '+anexo.length+' documento'+(anexo.length===1?'':'s')+'. '+
-      'Si alguno de ellos falta tras esta hoja, solicítelo a la empresa instaladora.</p>'+
+      '<p class="min">Total: '+anexo.length+' documento'+(anexo.length===1?'':'s')+', '+
+      'de los que '+adjuntos+' se incluyen en estas páginas'+
+      (anexo.length - adjuntos > 0
+        ? ' y '+(anexo.length-adjuntos)+' se entregan como archivo aparte.' : '.')+'</p>'+
       // Las imágenes sí se pueden incrustar; los PDF van detrás, impresos aparte
       anexo.filter(x => /^image\//i.test(x.mime||'') && url[x.ruta]).map(x =>
         '<div class="comp"><h4>'+esc([x.tipo_doc, x.fabricante].filter(Boolean).join(' · '))+'</h4>'+
@@ -4926,24 +5234,74 @@ async function libroExpediente(id){
       '</section>';
   }
 
-  /* ---------- INSTRUCCIONES ---------- */
+  /* ---------- INSTRUCCIONES ----------
+     Las instrucciones no son las mismas para una puerta de garaje, una peatonal
+     automática por detector y una cortafuegos. Lo común va primero y lo propio de
+     cada producto después.
+
+     Se ha quitado «vigilar la puerta durante toda la maniobra cuando se accione sin
+     verla», porque pedía algo imposible de cumplir: si no se ve la puerta no se puede
+     vigilar. Una protección insuficiente no se arregla con una advertencia. */
+  const comunes = [
+    'No cruzar el hueco mientras la puerta está en movimiento.',
+    'No permitir que los niños jueguen con los mandos ni en las proximidades de la puerta.',
+    'No forzar la puerta ni anular, tapar o desconectar ningún dispositivo de seguridad.',
+    'Ante cualquier ruido, golpe o funcionamiento anómalo, dejar de usar la puerta y avisar al mantenedor.',
+  ];
+  const sinVista = /sin ver|sin visibilidad/i.test(pu.activacion || '');
+  const propias = {
+    industrial: [].concat(
+      'Mantener limpias las ópticas de las fotocélulas y libre de obstáculos la zona de barrido.',
+      sinVista
+        ? ['Esta puerta se acciona sin tener el hueco a la vista. Antes de dar la orden, '+
+           'asegurarse de que nadie va a cruzar, y no accionarla si no se puede comprobar.']
+        : ['No accionar la puerta si hay personas o vehículos en el hueco de paso.'],
+      'No permanecer bajo la hoja ni en su recorrido durante la maniobra.'),
+    barrera: [
+      'No pasar bajo el mástil mientras se mueve, ni forzarlo a mano.',
+      'Respetar la señalización y esperar a que el mástil quede completamente arriba.',
+      'Mantener limpia la fotocélula y despejada la zona del bucle de detección.',
+    ],
+    peatonal: [
+      'Pasar de frente y por el centro del hueco, sin detenerse en la línea de cierre.',
+      'No empujar las hojas a mano ni sujetarlas durante la maniobra.',
+      'Mantener limpios los sensores y el acristalamiento, y libre la zona que vigilan.',
+      'Respetar la señalización del vidrio: no apoyarse ni cargar objetos contra las hojas.',
+    ],
+    cortafuegos: [
+      'No calzar, bloquear ni dejar obstáculos que impidan el cierre de la puerta.',
+      'No colgar ni apoyar nada en la hoja ni en sus herrajes.',
+      'La puerta forma parte de la compartimentación contra incendios: cualquier elemento '+
+        'que impida su cierre anula esa función.',
+      'No desconectar los retenedores ni el sistema de detección sin consultarlo con el mantenedor.',
+    ],
+  };
+  const desbloqueoTexto = e.familia === 'cortafuegos'
+    ? 'El desbloqueo y la maniobra manual de esta puerta son los que indique el manual de su '+
+      'fabricante. No se dan aquí instrucciones genéricas: una maniobra equivocada puede dejar '+
+      'la puerta sin su función de cierre en caso de incendio.'
+    : (((d.comp||{}).desbloqueo||{}).nota ||
+       'El desbloqueo manual permite mover la puerta a mano cuando falta la corriente. Antes de '+
+       'accionarlo hay que cortar la alimentación y asegurarse de que la hoja no puede caer ni '+
+       'desplazarse de forma incontrolada. Seguir el procedimiento del manual del equipo instalado.');
+  const falloTexto = e.familia === 'cortafuegos'
+    ? 'Avisar a la empresa mantenedora. No dejar la puerta calzada ni abierta de forma permanente: '+
+      'mientras no cierre, el sector de incendio queda sin compartimentar. Si hay que dejarla fuera '+
+      'de servicio, acordar con la propiedad una medida compensatoria.'
+    : 'Cortar la alimentación, dejar la puerta fuera de servicio, señalizarla y avisar a la empresa '+
+      'mantenedora. No intentar repararla ni anular las seguridades para seguir usándola.';
+
   H += abreSec('Instrucciones de uso y seguridad')+
     '<h4>Uso previsto</h4><p>La puerta está prevista para '+esc(pu.uso_puerta || 'el uso indicado en este expediente')+
     '. Cualquier uso distinto del previsto queda fuera de las condiciones en que se ha evaluado su seguridad.</p>'+
     '<h4>Normas de uso</h4><ul class="norm">'+
-    '<li>No cruzar el hueco mientras la puerta está en movimiento.</li>'+
-    '<li>No permitir que los niños jueguen con los mandos ni en las proximidades de la puerta.</li>'+
-    '<li>Vigilar la puerta durante toda la maniobra cuando se accione sin verla.</li>'+
-    '<li>No forzar la puerta ni anular, tapar o desconectar ningún dispositivo de seguridad.</li>'+
-    '<li>Mantener limpias las ópticas de las fotocélulas y libre de obstáculos la zona de barrido.</li>'+
-    '<li>Ante cualquier ruido, golpe o funcionamiento anómalo, dejar de usar la puerta y avisar al mantenedor.</li>'+
+    comunes.concat(propias[e.familia] || propias.industrial)
+      .map(x => '<li>'+esc(x)+'</li>').join('')+
     '</ul>'+
-    '<h4>Maniobra manual</h4><p>'+
-    esc(((d.comp||{}).desbloqueo||{}).nota || 'El desbloqueo manual permite mover la puerta a mano cuando falta '+
-    'la corriente. Antes de accionarlo hay que cortar la alimentación y asegurarse de que la hoja no puede caer '+
-    'ni desplazarse de forma incontrolada.')+'</p>'+
-    '<h4>Qué hacer ante un fallo</h4><p>Cortar la alimentación, dejar la puerta fuera de servicio, señalizarla '+
-    'y avisar a la empresa mantenedora. No intentar repararla ni anular las seguridades para seguir usándola.</p>'+
+    '<h4>Maniobra manual</h4><p>'+esc(desbloqueoTexto)+'</p>'+
+    '<h4>Qué hacer ante un fallo</h4><p>'+esc(falloTexto)+'</p>'+
+    '<p class="min">Estas instrucciones no sustituyen al manual del fabricante del equipo '+
+    'instalado, que se entrega con esta documentación y prevalece en lo relativo a su manejo.</p>'+
     '<h4>Contacto del mantenedor</h4><p>'+esc(em.razon_social)+
     (em.telefono?(' · Teléfono '+esc(em.telefono)):'')+(em.email?(' · '+esc(em.email)):'')+'</p>'+
     '</section>';
@@ -6976,6 +7334,20 @@ raiz.addEventListener('click', async e => {
     try { await guardarLista(clave, arr); pintar(); toast('Lista guardada.'); }
     catch(err){ fallo(err); }
   }
+  else if (a === 'guardar-proteccion'){
+    const o = {};
+    document.querySelectorAll('[data-prot]').forEach(x => {
+      const v = x.value.trim();
+      if (v) o[x.dataset.prot] = v;          // las vacías no se guardan: siguen sin definir
+    });
+    try {
+      const { error } = await sb.from('ajustes').upsert({ clave:'proteccion', valor:o }, { onConflict:'clave' });
+      if (error) throw error;
+      S.ajustes.proteccion = o;
+      toast(Object.keys(o).length + ' combinaciones guardadas.');
+      pintar();
+    } catch(err){ fallo(err); }
+  }
   else if (a === 'guardar-empresa' || a === 'guardar-limites'){
     const esEmp = a === 'guardar-empresa';
     const clave = esEmp ? 'empresa' : 'limites_fuerza';
@@ -7032,7 +7404,7 @@ raiz.addEventListener('change', e => {
     // Solo repintamos cuando la respuesta cambia lo que hay que enseñar.
     // acceso_personas entra aquí porque decide si la barrera lleva declaración
     // de prestaciones, y con ella todo un paso del cuestionario.
-    if (/\.(estado|v|incluir)$|motorizada|hueco$|\.via$|acceso_personas$|emitir_ddp$/.test(ruta)) pintar();
+    if (/\.(estado|v|incluir)$|motorizada|hueco$|\.via$|acceso_personas$|emitir_ddp$|\.modo$|usuarios$/.test(ruta)) pintar();
     return;
   }
   if (e.target.dataset.expChk !== undefined){
