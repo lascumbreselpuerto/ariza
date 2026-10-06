@@ -239,6 +239,9 @@ dialog::backdrop{background:rgba(20,18,17,.55)}
 .dlg .pie{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
 .err{color:var(--mal);font-size:14px;margin:0;min-height:1em}
 .aviso-caja{background:var(--aviso-bg);color:var(--ink);border:1px solid color-mix(in srgb,var(--aviso) 35%,transparent);border-radius:6px;padding:10px 12px;font-size:14px}
+.guia-usuarios{border:1px solid var(--line);border-radius:6px;padding:8px 10px;background:var(--surface)}
+.guia-usuarios summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--amarillo-osc,#8a5a06)}
+.guia-usuarios[open] summary{margin-bottom:4px}
 .mal-caja{background:var(--mal-bg);color:var(--ink);border:1px solid color-mix(in srgb,var(--mal) 40%,transparent);border-radius:6px;padding:10px 12px;font-size:14px}
 #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--negro);color:#fff;padding:11px 16px;border-radius:6px;font-size:14px;box-shadow:var(--sombra);z-index:20;max-width:calc(100% - 24px)}
 .login{max-width:380px;margin:8vh auto 0;display:grid;gap:14px}
@@ -2708,6 +2711,142 @@ const TIPOS_USUARIO = {
   no_informados:      'Personas no informadas, uso público',
 };
 
+/* Guía de clasificación por entorno. No decide por el técnico: le enseña cómo se
+   clasifica normalmente cada caso y qué hay que mirar. La norma considera informado
+   al usuario autorizado que ha recibido instrucciones de uso; lo determinante no es
+   que la puerta sea «residencial» o «industrial», sino quién puede llegar hasta ella.
+   Procede del documento de trabajo aportado por la empresa el 6 de octubre de 2026. */
+const GUIA_USUARIOS = [
+  ['Vivienda unifamiliar privada', 'informados_privado',
+   'Solo la usa la familia, identificada, y el público no está expuesto.'],
+  ['Garaje de comunidad', 'informados_privado',
+   'Grupo limitado e instruido, pero hay que mirar si la puerta da a zona pública: '+
+   'si la calle llega hasta ella, la cara exterior cambia de clasificación.'],
+  ['Industria, recinto cerrado', 'informados_privado',
+   'Personal formado en área privada.'],
+  ['Industria con puerta hacia la vía pública', 'no_informados',
+   'En la cara accesible al público hay que aplicar el nivel más alto.'],
+  ['Parking de empleados', 'informados_privado',
+   'Grupo identificado y formado, según dónde esté la puerta.'],
+  ['Parking público', 'no_informados', 'Público general.'],
+  ['Centro comercial', 'no_informados', 'Público general.'],
+  ['Supermercado', 'no_informados', 'Público general.'],
+  ['Hotel', 'no_informados', 'Público general en los accesos de clientes.'],
+  ['Hospital', 'no_informados',
+   'Público general y usuarios vulnerables: la valoración debe ser conservadora.'],
+  ['Colegio o guardería', 'no_informados',
+   'Público y presencia de menores: análisis reforzado del riesgo.'],
+  ['Logística 24 horas', '',
+   'La intensidad de uso aumenta las exigencias de fiabilidad y mantenimiento, '+
+   'pero no cambia por sí sola la clasificación del usuario: depende de quién accede.'],
+];
+
+/* ===== Peligros propios de cada tipo de puerta =====
+   Procedencia: documento de trabajo aportado por la empresa el 6 de octubre de 2026.
+   La idea que lo sostiene es importante: proteger el borde principal de cierre con el
+   nivel que exige la matriz NO agota las obligaciones. Cada movimiento tiene sus
+   puntos peligrosos y hay que valorarlos uno a uno.
+
+   Cada punto lleva el peligro y los elementos que habitualmente lo protegen. Lo
+   segundo es orientación, no una lista cerrada: la configuración definitiva depende
+   de distancias, velocidades, fuerzas, geometría, accesibilidad y del análisis de
+   riesgos de la instalación concreta. */
+const PELIGROS_POR_TIPO = {
+  corredera: [
+    ['cor_borde',    'Aplastamiento en el borde principal de cierre',
+                     'Limitación de fuerzas o borde sensible'],
+    ['cor_poste',    'Atrapamiento contra el poste o jamba de cierre',
+                     'Distancias de seguridad, resguardo o dispositivo sensible'],
+    ['cor_posterior','Atrapamiento en el borde posterior al abrir',
+                     'Protección del borde posterior o detección en esa zona'],
+    ['cor_arrastre', 'Arrastre hacia el hueco de recogida de la hoja',
+                     'Resguardo, malla o protección de la zona de arrastre'],
+    ['cor_cizalla',  'Cizallamiento entre la hoja y los elementos fijos',
+                     'Separaciones seguras o protección física'],
+  ],
+  batiente: [
+    ['bat_impacto', 'Impacto de la hoja en su barrido',
+                    'Limitación de fuerzas, detección o barrido señalizado y libre'],
+    ['bat_fijos',   'Aplastamiento entre la hoja y elementos fijos',
+                    'Distancias de seguridad o dispositivo sensible'],
+    ['bat_bisagra', 'Cizallamiento en la zona de bisagras',
+                    'Protección de la zona de bisagra'],
+    ['bat_atrapa',  'Atrapamiento en el cierre entre hojas',
+                    'Borde sensible o detección en la línea de cierre'],
+  ],
+  seccional: [
+    ['sec_inferior','Aplastamiento del borde inferior',
+                    'Limitación de fuerzas o banda de seguridad'],
+    ['sec_caida',   'Caída de la hoja por rotura de muelle o cable',
+                    'Paracaídas de muelle y de cable'],
+    ['sec_paneles', 'Atrapamiento de dedos entre paneles',
+                    'Perfilería de panel con protección antiatrapamiento'],
+    ['sec_cables',  'Riesgo de cables, muelles y tambores accesibles',
+                    'Protección o situación fuera de alcance'],
+  ],
+  basculante: [
+    ['bas_impacto', 'Impacto y aplastamiento del borde de cierre',
+                    'Limitación de fuerzas o borde sensible'],
+    ['bas_barrido', 'Barrido de la hoja hacia fuera o hacia dentro',
+                    'Zona de barrido libre y señalizada, o detección'],
+    ['bas_caida',   'Caída de la hoja',
+                    'Dispositivo anticaída'],
+    ['bas_brazos',  'Brazos, contrapesos y puntos de cizallamiento',
+                    'Protección o situación fuera de alcance'],
+  ],
+  rapida: [
+    ['rap_borde',    'Impacto del borde inferior con cierre rápido',
+                     'Borde sensible o sistema equivalente'],
+    ['rap_optica',   'Paso de personas durante el cierre',
+                     'Barrera óptica o fotocélulas que cubran el hueco'],
+    ['rap_velocidad','Fuerzas y velocidades por encima de lo admisible',
+                     'Control de fuerza y velocidad comprobado'],
+    ['rap_laterales','Arrastre o atrapamiento en guías y recogida',
+                     'Protección de las zonas laterales y de recogida'],
+  ],
+  enrollable: [
+    ['enr_borde',   'Aplastamiento del borde inferior',
+                    'Limitación de fuerzas o borde sensible'],
+    ['enr_caida',   'Caída o desenrollamiento de la lama',
+                    'Dispositivo anticaída o freno'],
+    ['enr_lateral', 'Atrapamiento lateral en las guías',
+                    'Guías con protección o separaciones seguras'],
+  ],
+  plegable: [
+    ['ple_cizalla',  'Cizallamiento entre hojas al plegarse',
+                     'Bordes sensibles en los puntos peligrosos'],
+    ['ple_borde',    'Aplastamiento del borde de cierre',
+                     'Limitación de fuerzas o borde sensible'],
+    ['ple_articula', 'Atrapamiento en las articulaciones accesibles',
+                     'Protección de las articulaciones'],
+  ],
+  barrera: [
+    ['bar_impacto', 'Impacto del mástil en su recorrido',
+                    'Limitación de fuerzas o mástil amortiguado'],
+    ['bar_descenso','Descenso sobre vehículos o personas',
+                    'Fotocélula, lazo de detección o detector de presencia'],
+    ['bar_senal',   'Mástil poco visible',
+                    'Señalización reflectante del mástil'],
+  ],
+};
+
+/* Qué grupo toca según el tipo de puerta. Si el tipo no se reconoce no se inventa
+   ninguno: el expediente avisará de que hay que valorarlo a mano. */
+function peligrosDe(e){
+  const t = (((e||{}).datos||{}).puerta||{}).tipo || '';
+  if (!t) return null;
+  const cual =
+      /corredera/i.test(t)  ? 'corredera'
+    : /batiente/i.test(t)   ? 'batiente'
+    : /seccional/i.test(t)  ? 'seccional'
+    : /basculante/i.test(t) ? 'basculante'
+    : /r[áa]pida/i.test(t)  ? 'rapida'
+    : /enrollable/i.test(t) ? 'enrollable'
+    : /plegable/i.test(t)   ? 'plegable'
+    : /barrera/i.test(t)    ? 'barrera' : null;
+  return cual ? { clave: cual, lista: PELIGROS_POR_TIPO[cual] } : null;
+}
+
 /* ===== Niveles de protección de la UNE-EN 12453 =====
    Procedencia: documento de trabajo aportado por la empresa el 6 de octubre de 2026,
    que interpreta la matriz de protección mínima del borde principal de cierre de la
@@ -2764,6 +2903,7 @@ const MATRIZ_PROTECCION_FABRICA = {
   'automatico|no_informados': { niveles:'C+D o E', admisible:true,
     elementos:'Limitación de fuerzas más detección de presencia; como alternativa, sistema de nivel E.' },
 };
+
 
 /* Las puertas exclusivamente peatonales no se evalúan con esta matriz: su norma de
    seguridad de uso es la UNE-EN 16005+A1:2024, con su propio método. */
@@ -3245,6 +3385,26 @@ function expPendientes(e){
         'comercial dice «'+pu.denominacion+'». No pueden ser las dos');
   }
 
+  /* Un peligro propio del tipo de puerta sin contestar es un hueco igual que una
+     comprobación general, y uno resuelto sin decir cómo no vale como prueba. */
+  {
+    const pel = peligrosDe(e);
+    if (pel){
+      const pd = d.peligro || {};
+      const sinV = pel.lista.filter(([pk]) => !((pd[pk]||{}).v));
+      if (sinV.length) falta.push(sinV.length + ' peligros propios del tipo de puerta sin valorar');
+      const sinComo = pel.lista.filter(([pk]) => (pd[pk]||{}).v === 'si' && !(pd[pk]||{}).como);
+      if (sinComo.length) falta.push('explicar cómo se han resuelto ' + sinComo.length +
+        ' de los peligros marcados como resueltos');
+      const sinPor = pel.lista.filter(([pk]) => {
+        const x = pd[pk] || {};
+        return ['no','na','nc'].includes(x.v) && !x.motivo;
+      });
+      if (sinPor.length) falta.push('el motivo de ' + sinPor.length +
+        ' peligros marcados como no resueltos, no aplicables o no comprobados');
+    }
+  }
+
   const sinMotivo = chk.filter(c => {
     const x = (d.cumple||{})[c[0]] || {};
     return (x.v === 'na' || x.v === 'nc') && !x.motivo;
@@ -3317,6 +3477,7 @@ function vistaExpediente(id){
   h += '<div class="fila"><button class="btn plana" data-act="exp-volver">‹ Volver</button>'+
        '<span class="sp"></span><span class="mini" id="exp-guardado"></span>'+
        '<button class="btn sm plana" data-act="exp-marcado" data-id="'+e.id+'">Marcado CE</button>'+
+       '<button class="btn sm plana" data-act="exp-hoja-campo" data-id="'+e.id+'">Hoja de campo</button>'+
        '<button class="btn sm plana" data-act="exp-libro-mant" data-id="'+e.id+'">Libro de mantenimiento</button>'+
        '<button class="btn" data-act="exp-libro" data-id="'+e.id+'">Ver el libro</button>'+
        (esGestion() && e.estado !== 'emitido'
@@ -3505,6 +3666,15 @@ function expSecPuerta(e, p){
       [['', 'Sin contestar']].concat(Object.entries(TIPOS_USUARIO)),
       'Una persona informada conoce la puerta y sus riesgos: vive o trabaja allí y se le '+
       'ha instruido. Un visitante, un cliente o quien pasa por la calle no está informado')+
+    '<div class="campo full"><details class="guia-usuarios"><summary>Cómo se clasifica cada caso</summary>'+
+      '<table class="datos chk" style="margin-top:8px"><tbody>'+
+      GUIA_USUARIOS.map(([caso, sug, nota]) =>
+        '<tr><td style="width:34%">'+esc(caso)+'</td>'+
+        '<td style="width:26%">'+esc(sug ? TIPOS_USUARIO[sug] : 'Según el acceso')+'</td>'+
+        '<td class="min">'+esc(nota)+'</td></tr>').join('')+
+      '</tbody></table>'+
+      '<p class="mini">Esto es una guía: la clasificación la decides tú mirando quién puede '+
+      'llegar hasta la puerta, no el nombre del edificio.</p></details></div>'+
     expSel('puerta.modo', 'Cómo se da la orden de maniobra',
       [['', 'Sin contestar']].concat(Object.entries(MODOS_ACCIONAMIENTO).map(([k,v]) => [k, v.nombre])),
       'De esto depende qué protección exige la norma')+
@@ -3659,6 +3829,47 @@ function expSecCumplimiento(e){
     h += '<p class="nota-oficina" style="margin:0 0 14px"><b>'+mal.length+' sin cumplir.</b> '+
          'Lo que no se cumple sale en el libro como deficiencia, con su propuesta de arreglo. '+
          'No se oculta: ese es el valor del documento.</p>';
+
+  /* Peligros propios del tipo de puerta. Van aparte de las comprobaciones de la
+     familia porque dependen del movimiento: una corredera y una seccional no tienen
+     los mismos puntos. Se guardan en «peligro», no en «cumple». */
+  const pel = peligrosDe(e);
+  if (pel){
+    const pd = (e.datos||{}).peligro || {};
+    h += '<div class="panel-h" style="margin-top:18px"><h3>Puntos peligrosos de una '+
+      esc(pel.clave)+'</h3></div>'+
+      '<p class="nota-oficina" style="margin:0 0 14px">Proteger el borde principal con el nivel '+
+      'que exige la matriz no agota las obligaciones: estos puntos se valoran uno a uno. '+
+      'Los elementos que se citan son la protección habitual, no una lista cerrada.</p>';
+    pel.lista.forEach(([pk, peligro, elementos]) => {
+      const v = (pd[pk]||{}).v || '';
+      h += '<div class="exp-item'+(v==='no'?' falta':(v==='si'?' bien':''))+'">'+
+        '<div class="fila" style="gap:8px;flex-wrap:wrap;align-items:baseline">'+
+          '<span style="flex:1 1 260px">'+esc(peligro)+
+            '<span class="sub mini" style="display:block">'+esc(elementos)+'</span></span>'+
+          '<select data-exp="peligro.'+pk+'.v" class="cal-sel">'+
+            '<option value=""'  +(v===''  ?' selected':'')+'>Pendiente</option>'+
+            '<option value="si"'+(v==='si'?' selected':'')+'>Resuelto</option>'+
+            '<option value="no"'+(v==='no'?' selected':'')+'>No resuelto</option>'+
+            '<option value="nc"'+(v==='nc'?' selected':'')+'>No comprobado</option>'+
+            '<option value="na"'+(v==='na'?' selected':'')+'>No aplicable</option>'+
+          '</select></div>'+
+        (v === 'si'
+          ? '<div class="campos" style="margin-top:8px">'+
+            expTxt('peligro.'+pk+'.como', 'Cómo se ha resuelto en esta puerta', '', 1)+'</div>'
+          : (v === 'na' || v === 'nc'
+            ? '<div class="campos" style="margin-top:8px">'+
+              expTxt('peligro.'+pk+'.motivo',
+                v === 'na' ? 'Por qué no aplica' : 'Por qué no se ha comprobado', '', 1)+'</div>'
+            : (v === 'no'
+              ? '<div class="campos" style="margin-top:8px">'+
+                expTxt('peligro.'+pk+'.motivo', 'Qué falta y qué hay que hacer', '', 1)+'</div>'
+              : '')))+
+        '</div>';
+    });
+    h += '<div class="panel-h" style="margin-top:18px"><h3>Comprobaciones de normativa</h3></div>';
+  }
+
   chk.forEach(([k, texto, norma, pideFoto, critico]) => {
     const v = (d[k]||{}).v || '';
     /* Lo que no procede por la configuración de la puerta no se pregunta: se deja
@@ -4702,6 +4913,116 @@ function asistenciasDeLibro(e){
 
 const LIBRO_MAX = 30;
 
+/* Hoja de campo: lo que el técnico se lleva impreso a la obra. No es un documento
+   de entrega ni una declaración: es el guion de lo que hay que mirar en esta puerta
+   concreta, con casillas para anotar a mano y pasarlo luego a la aplicación. */
+function hojaDeCampo(expId){
+  const e = expDe(expId); if (!e) return;
+  const d = e.datos || {};
+  const pu = d.puerta || {};
+  const p = e.puerta_id ? (puertaDe(e.puerta_id) || {}) : {};
+  const em = datosEmpresa();
+  const ex = exigenciaProteccion(e);
+  const pel = peligrosDe(e);
+  const chk = EXP_COMPROBACIONES[e.familia] || [];
+  const comps = EXP_COMPONENTES[e.familia] || [];
+  const m = MODOS_ACCIONAMIENTO[ex.modo] || {};
+
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana.'); return; }
+  const linea = t => '<tr><td>'+esc(t)+'</td><td class="cas"></td><td class="cas"></td>'+
+                     '<td class="cas"></td><td class="obs"></td></tr>';
+
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
+    '<title>Hoja de campo '+esc(e.referencia||'')+'</title><style>'+
+    '@page{size:A4;margin:14mm 12mm}*{box-sizing:border-box}'+
+    'body{font:10.5px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;color:#1C1817;margin:0}'+
+    'h1{font-size:16px;margin:0 0 2px}h2{font-size:12px;margin:12px 0 4px;'+
+      'border-bottom:2px solid #FCBA1D;padding-bottom:3px}'+
+    '.cab{display:flex;justify-content:space-between;align-items:flex-start;'+
+      'border-bottom:2px solid #1C1817;padding-bottom:6px;margin-bottom:8px}'+
+    '.marca{font-weight:800;font-size:13px}.marca span{color:#C98F08}'+
+    'table{width:100%;border-collapse:collapse;margin:0 0 6px}'+
+    'th,td{border:1px solid #d8d4d0;padding:3px 5px;text-align:left;vertical-align:top}'+
+    'th{background:#F3F2F0;font-size:9.5px;text-transform:uppercase;letter-spacing:.03em}'+
+    '.cas{width:34px;text-align:center}.obs{width:32%}'+
+    '.datos td{border:none;padding:2px 4px}.datos th{background:none;border:none;'+
+      'text-transform:none;letter-spacing:0;font-size:10.5px;width:130px;color:#6B6560}'+
+    '.aviso{background:#FCEFD3;border-left:3px solid #9A6206;padding:5px 7px;margin:0 0 8px;font-size:10px}'+
+    '.mal{background:#F8E1DF;border-left:3px solid #B3271E;padding:5px 7px;margin:0 0 8px;font-size:10px}'+
+    '.firma{margin-top:14px;display:flex;gap:18px}'+
+    '.firma div{flex:1;border-top:1px solid #1C1817;padding-top:3px;font-size:9.5px;color:#6B6560}'+
+    '.barra{position:fixed;top:0;left:0;right:0;background:#1C1817;color:#fff;padding:8px 12px;'+
+      'display:flex;gap:10px;align-items:center;z-index:9}'+
+    '.barra button{font:inherit;padding:5px 10px;border:0;border-radius:5px;background:#FCBA1D;cursor:pointer}'+
+    'body{padding-top:46px}@media print{.barra{display:none}body{padding-top:0}}'+
+    '</style></head><body>'+
+    '<div class="barra"><button onclick="window.print()">Imprimir hoja de campo</button>'+
+    '<span style="font-size:11px;color:#CFCAC6">Para anotar a mano en obra. No es un documento de entrega.</span></div>'+
+
+    '<div class="cab"><div><div class="marca">ARIZA <span>puertas automáticas</span></div>'+
+      '<h1>Hoja de campo</h1></div>'+
+      '<div style="text-align:right;font-size:10px;color:#6B6560">'+esc(e.referencia||'')+'<br>'+
+      esc(EXP_FAMILIA[e.familia]||'')+'</div></div>'+
+
+    '<table class="datos"><tr><th>Puerta</th><td>'+
+      esc([p.codigo, pu.denominacion, pu.tipo].filter(Boolean).join(' · ') || '—')+'</td></tr>'+
+      '<tr><th>Emplazamiento</th><td>'+esc((d.obra||{}).emplazamiento || p.direccion || '—')+'</td></tr>'+
+      '<tr><th>Accionamiento</th><td>'+esc(m.nombre || 'sin indicar')+' · '+
+        esc(TIPOS_USUARIO[ex.usuarios] || 'usuario sin indicar')+'</td></tr>'+
+      '<tr><th>Técnico</th><td>________________________  <b>Fecha</b> ____ / ____ / ______</td></tr>'+
+    '</table>'+
+
+    (ex.fuera
+      ? '<div class="aviso">Puerta exclusivamente peatonal: su seguridad de uso se evalúa con la '+
+        'UNE-EN 16005+A1:2024, no con la matriz de la UNE-EN 12453.</div>'
+      : !ex.admisible
+      ? '<div class="mal"><b>Combinación no admisible.</b> '+esc(ex.ficha||'')+'</div>'
+      : (ex.niveles
+         ? '<div class="aviso"><b>Protección mínima aplicable: '+esc(ex.niveles)+'.</b> '+esc(ex.ficha||'')+'</div>'
+         : ''))+
+
+    (pel
+      ? '<h2>Peligros propios de una '+esc(pel.clave.toLowerCase())+'</h2>'+
+        '<table><thead><tr><th>Peligro y protección habitual</th><th class="cas">Sí</th>'+
+        '<th class="cas">No</th><th class="cas">N/A</th><th class="obs">Cómo se ha resuelto</th></tr></thead><tbody>'+
+        pel.lista.map(([, peligro, elementos]) =>
+          linea(peligro + ' — ' + elementos)).join('')+
+        '</tbody></table>'
+      : '')+
+
+    '<h2>Elementos de la instalación</h2>'+
+    '<table><thead><tr><th>Elemento</th><th class="cas">Sí</th><th class="cas">No</th>'+
+    '<th class="cas">N/A</th><th class="obs">Observaciones</th></tr></thead><tbody>'+
+    comps.map(c => linea(c[1])).join('')+'</tbody></table>'+
+
+    '<h2>Comprobaciones de normativa</h2>'+
+    '<table><thead><tr><th>Comprobación</th><th class="cas">Sí</th><th class="cas">No</th>'+
+    '<th class="cas">N/A</th><th class="obs">Observaciones</th></tr></thead><tbody>'+
+    chk.filter(c => { const ap = procede(APLICA_COMPROBACION, c[0], e); return !(ap && ap.no); })
+       .map(c => linea(c[1])).join('')+'</tbody></table>'+
+
+    '<h2>Ensayo de fuerzas</h2>'+
+    '<table class="datos"><tr><th>Instrumento</th><td>______________________________  '+
+      '<b>Nº serie</b> ____________  <b>Calibración</b> ____________</td></tr></table>'+
+    '<table><thead><tr><th>Punto de medida</th><th class="cas">Fd (N)</th><th class="cas">Fs (N)</th>'+
+    '<th class="cas">Fe (N)</th><th class="obs">td (s) y observaciones</th></tr></thead><tbody>'+
+    (EXP_PUNTOS_FUERZA[e.familia] || EXP_PUNTOS_FUERZA.industrial)
+      .map(pt => '<tr><td>'+esc(pt)+'</td><td class="cas"></td><td class="cas"></td>'+
+                 '<td class="cas"></td><td class="obs"></td></tr>').join('')+
+    '</tbody></table>'+
+    '<div class="aviso">Anotar también la configuración de la puerta durante el ensayo, la dirección '+
+    'de medida y las repeticiones que pida el método. Los valores se pasan a la aplicación al volver.</div>'+
+
+    '<h2>Notas</h2><div style="border:1px solid #d8d4d0;height:60px"></div>'+
+    '<div class="firma"><div>Técnico que ha ejecutado la intervención</div>'+
+    '<div>Persona que atiende en obra</div></div>'+
+    '<p style="margin-top:10px;font-size:9px;color:#6B6560">'+esc(em.razon_social)+
+    ' · Hoja de trabajo interna. No sustituye a la documentación que se entrega al titular.</p>'+
+    '</body></html>');
+  w.document.close();
+}
+
 function libroMantenimiento(expId, conHistorial){
   const e = expDe(expId); if (!e) return;
   const em = datosEmpresa();
@@ -5098,6 +5419,27 @@ async function libroExpediente(id){
         ? '<p class="aviso-borrador">'+sin.length+' comprobación(es) sin resultado. '+
           'El alcance de este documento no incluye lo que no se ha comprobado.</p>' : '';
     })();
+  /* Los peligros propios del tipo de puerta, con lo que se hizo en cada uno. */
+  {
+    const pel = peligrosDe(e);
+    if (pel){
+      const pd = d.peligro || {};
+      H += '<h4>Peligros propios de una '+esc(pel.clave.toLowerCase())+'</h4>'+
+        '<table class="datos chk"><thead><tr><th>Peligro</th><th style="width:80px">Estado</th>'+
+        '<th style="width:40%">Cómo se ha resuelto</th></tr></thead><tbody>'+
+        pel.lista.map(([pk, peligro, elementos]) => {
+          const x = pd[pk] || {};
+          const r = x.v === 'si' ? '<span class="ok">Resuelto</span>'
+                  : x.v === 'no' ? '<span class="no">No resuelto</span>'
+                  : x.v === 'na' ? '<span class="na">No aplicable</span>'
+                  : x.v === 'nc' ? '<span class="no">No comprobado</span>'
+                  : '<span class="pendiente">Pendiente</span>';
+          return '<tr><td>'+esc(peligro)+
+            '<span class="sub min" style="display:block">'+esc(elementos)+'</span></td>'+
+            '<td>'+r+'</td><td>'+esc(x.como || x.motivo || '—')+'</td></tr>';
+        }).join('')+'</tbody></table>';
+    }
+  }
   chk.forEach(([k, texto]) => { const g = galeria('cumple:'+k, 2);
     if (g) H += '<div class="comp"><h4>'+esc(texto)+'</h4>'+g+'</div>'; });
   H += '</section>';
@@ -7164,6 +7506,7 @@ raiz.addEventListener('click', async e => {
       S.ajustes.cpf = o; pintar(); toast('Procedimiento guardado.');
     } catch(err){ fallo(err); }
   }
+  else if (a === 'exp-hoja-campo') hojaDeCampo(b.dataset.id);
   else if (a === 'exp-libro-mant') dlgLibroMantenimiento(b.dataset.id);
   else if (a === 'exp-abrir-docs') abrirDocsExp();
   else if (a === 'exp-ver-doc') verDocExp(b.dataset.id);
@@ -7517,7 +7860,7 @@ raiz.addEventListener('change', e => {
     // Solo repintamos cuando la respuesta cambia lo que hay que enseñar.
     // acceso_personas entra aquí porque decide si la barrera lleva declaración
     // de prestaciones, y con ella todo un paso del cuestionario.
-    if (/\.(estado|v|incluir)$|motorizada|hueco$|\.via$|acceso_personas$|emitir_ddp$|\.modo$|usuarios$/.test(ruta)) pintar();
+    if (/\.(estado|v|incluir)$|motorizada|hueco$|\.via$|acceso_personas$|emitir_ddp$|\.modo$|usuarios$|puerta\.tipo$/.test(ruta)) pintar();
     return;
   }
   if (e.target.dataset.expChk !== undefined){
