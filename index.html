@@ -2576,6 +2576,21 @@ function regimenDe(e){
     const v = ((((e||{}).datos||{}).puerta)||{})[r.depende.split('.')[1]];
     if (v === 'no') return r.sinDdp;
   }
+  /* Al motorizar una puerta manual existente pasamos a ser fabricante de la máquina:
+     eso no se discute. Lo que está sin confirmar es si además hay que emitir
+     declaración de prestaciones, porque la puerta como producto de construcción ya
+     estaba puesta en el mercado. Mientras no haya respuesta del Ministerio, lo decide
+     quien rellena el expediente, y queda escrito en el libro qué criterio se siguió. */
+  if (e && e.situacion === 'modificacion' && r.ddp
+      && ((((e.datos||{}).prest)||{}).emitir_ddp) === 'no')
+    return Object.assign({}, r, { ddp:false,
+      etiqueta:'no se emite declaración de prestaciones nueva',
+      nota:'En esta intervención hemos motorizado una puerta que ya estaba puesta en el '+
+           'mercado como producto de construcción. Pasamos a ser fabricante de la máquina '+
+           'y emitimos la declaración de conformidad que corresponde, pero no se emite '+
+           'declaración de prestaciones nueva por el Reglamento (UE) 305/2011, al no '+
+           'haberse alterado las prestaciones declaradas de la puerta como producto de '+
+           'construcción.' });
   return r;
 }
 
@@ -3084,11 +3099,22 @@ function expSecPuerta(e, p){
         [['si','Sí, pasan o pueden pasar peatones'], ['no','No, es de uso exclusivo para vehículos']],
         'Si solo pasan vehículos queda fuera de la UNE-EN 13241 y no lleva declaración de prestaciones')
     : '';
+  /* Motorizar una puerta existente nos hace fabricante de la máquina, pero si además
+     arrastra declaración de prestaciones nueva está sin confirmar. Se pregunta en vez
+     de decidirlo por su cuenta la aplicación. */
+  const modif = (e.situacion === 'modificacion' && (EXP_REGIMEN[e.familia]||{}).ddp)
+    ? expSel('prest.emitir_ddp', '¿Emitimos declaración de prestaciones nueva?',
+        [['si','Sí, hemos alterado las prestaciones de la puerta'],
+         ['no','No, solo hemos motorizado: las prestaciones no cambian']],
+        'La declaración de conformidad de máquina se emite en los dos casos. Lo que está '+
+        'pendiente de confirmar con el Ministerio es si una motorización obliga además a '+
+        'declaración de prestaciones nueva')
+    : '';
   return '<div class="panel-h"><h3>La puerta</h3></div>'+
     '<p class="mini" style="margin:0 0 12px">Identificación que irá en la declaración y en la placa de características.</p>'+
     '<div class="campos">'+
     expSel('puerta.tipo', 'Tipo de puerta', [''].concat(tipos))+
-    barrera+
+    barrera + modif+
     expTxt('puerta.denominacion', 'Denominación comercial', 'Como la llamas tú en el presupuesto')+
     expTxt('puerta.marca', 'Marca')+
     expTxt('puerta.modelo', 'Modelo')+
@@ -4486,13 +4512,22 @@ async function libroExpediente(id){
   /* ---------- 3. NORMAS ---------- */
   H += '<section><h3 class="sec">3. Marco normativo aplicado</h3>'+
     '<h4>Legislación</h4><ul class="norm">'+
-    (reg.ddp
+    /* Quién emite qué depende de dos cosas: si de esta familia sale declaración de
+       prestaciones, y de qué papel tenemos en esta intervención. En una adecuación no
+       ponemos en el mercado ningún producto nuevo, así que no emitimos declaración
+       ninguna: el documento es el informe de riesgos y deficiencias. */
+    (e.situacion === 'adecuacion'
+      ? '<li><b>Reglamento (UE) 305/2011</b> de productos de construcción: <b>no se emite declaración de prestaciones</b>. Esta intervención no pone en el mercado un producto nuevo: adecuamos a normativa una puerta que ya estaba instalada, sin alterar sus prestaciones como producto de construcción. El documento que corresponde es el informe de riesgos y deficiencias detectadas de este expediente.</li>'
+      : e.situacion === 'nueva_instalador' && reg.ddp
+      ? '<li><b>Reglamento (UE) 305/2011</b> de productos de construcción, sistema '+esc(reg.sistema)+' de evaluación y verificación de la constancia de las prestaciones. <b>La declaración de prestaciones la emite el fabricante de la puerta</b>; nosotros la comprobamos, la recopilamos y la transmitimos al titular. Copia en el anexo de documentación.</li>'
+      : reg.ddp
       ? '<li><b>Reglamento (UE) 305/2011</b> de productos de construcción. Declaración de prestaciones conforme al modelo del Reglamento Delegado (UE) 574/2014. Sistema '+esc(reg.sistema)+' de evaluación y verificación de la constancia de las prestaciones.</li>'
       : reg.sistema === '1'
       /* Aquí sí hay declaración de prestaciones: la que emite el fabricante del
          conjunto certificado. Lo que no hay es una declaración nuestra. */
       ? '<li><b>Reglamento (UE) 305/2011</b> de productos de construcción, sistema 1 de evaluación y verificación de la constancia de las prestaciones. <b>La declaración de prestaciones de esta puerta la emite su fabricante</b>, con certificado de constancia de las prestaciones expedido por un organismo notificado. Nosotros intervenimos como instalador: comprobamos el marcado CE, montamos según las instrucciones del fabricante sin sustituir ningún componente del conjunto ensayado, y recopilamos y transmitimos su documentación. Copia de la declaración del fabricante, en el anexo de documentación.</li>'
-      : '<li><b>Reglamento (UE) 305/2011</b> de productos de construcción: <b>no procede declaración de prestaciones</b>. '+esc(reg.nota)+'</li>')+
+      : '<li><b>Reglamento (UE) 305/2011</b> de productos de construcción: <b>'+
+        esc(reg.etiqueta || 'no procede declaración de prestaciones')+'</b>. '+esc(reg.nota)+'</li>')+
     (motor && M ? '<li><b>'+esc(M.nombre)+'</b>. '+esc(M.documento)+', '+esc(M.anexo)+'.</li>' : '')+
     (motor ? '<li><b>Directiva 2014/30/UE</b> de compatibilidad electromagnética, transpuesta por el Real Decreto 186/2016.</li>' : '')+
     ((d.obra||{}).centro_trabajo === 'si'
@@ -6807,7 +6842,7 @@ raiz.addEventListener('change', e => {
     // Solo repintamos cuando la respuesta cambia lo que hay que enseñar.
     // acceso_personas entra aquí porque decide si la barrera lleva declaración
     // de prestaciones, y con ella todo un paso del cuestionario.
-    if (/\.(estado|v|incluir)$|motorizada|hueco$|\.via$|acceso_personas$/.test(ruta)) pintar();
+    if (/\.(estado|v|incluir)$|motorizada|hueco$|\.via$|acceso_personas$|emitir_ddp$/.test(ruta)) pintar();
     return;
   }
   if (e.target.dataset.expChk !== undefined){
