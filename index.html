@@ -239,6 +239,7 @@ dialog::backdrop{background:rgba(20,18,17,.55)}
 .dlg .pie{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
 .err{color:var(--mal);font-size:14px;margin:0;min-height:1em}
 .aviso-caja{background:var(--aviso-bg);color:var(--ink);border:1px solid color-mix(in srgb,var(--aviso) 35%,transparent);border-radius:6px;padding:10px 12px;font-size:14px}
+.mal-caja{background:var(--mal-bg);color:var(--ink);border:1px solid color-mix(in srgb,var(--mal) 40%,transparent);border-radius:6px;padding:10px 12px;font-size:14px}
 #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--negro);color:#fff;padding:11px 16px;border-radius:6px;font-size:14px;box-shadow:var(--sombra);z-index:20;max-width:calc(100% - 24px)}
 .login{max-width:380px;margin:8vh auto 0;display:grid;gap:14px}
 .login .panel{display:grid;gap:12px}
@@ -2493,23 +2494,90 @@ const EXP_NORMAS = {
     ['UNE 85635:2012',               'Norma española de requisitos de instalación, uso, mantenimiento y modificación.'],
   ],
   peatonal: [
-    ['UNE-EN 16361:2013+A1:2016',    'Norma de producto de puertas peatonales motorizadas. Base de la declaración de prestaciones.'],
+    ['UNE-EN 16361:2013+A1:2016',    'Norma de producto de puertas peatonales motorizadas, excepto batientes. NO está citada en el DOUE como norma armonizada del Reglamento 305/2011: de ella no sale declaración de prestaciones.'],
     ['UNE-EN 16005:2023+A1:2024',    'Seguridad en el uso de puertas peatonales motorizadas: requisitos y métodos de ensayo.'],
     ['UNE-EN 12978:2024',            'Dispositivos de protección: requisitos y métodos de ensayo.'],
   ],
   barrera: [
-    ['UNE-EN 13241:2004+A2:2017',    'Norma de producto armonizada, en lo aplicable a barreras.'],
+    ['UNE-EN 13241:2004+A2:2017',    'Norma de producto armonizada. Cubre las barreras instaladas en zonas accesibles a personas; las de uso exclusivo para tráfico de vehículos quedan excluidas de su ámbito.'],
     ['UNE-EN 12453:2017+A1:2021',    'Seguridad en el uso: limitación de fuerzas y detección de presencia.'],
     ['UNE-EN 12978:2024',            'Dispositivos de protección.'],
     ['UNE 85635:2012',               'Requisitos de instalación, uso, mantenimiento y modificación.'],
   ],
   cortafuegos: [
-    ['UNE-EN 16034:2015',            'Norma de producto para prestaciones de resistencia al fuego y control de humos. Se declara junto a la norma de producto que corresponda.'],
+    ['UNE-EN 16034:2015',            'Prestaciones de resistencia al fuego y control de humos. Solo se aplica junto a la UNE-EN 13241 o la UNE-EN 14351-1, nunca sola. Sistema 1: la declaración la emite el fabricante con certificado de organismo notificado.'],
     ['UNE-EN 13241:2004+A2:2017',    'Norma de producto, cuando se trata de puerta industrial, comercial o de garaje.'],
     ['UNE-EN 12453:2017+A1:2021',    'Seguridad en el uso, si es motorizada.'],
     ['UNE-EN 12635:2002+A1:2009',    'Instalación y uso.'],
   ],
 };
+
+/* ===== Régimen legal de cada familia =====
+   Verificado el 6 de octubre de 2026 contra el informe del Ministerio de Industria
+   «Requisitos de marcado CE, instalación y modificación de puertas industriales,
+   comerciales, de garaje, portones y barreras» y la nota «Marcado CE de las puertas
+   cortafuegos» de 26 de febrero de 2020.
+
+   Lo que decide si hay declaración de prestaciones es si la familia está cubierta por
+   una norma armonizada citada en el DOUE bajo el Reglamento (UE) 305/2011, y en qué
+   sistema de evaluación de la constancia de las prestaciones está:
+
+     · Sistema 3  Los ensayos de tipo los hace un laboratorio notificado. Una
+                  microempresa puede tratarlo como sistema 4 por el artículo 37,
+                  documentando la equivalencia de sus métodos. Es nuestro caso.
+     · Sistema 1  Certificado de un organismo notificado, inspección inicial de la
+                  fábrica y vigilancia continua. Los artículos 36.2 y 38.2 cierran
+                  las vías simplificadas y el 37 solo alcanza a los sistemas 3 y 4.
+                  Aquí NO cabe autocertificar de ninguna manera.
+
+   Ojo con las peatonales: la EN 16361 no aparece en la lista de normas armonizadas
+   del Reglamento 305/2011, así que su marcado CE no sale de ahí sino de la Directiva
+   de máquinas y de la de compatibilidad electromagnética. */
+const EXP_REGIMEN = {
+  industrial: {
+    ddp: true, sistema: '3', norma: 'UNE-EN 13241:2004+A2:2017',
+    nota: 'Sistema 3. Como microempresa lo tratamos como sistema 4 por el artículo 37 '+
+          'del Reglamento 305/2011, justificándolo en la documentación técnica específica.',
+  },
+  barrera: {
+    ddp: true, sistema: '3', norma: 'UNE-EN 13241:2004+A2:2017',
+    depende: 'puerta.acceso_personas',
+    nota: 'Igual que una puerta industrial, siempre que la barrera esté en una zona '+
+          'accesible a personas.',
+    sinDdp: {
+      ddp: false, sistema: null, norma: null,
+      nota: 'Barrera de uso exclusivo para tráfico de vehículos: queda fuera del ámbito '+
+            'de la UNE-EN 13241, así que no lleva declaración de prestaciones. Solo '+
+            'declaración de conformidad como máquina y compatibilidad electromagnética.',
+    },
+  },
+  peatonal: {
+    ddp: false, sistema: null, norma: 'UNE-EN 16361:2013+A1:2016',
+    nota: 'La UNE-EN 16361 no está citada en el DOUE como norma armonizada del '+
+          'Reglamento 305/2011, de modo que esta puerta no lleva declaración de '+
+          'prestaciones. Su marcado CE sale de la directiva de máquinas y de la de '+
+          'compatibilidad electromagnética.',
+  },
+  cortafuegos: {
+    ddp: false, sistema: '1', norma: 'UNE-EN 16034:2015', bloqueaFabricante: true,
+    nota: 'Sistema 1: exige certificado de un organismo notificado, inspección de '+
+          'fábrica y vigilancia continua. No se puede autocertificar. Con una puerta '+
+          'cortafuegos solo cabe actuar como mero instalador de un kit completo del '+
+          'fabricante, montado según sus instrucciones y sin sustituir ningún '+
+          'componente del conjunto ensayado.',
+  },
+};
+
+/* El régimen que toca, mirando también la respuesta a la pregunta de la que depende
+   (hoy solo las barreras: cambia según estén o no al alcance de personas). */
+function regimenDe(e){
+  const r = EXP_REGIMEN[e && e.familia] || EXP_REGIMEN.industrial;
+  if (r.depende && r.sinDdp){
+    const v = ((((e||{}).datos||{}).puerta)||{})[r.depende.split('.')[1]];
+    if (v === 'no') return r.sinDdp;
+  }
+  return r;
+}
 
 /* Legislación según el marco que toque por la fecha de puesta en servicio */
 const EXP_MARCO = {
@@ -2817,7 +2885,10 @@ function expSecciones(e){
     ['cumplimiento','Cumplimiento de normativa'],
   ];
   if (expVal('puerta.motorizada', 'si') === 'si') s.push(['fuerzas', 'Ensayo de fuerzas']);
-  if (EXP_ES_FABRICANTE(e.situacion)) s.push(['prestaciones', 'Prestaciones declaradas']);
+  /* Las prestaciones declaradas solo tienen sentido si de esta familia sale una
+     declaración de prestaciones. En peatonales y en barreras de solo vehículos no
+     sale ninguna, así que no se pide. */
+  if (EXP_ES_FABRICANTE(e.situacion) && regimenDe(e).ddp) s.push(['prestaciones', 'Prestaciones declaradas']);
   s.push(['docs', 'Documentación de fabricantes']);
   s.push(['riesgos', e.situacion === 'adecuacion' ? 'Riesgos y deficiencias' : 'Riesgos residuales']);
   s.push(['entrega', 'Entrega y firma']);
@@ -2891,6 +2962,21 @@ function vistaExpediente(id){
        esc(EXP_FAMILIA[e.familia]||'')+' · '+esc(c.nombre || p.cliente || 'Sin cliente')+
        (p.codigo ? ' · '+esc(p.codigo) : '')+'</p>'+
        '<p class="mini" style="margin:6px 0 0">'+esc(EXP_SIT_AYUDA[e.situacion]||'')+'</p>';
+
+  /* Qué sale y qué no sale de esta familia, a la vista desde el primer momento.
+     Si alguien abrió un expediente de cortafuegos como fabricante antes de que esto
+     estuviera puesto, aquí se le avisa de que esa declaración no la puede firmar. */
+  {
+    const reg = regimenDe(e);
+    const esFab = EXP_ES_FABRICANTE(e.situacion);
+    if (reg.bloqueaFabricante && esFab)
+      h += '<div class="mal-caja" style="margin-top:12px"><b>Esta puerta no se puede autocertificar.</b><br>'+
+           esc(reg.nota)+'<br>Pasa el expediente a «Puerta nueva de kit completo» y recopila la '+
+           'declaración del fabricante en lugar de emitir la nuestra.</div>';
+    else if (!reg.ddp && esFab)
+      h += '<div class="aviso-caja" style="margin-top:12px"><b>Sin declaración de prestaciones.</b><br>'+
+           esc(reg.nota)+'</div>';
+  }
 
   // El marco legal no se elige: lo decide la fecha de puesta en servicio
   h += '<div class="campos" style="margin-top:12px">'+
@@ -2990,10 +3076,19 @@ function expSecObra(e, p, c){
 
 function expSecPuerta(e, p){
   const tipos = lista('tipos', TIPOS);
+  /* En las barreras hay que preguntarlo: la UNE-EN 13241 cubre las que están al
+     alcance de personas y deja fuera las de uso exclusivo para tráfico de vehículos.
+     De la respuesta depende que haya declaración de prestaciones o no. */
+  const barrera = e.familia === 'barrera'
+    ? expSel('puerta.acceso_personas', '¿Está al alcance de personas?',
+        [['si','Sí, pasan o pueden pasar peatones'], ['no','No, es de uso exclusivo para vehículos']],
+        'Si solo pasan vehículos queda fuera de la UNE-EN 13241 y no lleva declaración de prestaciones')
+    : '';
   return '<div class="panel-h"><h3>La puerta</h3></div>'+
     '<p class="mini" style="margin:0 0 12px">Identificación que irá en la declaración y en la placa de características.</p>'+
     '<div class="campos">'+
     expSel('puerta.tipo', 'Tipo de puerta', [''].concat(tipos))+
+    barrera+
     expTxt('puerta.denominacion', 'Denominación comercial', 'Como la llamas tú en el presupuesto')+
     expTxt('puerta.marca', 'Marca')+
     expTxt('puerta.modelo', 'Modelo')+
@@ -3299,13 +3394,15 @@ function expSecEntrega(e){
   const fab = EXP_ES_FABRICANTE(e.situacion);
   const marco = marcoDeFecha(e.fecha_puesta_servicio);
   const em = datosEmpresa();
+  const reg = regimenDe(e);
   const docs = fab
-    ? [['ddp','Declaración de prestaciones'],
-       ['dc', marco === 'pendiente' ? 'Declaración de conformidad' : EXP_MARCO[marco].documento],
+    ? [].concat(
+       reg.ddp ? [['ddp','Declaración de prestaciones']] : [],
+       [['dc', marco === 'pendiente' ? 'Declaración de conformidad' : EXP_MARCO[marco].documento],
        ['marcado','Marcado CE colocado en la puerta'],
        ['manual','Manual de uso y mantenimiento'],
        ['libro','Libro de mantenimiento'],
-       ['expediente','Expediente técnico archivado (se conserva 10 años, no se entrega)']]
+       ['expediente','Expediente técnico archivado (se conserva 10 años, no se entrega)']])
     : e.situacion === 'nueva_instalador'
     ? [['ddp_fab','Declaración de prestaciones del fabricante, recopilada'],
        ['dc_fab','Declaración de conformidad del fabricante, recopilada'],
@@ -3428,11 +3525,19 @@ function dlgExpedienteNuevo(puertaId){
       Object.entries(EXP_FAMILIA).map(([k,v]) => '<option value="'+k+'"'+(k===sug?' selected':'')+'>'+esc(v)+'</option>').join('')+
       '</select><span class="pista">Decide las normas y el cuestionario. Una peatonal automática no va por la '+
       'EN 13241 sino por la EN 16361 y la EN 16005.</span></div>'+
-    '</div><p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '</div><div id="xp-regimen"></div><p class="err"></p><div class="pie"><span class="sp"></span>'+
     '<button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
     '<button type="submit" class="btn pri">Empezar</button></div>';
   abrirDlg(h, async () => {
     try {
+      /* Una puerta cortafuegos va por el sistema 1 del Reglamento 305/2011: hace falta
+         certificado de un organismo notificado. Por eso no dejamos abrir un expediente
+         en el que seamos nosotros quienes declaramos. */
+      if (val('xp-fam') === 'cortafuegos' && EXP_ES_FABRICANTE(val('xp-sit')))
+        return setErr('Una puerta resistente al fuego no se puede autocertificar: va por el sistema 1 '+
+          'del Reglamento 305/2011 y necesita certificado de un organismo notificado. Con una '+
+          'cortafuegos solo cabe «Puerta nueva de kit completo», montada según las instrucciones '+
+          'del fabricante y sin sustituir ningún componente del conjunto ensayado.');
       const { data, error } = await sb.rpc('crear_expediente', {
         p_puerta: puertaId, p_situacion: val('xp-sit'), p_familia: val('xp-fam'), p_aviso: null });
       if (error) throw error;
@@ -3445,10 +3550,35 @@ function dlgExpedienteNuevo(puertaId){
     } catch(err){ setErr(err.message); }
   });
   const sel = document.getElementById('xp-sit');
+  const fam = document.getElementById('xp-fam');
+  /* Avisa antes de empezar de qué sale y qué no sale de esta combinación, para que
+     nadie rellene un expediente entero y se lleve el chasco al final. */
+  const pintarRegimen = () => {
+    const caja = document.getElementById('xp-regimen');
+    if (!caja || !fam || !sel) return;
+    const reg = EXP_REGIMEN[fam.value] || {};
+    const esFab = EXP_ES_FABRICANTE(sel.value);
+    let clase = 'aviso-caja', txt = reg.nota || '';
+    if (reg.bloqueaFabricante && esFab){
+      clase = 'mal-caja';
+      txt = 'No se puede autocertificar. ' + reg.nota;
+    } else if (!reg.ddp && esFab && reg.sistema !== '1'){
+      txt = 'De esta puerta no sale declaración de prestaciones. ' + reg.nota;
+    }
+    caja.innerHTML = txt
+      ? '<div class="'+clase+'" style="margin:0 0 12px">'+esc(txt)+'</div>' : '';
+  };
+  /* Al cambiar la elección, el error anterior deja de valer: si no se borra,
+     queda en pantalla un «no se puede autocertificar» que ya no es cierto. */
+  const limpiarErr = () => { const p = document.querySelector('#dlg .err');
+    if (p) p.textContent = ''; };
   if (sel) sel.addEventListener('change', () => {
     const a = document.getElementById('xp-ayuda');
     if (a) a.textContent = EXP_SIT_AYUDA[sel.value] || '';
+    limpiarErr(); pintarRegimen();
   });
+  if (fam) fam.addEventListener('change', () => { limpiarErr(); pintarRegimen(); });
+  pintarRegimen();
 }
 
 function dlgEmitirExpediente(id){
@@ -3957,7 +4087,8 @@ function etiquetaCE(expId){
   const motor = pu.motorizada !== 'no';
   const norma = ((EXP_NORMAS[e.familia]||[])[0]||[''])[0];
   const anio = (e.fecha_puesta_servicio || new Date().toISOString().slice(0,10)).slice(0,4);
-  const pr = (EXP_PRESTACIONES[e.familia] || []).filter(x => x[3]);
+  const reg = regimenDe(e);
+  const pr = reg.ddp ? (EXP_PRESTACIONES[e.familia] || []).filter(x => x[3]) : [];
   const pv = (d.prest||{}).v || {};
   const url = enlaceQR(p.codigo);
 
@@ -4009,7 +4140,10 @@ function etiquetaCE(expId){
         fila('Uso previsto', pu.uso_puerta)+
       '</table><div class="sep"></div><table>'+
         fila('Norma', norma)+
-        fila('DdP nº', e.referencia)+
+        /* El número de declaración de prestaciones solo se imprime si existe tal
+           declaración. En una peatonal o en una barrera de solo vehículos no la hay:
+           poner un número ahí sería afirmar algo que no es cierto. */
+        (reg.ddp ? fila('DdP nº', e.referencia) : '')+
         // Las prestaciones obligatorias van en una sola línea: en 62 mm no caben en tabla
         fila('Prestaciones', pr.map(([k, nombre]) =>
           nombre.replace(/ \(.*\)/,'').replace('Resistencia mecánica y estabilidad','Resist. mecánica')
@@ -4018,7 +4152,7 @@ function etiquetaCE(expId){
                 .replace('Capacidad de cierre automático','Autocierre')
                 .replace('Resistencia al fuego','Fuego')
           + ' ' + (pv[k] || 'NPD')).join(' · '))+
-        fila('Org. notif.', (d.prest||{}).laboratorio)+
+        (reg.ddp ? fila('Org. notif.', (d.prest||{}).laboratorio) : '')+
       '</table>'+
       '<div class="pie"><div class="qr">'+svgQR(url, '21mm')+'</div>'+
         '<div><div class="cod">'+esc(p.codigo||'')+'</div>'+
@@ -4239,6 +4373,7 @@ async function libroExpediente(id){
   const hoy = new Date().toISOString().slice(0,10);
   const sello = em.razon_social + (em.nif ? ' · ' + em.nif : '');
 
+  const reg = regimenDe(e);
   let H = '';
 
   /* ---------- PORTADA ---------- */
@@ -4271,8 +4406,8 @@ async function libroExpediente(id){
   secciones.push('Elementos de la instalación');
   secciones.push('Comprobaciones de cumplimiento');
   if (motor && ((d.fuerzas||{}).incluir !== 'no')) secciones.push('Ensayo de fuerzas');
-  if (fab) secciones.push('Prestaciones declaradas');
-  if (fab) secciones.push('Declaración de prestaciones');
+  if (fab && regimenDe(e).ddp) secciones.push('Prestaciones declaradas');
+  if (fab && regimenDe(e).ddp) secciones.push('Declaración de prestaciones');
   if (fab && M) secciones.push(M.documento);
   secciones.push(e.situacion === 'adecuacion' ? 'Informe de riesgos y deficiencias' : 'Riesgos residuales');
   if ((S.expDocs||[]).length) secciones.push('Anexo: documentación de los fabricantes');
@@ -4301,8 +4436,16 @@ async function libroExpediente(id){
     '</div></section>';
 
   /* ---------- 1. OBJETO ---------- */
+  /* El texto de la situación habla en general de «emitimos declaración de prestaciones».
+     Si esta familia no la lleva, se corrige aquí para no afirmar algo que no es cierto. */
+  const objeto = (EXP_ES_FABRICANTE(e.situacion) && !reg.ddp)
+    ? (EXP_SIT_AYUDA[e.situacion]||'').replace(
+        'emitimos declaración de prestaciones, declaración de conformidad y marcado CE propios',
+        'emitimos declaración de conformidad y marcado CE propios')
+    : (EXP_SIT_AYUDA[e.situacion]||'');
   H += '<section><h3 class="sec">1. Objeto y alcance</h3>'+
-    '<p>'+esc(EXP_SIT_AYUDA[e.situacion]||'')+'</p>'+
+    '<p>'+esc(objeto)+'</p>'+
+    (!reg.ddp ? '<p>'+esc(reg.nota)+'</p>' : '')+
     '<p>Este documento recoge la identificación de la puerta, los elementos que componen la instalación, '+
     'las comprobaciones de cumplimiento realizadas y la documentación que se entrega al titular. '+
     'Las fotografías forman parte del documento y reflejan el estado en que quedó la instalación '+
@@ -4343,7 +4486,13 @@ async function libroExpediente(id){
   /* ---------- 3. NORMAS ---------- */
   H += '<section><h3 class="sec">3. Marco normativo aplicado</h3>'+
     '<h4>Legislación</h4><ul class="norm">'+
-    '<li><b>Reglamento (UE) 305/2011</b> de productos de construcción. Declaración de prestaciones conforme al modelo del Reglamento Delegado (UE) 574/2014.</li>'+
+    (reg.ddp
+      ? '<li><b>Reglamento (UE) 305/2011</b> de productos de construcción. Declaración de prestaciones conforme al modelo del Reglamento Delegado (UE) 574/2014. Sistema '+esc(reg.sistema)+' de evaluación y verificación de la constancia de las prestaciones.</li>'
+      : reg.sistema === '1'
+      /* Aquí sí hay declaración de prestaciones: la que emite el fabricante del
+         conjunto certificado. Lo que no hay es una declaración nuestra. */
+      ? '<li><b>Reglamento (UE) 305/2011</b> de productos de construcción, sistema 1 de evaluación y verificación de la constancia de las prestaciones. <b>La declaración de prestaciones de esta puerta la emite su fabricante</b>, con certificado de constancia de las prestaciones expedido por un organismo notificado. Nosotros intervenimos como instalador: comprobamos el marcado CE, montamos según las instrucciones del fabricante sin sustituir ningún componente del conjunto ensayado, y recopilamos y transmitimos su documentación. Copia de la declaración del fabricante, en el anexo de documentación.</li>'
+      : '<li><b>Reglamento (UE) 305/2011</b> de productos de construcción: <b>no procede declaración de prestaciones</b>. '+esc(reg.nota)+'</li>')+
     (motor && M ? '<li><b>'+esc(M.nombre)+'</b>. '+esc(M.documento)+', '+esc(M.anexo)+'.</li>' : '')+
     (motor ? '<li><b>Directiva 2014/30/UE</b> de compatibilidad electromagnética, transpuesta por el Real Decreto 186/2016.</li>' : '')+
     ((d.obra||{}).centro_trabajo === 'si'
@@ -4436,8 +4585,10 @@ async function libroExpediente(id){
       '</section>';
   }
 
-  /* ---------- 7 y 8. PRESTACIONES Y DdP ---------- */
-  if (fab){
+  /* ---------- 7 y 8. PRESTACIONES Y DdP ----------
+     Solo si de esta familia sale declaración de prestaciones. En una peatonal
+     automática o en una barrera de solo vehículos, no sale ninguna. */
+  if (fab && reg.ddp){
     const pr = EXP_PRESTACIONES[e.familia] || [];
     const pv = (d.prest||{}).v || {};
     const vias = { ensayos:'Ensayos iniciales de tipo de laboratorio notificado',
@@ -6653,8 +6804,10 @@ raiz.addEventListener('change', e => {
   if (e.target.dataset.exp && e.target.tagName === 'SELECT'){
     const ruta = e.target.dataset.exp;
     expPon(ruta, e.target.value);
-    // Solo repintamos cuando la respuesta cambia lo que hay que enseñar
-    if (/\.(estado|v|incluir)$|motorizada|hueco$|\.via$/.test(ruta)) pintar();
+    // Solo repintamos cuando la respuesta cambia lo que hay que enseñar.
+    // acceso_personas entra aquí porque decide si la barrera lleva declaración
+    // de prestaciones, y con ella todo un paso del cuestionario.
+    if (/\.(estado|v|incluir)$|motorizada|hueco$|\.via$|acceso_personas$/.test(ruta)) pintar();
     return;
   }
   if (e.target.dataset.expChk !== undefined){
