@@ -471,7 +471,7 @@ const puertasDeContrato = kid => S.contratoPuertas.filter(x => x.contrato_id ===
 const RESP = { ok:'Bien', mal:'Mal', na:'N/A' };
 /* Guiones de revisión de fábrica, por tipo de puerta. Se guardan en ajustes la primera vez
    que entra el administrador; a partir de ahí mandan los que haya guardados. */
-const GUIONES_FABRICA = {"Corredera":[{"h":"Documentación e identificación"},{"t":"Placa de características y marcado CE legibles","n":"UNE-EN 13241"},{"t":"Instrucciones de uso y de desbloqueo visibles para el usuario","n":"UNE-EN 12635"},{"t":"Registro de mantenimiento disponible en la instalación","n":"UNE-EN 12635"},{"t":"Etiqueta ARIZA colocada, visible y legible"},{"h":"Estructura y mecánica"},{"t":"Anclajes y fijaciones apretados, sin holguras"},{"t":"Guías, carriles y rodamientos limpios y sin desgaste"},{"t":"Hoja sin deformaciones, roturas ni corrosión"},{"t":"Engrase de los puntos previstos por el fabricante"},{"t":"Cables, cadenas o correas y sus fijaciones en buen estado"},{"h":"Accionamiento y maniobra"},{"t":"Motorreductor sin ruidos, vibraciones, sobrecalentamiento ni fugas"},{"t":"Fijación del operador y de la transmisión"},{"t":"Finales de carrera bien ajustados"},{"t":"Cuadro de maniobra limpio, seco y con las bornas apretadas"},{"t":"Batería de respaldo, si la lleva"},{"t":"Consumo del motor en marcha","m":"num","u":"A"},{"h":"Propio de corredera"},{"t":"Cremallera: estado, fijación y holgura con el piñón"},{"t":"Rodillos de guía superior y carro inferior"},{"t":"Topes mecánicos de final de recorrido en ambos extremos"},{"t":"Sistema antidescarrilamiento y antivuelco"},{"t":"Hoja nivelada y aplomada"},{"t":"Separación entre hoja y elementos fijos, o protección equivalente","m":"num","u":"mm","n":"UNE-EN 12604"},{"t":"Protección del hueco de arrastre al abrir"},{"t":"Bucle magnético o radar de seguridad, si lo lleva"},{"h":"Seguridad (bloque crítico)"},{"t":"Fuerza dinámica máxima medida","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"Duración de la fuerza dinámica","m":"num","u":"s","n":"UNE-EN 12453"},{"t":"Fuerza estática residual","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"La puerta para e invierte ante un obstáculo en todo el recorrido","n":"UNE-EN 12453"},{"t":"Fotocélulas alineadas, limpias y con corte efectivo","n":"UNE-EN 12978"},{"t":"Banda de seguridad responde y su autocontrol funciona","n":"UNE-EN 12978"},{"t":"Zonas de aplastamiento, cizallamiento y arrastre protegidas","n":"UNE-EN 12604"},{"t":"Desbloqueo manual accesible, señalizado y operativo","n":"UNE-EN 12635"},{"t":"Parada de emergencia, si la lleva"},{"t":"Señalización de puerta automática, semáforo o baliza"},{"h":"Instalación eléctrica"},{"t":"Cuadro cerrado, con tapas y grado de protección adecuado","n":"REBT"},{"t":"Puesta a tierra y continuidad comprobadas","n":"REBT"},{"t":"Protección diferencial y magnetotérmica correctas","n":"REBT"},{"t":"Cableado, prensaestopas y canalizaciones en buen estado"},{"t":"Tensión de alimentación medida","m":"num","u":"V"},{"h":"Prueba de funcionamiento"},{"t":"Ciclo completo de apertura y cierre sin incidencias"},{"t":"Tiempo de apertura","m":"num","u":"s"},{"t":"Tiempo de cierre","m":"num","u":"s"},{"t":"Mandos, teclados, lectores y pulsadores responden"},{"t":"Maniobra de hombre presente, si aplica"}],"Batiente":[{"h":"Documentación e identificación"},{"t":"Placa de características y marcado CE legibles","n":"UNE-EN 13241"},{"t":"Instrucciones de uso y de desbloqueo visibles para el usuario","n":"UNE-EN 12635"},{"t":"Registro de mantenimiento disponible en la instalación","n":"UNE-EN 12635"},{"t":"Etiqueta ARIZA colocada, visible y legible"},{"h":"Estructura y mecánica"},{"t":"Anclajes y fijaciones apretados, sin holguras"},{"t":"Guías, carriles y rodamientos limpios y sin desgaste"},{"t":"Hoja sin deformaciones, roturas ni corrosión"},{"t":"Engrase de los puntos previstos por el fabricante"},{"t":"Cables, cadenas o correas y sus fijaciones en buen estado"},{"h":"Accionamiento y maniobra"},{"t":"Motorreductor sin ruidos, vibraciones, sobrecalentamiento ni fugas"},{"t":"Fijación del operador y de la transmisión"},{"t":"Finales de carrera bien ajustados"},{"t":"Cuadro de maniobra limpio, seco y con las bornas apretadas"},{"t":"Batería de respaldo, si la lleva"},{"t":"Consumo del motor en marcha","m":"num","u":"A"},{"h":"Propio de batiente"},{"t":"Bisagras y quicios: holguras y engrase"},{"t":"Brazos o pistones: fijación, estanqueidad y recorrido ajustado"},{"t":"Topes mecánicos de apertura y de cierre"},{"t":"Electrocerradura o golpe eléctrico"},{"t":"Desfase de hojas y solapamiento de cierre correctos"},{"t":"Zona de aplastamiento junto a la bisagra protegida","n":"UNE-EN 12604"},{"t":"Comportamiento con viento, si la hoja es ciega"},{"h":"Seguridad (bloque crítico)"},{"t":"Fuerza dinámica máxima medida","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"Duración de la fuerza dinámica","m":"num","u":"s","n":"UNE-EN 12453"},{"t":"Fuerza estática residual","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"La puerta para e invierte ante un obstáculo en todo el recorrido","n":"UNE-EN 12453"},{"t":"Fotocélulas alineadas, limpias y con corte efectivo","n":"UNE-EN 12978"},{"t":"Banda de seguridad responde y su autocontrol funciona","n":"UNE-EN 12978"},{"t":"Zonas de aplastamiento, cizallamiento y arrastre protegidas","n":"UNE-EN 12604"},{"t":"Desbloqueo manual accesible, señalizado y operativo","n":"UNE-EN 12635"},{"t":"Parada de emergencia, si la lleva"},{"t":"Señalización de puerta automática, semáforo o baliza"},{"h":"Instalación eléctrica"},{"t":"Cuadro cerrado, con tapas y grado de protección adecuado","n":"REBT"},{"t":"Puesta a tierra y continuidad comprobadas","n":"REBT"},{"t":"Protección diferencial y magnetotérmica correctas","n":"REBT"},{"t":"Cableado, prensaestopas y canalizaciones en buen estado"},{"t":"Tensión de alimentación medida","m":"num","u":"V"},{"h":"Prueba de funcionamiento"},{"t":"Ciclo completo de apertura y cierre sin incidencias"},{"t":"Tiempo de apertura","m":"num","u":"s"},{"t":"Tiempo de cierre","m":"num","u":"s"},{"t":"Mandos, teclados, lectores y pulsadores responden"},{"t":"Maniobra de hombre presente, si aplica"}],"Seccional":[{"h":"Documentación e identificación"},{"t":"Placa de características y marcado CE legibles","n":"UNE-EN 13241"},{"t":"Instrucciones de uso y de desbloqueo visibles para el usuario","n":"UNE-EN 12635"},{"t":"Registro de mantenimiento disponible en la instalación","n":"UNE-EN 12635"},{"t":"Etiqueta ARIZA colocada, visible y legible"},{"h":"Estructura y mecánica"},{"t":"Anclajes y fijaciones apretados, sin holguras"},{"t":"Guías, carriles y rodamientos limpios y sin desgaste"},{"t":"Hoja sin deformaciones, roturas ni corrosión"},{"t":"Engrase de los puntos previstos por el fabricante"},{"t":"Cables, cadenas o correas y sus fijaciones en buen estado"},{"h":"Accionamiento y maniobra"},{"t":"Motorreductor sin ruidos, vibraciones, sobrecalentamiento ni fugas"},{"t":"Fijación del operador y de la transmisión"},{"t":"Finales de carrera bien ajustados"},{"t":"Cuadro de maniobra limpio, seco y con las bornas apretadas"},{"t":"Batería de respaldo, si la lleva"},{"t":"Consumo del motor en marcha","m":"num","u":"A"},{"h":"Propio de seccional"},{"t":"Muelles de torsión: estado, tensión y ciclos consumidos"},{"t":"Paracaídas de muelle y paracaídas de cable"},{"t":"Cables de acero, tambores y ajuste de los tambores"},{"t":"Rodillos, herrajes y bisagras entre paneles"},{"t":"Protección contra atrapamiento de dedos entre paneles","n":"UNE-EN 12604"},{"t":"Equilibrado: la hoja se mantiene sola a media altura"},{"t":"Juntas perimetrales y burlete inferior"},{"t":"Puerta peatonal integrada: micro de seguridad y cierrapuertas"},{"h":"Seguridad (bloque crítico)"},{"t":"Fuerza dinámica máxima medida","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"Duración de la fuerza dinámica","m":"num","u":"s","n":"UNE-EN 12453"},{"t":"Fuerza estática residual","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"La puerta para e invierte ante un obstáculo en todo el recorrido","n":"UNE-EN 12453"},{"t":"Fotocélulas alineadas, limpias y con corte efectivo","n":"UNE-EN 12978"},{"t":"Banda de seguridad responde y su autocontrol funciona","n":"UNE-EN 12978"},{"t":"Zonas de aplastamiento, cizallamiento y arrastre protegidas","n":"UNE-EN 12604"},{"t":"Desbloqueo manual accesible, señalizado y operativo","n":"UNE-EN 12635"},{"t":"Parada de emergencia, si la lleva"},{"t":"Señalización de puerta automática, semáforo o baliza"},{"h":"Instalación eléctrica"},{"t":"Cuadro cerrado, con tapas y grado de protección adecuado","n":"REBT"},{"t":"Puesta a tierra y continuidad comprobadas","n":"REBT"},{"t":"Protección diferencial y magnetotérmica correctas","n":"REBT"},{"t":"Cableado, prensaestopas y canalizaciones en buen estado"},{"t":"Tensión de alimentación medida","m":"num","u":"V"},{"h":"Prueba de funcionamiento"},{"t":"Ciclo completo de apertura y cierre sin incidencias"},{"t":"Tiempo de apertura","m":"num","u":"s"},{"t":"Tiempo de cierre","m":"num","u":"s"},{"t":"Mandos, teclados, lectores y pulsadores responden"},{"t":"Maniobra de hombre presente, si aplica"}],"Enrollable":[{"h":"Documentación e identificación"},{"t":"Placa de características y marcado CE legibles","n":"UNE-EN 13241"},{"t":"Instrucciones de uso y de desbloqueo visibles para el usuario","n":"UNE-EN 12635"},{"t":"Registro de mantenimiento disponible en la instalación","n":"UNE-EN 12635"},{"t":"Etiqueta ARIZA colocada, visible y legible"},{"h":"Estructura y mecánica"},{"t":"Anclajes y fijaciones apretados, sin holguras"},{"t":"Guías, carriles y rodamientos limpios y sin desgaste"},{"t":"Hoja sin deformaciones, roturas ni corrosión"},{"t":"Engrase de los puntos previstos por el fabricante"},{"t":"Cables, cadenas o correas y sus fijaciones en buen estado"},{"h":"Accionamiento y maniobra"},{"t":"Motorreductor sin ruidos, vibraciones, sobrecalentamiento ni fugas"},{"t":"Fijación del operador y de la transmisión"},{"t":"Finales de carrera bien ajustados"},{"t":"Cuadro de maniobra limpio, seco y con las bornas apretadas"},{"t":"Batería de respaldo, si la lleva"},{"t":"Consumo del motor en marcha","m":"num","u":"A"},{"h":"Propio de enrollable"},{"t":"Eje, coronas y muelles compensadores"},{"t":"Lamas sin deformación y con ganchos antidescarrilamiento"},{"t":"Guías laterales limpias y engrasadas"},{"t":"Freno de caída o paracaídas"},{"t":"Barra final y perfil de seguridad inferior"},{"t":"Caja o tambor cerrado y accesible para mantenimiento"},{"h":"Seguridad (bloque crítico)"},{"t":"Fuerza dinámica máxima medida","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"Duración de la fuerza dinámica","m":"num","u":"s","n":"UNE-EN 12453"},{"t":"Fuerza estática residual","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"La puerta para e invierte ante un obstáculo en todo el recorrido","n":"UNE-EN 12453"},{"t":"Fotocélulas alineadas, limpias y con corte efectivo","n":"UNE-EN 12978"},{"t":"Banda de seguridad responde y su autocontrol funciona","n":"UNE-EN 12978"},{"t":"Zonas de aplastamiento, cizallamiento y arrastre protegidas","n":"UNE-EN 12604"},{"t":"Desbloqueo manual accesible, señalizado y operativo","n":"UNE-EN 12635"},{"t":"Parada de emergencia, si la lleva"},{"t":"Señalización de puerta automática, semáforo o baliza"},{"h":"Instalación eléctrica"},{"t":"Cuadro cerrado, con tapas y grado de protección adecuado","n":"REBT"},{"t":"Puesta a tierra y continuidad comprobadas","n":"REBT"},{"t":"Protección diferencial y magnetotérmica correctas","n":"REBT"},{"t":"Cableado, prensaestopas y canalizaciones en buen estado"},{"t":"Tensión de alimentación medida","m":"num","u":"V"},{"h":"Prueba de funcionamiento"},{"t":"Ciclo completo de apertura y cierre sin incidencias"},{"t":"Tiempo de apertura","m":"num","u":"s"},{"t":"Tiempo de cierre","m":"num","u":"s"},{"t":"Mandos, teclados, lectores y pulsadores responden"},{"t":"Maniobra de hombre presente, si aplica"}],"Basculante":[{"h":"Documentación e identificación"},{"t":"Placa de características y marcado CE legibles","n":"UNE-EN 13241"},{"t":"Instrucciones de uso y de desbloqueo visibles para el usuario","n":"UNE-EN 12635"},{"t":"Registro de mantenimiento disponible en la instalación","n":"UNE-EN 12635"},{"t":"Etiqueta ARIZA colocada, visible y legible"},{"h":"Estructura y mecánica"},{"t":"Anclajes y fijaciones apretados, sin holguras"},{"t":"Guías, carriles y rodamientos limpios y sin desgaste"},{"t":"Hoja sin deformaciones, roturas ni corrosión"},{"t":"Engrase de los puntos previstos por el fabricante"},{"t":"Cables, cadenas o correas y sus fijaciones en buen estado"},{"h":"Accionamiento y maniobra"},{"t":"Motorreductor sin ruidos, vibraciones, sobrecalentamiento ni fugas"},{"t":"Fijación del operador y de la transmisión"},{"t":"Finales de carrera bien ajustados"},{"t":"Cuadro de maniobra limpio, seco y con las bornas apretadas"},{"t":"Batería de respaldo, si la lleva"},{"t":"Consumo del motor en marcha","m":"num","u":"A"},{"h":"Propio de basculante"},{"t":"Contrapesos o muelles: estado, anclajes y recorrido"},{"t":"Brazos articulados y guías"},{"t":"Recorrido de los contrapesos protegido"},{"t":"Holguras del bastidor y del marco"},{"t":"Equilibrado de la hoja"},{"h":"Seguridad (bloque crítico)"},{"t":"Fuerza dinámica máxima medida","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"Duración de la fuerza dinámica","m":"num","u":"s","n":"UNE-EN 12453"},{"t":"Fuerza estática residual","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"La puerta para e invierte ante un obstáculo en todo el recorrido","n":"UNE-EN 12453"},{"t":"Fotocélulas alineadas, limpias y con corte efectivo","n":"UNE-EN 12978"},{"t":"Banda de seguridad responde y su autocontrol funciona","n":"UNE-EN 12978"},{"t":"Zonas de aplastamiento, cizallamiento y arrastre protegidas","n":"UNE-EN 12604"},{"t":"Desbloqueo manual accesible, señalizado y operativo","n":"UNE-EN 12635"},{"t":"Parada de emergencia, si la lleva"},{"t":"Señalización de puerta automática, semáforo o baliza"},{"h":"Instalación eléctrica"},{"t":"Cuadro cerrado, con tapas y grado de protección adecuado","n":"REBT"},{"t":"Puesta a tierra y continuidad comprobadas","n":"REBT"},{"t":"Protección diferencial y magnetotérmica correctas","n":"REBT"},{"t":"Cableado, prensaestopas y canalizaciones en buen estado"},{"t":"Tensión de alimentación medida","m":"num","u":"V"},{"h":"Prueba de funcionamiento"},{"t":"Ciclo completo de apertura y cierre sin incidencias"},{"t":"Tiempo de apertura","m":"num","u":"s"},{"t":"Tiempo de cierre","m":"num","u":"s"},{"t":"Mandos, teclados, lectores y pulsadores responden"},{"t":"Maniobra de hombre presente, si aplica"}],"Peatonal automática":[{"h":"Documentación e identificación"},{"t":"Placa de características y marcado CE legibles","n":"UNE-EN 13241"},{"t":"Instrucciones de uso y de desbloqueo visibles para el usuario","n":"UNE-EN 12635"},{"t":"Registro de mantenimiento disponible en la instalación","n":"UNE-EN 12635"},{"t":"Etiqueta ARIZA colocada, visible y legible"},{"h":"Estructura y mecánica"},{"t":"Anclajes y fijaciones apretados, sin holguras"},{"t":"Guías, carriles y rodamientos limpios y sin desgaste"},{"t":"Hoja sin deformaciones, roturas ni corrosión"},{"t":"Engrase de los puntos previstos por el fabricante"},{"t":"Cables, cadenas o correas y sus fijaciones en buen estado"},{"h":"Accionamiento y maniobra"},{"t":"Motorreductor sin ruidos, vibraciones, sobrecalentamiento ni fugas"},{"t":"Fijación del operador y de la transmisión"},{"t":"Finales de carrera bien ajustados"},{"t":"Cuadro de maniobra limpio, seco y con las bornas apretadas"},{"t":"Batería de respaldo, si la lleva"},{"t":"Consumo del motor en marcha","m":"num","u":"A"},{"h":"Propio de peatonal automática"},{"t":"Sensores de apertura: cobertura y ajuste","n":"UNE-EN 16005"},{"t":"Sensores de presencia: detectan persona parada en la línea de cierre","n":"UNE-EN 16005"},{"t":"Fuerza dinámica en la hoja","m":"num","u":"N","n":"UNE-EN 16005"},{"t":"Tiempo de mantenimiento en abierto","m":"num","u":"s"},{"t":"Zonas de atrapamiento entre hoja y jamba protegidas","n":"UNE-EN 16005"},{"t":"Señalización de los vidrios y estado del acristalamiento","n":"UNE-EN 16005"},{"t":"Apertura manual ante fallo de tensión con la fuerza admisible","n":"UNE 85635"},{"t":"Si está en recorrido de evacuación: apertura garantizada y pulsador de emergencia","n":"UNE 85635"},{"t":"Selector de modos y llave"},{"t":"Electroimán o bloqueo y su liberación"},{"t":"Modo de baja energía, si está configurado","n":"UNE-EN 16005"},{"h":"Seguridad (bloque crítico)"},{"t":"Fuerza dinámica máxima medida","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"Duración de la fuerza dinámica","m":"num","u":"s","n":"UNE-EN 12453"},{"t":"Fuerza estática residual","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"La puerta para e invierte ante un obstáculo en todo el recorrido","n":"UNE-EN 12453"},{"t":"Fotocélulas alineadas, limpias y con corte efectivo","n":"UNE-EN 12978"},{"t":"Banda de seguridad responde y su autocontrol funciona","n":"UNE-EN 12978"},{"t":"Zonas de aplastamiento, cizallamiento y arrastre protegidas","n":"UNE-EN 12604"},{"t":"Desbloqueo manual accesible, señalizado y operativo","n":"UNE-EN 12635"},{"t":"Parada de emergencia, si la lleva"},{"t":"Señalización de puerta automática, semáforo o baliza"},{"h":"Instalación eléctrica"},{"t":"Cuadro cerrado, con tapas y grado de protección adecuado","n":"REBT"},{"t":"Puesta a tierra y continuidad comprobadas","n":"REBT"},{"t":"Protección diferencial y magnetotérmica correctas","n":"REBT"},{"t":"Cableado, prensaestopas y canalizaciones en buen estado"},{"t":"Tensión de alimentación medida","m":"num","u":"V"},{"h":"Prueba de funcionamiento"},{"t":"Ciclo completo de apertura y cierre sin incidencias"},{"t":"Tiempo de apertura","m":"num","u":"s"},{"t":"Tiempo de cierre","m":"num","u":"s"},{"t":"Mandos, teclados, lectores y pulsadores responden"},{"t":"Maniobra de hombre presente, si aplica"}],"Barrera":[{"h":"Documentación e identificación"},{"t":"Placa de características y marcado CE legibles","n":"UNE-EN 13241"},{"t":"Instrucciones de uso y de desbloqueo visibles para el usuario","n":"UNE-EN 12635"},{"t":"Registro de mantenimiento disponible en la instalación","n":"UNE-EN 12635"},{"t":"Etiqueta ARIZA colocada, visible y legible"},{"h":"Estructura y mecánica"},{"t":"Anclajes y fijaciones apretados, sin holguras"},{"t":"Guías, carriles y rodamientos limpios y sin desgaste"},{"t":"Hoja sin deformaciones, roturas ni corrosión"},{"t":"Engrase de los puntos previstos por el fabricante"},{"t":"Cables, cadenas o correas y sus fijaciones en buen estado"},{"h":"Accionamiento y maniobra"},{"t":"Motorreductor sin ruidos, vibraciones, sobrecalentamiento ni fugas"},{"t":"Fijación del operador y de la transmisión"},{"t":"Finales de carrera bien ajustados"},{"t":"Cuadro de maniobra limpio, seco y con las bornas apretadas"},{"t":"Batería de respaldo, si la lleva"},{"t":"Consumo del motor en marcha","m":"num","u":"A"},{"h":"Propio de barrera"},{"t":"Mástil: estado, equilibrado y ajuste del muelle o contrapeso"},{"t":"Eje de giro y bisagra sin holguras"},{"t":"Fotocélula bajo el mástil"},{"t":"Bucle magnético de seguridad y de presencia"},{"t":"Banda de seguridad o faldón del mástil"},{"t":"Horquilla o apoyo de descanso"},{"t":"Desbloqueo manual y comportamiento ante fallo de tensión"},{"t":"Señalización reflectante del mástil"},{"t":"Lector, mando o sistema de control de accesos"},{"h":"Seguridad (bloque crítico)"},{"t":"Fuerza dinámica máxima medida","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"Duración de la fuerza dinámica","m":"num","u":"s","n":"UNE-EN 12453"},{"t":"Fuerza estática residual","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"La puerta para e invierte ante un obstáculo en todo el recorrido","n":"UNE-EN 12453"},{"t":"Fotocélulas alineadas, limpias y con corte efectivo","n":"UNE-EN 12978"},{"t":"Banda de seguridad responde y su autocontrol funciona","n":"UNE-EN 12978"},{"t":"Zonas de aplastamiento, cizallamiento y arrastre protegidas","n":"UNE-EN 12604"},{"t":"Desbloqueo manual accesible, señalizado y operativo","n":"UNE-EN 12635"},{"t":"Parada de emergencia, si la lleva"},{"t":"Señalización de puerta automática, semáforo o baliza"},{"h":"Instalación eléctrica"},{"t":"Cuadro cerrado, con tapas y grado de protección adecuado","n":"REBT"},{"t":"Puesta a tierra y continuidad comprobadas","n":"REBT"},{"t":"Protección diferencial y magnetotérmica correctas","n":"REBT"},{"t":"Cableado, prensaestopas y canalizaciones en buen estado"},{"t":"Tensión de alimentación medida","m":"num","u":"V"},{"h":"Prueba de funcionamiento"},{"t":"Ciclo completo de apertura y cierre sin incidencias"},{"t":"Tiempo de apertura","m":"num","u":"s"},{"t":"Tiempo de cierre","m":"num","u":"s"},{"t":"Mandos, teclados, lectores y pulsadores responden"},{"t":"Maniobra de hombre presente, si aplica"}],"Otro":[{"h":"Documentación e identificación"},{"t":"Placa de características y marcado CE legibles","n":"UNE-EN 13241"},{"t":"Instrucciones de uso y de desbloqueo visibles para el usuario","n":"UNE-EN 12635"},{"t":"Registro de mantenimiento disponible en la instalación","n":"UNE-EN 12635"},{"t":"Etiqueta ARIZA colocada, visible y legible"},{"h":"Estructura y mecánica"},{"t":"Anclajes y fijaciones apretados, sin holguras"},{"t":"Guías, carriles y rodamientos limpios y sin desgaste"},{"t":"Hoja sin deformaciones, roturas ni corrosión"},{"t":"Engrase de los puntos previstos por el fabricante"},{"t":"Cables, cadenas o correas y sus fijaciones en buen estado"},{"h":"Accionamiento y maniobra"},{"t":"Motorreductor sin ruidos, vibraciones, sobrecalentamiento ni fugas"},{"t":"Fijación del operador y de la transmisión"},{"t":"Finales de carrera bien ajustados"},{"t":"Cuadro de maniobra limpio, seco y con las bornas apretadas"},{"t":"Batería de respaldo, si la lleva"},{"t":"Consumo del motor en marcha","m":"num","u":"A"},{"h":"Propio de esta puerta"},{"t":"Comprobaciones específicas según el manual del fabricante"},{"h":"Seguridad (bloque crítico)"},{"t":"Fuerza dinámica máxima medida","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"Duración de la fuerza dinámica","m":"num","u":"s","n":"UNE-EN 12453"},{"t":"Fuerza estática residual","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"La puerta para e invierte ante un obstáculo en todo el recorrido","n":"UNE-EN 12453"},{"t":"Fotocélulas alineadas, limpias y con corte efectivo","n":"UNE-EN 12978"},{"t":"Banda de seguridad responde y su autocontrol funciona","n":"UNE-EN 12978"},{"t":"Zonas de aplastamiento, cizallamiento y arrastre protegidas","n":"UNE-EN 12604"},{"t":"Desbloqueo manual accesible, señalizado y operativo","n":"UNE-EN 12635"},{"t":"Parada de emergencia, si la lleva"},{"t":"Señalización de puerta automática, semáforo o baliza"},{"h":"Instalación eléctrica"},{"t":"Cuadro cerrado, con tapas y grado de protección adecuado","n":"REBT"},{"t":"Puesta a tierra y continuidad comprobadas","n":"REBT"},{"t":"Protección diferencial y magnetotérmica correctas","n":"REBT"},{"t":"Cableado, prensaestopas y canalizaciones en buen estado"},{"t":"Tensión de alimentación medida","m":"num","u":"V"},{"h":"Prueba de funcionamiento"},{"t":"Ciclo completo de apertura y cierre sin incidencias"},{"t":"Tiempo de apertura","m":"num","u":"s"},{"t":"Tiempo de cierre","m":"num","u":"s"},{"t":"Mandos, teclados, lectores y pulsadores responden"},{"t":"Maniobra de hombre presente, si aplica"}]};  /* GUIONES-AQUI */
+const GUIONES_FABRICA = {"Corredera":[{"h":"Documentación e identificación"},{"t":"Placa de características y marcado CE legibles","n":"UNE-EN 13241"},{"t":"Instrucciones de uso y de desbloqueo visibles para el usuario","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Registro de mantenimiento disponible en la instalación","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Etiqueta ARIZA colocada, visible y legible"},{"h":"Estructura y mecánica"},{"t":"Anclajes y fijaciones apretados, sin holguras"},{"t":"Guías, carriles y rodamientos limpios y sin desgaste"},{"t":"Hoja sin deformaciones, roturas ni corrosión"},{"t":"Engrase de los puntos previstos por el fabricante"},{"t":"Cables, cadenas o correas y sus fijaciones en buen estado"},{"h":"Accionamiento y maniobra"},{"t":"Motorreductor sin ruidos, vibraciones, sobrecalentamiento ni fugas"},{"t":"Fijación del operador y de la transmisión"},{"t":"Finales de carrera bien ajustados"},{"t":"Cuadro de maniobra limpio, seco y con las bornas apretadas"},{"t":"Batería de respaldo, si la lleva"},{"t":"Consumo del motor en marcha","m":"num","u":"A"},{"h":"Propio de corredera"},{"t":"Cremallera: estado, fijación y holgura con el piñón"},{"t":"Rodillos de guía superior y carro inferior"},{"t":"Topes mecánicos de final de recorrido en ambos extremos"},{"t":"Sistema antidescarrilamiento y antivuelco"},{"t":"Hoja nivelada y aplomada"},{"t":"Separación entre hoja y elementos fijos, o protección equivalente","m":"num","u":"mm","n":"UNE-EN 12604"},{"t":"Protección del hueco de arrastre al abrir"},{"t":"Bucle magnético o radar de seguridad, si lo lleva"},{"h":"Seguridad (bloque crítico)"},{"t":"Fuerza dinámica máxima medida","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"Duración de la fuerza dinámica","m":"num","u":"s","n":"UNE-EN 12453"},{"t":"Fuerza estática residual","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"La puerta para e invierte ante un obstáculo en todo el recorrido","n":"UNE-EN 12453"},{"t":"Fotocélulas alineadas, limpias y con corte efectivo","n":"UNE-EN 12978"},{"t":"Banda de seguridad responde y su autocontrol funciona","n":"UNE-EN 12978"},{"t":"Zonas de aplastamiento, cizallamiento y arrastre protegidas","n":"UNE-EN 12604"},{"t":"Desbloqueo manual accesible, señalizado y operativo","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Parada de emergencia, si la lleva"},{"t":"Señalización de puerta automática, semáforo o baliza"},{"h":"Instalación eléctrica"},{"t":"Cuadro cerrado, con tapas y grado de protección adecuado","n":"REBT"},{"t":"Puesta a tierra y continuidad comprobadas","n":"REBT"},{"t":"Protección diferencial y magnetotérmica correctas","n":"REBT"},{"t":"Cableado, prensaestopas y canalizaciones en buen estado"},{"t":"Tensión de alimentación medida","m":"num","u":"V"},{"h":"Prueba de funcionamiento"},{"t":"Ciclo completo de apertura y cierre sin incidencias"},{"t":"Tiempo de apertura","m":"num","u":"s"},{"t":"Tiempo de cierre","m":"num","u":"s"},{"t":"Mandos, teclados, lectores y pulsadores responden"},{"t":"Maniobra de hombre presente, si aplica"}],"Batiente":[{"h":"Documentación e identificación"},{"t":"Placa de características y marcado CE legibles","n":"UNE-EN 13241"},{"t":"Instrucciones de uso y de desbloqueo visibles para el usuario","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Registro de mantenimiento disponible en la instalación","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Etiqueta ARIZA colocada, visible y legible"},{"h":"Estructura y mecánica"},{"t":"Anclajes y fijaciones apretados, sin holguras"},{"t":"Guías, carriles y rodamientos limpios y sin desgaste"},{"t":"Hoja sin deformaciones, roturas ni corrosión"},{"t":"Engrase de los puntos previstos por el fabricante"},{"t":"Cables, cadenas o correas y sus fijaciones en buen estado"},{"h":"Accionamiento y maniobra"},{"t":"Motorreductor sin ruidos, vibraciones, sobrecalentamiento ni fugas"},{"t":"Fijación del operador y de la transmisión"},{"t":"Finales de carrera bien ajustados"},{"t":"Cuadro de maniobra limpio, seco y con las bornas apretadas"},{"t":"Batería de respaldo, si la lleva"},{"t":"Consumo del motor en marcha","m":"num","u":"A"},{"h":"Propio de batiente"},{"t":"Bisagras y quicios: holguras y engrase"},{"t":"Brazos o pistones: fijación, estanqueidad y recorrido ajustado"},{"t":"Topes mecánicos de apertura y de cierre"},{"t":"Electrocerradura o golpe eléctrico"},{"t":"Desfase de hojas y solapamiento de cierre correctos"},{"t":"Zona de aplastamiento junto a la bisagra protegida","n":"UNE-EN 12604"},{"t":"Comportamiento con viento, si la hoja es ciega"},{"h":"Seguridad (bloque crítico)"},{"t":"Fuerza dinámica máxima medida","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"Duración de la fuerza dinámica","m":"num","u":"s","n":"UNE-EN 12453"},{"t":"Fuerza estática residual","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"La puerta para e invierte ante un obstáculo en todo el recorrido","n":"UNE-EN 12453"},{"t":"Fotocélulas alineadas, limpias y con corte efectivo","n":"UNE-EN 12978"},{"t":"Banda de seguridad responde y su autocontrol funciona","n":"UNE-EN 12978"},{"t":"Zonas de aplastamiento, cizallamiento y arrastre protegidas","n":"UNE-EN 12604"},{"t":"Desbloqueo manual accesible, señalizado y operativo","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Parada de emergencia, si la lleva"},{"t":"Señalización de puerta automática, semáforo o baliza"},{"h":"Instalación eléctrica"},{"t":"Cuadro cerrado, con tapas y grado de protección adecuado","n":"REBT"},{"t":"Puesta a tierra y continuidad comprobadas","n":"REBT"},{"t":"Protección diferencial y magnetotérmica correctas","n":"REBT"},{"t":"Cableado, prensaestopas y canalizaciones en buen estado"},{"t":"Tensión de alimentación medida","m":"num","u":"V"},{"h":"Prueba de funcionamiento"},{"t":"Ciclo completo de apertura y cierre sin incidencias"},{"t":"Tiempo de apertura","m":"num","u":"s"},{"t":"Tiempo de cierre","m":"num","u":"s"},{"t":"Mandos, teclados, lectores y pulsadores responden"},{"t":"Maniobra de hombre presente, si aplica"}],"Seccional":[{"h":"Documentación e identificación"},{"t":"Placa de características y marcado CE legibles","n":"UNE-EN 13241"},{"t":"Instrucciones de uso y de desbloqueo visibles para el usuario","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Registro de mantenimiento disponible en la instalación","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Etiqueta ARIZA colocada, visible y legible"},{"h":"Estructura y mecánica"},{"t":"Anclajes y fijaciones apretados, sin holguras"},{"t":"Guías, carriles y rodamientos limpios y sin desgaste"},{"t":"Hoja sin deformaciones, roturas ni corrosión"},{"t":"Engrase de los puntos previstos por el fabricante"},{"t":"Cables, cadenas o correas y sus fijaciones en buen estado"},{"h":"Accionamiento y maniobra"},{"t":"Motorreductor sin ruidos, vibraciones, sobrecalentamiento ni fugas"},{"t":"Fijación del operador y de la transmisión"},{"t":"Finales de carrera bien ajustados"},{"t":"Cuadro de maniobra limpio, seco y con las bornas apretadas"},{"t":"Batería de respaldo, si la lleva"},{"t":"Consumo del motor en marcha","m":"num","u":"A"},{"h":"Propio de seccional"},{"t":"Muelles de torsión: estado, tensión y ciclos consumidos"},{"t":"Paracaídas de muelle y paracaídas de cable"},{"t":"Cables de acero, tambores y ajuste de los tambores"},{"t":"Rodillos, herrajes y bisagras entre paneles"},{"t":"Protección contra atrapamiento de dedos entre paneles","n":"UNE-EN 12604"},{"t":"Equilibrado: la hoja se mantiene sola a media altura"},{"t":"Juntas perimetrales y burlete inferior"},{"t":"Puerta peatonal integrada: micro de seguridad y cierrapuertas"},{"h":"Seguridad (bloque crítico)"},{"t":"Fuerza dinámica máxima medida","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"Duración de la fuerza dinámica","m":"num","u":"s","n":"UNE-EN 12453"},{"t":"Fuerza estática residual","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"La puerta para e invierte ante un obstáculo en todo el recorrido","n":"UNE-EN 12453"},{"t":"Fotocélulas alineadas, limpias y con corte efectivo","n":"UNE-EN 12978"},{"t":"Banda de seguridad responde y su autocontrol funciona","n":"UNE-EN 12978"},{"t":"Zonas de aplastamiento, cizallamiento y arrastre protegidas","n":"UNE-EN 12604"},{"t":"Desbloqueo manual accesible, señalizado y operativo","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Parada de emergencia, si la lleva"},{"t":"Señalización de puerta automática, semáforo o baliza"},{"h":"Instalación eléctrica"},{"t":"Cuadro cerrado, con tapas y grado de protección adecuado","n":"REBT"},{"t":"Puesta a tierra y continuidad comprobadas","n":"REBT"},{"t":"Protección diferencial y magnetotérmica correctas","n":"REBT"},{"t":"Cableado, prensaestopas y canalizaciones en buen estado"},{"t":"Tensión de alimentación medida","m":"num","u":"V"},{"h":"Prueba de funcionamiento"},{"t":"Ciclo completo de apertura y cierre sin incidencias"},{"t":"Tiempo de apertura","m":"num","u":"s"},{"t":"Tiempo de cierre","m":"num","u":"s"},{"t":"Mandos, teclados, lectores y pulsadores responden"},{"t":"Maniobra de hombre presente, si aplica"}],"Enrollable":[{"h":"Documentación e identificación"},{"t":"Placa de características y marcado CE legibles","n":"UNE-EN 13241"},{"t":"Instrucciones de uso y de desbloqueo visibles para el usuario","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Registro de mantenimiento disponible en la instalación","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Etiqueta ARIZA colocada, visible y legible"},{"h":"Estructura y mecánica"},{"t":"Anclajes y fijaciones apretados, sin holguras"},{"t":"Guías, carriles y rodamientos limpios y sin desgaste"},{"t":"Hoja sin deformaciones, roturas ni corrosión"},{"t":"Engrase de los puntos previstos por el fabricante"},{"t":"Cables, cadenas o correas y sus fijaciones en buen estado"},{"h":"Accionamiento y maniobra"},{"t":"Motorreductor sin ruidos, vibraciones, sobrecalentamiento ni fugas"},{"t":"Fijación del operador y de la transmisión"},{"t":"Finales de carrera bien ajustados"},{"t":"Cuadro de maniobra limpio, seco y con las bornas apretadas"},{"t":"Batería de respaldo, si la lleva"},{"t":"Consumo del motor en marcha","m":"num","u":"A"},{"h":"Propio de enrollable"},{"t":"Eje, coronas y muelles compensadores"},{"t":"Lamas sin deformación y con ganchos antidescarrilamiento"},{"t":"Guías laterales limpias y engrasadas"},{"t":"Freno de caída o paracaídas"},{"t":"Barra final y perfil de seguridad inferior"},{"t":"Caja o tambor cerrado y accesible para mantenimiento"},{"h":"Seguridad (bloque crítico)"},{"t":"Fuerza dinámica máxima medida","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"Duración de la fuerza dinámica","m":"num","u":"s","n":"UNE-EN 12453"},{"t":"Fuerza estática residual","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"La puerta para e invierte ante un obstáculo en todo el recorrido","n":"UNE-EN 12453"},{"t":"Fotocélulas alineadas, limpias y con corte efectivo","n":"UNE-EN 12978"},{"t":"Banda de seguridad responde y su autocontrol funciona","n":"UNE-EN 12978"},{"t":"Zonas de aplastamiento, cizallamiento y arrastre protegidas","n":"UNE-EN 12604"},{"t":"Desbloqueo manual accesible, señalizado y operativo","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Parada de emergencia, si la lleva"},{"t":"Señalización de puerta automática, semáforo o baliza"},{"h":"Instalación eléctrica"},{"t":"Cuadro cerrado, con tapas y grado de protección adecuado","n":"REBT"},{"t":"Puesta a tierra y continuidad comprobadas","n":"REBT"},{"t":"Protección diferencial y magnetotérmica correctas","n":"REBT"},{"t":"Cableado, prensaestopas y canalizaciones en buen estado"},{"t":"Tensión de alimentación medida","m":"num","u":"V"},{"h":"Prueba de funcionamiento"},{"t":"Ciclo completo de apertura y cierre sin incidencias"},{"t":"Tiempo de apertura","m":"num","u":"s"},{"t":"Tiempo de cierre","m":"num","u":"s"},{"t":"Mandos, teclados, lectores y pulsadores responden"},{"t":"Maniobra de hombre presente, si aplica"}],"Basculante":[{"h":"Documentación e identificación"},{"t":"Placa de características y marcado CE legibles","n":"UNE-EN 13241"},{"t":"Instrucciones de uso y de desbloqueo visibles para el usuario","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Registro de mantenimiento disponible en la instalación","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Etiqueta ARIZA colocada, visible y legible"},{"h":"Estructura y mecánica"},{"t":"Anclajes y fijaciones apretados, sin holguras"},{"t":"Guías, carriles y rodamientos limpios y sin desgaste"},{"t":"Hoja sin deformaciones, roturas ni corrosión"},{"t":"Engrase de los puntos previstos por el fabricante"},{"t":"Cables, cadenas o correas y sus fijaciones en buen estado"},{"h":"Accionamiento y maniobra"},{"t":"Motorreductor sin ruidos, vibraciones, sobrecalentamiento ni fugas"},{"t":"Fijación del operador y de la transmisión"},{"t":"Finales de carrera bien ajustados"},{"t":"Cuadro de maniobra limpio, seco y con las bornas apretadas"},{"t":"Batería de respaldo, si la lleva"},{"t":"Consumo del motor en marcha","m":"num","u":"A"},{"h":"Propio de basculante"},{"t":"Contrapesos o muelles: estado, anclajes y recorrido"},{"t":"Brazos articulados y guías"},{"t":"Recorrido de los contrapesos protegido"},{"t":"Holguras del bastidor y del marco"},{"t":"Equilibrado de la hoja"},{"h":"Seguridad (bloque crítico)"},{"t":"Fuerza dinámica máxima medida","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"Duración de la fuerza dinámica","m":"num","u":"s","n":"UNE-EN 12453"},{"t":"Fuerza estática residual","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"La puerta para e invierte ante un obstáculo en todo el recorrido","n":"UNE-EN 12453"},{"t":"Fotocélulas alineadas, limpias y con corte efectivo","n":"UNE-EN 12978"},{"t":"Banda de seguridad responde y su autocontrol funciona","n":"UNE-EN 12978"},{"t":"Zonas de aplastamiento, cizallamiento y arrastre protegidas","n":"UNE-EN 12604"},{"t":"Desbloqueo manual accesible, señalizado y operativo","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Parada de emergencia, si la lleva"},{"t":"Señalización de puerta automática, semáforo o baliza"},{"h":"Instalación eléctrica"},{"t":"Cuadro cerrado, con tapas y grado de protección adecuado","n":"REBT"},{"t":"Puesta a tierra y continuidad comprobadas","n":"REBT"},{"t":"Protección diferencial y magnetotérmica correctas","n":"REBT"},{"t":"Cableado, prensaestopas y canalizaciones en buen estado"},{"t":"Tensión de alimentación medida","m":"num","u":"V"},{"h":"Prueba de funcionamiento"},{"t":"Ciclo completo de apertura y cierre sin incidencias"},{"t":"Tiempo de apertura","m":"num","u":"s"},{"t":"Tiempo de cierre","m":"num","u":"s"},{"t":"Mandos, teclados, lectores y pulsadores responden"},{"t":"Maniobra de hombre presente, si aplica"}],"Peatonal automática":[{"h":"Documentación e identificación"},{"t":"Placa de características y marcado CE legibles","n":"UNE-EN 13241"},{"t":"Instrucciones de uso y de desbloqueo visibles para el usuario","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Registro de mantenimiento disponible en la instalación","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Etiqueta ARIZA colocada, visible y legible"},{"h":"Estructura y mecánica"},{"t":"Anclajes y fijaciones apretados, sin holguras"},{"t":"Guías, carriles y rodamientos limpios y sin desgaste"},{"t":"Hoja sin deformaciones, roturas ni corrosión"},{"t":"Engrase de los puntos previstos por el fabricante"},{"t":"Cables, cadenas o correas y sus fijaciones en buen estado"},{"h":"Accionamiento y maniobra"},{"t":"Motorreductor sin ruidos, vibraciones, sobrecalentamiento ni fugas"},{"t":"Fijación del operador y de la transmisión"},{"t":"Finales de carrera bien ajustados"},{"t":"Cuadro de maniobra limpio, seco y con las bornas apretadas"},{"t":"Batería de respaldo, si la lleva"},{"t":"Consumo del motor en marcha","m":"num","u":"A"},{"h":"Propio de peatonal automática"},{"t":"Sensores de apertura: cobertura y ajuste","n":"UNE-EN 16005"},{"t":"Sensores de presencia: detectan persona parada en la línea de cierre","n":"UNE-EN 16005"},{"t":"Fuerza dinámica en la hoja","m":"num","u":"N","n":"UNE-EN 16005"},{"t":"Tiempo de mantenimiento en abierto","m":"num","u":"s"},{"t":"Zonas de atrapamiento entre hoja y jamba protegidas","n":"UNE-EN 16005"},{"t":"Señalización de los vidrios y estado del acristalamiento","n":"UNE-EN 16005"},{"t":"Apertura manual ante fallo de tensión con la fuerza admisible","n":"UNE 85121:2018"},{"t":"Si está en recorrido de evacuación: apertura garantizada y pulsador de emergencia","n":"UNE 85121:2018"},{"t":"Selector de modos y llave"},{"t":"Electroimán o bloqueo y su liberación"},{"t":"Modo de baja energía, si está configurado","n":"UNE-EN 16005"},{"h":"Seguridad (bloque crítico)"},{"t":"Fuerza dinámica máxima medida","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"Duración de la fuerza dinámica","m":"num","u":"s","n":"UNE-EN 12453"},{"t":"Fuerza estática residual","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"La puerta para e invierte ante un obstáculo en todo el recorrido","n":"UNE-EN 12453"},{"t":"Fotocélulas alineadas, limpias y con corte efectivo","n":"UNE-EN 12978"},{"t":"Banda de seguridad responde y su autocontrol funciona","n":"UNE-EN 12978"},{"t":"Zonas de aplastamiento, cizallamiento y arrastre protegidas","n":"UNE-EN 12604"},{"t":"Desbloqueo manual accesible, señalizado y operativo","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Parada de emergencia, si la lleva"},{"t":"Señalización de puerta automática, semáforo o baliza"},{"h":"Instalación eléctrica"},{"t":"Cuadro cerrado, con tapas y grado de protección adecuado","n":"REBT"},{"t":"Puesta a tierra y continuidad comprobadas","n":"REBT"},{"t":"Protección diferencial y magnetotérmica correctas","n":"REBT"},{"t":"Cableado, prensaestopas y canalizaciones en buen estado"},{"t":"Tensión de alimentación medida","m":"num","u":"V"},{"h":"Prueba de funcionamiento"},{"t":"Ciclo completo de apertura y cierre sin incidencias"},{"t":"Tiempo de apertura","m":"num","u":"s"},{"t":"Tiempo de cierre","m":"num","u":"s"},{"t":"Mandos, teclados, lectores y pulsadores responden"},{"t":"Maniobra de hombre presente, si aplica"}],"Barrera":[{"h":"Documentación e identificación"},{"t":"Placa de características y marcado CE legibles","n":"UNE-EN 13241"},{"t":"Instrucciones de uso y de desbloqueo visibles para el usuario","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Registro de mantenimiento disponible en la instalación","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Etiqueta ARIZA colocada, visible y legible"},{"h":"Estructura y mecánica"},{"t":"Anclajes y fijaciones apretados, sin holguras"},{"t":"Guías, carriles y rodamientos limpios y sin desgaste"},{"t":"Hoja sin deformaciones, roturas ni corrosión"},{"t":"Engrase de los puntos previstos por el fabricante"},{"t":"Cables, cadenas o correas y sus fijaciones en buen estado"},{"h":"Accionamiento y maniobra"},{"t":"Motorreductor sin ruidos, vibraciones, sobrecalentamiento ni fugas"},{"t":"Fijación del operador y de la transmisión"},{"t":"Finales de carrera bien ajustados"},{"t":"Cuadro de maniobra limpio, seco y con las bornas apretadas"},{"t":"Batería de respaldo, si la lleva"},{"t":"Consumo del motor en marcha","m":"num","u":"A"},{"h":"Propio de barrera"},{"t":"Mástil: estado, equilibrado y ajuste del muelle o contrapeso"},{"t":"Eje de giro y bisagra sin holguras"},{"t":"Fotocélula bajo el mástil"},{"t":"Bucle magnético de seguridad y de presencia"},{"t":"Banda de seguridad o faldón del mástil"},{"t":"Horquilla o apoyo de descanso"},{"t":"Desbloqueo manual y comportamiento ante fallo de tensión"},{"t":"Señalización reflectante del mástil"},{"t":"Lector, mando o sistema de control de accesos"},{"h":"Seguridad (bloque crítico)"},{"t":"Fuerza dinámica máxima medida","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"Duración de la fuerza dinámica","m":"num","u":"s","n":"UNE-EN 12453"},{"t":"Fuerza estática residual","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"La puerta para e invierte ante un obstáculo en todo el recorrido","n":"UNE-EN 12453"},{"t":"Fotocélulas alineadas, limpias y con corte efectivo","n":"UNE-EN 12978"},{"t":"Banda de seguridad responde y su autocontrol funciona","n":"UNE-EN 12978"},{"t":"Zonas de aplastamiento, cizallamiento y arrastre protegidas","n":"UNE-EN 12604"},{"t":"Desbloqueo manual accesible, señalizado y operativo","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Parada de emergencia, si la lleva"},{"t":"Señalización de puerta automática, semáforo o baliza"},{"h":"Instalación eléctrica"},{"t":"Cuadro cerrado, con tapas y grado de protección adecuado","n":"REBT"},{"t":"Puesta a tierra y continuidad comprobadas","n":"REBT"},{"t":"Protección diferencial y magnetotérmica correctas","n":"REBT"},{"t":"Cableado, prensaestopas y canalizaciones en buen estado"},{"t":"Tensión de alimentación medida","m":"num","u":"V"},{"h":"Prueba de funcionamiento"},{"t":"Ciclo completo de apertura y cierre sin incidencias"},{"t":"Tiempo de apertura","m":"num","u":"s"},{"t":"Tiempo de cierre","m":"num","u":"s"},{"t":"Mandos, teclados, lectores y pulsadores responden"},{"t":"Maniobra de hombre presente, si aplica"}],"Otro":[{"h":"Documentación e identificación"},{"t":"Placa de características y marcado CE legibles","n":"UNE-EN 13241"},{"t":"Instrucciones de uso y de desbloqueo visibles para el usuario","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Registro de mantenimiento disponible en la instalación","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Etiqueta ARIZA colocada, visible y legible"},{"h":"Estructura y mecánica"},{"t":"Anclajes y fijaciones apretados, sin holguras"},{"t":"Guías, carriles y rodamientos limpios y sin desgaste"},{"t":"Hoja sin deformaciones, roturas ni corrosión"},{"t":"Engrase de los puntos previstos por el fabricante"},{"t":"Cables, cadenas o correas y sus fijaciones en buen estado"},{"h":"Accionamiento y maniobra"},{"t":"Motorreductor sin ruidos, vibraciones, sobrecalentamiento ni fugas"},{"t":"Fijación del operador y de la transmisión"},{"t":"Finales de carrera bien ajustados"},{"t":"Cuadro de maniobra limpio, seco y con las bornas apretadas"},{"t":"Batería de respaldo, si la lleva"},{"t":"Consumo del motor en marcha","m":"num","u":"A"},{"h":"Propio de esta puerta"},{"t":"Comprobaciones específicas según el manual del fabricante"},{"h":"Seguridad (bloque crítico)"},{"t":"Fuerza dinámica máxima medida","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"Duración de la fuerza dinámica","m":"num","u":"s","n":"UNE-EN 12453"},{"t":"Fuerza estática residual","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"La puerta para e invierte ante un obstáculo en todo el recorrido","n":"UNE-EN 12453"},{"t":"Fotocélulas alineadas, limpias y con corte efectivo","n":"UNE-EN 12978"},{"t":"Banda de seguridad responde y su autocontrol funciona","n":"UNE-EN 12978"},{"t":"Zonas de aplastamiento, cizallamiento y arrastre protegidas","n":"UNE-EN 12604"},{"t":"Desbloqueo manual accesible, señalizado y operativo","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Parada de emergencia, si la lleva"},{"t":"Señalización de puerta automática, semáforo o baliza"},{"h":"Instalación eléctrica"},{"t":"Cuadro cerrado, con tapas y grado de protección adecuado","n":"REBT"},{"t":"Puesta a tierra y continuidad comprobadas","n":"REBT"},{"t":"Protección diferencial y magnetotérmica correctas","n":"REBT"},{"t":"Cableado, prensaestopas y canalizaciones en buen estado"},{"t":"Tensión de alimentación medida","m":"num","u":"V"},{"h":"Prueba de funcionamiento"},{"t":"Ciclo completo de apertura y cierre sin incidencias"},{"t":"Tiempo de apertura","m":"num","u":"s"},{"t":"Tiempo de cierre","m":"num","u":"s"},{"t":"Mandos, teclados, lectores y pulsadores responden"},{"t":"Maniobra de hombre presente, si aplica"}]};  /* GUIONES-AQUI */
 
 /* ================= Utilidades ================= */
 const $ = s => document.querySelector(s);
@@ -2135,18 +2135,30 @@ function panelEmpresa(){
   {
     const tabla = S.ajustes.proteccion || {};
     h += '<div class="panel"><div class="panel-h"><h3>Protección exigida según accionamiento y usuario</h3></div>'+
-      '<p class="nota-oficina" style="margin:0 0 10px">Esta tabla está <b>vacía de serie</b> y no la relleno yo: '+
-      'el nivel de protección que exige cada combinación está en la UNE-EN 12453, que es de pago y no tengo. '+
-      'Escribe aquí, con tu ejemplar delante, qué dispositivos exige cada caso. Mientras una casilla esté vacía, '+
-      'los expedientes con esa combinación avisarán de que no se puede contrastar lo instalado con lo exigible.</p>'+
-      '<div class="tabla-wrap"><table class="tabla"><thead><tr><th style="width:220px">Cómo se acciona</th>'+
-      '<th style="width:200px">Quién la usa</th><th>Protección exigida</th></tr></thead><tbody>';
+      '<p class="nota-oficina" style="margin:0 0 10px">Lo que ves cargado es una <b>interpretación</b> de la matriz '+
+      'de protección mínima de la UNE-EN 12453:2018+A1:2022, procedente de un documento de trabajo, no del texto de '+
+      'la norma. <b>Contrástala con tu ejemplar</b> y corrige lo que no cuadre: lo que escribas aquí manda sobre lo '+
+      'cargado de serie, y los expedientes dirán que el texto es tuyo.</p>'+
+      '<p class="mini" style="margin:0 0 10px"><b>Niveles:</b> '+
+      Object.values(NIVELES_PROTECCION).map(n => esc(n.nombre)+' — '+esc(n.detalle)).join('<br>')+
+      '<br><b>Ojo:</b> C+D no es «poner una fotocélula». Primero hay que proteger el impacto y el '+
+      'aplastamiento con C, y la D es una protección añadida, no un sustituto.</p>'+
+      '<p class="mini" style="margin:0 0 10px">Esta matriz <b>no se aplica a las puertas exclusivamente '+
+      'peatonales</b>: esas van por la UNE-EN 16005+A1:2024, que tiene su propio método.</p>'+
+      '<div class="tabla-wrap"><table class="tabla"><thead><tr><th style="width:190px">Cómo se acciona</th>'+
+      '<th style="width:170px">Quién la usa</th><th style="width:90px">Mínimo</th>'+
+      '<th>Protección exigida</th></tr></thead><tbody>';
     Object.entries(MODOS_ACCIONAMIENTO).forEach(([mk, mv]) => {
       Object.entries(TIPOS_USUARIO).forEach(([uk, ut]) => {
         const clave = mk + '|' + uk;
-        h += '<tr><td>'+esc(mv.nombre)+'</td><td>'+esc(ut)+'</td>'+
+        const base = MATRIZ_PROTECCION_FABRICA[clave] || {};
+        h += '<tr'+(base.admisible === false ? ' style="background:var(--mal-bg)"' : '')+'>'+
+          '<td>'+esc(mv.nombre)+'</td><td>'+esc(ut)+'</td>'+
+          '<td>'+(base.admisible === false
+            ? '<span class="chip mal sin">No admisible</span>'
+            : '<b>'+esc(base.niveles||'—')+'</b>')+'</td>'+
           '<td><input type="text" data-prot="'+esc(clave)+'" value="'+esc(tabla[clave]||'')+'" '+
-          'placeholder="Ej.: limitación de fuerza y detección de presencia en todo el recorrido" '+
+          'placeholder="'+esc(base.elementos||'')+'" '+
           'style="width:100%;padding:5px 7px;border:1px solid var(--line);border-radius:5px;'+
           'background:var(--surface);color:var(--ink);font-size:13px"></td></tr>';
       });
@@ -2207,7 +2219,7 @@ function panelGuiones(){
     '<div class="campo"><label for="gn-norma">Norma</label><input id="gn-norma" type="text" maxlength="40" placeholder="UNE-EN 12453"></div>'+
     '<div class="campo" style="align-content:end"><button class="btn pri" data-act="guion-anadir">Añadir al guión</button></div>'+
     '</div>';
-  h += '<p class="mini" style="margin:10px 0 0">Los guiones de fábrica siguen UNE-EN 13241, 12453, 12604, 12635, 12978 y, en peatonales, UNE-EN 16005 y UNE 85635. '+
+  h += '<p class="mini" style="margin:10px 0 0">Los guiones de fábrica siguen UNE-EN 13241, 12453, 12604 y 12978 y, en peatonales, UNE-EN 16005 y UNE 85121. '+
        'Si los cambias, revisa que no te dejas fuera ninguna comprobación de seguridad.</p></div>';
   return h;
 }
@@ -2517,28 +2529,27 @@ const EXP_ES_NUEVA      = s => s === 'nueva_fabricante' || s === 'nueva_instalad
 const EXP_NORMAS = {
   industrial: [
     ['UNE-EN 13241:2004+A2:2017',    'Norma de producto armonizada. Base de la declaración de prestaciones y del marcado CE por el Reglamento de Productos de Construcción.'],
-    ['UNE-EN 12453:2017+A1:2021',    'Seguridad en el uso de puertas motorizadas: requisitos y métodos de ensayo de fuerzas. Absorbió la EN 12445.'],
-    ['UNE-EN 12604:2017+A1:2020',    'Aspectos mecánicos: requisitos y métodos de ensayo. Absorbió la EN 12605.'],
-    ['UNE-EN 12635:2002+A1:2009',    'Instalación y uso. Define el expediente de la instalación y el libro de mantenimiento.'],
-    ['UNE-EN 12978:2024',            'Dispositivos de protección para puertas motorizadas: requisitos y métodos de ensayo.'],
+    ['UNE-EN 12453:2018+A1:2022',    'Seguridad en el uso de puertas motorizadas: requisitos y métodos de ensayo de fuerzas. Absorbió la EN 12445.'],
+    ['UNE-EN 12604:2018+A1:2021',    'Aspectos mecánicos: requisitos y métodos de ensayo. Absorbió la EN 12605.'],
+    ['UNE-EN 12978:2025',            'Dispositivos de protección para puertas motorizadas: requisitos y métodos de ensayo.'],
     ['UNE 85635:2012',               'Norma española de requisitos de instalación, uso, mantenimiento y modificación.'],
   ],
   peatonal: [
-    ['UNE-EN 16361:2013+A1:2016',    'Norma de producto de puertas peatonales motorizadas, excepto batientes. NO está citada en el DOUE como norma armonizada del Reglamento 305/2011: de ella no sale declaración de prestaciones.'],
-    ['UNE-EN 16005:2023+A1:2024',    'Seguridad en el uso de puertas peatonales motorizadas: requisitos y métodos de ensayo.'],
-    ['UNE-EN 12978:2024',            'Dispositivos de protección: requisitos y métodos de ensayo.'],
+    ['UNE-EN 16361:2014+A1:2017',    'Norma de producto de puertas peatonales motorizadas, excepto batientes. NO está citada en el DOUE como norma armonizada del Reglamento 305/2011: de ella no sale declaración de prestaciones.'],
+    ['UNE-EN 16005+A1:2024',    'Seguridad en el uso de puertas peatonales motorizadas. Es la norma de referencia de esta familia: la matriz de protección de la UNE-EN 12453 no se aplica a las puertas exclusivamente peatonales.'],
+    ['UNE 85121:2018',           'Norma española de instalación, uso y mantenimiento de puertas peatonales automáticas.'],
+    ['UNE-EN 12978:2025',            'Dispositivos de protección: requisitos y métodos de ensayo.'],
   ],
   barrera: [
     ['UNE-EN 13241:2004+A2:2017',    'Norma de producto armonizada. Cubre las barreras instaladas en zonas accesibles a personas; las de uso exclusivo para tráfico de vehículos quedan excluidas de su ámbito.'],
-    ['UNE-EN 12453:2017+A1:2021',    'Seguridad en el uso: limitación de fuerzas y detección de presencia.'],
-    ['UNE-EN 12978:2024',            'Dispositivos de protección.'],
+    ['UNE-EN 12453:2018+A1:2022',    'Seguridad en el uso: limitación de fuerzas y detección de presencia.'],
+    ['UNE-EN 12978:2025',            'Dispositivos de protección.'],
     ['UNE 85635:2012',               'Requisitos de instalación, uso, mantenimiento y modificación.'],
   ],
   cortafuegos: [
     ['UNE-EN 16034:2015',            'Prestaciones de resistencia al fuego y control de humos. Solo se aplica junto a la UNE-EN 13241 o la UNE-EN 14351-1, nunca sola. Sistema 1: la declaración la emite el fabricante con certificado de organismo notificado.'],
     ['UNE-EN 13241:2004+A2:2017',    'Norma de producto, cuando se trata de puerta industrial, comercial o de garaje.'],
-    ['UNE-EN 12453:2017+A1:2021',    'Seguridad en el uso, si es motorizada.'],
-    ['UNE-EN 12635:2002+A1:2009',    'Instalación y uso.'],
+    ['UNE-EN 12453:2018+A1:2022',    'Seguridad en el uso, si es motorizada.'],
   ],
 };
 
@@ -2582,7 +2593,7 @@ const EXP_REGIMEN = {
     },
   },
   peatonal: {
-    ddp: false, sistema: null, norma: 'UNE-EN 16361:2013+A1:2016',
+    ddp: false, sistema: null, norma: 'UNE-EN 16361:2014+A1:2017',
     nota: 'La UNE-EN 16361 no está citada en el DOUE como norma armonizada del '+
           'Reglamento 305/2011, de modo que esta puerta no lleva declaración de '+
           'prestaciones. Su marcado CE sale de la directiva de máquinas y de la de '+
@@ -2697,13 +2708,83 @@ const TIPOS_USUARIO = {
   no_informados:      'Personas no informadas, uso público',
 };
 
+/* ===== Niveles de protección de la UNE-EN 12453 =====
+   Procedencia: documento de trabajo aportado por la empresa el 6 de octubre de 2026,
+   que interpreta la matriz de protección mínima del borde principal de cierre de la
+   UNE-EN 12453:2018+A1:2022. NO es el texto de la norma: es una lectura de ella.
+   Por eso la tabla es editable y cada expediente deja constancia de su origen.
+
+   La propia norma no se ha podido consultar: es de pago. Lo que aquí hay sirve para
+   trabajar y para discutirlo con la norma delante, no para darlo por bueno sin más. */
+const NIVELES_PROTECCION = {
+  A: { nombre:'A · Hombre presente',
+       detalle:'Pulsador mantenido. Al soltarlo, el movimiento debe detenerse.' },
+  B: { nombre:'B · Hombre presente con acceso restringido',
+       detalle:'Pulsador mantenido más llave, selector controlado o equivalente.' },
+  C: { nombre:'C · Limitación de fuerzas',
+       detalle:'Automatismo con limitación de fuerza verificada, o dispositivo sensible '+
+               'como banda o borde de seguridad.' },
+  D: { nombre:'D · Dispositivo adicional que reduce la probabilidad de contacto',
+       detalle:'Fotocélulas, barreras fotoeléctricas o detectores de presencia, según la '+
+               'geometría y el riesgo. Se usa junto con C, nunca en lugar de C.' },
+  E: { nombre:'E · Detección de presencia que impide el contacto',
+       detalle:'Sistema de presencia diseñado e instalado de modo que la hoja no pueda '+
+               'alcanzar a una persona en la zona peligrosa.' },
+};
+
+/* Matriz de protección mínima. Cada casilla lleva los niveles exigidos, los elementos
+   que normalmente los materializan y si la combinación es admisible.
+   Origen: el mismo documento de trabajo. Editable en Equipo. */
+const MATRIZ_PROTECCION_FABRICA = {
+  'hombre_presente|informados_privado': { niveles:'A', admisible:true,
+    elementos:'Pulsador mantenido situado de forma que permita controlar la maniobra.' },
+  'hombre_presente|informados_publico': { niveles:'B', admisible:true,
+    elementos:'Pulsador mantenido más llave o selector de acceso restringido.' },
+  'hombre_presente|no_informados': { niveles:'', admisible:false,
+    elementos:'No basta el funcionamiento a hombre presente. Hay que cambiar el sistema.' },
+
+  'impulso_vista|informados_privado': { niveles:'C o E', admisible:true,
+    elementos:'Limitación de fuerza o borde sensible; como alternativa, detección de presencia que impida el contacto.' },
+  'impulso_vista|informados_publico': { niveles:'C o E', admisible:true,
+    elementos:'Limitación de fuerza o borde sensible; como alternativa, detección de presencia equivalente.' },
+  'impulso_vista|no_informados': { niveles:'C+D o E', admisible:true,
+    elementos:'Limitación de fuerza más detección adicional de presencia; como alternativa, sistema de nivel E.' },
+
+  'impulso_sin_vista|informados_privado': { niveles:'C o E', admisible:true,
+    elementos:'Limitación de fuerza o borde sensible; como alternativa, sistema de nivel E.' },
+  'impulso_sin_vista|informados_publico': { niveles:'C+D o E', admisible:true,
+    elementos:'Limitación de fuerza más fotocélula o detector; como alternativa, sistema de nivel E.' },
+  'impulso_sin_vista|no_informados': { niveles:'C+D o E', admisible:true,
+    elementos:'Limitación de fuerza más detección adicional; como alternativa, sistema de nivel E.' },
+
+  'automatico|informados_privado': { niveles:'C+D o E', admisible:true,
+    elementos:'Limitación de fuerzas más detección de presencia; como alternativa, sistema de nivel E.' },
+  'automatico|informados_publico': { niveles:'C+D o E', admisible:true,
+    elementos:'Limitación de fuerzas más detección de presencia; como alternativa, sistema de nivel E.' },
+  'automatico|no_informados': { niveles:'C+D o E', admisible:true,
+    elementos:'Limitación de fuerzas más detección de presencia; como alternativa, sistema de nivel E.' },
+};
+
+/* Las puertas exclusivamente peatonales no se evalúan con esta matriz: su norma de
+   seguridad de uso es la UNE-EN 16005+A1:2024, con su propio método. */
+const MATRIZ_NO_APLICA_A = ['peatonal'];
+
 /* Lo que la empresa haya registrado para esta combinación. Vacío mientras no se
    rellene en Equipo, y entonces la aplicación lo dice en vez de suponer. */
 function exigenciaProteccion(e){
   const pu = ((e||{}).datos||{}).puerta || {};
   const clave = (pu.modo || '') + '|' + (pu.usuarios || '');
-  const tabla = S.ajustes.proteccion || {};
-  return { clave, modo: pu.modo, usuarios: pu.usuarios, ficha: tabla[clave] || null };
+  const propia = (S.ajustes.proteccion || {})[clave];
+  const base = MATRIZ_PROTECCION_FABRICA[clave];
+  const fuera = MATRIZ_NO_APLICA_A.includes((e||{}).familia);
+  return {
+    clave, modo: pu.modo, usuarios: pu.usuarios, fuera,
+    // lo que la empresa haya escrito manda sobre la matriz de partida
+    ficha: propia || (base ? base.elementos : null),
+    niveles: base ? base.niveles : '',
+    admisible: base ? base.admisible !== false : true,
+    propia: !!propia,
+  };
 }
 
 const EXP_COMPONENTES = {
@@ -2839,9 +2920,9 @@ const EXP_COMPROBACIONES = {
     ['senal',       'Señalización de riesgos colocada y visible',
        'UNE 85635:2012', 1, 0],
     ['libro',       'Libro de mantenimiento entregado y cumplimentado',
-       'UNE-EN 12635', 0, 1],
+       'UNE-EN 12453:2018+A1:2022', 0, 1],
     ['manual_uso',  'Manual de uso y mantenimiento entregado al titular',
-       'UNE-EN 12635 · Código Técnico de la Edificación', 0, 1],
+       'UNE-EN 12453:2018+A1:2022 · Código Técnico de la Edificación', 0, 1],
   ],
   peatonal: [
     ['presencia',   'Sensores de presencia que vigilan el hueco de paso por los dos lados',
@@ -2891,7 +2972,7 @@ const EXP_COMPROBACIONES = {
     ['marcado',     'Marcado CE y placa de características colocados y legibles',
        'Reglamento (UE) 305/2011 · marco de máquinas vigente', 1, 1],
     ['libro',       'Libro de mantenimiento entregado y cumplimentado',
-       'UNE-EN 12635', 0, 1],
+       'UNE-EN 12453:2018+A1:2022', 0, 1],
   ],
   cortafuegos: [
     ['clase',       'La clase de resistencia al fuego declarada es la que exige el proyecto',
@@ -2915,7 +2996,7 @@ const EXP_COMPROBACIONES = {
     ['marcado',     'Marcado CE y declaración de prestaciones disponibles',
        'Reglamento (UE) 305/2011', 1, 1],
     ['libro',       'Libro de mantenimiento entregado y cumplimentado',
-       'UNE-EN 12635', 0, 0],
+       'UNE-EN 12453:2018+A1:2022', 0, 0],
   ],
 };
 
@@ -2988,7 +3069,7 @@ const limitesFuerza = () => Object.assign({}, LIM_FUERZA_FABRICA, S.ajustes.limi
 const PERFILES_FUERZA = {
   industrial: {
     nombre: 'Puertas industriales, comerciales y de garaje',
-    norma: 'UNE-EN 12453:2017+A1:2021', apartado: 'pendiente de concretar',
+    norma: 'UNE-EN 12453:2018+A1:2022', apartado: 'pendiente de concretar',
     magnitudes: 'Fd fuerza dinámica máxima (N), Fs fuerza estática (N), '+
                 'Fe fuerza residual (N), td tiempo por encima de la fuerza estática (s)',
     validado: false,
@@ -3002,14 +3083,14 @@ const PERFILES_FUERZA = {
   },
   barrera: {
     nombre: 'Barreras de vehículos',
-    norma: 'UNE-EN 12453:2017+A1:2021', apartado: 'pendiente de concretar',
+    norma: 'UNE-EN 12453:2018+A1:2022', apartado: 'pendiente de concretar',
     magnitudes: 'Fd fuerza dinámica máxima (N), Fs fuerza estática (N), '+
                 'Fe fuerza residual (N), td tiempo por encima de la fuerza estática (s)',
     validado: false,
   },
   cortafuegos: {
     nombre: 'Puertas con función de resistencia al fuego',
-    norma: 'UNE-EN 12453:2017+A1:2021 para el funcionamiento ordinario',
+    norma: 'UNE-EN 12453:2018+A1:2022 para el funcionamiento ordinario',
     apartado: 'pendiente de concretar',
     magnitudes: 'Fd fuerza dinámica máxima (N), Fs fuerza estática (N), '+
                 'Fe fuerza residual (N), td tiempo por encima de la fuerza estática (s)',
@@ -3134,10 +3215,14 @@ function expPendientes(e){
       if (pu.modo === 'hombre_presente' && pu.hp_comprobado !== 'si')
         falta.push('comprobar que la puerta se detiene al soltar el mando: sin eso no es '+
           'hombre presente y la protección exigible es otra');
-      if (pu.modo && pu.usuarios && !((S.ajustes.proteccion||{})[pu.modo+'|'+pu.usuarios]))
-        falta.push('definir en Equipo qué protección exige la combinación «'+
-          ((MODOS_ACCIONAMIENTO[pu.modo]||{}).nombre||'')+' · '+
-          (TIPOS_USUARIO[pu.usuarios]||'')+'», contrastándola con la UNE-EN 12453');
+      if (pu.modo && pu.usuarios && !MATRIZ_NO_APLICA_A.includes(e.familia)){
+        const base = MATRIZ_PROTECCION_FABRICA[pu.modo+'|'+pu.usuarios];
+        if (base && base.admisible === false)
+          falta.push('cambiar el modo de accionamiento o el nivel de protección: «'+
+            ((MODOS_ACCIONAMIENTO[pu.modo]||{}).nombre||'')+'» con «'+
+            (TIPOS_USUARIO[pu.usuarios]||'')+'» no es una combinación admisible, '+
+            'y no se puede certificar una puerta así');
+      }
     }
   }
 
@@ -3537,14 +3622,28 @@ function expSecCumplimiento(e){
   } else {
     const m = MODOS_ACCIONAMIENTO[ex.modo] || {};
     const hpMal = ex.modo === 'hombre_presente' && pu2.hp_comprobado !== 'si';
-    cab = '<div class="'+(ex.ficha ? 'aviso-caja' : 'mal-caja')+'" style="margin:0 0 14px">'+
-      '<b>'+esc(m.nombre||'')+' · '+esc(TIPOS_USUARIO[ex.usuarios]||'')+'</b><br>'+
-      (ex.ficha
-        ? 'Protección que la empresa tiene registrada para esta combinación:<br>'+esc(ex.ficha)
-        : 'No hay registrada ninguna exigencia de protección para esta combinación. '+
-          'Se rellena en Equipo, contrastándola con la UNE-EN 12453. Mientras no esté, la '+
-          'aplicación no puede decir si los dispositivos instalados son los que exige la norma.')+
-      '</div>';
+    if (ex.fuera){
+      cab = '<div class="aviso-caja" style="margin:0 0 14px">'+
+        '<b>'+esc(m.nombre||'')+' · '+esc(TIPOS_USUARIO[ex.usuarios]||'')+'</b><br>'+
+        'Esta es una puerta exclusivamente peatonal: su seguridad de uso se evalúa con la '+
+        '<b>UNE-EN 16005+A1:2024</b>, no con la matriz de protección de la UNE-EN 12453. '+
+        'Las exigencias de esa norma no están cargadas en la aplicación.</div>';
+    } else if (!ex.admisible){
+      cab = '<div class="mal-caja" style="margin:0 0 14px">'+
+        '<b>'+esc(m.nombre||'')+' · '+esc(TIPOS_USUARIO[ex.usuarios]||'')+': combinación no admisible.</b><br>'+
+        esc(ex.ficha||'')+'<br>Hay que cambiar el modo de accionamiento o el nivel de protección: '+
+        'no se puede certificar una puerta en esta situación.</div>';
+    } else {
+      cab = '<div class="aviso-caja" style="margin:0 0 14px">'+
+        '<b>'+esc(m.nombre||'')+' · '+esc(TIPOS_USUARIO[ex.usuarios]||'')+'</b>'+
+        (ex.niveles ? ' · Protección mínima <b>'+esc(ex.niveles)+'</b>' : '')+'<br>'+
+        esc(ex.ficha||'')+
+        (ex.propia
+          ? '<br><span class="mini">Texto propio de la empresa.</span>'
+          : '<br><span class="mini">Interpretación de la UNE-EN 12453:2018+A1:2022 cargada de '+
+            'serie. Contrástala con tu ejemplar y edítala en Equipo si no cuadra.</span>')+
+        '</div>';
+    }
     if (hpMal)
       cab += '<div class="mal-caja" style="margin:0 0 14px"><b>Hombre presente sin comprobar.</b><br>'+
         'Has indicado hombre presente, pero no consta que se haya comprobado que la puerta se '+
@@ -4691,7 +4790,7 @@ function libroMantenimiento(expId, conHistorial){
 
     '<h2>Registro de asistencias y revisiones</h2>'+
     '<p style="margin:0 0 2px;font-size:10px;color:#6B6560">Cada intervención sobre la puerta se anota aquí. '+
-    'Contenido conforme a la UNE-EN 12635. Conservación mínima recomendada: diez años.</p>'+
+    'Contenido conforme a la UNE-EN 12453:2018+A1:2022, que desde el 20 de octubre de 2022 recoge lo que antes estaba en la UNE-EN 12635, hoy anulada. Conservación mínima recomendada: diez años.</p>'+
     '<table class="reg"><thead><tr>'+
       '<th class="n">Nº</th><th style="width:20mm">Fecha</th><th style="width:28mm">Tipo</th>'+
       '<th>Trabajo realizado</th><th style="width:26mm">Técnico</th><th style="width:24mm">Firma</th>'+
@@ -4952,12 +5051,22 @@ async function libroExpediente(id){
     (exi.modo && exi.usuarios
       ? '<h4>Nivel de protección aplicable</h4>'+
         '<p>Esta puerta funciona en modo <b>'+esc((MODOS_ACCIONAMIENTO[exi.modo]||{}).nombre||'')+
-        '</b> y la usan <b>'+esc((TIPOS_USUARIO[exi.usuarios]||'').toLowerCase())+'</b>. '+
-        (exi.ficha
-          ? 'La protección exigida para esta combinación es: '+esc(exi.ficha)
-          : '<span class="pendiente">La exigencia de protección para esta combinación no está '+
-            'definida, de modo que las comprobaciones de este apartado no se han podido contrastar '+
-            'con el nivel que exige la norma para este caso.</span>')+'</p>'
+        '</b> y la usan <b>'+esc((TIPOS_USUARIO[exi.usuarios]||'').toLowerCase())+'</b>.</p>'+
+        (exi.fuera
+          ? '<p>Al tratarse de una puerta exclusivamente peatonal, su seguridad de uso se evalúa '+
+            'conforme a la <b>UNE-EN 16005+A1:2024</b>, que es su norma específica, y no mediante '+
+            'la matriz de protección de la UNE-EN 12453.</p>'
+          : !exi.admisible
+          ? '<p class="pendiente">Esta combinación de accionamiento y tipo de usuario no se considera '+
+            'admisible: '+esc(exi.ficha||'')+'</p>'
+          : '<p>Protección mínima aplicable: <b>'+esc(exi.niveles||'')+'</b>. '+esc(exi.ficha||'')+'</p>'+
+            '<p class="min">'+
+            (exi.propia
+              ? 'Criterio propio de la empresa, registrado en sus ajustes.'
+              : 'Criterio tomado de la interpretación de la UNE-EN 12453:2018+A1:2022 que la empresa '+
+                'tiene cargada. Los niveles A a E se corresponden con los definidos en esa norma.')+
+            ' La configuración definitiva depende de distancias, velocidades, fuerzas, geometría, '+
+            'accesibilidad y del análisis de riesgos de la instalación concreta.</p>')
       : '<p class="pendiente">No consta cómo se acciona la puerta ni quién la usa, que es de lo que '+
         'depende el nivel de protección exigible.</p>')+
     '<table class="datos chk"><thead><tr><th style="width:auto">Comprobación</th><th style="width:70px">Resultado</th><th style="width:150px">Exigencia</th></tr></thead><tbody>'+
@@ -5308,8 +5417,12 @@ async function libroExpediente(id){
 
   /* ---------- LIBRO DE MANTENIMIENTO ---------- */
   H += abreSec('Libro de mantenimiento')+
-    '<p class="min">Contenido conforme a la UNE-EN 12635. Este libro debe conservarse junto a la instalación '+
-    'y permanecer a disposición de quien realice el mantenimiento. Conservación mínima recomendada: diez años.</p>'+
+    '<p class="min">Contenido conforme a la '+
+    (e.familia === 'peatonal'
+      ? 'UNE-EN 16005+A1:2024 y la UNE 85121:2018'
+      : 'UNE-EN 12453:2018+A1:2022 y la UNE 85635:2012')+
+    '. Este libro debe conservarse junto a la instalación y permanecer a disposición de quien realice '+
+    'el mantenimiento. Conservación mínima recomendada: diez años.</p>'+
     '<table class="datos">'+
       campo('Fabricante de la puerta', fab ? em.razon_social : (pu.marca || ''))+
       campo('Instalador', em.razon_social + (em.telefono ? ' · '+em.telefono : ''))+
