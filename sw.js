@@ -1,31 +1,9002 @@
-/* ARIZA SAT: guarda la app en el móvil para que abra rápido y sin cobertura. */
-const CACHE = 'ariza-sat-v3';
-const SHELL = ['./index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
-self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
-self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== CACHE).map(x => caches.delete(x)))).then(() => self.clients.claim())); });
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ARIZA SAT</title>
+<meta name="theme-color" content="#1C1817">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Ariza SAT">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#F4F4F2; --surface:#FFFFFF; --surface-2:#ECECE8; --ink:#1C1817; --muted:#5F5B58; --line:#D6D4CF;
+  --amarillo:#FCBA1D; --amarillo-oscuro:#C98F08; --grafito:#454545; --negro:#1C1817;
+  --ok:#2E7D46; --ok-bg:#E3F1E6; --aviso:#9A6206; --aviso-bg:#FCEFD3; --mal:#B3271E; --mal-bg:#F8E1DF;
+  --gris:#6B6764; --gris-bg:#E9E8E4;
+  --sans:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --cond:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --sombra:0 10px 30px rgba(28,24,23,.18);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#151312; --surface:#201D1C; --surface-2:#2A2624; --ink:#F2EFEC; --muted:#A49E99; --line:#3A3533;
+    --ok:#69C184; --ok-bg:#1C3325; --aviso:#E3AC4F; --aviso-bg:#382B14; --mal:#EE7F73; --mal-bg:#3B201D;
+    --gris:#A49E99; --gris-bg:#2A2624; --sombra:0 10px 30px rgba(0,0,0,.55);
+  }
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{color-scheme:light dark}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--sans);-webkit-font-smoothing:antialiased;padding-bottom:env(safe-area-inset-bottom)}
+h1,h2,h3{font-family:var(--cond);font-weight:600;margin:0;text-wrap:balance;letter-spacing:.01em}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--amarillo);outline-offset:2px}
+img{max-width:100%}
+.wrap{max-width:1000px;margin:0 auto;padding-inline:16px;padding-block:0 56px}
 
-/* La comprobación de versión nueva pide /index.html?v=<marca de tiempo>. Esa URL
-   cambia en cada comprobación: si se guardara, la caché crecería sin parar con
-   copias enteras de la aplicación. Nunca se guarda. */
-const esComprobacionDeVersion = url =>
-  url.origin === location.origin && url.search && /(^|\/)index\.html$/.test(url.pathname);
+/* Cabecera */
+.top{background:var(--negro);color:#fff;position:sticky;top:0;z-index:5}
+.top-in{max-width:1000px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.marca{display:flex;align-items:center;gap:9px;font-family:var(--cond);font-size:22px;font-weight:700;letter-spacing:.02em}
+.marca i{width:26px;height:22px;background:var(--amarillo);clip-path:polygon(50% 0,100% 100%,72% 100%,50% 44%,28% 100%,0 100%);display:block}
+.marca b{color:var(--amarillo);font-weight:700}
+.top .sp{flex:1}
+.top .quien{font-size:13px;color:#CFC9C4;display:flex;align-items:center;gap:8px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block}
+.dot.off{background:var(--aviso)}
+.tabs{display:flex;gap:2px;overflow-x:auto;background:var(--negro);scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs-in{max-width:1000px;margin:0 auto;display:flex;gap:2px;padding:0 8px}
+.tabs button{border:0;background:none;color:#B9B3AE;padding:10px 14px 12px;font:600 14px var(--sans);cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap}
+.tabs button[aria-selected="true"]{color:#fff;border-bottom-color:var(--amarillo)}
 
-self.addEventListener('fetch', e => {
-  const req = e.request; if (req.method !== 'GET') return;
-  const url = new URL(req.url);
-  if (url.hostname.endsWith('supabase.co')) return;            // datos y fotos: siempre en directo
-  if (esComprobacionDeVersion(url)) return;                    // siempre a la red, nunca a la caché
-  if (req.mode === 'navigate') {
-    // Siempre pide la versión nueva al servidor, saltándose la caché del navegador.
-    e.respondWith(fetch(new Request(req.url, { cache: 'reload', credentials: 'same-origin' }))
-      .then(r => { const c = r.clone(); caches.open(CACHE).then(x => x.put('./index.html', c)); return r; })
-      .catch(() => caches.match('./index.html')));
+/* Piezas */
+.btn{border:1px solid var(--line);background:var(--surface);padding:9px 14px;border-radius:6px;font:600 14px var(--sans);cursor:pointer;white-space:nowrap;line-height:1.25}
+.btn:hover{border-color:var(--muted)}
+.btn.pri{background:var(--amarillo);border-color:var(--amarillo);color:#1C1817}
+.btn.pri:hover{background:var(--amarillo-oscuro);border-color:var(--amarillo-oscuro)}
+.btn.oscuro{background:var(--negro);border-color:var(--negro);color:#fff}
+.btn.sm{padding:6px 10px;font-size:13px}
+.btn.plana{background:transparent}
+.btn.armado{background:var(--mal);border-color:var(--mal);color:#fff}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px}
+.panel-h{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between;margin-bottom:12px}
+.panel-h h2,.panel-h h3{font-size:20px}
+.stack{display:grid;gap:16px;padding-top:16px}
+.fila{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sp{flex:1}
+.muted{color:var(--muted)}
+.mini{font-size:13px;color:var(--muted)}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.eti{font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.chip{display:inline-flex;align-items:center;gap:6px;font:600 12px var(--sans);padding:5px 9px;border-radius:4px;white-space:nowrap}
+.chip::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.chip.ok{color:var(--ok);background:var(--ok-bg)}
+.chip.aviso{color:var(--aviso);background:var(--aviso-bg)}
+.chip.mal{color:var(--mal);background:var(--mal-bg)}
+.chip.gris{color:var(--gris);background:var(--gris-bg)}
+.chip.sin::before{display:none}
+.chip.tec{color:var(--ink);background:var(--surface-2);border:1px solid var(--line)}
+.chip.tec.t0::before{background:#2E7D46}
+.chip.tec.t1::before{background:#1F6FB2}
+.chip.tec.t2::before{background:#8C4BB5}
+.chip.tec.t3::before{background:#C2571A}
+.chip.tec.t4::before{background:#0E8C8C}
+.chip.tec.t5::before{background:#A31D6B}
+/* Cara del técnico: se reconoce de un vistazo quién lleva cada asistencia */
+.cara{width:28px;height:28px;border-radius:50%;object-fit:cover;flex:0 0 auto;
+      border:2px solid var(--surface);box-shadow:0 0 0 1px var(--line);background:var(--surface-2)}
+.cara.gr{width:46px;height:46px}
+.cara.ini{display:inline-flex;align-items:center;justify-content:center;
+           font:700 11px/1 var(--sans,inherit);color:#fff;letter-spacing:.02em}
+.cara.c0{background:#2E7D46}.cara.c1{background:#1F6FB2}.cara.c2{background:#8C4BB5}
+.cara.c3{background:#C2571A}.cara.c4{background:#0E8C8C}.cara.c5{background:#A31D6B}
+.cara.vacia{background:var(--gris-bg);color:var(--gris)}
+.cara.gr.ini{font-size:17px}
+/* Expediente de documentación */
+.exp-item{border:1px solid var(--line);border-left:3px solid var(--line);border-radius:8px;
+          padding:10px 12px;margin:0 0 10px;background:var(--surface)}
+.exp-item.bien{border-left-color:var(--ok)}
+.exp-item.falta{border-left-color:var(--mal);background:var(--mal-bg)}
+.exp-fotos{margin-top:10px;padding-top:8px;border-top:1px dashed var(--line)}
+.tiras{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.tira{margin:0;width:150px}
+.tira img{width:150px;height:110px;object-fit:cover;border-radius:6px;border:1px solid var(--line);display:block}
+.tira figcaption{display:flex;flex-direction:column;gap:3px;margin-top:4px}
+.tira .pie{font-size:12px;padding:3px 5px;border:1px solid var(--line);border-radius:4px;
+           background:var(--surface);color:var(--ink);width:150px}
+.chip.anulada{color:var(--gris);background:var(--gris-bg);text-decoration:none}
+.aviso.anulada,.item.anulada{opacity:.72}
+.aviso.archivada{border-style:dashed}
+.codigo{font:700 15px var(--mono);letter-spacing:.04em}
+.buscador{display:flex;gap:8px;align-items:center}
+.buscador input{flex:1;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:16px}
+
+/* Listado de puertas */
+.lista{display:grid;gap:10px}
+.item{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;cursor:pointer;text-align:left;width:100%;font:inherit;color:inherit}
+.item:hover{border-color:var(--muted)}
+.item .tit{display:block;font-weight:600;overflow-wrap:anywhere}
+.item .sub{display:block;font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.item .qr{width:38px;height:38px;display:grid;place-items:center;background:var(--negro);color:var(--amarillo);border-radius:6px;font:700 11px var(--mono)}
+
+/* Calendario de mantenimientos */
+.cifras{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}
+.cifra{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:grid;gap:2px}
+.cifra b{font:700 26px var(--sans);line-height:1}
+.cifra span{font-size:12px;color:var(--muted)}
+.cifra.mal b{color:var(--mal)}
+.enlace{background:none;border:0;padding:0;font:inherit;color:var(--ink);text-decoration:underline;cursor:pointer}
+.item-plano{background:var(--surface);border:1px solid var(--line);border-radius:8px}
+.item-plano .item{border:0;background:none;padding-bottom:6px}
+.item-plano .item:hover{border-color:transparent}
+
+/* Guión de revisión */
+.guion{display:grid;gap:6px}
+.g-bloque{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)}
+.g-bloque>summary{cursor:pointer;padding:10px 12px;font-weight:600;display:flex;gap:10px;align-items:center;list-style:none}
+.g-bloque>summary::-webkit-details-marker{display:none}
+.g-bloque>summary::before{content:"▸";color:var(--muted)}
+.g-bloque[open]>summary::before{content:"▾"}
+.g-bloque .g-cuenta{margin-left:auto;font:600 12px var(--sans);color:var(--muted)}
+.g-punto{display:grid;gap:6px;padding:10px 12px;border-top:1px solid var(--line)}
+.g-punto .g-txt{font-size:14px;line-height:1.4}
+.g-punto .g-norma{font:600 11px var(--sans);color:var(--muted);letter-spacing:.02em}
+.g-resp{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.g-resp button{font:600 13px var(--sans);padding:7px 12px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--muted);cursor:pointer;min-width:56px}
+.g-resp button[aria-pressed="true"][data-r="ok"]{background:var(--ok-bg);color:var(--ok);border-color:var(--ok)}
+.g-resp button[aria-pressed="true"][data-r="mal"]{background:var(--mal-bg);color:var(--mal);border-color:var(--mal)}
+.g-resp button[aria-pressed="true"][data-r="na"]{background:var(--gris-bg);color:var(--gris);border-color:var(--gris)}
+.g-resp input.g-val{width:92px;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:15px}
+.g-resp .g-uni{font:600 13px var(--sans);color:var(--muted)}
+.g-punto input.g-nota{padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:14px}
+.g-aviso{background:var(--mal-bg);color:var(--mal);border-radius:6px;padding:8px 10px;font:600 13px var(--sans)}
+
+/* Formularios */
+.campos{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px 14px}
+.campo{display:grid;gap:4px}
+.campo.full{grid-column:1/-1}
+.campo label{font-size:13px;font-weight:600}
+.campo input,.campo select,.campo textarea{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:16px;resize:vertical}
+.campo .pista{font-size:12px;color:var(--muted)}
+.grupo{border:1px solid var(--line);border-radius:8px;padding:14px;background:var(--surface);display:grid;gap:12px}
+.grupo>h3{font-size:17px}
+.checks{display:flex;flex-wrap:wrap;gap:8px}
+.checks label{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:20px;padding:6px 12px;font-size:14px;cursor:pointer;background:var(--surface)}
+.checks input{accent-color:var(--amarillo);width:16px;height:16px}
+
+/* Ficha */
+.ficha-h{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+.ficha-h h2{font-size:24px}
+.datos{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:12px 18px;margin:0}
+.datos div{min-width:0}
+.datos dt{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.datos dd{margin:0;overflow-wrap:anywhere}
+.fotos{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px}
+.foto{position:relative;aspect-ratio:4/3;border-radius:6px;overflow:hidden;border:1px solid var(--line);background:var(--surface-2)}
+.foto img{width:100%;height:100%;object-fit:cover;display:block}
+.foto button{position:absolute;top:4px;right:4px;border:0;background:rgba(28,24,23,.75);color:#fff;border-radius:4px;font-size:12px;padding:3px 7px;cursor:pointer}
+.pie-foto{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(transparent,rgba(0,0,0,.72));color:#fff;font-size:11px;line-height:1.3;padding:12px 6px 4px;pointer-events:none}
+.nota-oficina{margin:0;padding:8px 10px;border-left:3px solid var(--amarillo);background:rgba(252,186,29,.09);border-radius:0 6px 6px 0;font-size:14px;line-height:1.45}
+.firma-caja{border:1px solid var(--line);border-radius:8px;background:#fff;touch-action:none;width:100%;height:170px;display:block}
+.mat-fila{display:grid;grid-template-columns:1fr 76px 60px 34px;gap:6px;margin-bottom:6px;align-items:center}
+.mat-fila input,.mat-fila select{width:100%}
+@media (max-width:520px){ .mat-fila{grid-template-columns:1fr 64px 52px 32px} }
+.foto-rota{display:grid;place-items:center;width:100%;height:100%;font-size:12px;color:var(--muted);text-align:center;padding:8px;text-decoration:none}
+.linea{border-top:1px solid var(--line);padding-top:12px;margin-top:4px}
+.avisos{display:grid;gap:10px}
+.aviso{border:1px solid var(--line);border-radius:8px;padding:12px;background:var(--surface);display:grid;gap:8px}
+.aviso .cab{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* Etiquetas */
+.tabla-wrap{overflow-x:auto}
+table.tabla{width:100%;border-collapse:collapse;font-size:14px}
+table.tabla th{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}
+table.tabla td{padding:9px 8px;border-bottom:1px solid var(--line)}
+table.tabla tr:last-child td{border-bottom:0}
+
+/* Pública */
+.pub{min-height:100vh;background:var(--negro);color:#F2EFEC}
+.pub-in{max-width:520px;margin:0 auto;padding:24px 16px 60px;display:grid;gap:18px}
+.pub .tarjeta{background:#262221;border:1px solid #3A3533;border-radius:10px;padding:18px;display:grid;gap:12px}
+.pub h1{font-size:28px;color:#fff}
+.pub .estado-grande{display:flex;align-items:center;gap:12px;font-family:var(--cond);font-size:26px}
+.pub .bola{width:18px;height:18px;border-radius:50%;flex:none}
+.pub dt{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.07em;color:#A49E99}
+.pub dd{margin:0}
+.pub .btn{background:var(--amarillo);border-color:var(--amarillo);color:#1C1817;width:100%;padding:12px;font-size:16px}
+.pub .btn.sec{background:transparent;color:#F2EFEC;border-color:#4A4442}
+.pub .pie{font-size:13px;color:#A49E99;text-align:center}
+.pub .campo input,.pub .campo textarea{background:#1C1817;border-color:#3A3533;color:#F2EFEC}
+
+/* Impresión de etiquetas */
+#hoja{background:#fff;color:#000}
+@media print{
+  body{background:#fff}
+  .no-print{display:none!important}
+  #hoja{padding:0}
+}
+.hoja-grid{display:grid;grid-template-columns:repeat(auto-fill,50mm);gap:5mm;background:#fff;padding:5mm}
+.etq{width:50mm;height:65mm;border:.2mm dashed #bbb;padding:3mm;display:flex;flex-direction:column;align-items:center;justify-content:space-between;background:#fff;color:#000;text-align:center}
+.etq .logo{font-family:var(--cond);font-weight:700;font-size:5mm;letter-spacing:.02em}
+.etq .cod{font-family:var(--mono);font-weight:700;font-size:6mm;letter-spacing:.05em}
+.etq .url{font-family:var(--sans);font-size:2.6mm;color:#333}
+.etq svg{width:30mm;height:30mm}
+
+dialog{border:1px solid var(--line);border-radius:10px;padding:0;background:var(--surface);color:var(--ink);width:min(600px,calc(100% - 24px));box-shadow:var(--sombra)}
+dialog::backdrop{background:rgba(20,18,17,.55)}
+.dlg{display:grid;gap:14px;padding:18px 20px}
+.dlg h3{font-size:20px}
+.dlg .pie{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
+.err{color:var(--mal);font-size:14px;margin:0;min-height:1em}
+.aviso-caja{background:var(--aviso-bg);color:var(--ink);border:1px solid color-mix(in srgb,var(--aviso) 35%,transparent);border-radius:6px;padding:10px 12px;font-size:14px}
+.guia-usuarios{border:1px solid var(--line);border-radius:6px;padding:8px 10px;background:var(--surface)}
+.guia-usuarios summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--amarillo-osc,#8a5a06)}
+.guia-usuarios[open] summary{margin-bottom:4px}
+.mal-caja{background:var(--mal-bg);color:var(--ink);border:1px solid color-mix(in srgb,var(--mal) 40%,transparent);border-radius:6px;padding:10px 12px;font-size:14px}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--negro);color:#fff;padding:11px 16px;border-radius:6px;font-size:14px;box-shadow:var(--sombra);z-index:20;max-width:calc(100% - 24px)}
+.login{max-width:380px;margin:8vh auto 0;display:grid;gap:14px}
+.login .panel{display:grid;gap:12px}
+.cargando{padding:40px 0;text-align:center;color:var(--muted)}
+/* ---- Mi trabajo ---- */
+.trab{border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:var(--surface);display:grid;gap:6px}
+.trab.urg{border-left:4px solid var(--mal)}
+.trab .cab{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.trab-cli{font-size:17px;line-height:1.25;overflow-wrap:anywhere}
+.trab-dir{font-size:14px;color:var(--muted);overflow-wrap:anywhere}
+.trab-desc{margin:2px 0 0;font-size:14px}
+.trab-btns{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px}
+.trab-btns a.btn{text-decoration:none}
+.bloque-hoy{border-color:var(--amarillo);box-shadow:inset 0 0 0 1px var(--amarillo)}
+.bloque-mal .panel-h h2{color:var(--mal)}
+.bloque-sin .panel-h h2{color:var(--muted)}
+@media (max-width:640px){
+  .trab-btns .btn{flex:1 1 auto;justify-content:center;text-align:center}
+  .trab-btns .sp{display:none}
+}
+/* ---- Contrato: puertas cubiertas y cláusulas ---- */
+.k-puertas{display:grid;gap:8px}
+.k-puerta{display:grid;grid-template-columns:minmax(0,1fr) 120px 150px;gap:10px;align-items:center;
+  border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--surface)}
+.k-marca{display:flex;gap:10px;align-items:flex-start;cursor:pointer;min-width:0;font-size:14px}
+.k-cuota{display:grid;gap:3px;font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.k-cuota input,.k-cuota select{font:inherit;font-family:var(--sans);font-size:14px;text-transform:none;letter-spacing:0;
+  padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);width:100%}
+.k-cl{display:grid;grid-template-columns:24px minmax(0,1fr) 34px;gap:8px;align-items:start;margin-bottom:8px}
+.k-num{font:600 12px var(--mono);color:var(--muted);padding-top:9px;text-align:right}
+.k-cl-t{font:inherit;font-size:13px;line-height:1.45;padding:7px 9px;border:1px solid var(--line);border-radius:6px;
+  background:var(--surface);color:var(--ink);width:100%;resize:vertical}
+@media (max-width:640px){
+  .k-puerta{grid-template-columns:1fr 1fr}
+  .k-marca{grid-column:1 / -1}
+}
+.solo-movil{display:none}
+.filtros{display:flex;flex-wrap:wrap;gap:6px}
+.filtros .mini{opacity:.7}
+/* ---- Calendario navegable ---- */
+.cal-panel{display:grid;gap:12px}
+.cal-barra{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.cal-titulo{font:600 17px var(--sans);margin-left:4px}
+.cal-sel{font:inherit;font-size:14px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink)}
+.cal-cambio{display:inline-flex;gap:4px}
+.cal-rejilla{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.cal-cab{background:var(--surface-2);font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:center;padding:6px 2px}
+.cal-dia{background:var(--surface);min-height:92px;padding:4px;display:flex;flex-direction:column;gap:3px}
+.cal-dia.fuera{background:var(--surface-2);opacity:.6}
+.cal-dia.finde .cal-num{color:var(--muted)}
+.cal-dia.hoy{outline:2px solid var(--amarillo);outline-offset:-2px}
+.cal-num{align-self:flex-start;font:600 13px var(--sans);color:var(--ink);background:none;border:1px solid transparent;border-radius:6px;min-width:26px;padding:2px 5px;cursor:pointer;line-height:1.2}
+.cal-num:hover{border-color:var(--muted);background:var(--surface-2)}
+.cal-dia.hoy .cal-num{background:var(--amarillo);color:var(--negro)}
+.cal-cosas{display:flex;flex-direction:column;gap:2px;min-width:0}
+.cal-cosas .mas{font-size:11px;color:var(--muted);padding-left:2px}
+.cal-cosas .vacio{color:var(--muted);font-size:13px}
+.cal-semana{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.cal-col{background:var(--surface);min-height:150px;padding:6px;display:flex;flex-direction:column;gap:6px}
+.cal-col.finde{background:var(--surface-2)}
+.cal-col.hoy{outline:2px solid var(--amarillo);outline-offset:-2px}
+.cal-colcab{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:center}
+.cal-colcab b{font:600 15px var(--sans);color:var(--ink)}
+.cal-col .cal-cosas{flex:1}
+.cal-anadir{width:100%;justify-content:center;font-size:12px;padding:4px 6px}
+.pastilla{display:block;width:100%;text-align:left;font:500 11px var(--sans);line-height:1.25;padding:3px 5px;border:1px solid var(--line);border-left:3px solid var(--gris);border-radius:4px;background:var(--surface-2);color:var(--ink);cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pastilla:hover{border-color:var(--muted)}
+.pastilla.rev{border-left-color:var(--aviso);background:var(--aviso-bg)}
+.pastilla.urg{border-left-color:var(--mal);background:var(--mal-bg)}
+.pastilla.mto{border-left-color:var(--ok);background:var(--ok-bg)}
+.pastilla.com{border-left-color:var(--amarillo)}
+.pastilla .quien{display:block;font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pastilla .quien.sin{color:var(--mal)}
+@media (max-width:820px){
+  .solo-movil{display:inline}
+  .cal-semana{grid-template-columns:1fr;background:transparent;border:0;gap:6px}
+  .cal-col{min-height:0;border:1px solid var(--line);border-radius:8px;padding:8px 10px;gap:5px;
+    display:grid;grid-template-columns:auto 1fr auto;align-items:center}
+  .cal-colcab{text-align:left;white-space:nowrap}
+  .cal-col .cal-cosas{gap:4px}
+  .cal-col .vacio{display:none}
+  .cal-anadir{width:auto;padding:4px 10px}
+  .cal-dia{min-height:54px}
+  .cal-titulo{width:100%;margin:0;order:9}
+  .cal-col .pastilla{font-size:11px}
+  .cal-col .pastilla .quien{display:inline;margin-left:6px}
+  /* en el mes, en el móvil, no cabe el nombre: se ven puntos de color */
+  .cal-rejilla .cal-cosas{flex-direction:row;flex-wrap:wrap;gap:3px;padding-left:3px}
+  .cal-rejilla .pastilla{width:9px;height:9px;padding:0;border-radius:50%;border:0;
+    background:var(--gris);font-size:0;overflow:hidden;text-indent:-999px}
+  .cal-rejilla .pastilla.rev{background:var(--aviso)}
+  .cal-rejilla .pastilla.urg{background:var(--mal)}
+  .cal-rejilla .pastilla.mto{background:var(--ok)}
+  .cal-rejilla .pastilla.com{background:var(--amarillo)}
+  .cal-rejilla .pastilla .quien{display:none}
+  .cal-rejilla .mas{font-size:9px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<!-- Vista pública (QR) -->
+<div id="publica" class="pub" hidden><div class="pub-in" id="publica-in"></div></div>
+
+<!-- App -->
+<div id="app-root" hidden>
+  <header class="top">
+    <div class="top-in">
+      <span class="marca"><i></i>ARIZA <b>SAT</b></span>
+      <span class="sp"></span>
+      <span class="quien" id="quien"></span>
+      <button class="btn sm plana" id="btn-salir" style="color:#fff;border-color:#4A4442;background:transparent">Salir</button>
+    </div>
+  </header>
+  <nav class="tabs"><div class="tabs-in" id="tabs">
+    <button data-tab="trabajo" role="tab">Mi trabajo</button>
+    <button data-tab="puertas" role="tab">Puertas</button>
+    <button data-tab="avisos" role="tab">Asistencias</button>
+    <button data-tab="realizadas" role="tab">Realizadas</button>
+    <button data-tab="calendario" role="tab">Calendario</button>
+    <button data-tab="clientes" role="tab">Clientes</button>
+    <button data-tab="contratos" role="tab">Contratos</button>
+    <button data-tab="etiquetas" role="tab">Etiquetas</button>
+    <button data-tab="gestion" role="tab" hidden>Gestión</button>
+    <button data-tab="equipo" role="tab" hidden>Equipo</button>
+  </div></nav>
+  <main class="wrap" id="vista"></main>
+</div>
+
+<!-- Login -->
+<form id="login" class="login" hidden>
+  <div class="panel">
+    <h2 style="font-size:22px">Entrar en ARIZA SAT</h2>
+    <div class="campo"><label for="l-mail">Correo</label><input id="l-mail" type="email" autocomplete="username" inputmode="email"></div>
+    <div class="campo"><label for="l-pass">Contraseña</label><input id="l-pass" type="password" autocomplete="current-password"></div>
+    <p class="err" id="l-err" role="alert"></p>
+    <button class="btn pri" type="submit" id="l-go">Entrar</button>
+    <button class="btn plana sm" type="button" id="l-olvido">He olvidado mi contraseña</button>
+  </div>
+</form>
+
+<div id="arranque" class="cargando">Cargando…</div>
+<dialog id="dlg"><form id="dlg-form" class="dlg" novalidate></form></dialog>
+<div id="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+/* ================= Configuración ================= */
+const SUPA_URL = 'https://dgxoiuvuidawovpoewwl.supabase.co';
+const SUPA_KEY = 'sb_publishable_26cGPRb06Y3tNEU0Hw6Zrw_rF3gquaN';
+const BASE_QR  = 'https://arizapa.es/#';
+const ADMIN    = 'arizapuertasautomaticas@gmail.com';
+
+const sb = createClient(SUPA_URL, SUPA_KEY);
+
+/* ================= Catálogos ================= */
+const TIPOS = ['Corredera','Batiente','Seccional','Enrollable','Basculante','Peatonal automática','Barrera','Otro'];
+const USOS = ['Residencial','Industrial','Retail'];
+const CLIENTES = ['Particular','Comunidad','Empresa de servicios','Industria','Administración'];
+const SEGURIDAD = ['Fotocélulas','Banda de seguridad','Semáforo','Baliza','Desbloqueo manual','Pulsador de emergencia','Protección de dedos','Limitador de fuerza'];
+const ESTADOS = {
+  operativa:        {t:'Operativa',              c:'ok',    b:'#2E7D46'},
+  aviso_recibido:   {t:'Aviso recibido',         c:'aviso', b:'#E3AC4F'},
+  tecnico_asignado: {t:'Técnico asignado',       c:'aviso', b:'#E3AC4F'},
+  en_reparacion:    {t:'En reparación',          c:'aviso', b:'#E3AC4F'},
+  esperando_repuesto:{t:'Esperando repuesto',    c:'aviso', b:'#E3AC4F'},
+  fuera_servicio:   {t:'Fuera de servicio',      c:'mal',   b:'#EE5A48'},
+  mantenimiento:    {t:'Mantenimiento pendiente',c:'gris',  b:'#A49E99'}
+};
+const TIPOS_DOC = ['Manual de instrucciones','Desbloqueo de emergencia','Instrucciones de uso','Esquema eléctrico','Declaración CE','Certificado','Informe técnico','Presupuesto','Fotos de obra','Otro'];
+const EST_AVISO = {recibido:'Recibido', asignado:'Asignado', en_curso:'En curso', repuesto:'Esperando repuesto', cerrado:'Cerrado'};
+/* Tipos de asistencia: clave interna y cómo se llama en pantalla */
+const ASISTENCIAS = {
+  averia:          'Correctiva (avería)',
+  mantenimiento:   'Preventiva (mantenimiento)',
+  comercial:       'Comercial (ofertar)',
+  instalacion:     'Instalación',
+  puesta_servicio: 'Puesta en servicio',
+  normativa:       'Normativa y adecuación',
+  garantia:        'Garantía',
+  falso:           'Desplazamiento en falso',
+  urgencia:        'Urgencia fuera de horario',
+};
+const ORIGENES = ['QR','Teléfono','Correo','WhatsApp','Interno','Cliente en oficina'];
+const COBROS = ['Efectivo','Datáfono','Bizum','Cheque','Transferencia'];
+const EST_FINAL = ['Operativa','Operativa con reservas','Fuera de servicio','Esperando repuesto'];
+const PRIORIDADES = ['normal','urgente','programada'];
+/* Tipos que no llevan cobro en obra ni cambian el estado de la puerta */
+const SIN_COBRO = ['comercial','falso'];
+/* Mantenimiento: periodicidades que se ofrecen y estados del contrato */
+const PERIODOS = [[1,'Cada mes'],[2,'Cada 2 meses'],[3,'Cada trimestre'],[4,'Cada 4 meses'],[6,'Cada 6 meses'],[12,'Una vez al año'],[24,'Cada 2 años']];
+const FORMAS_PAGO = ['Transferencia','Domiciliación','Efectivo','Tarjeta'];
+const EST_CONTRATO = { activo:'Activo', suspendido:'Suspendido', baja:'De baja' };
+const DURACIONES = [[1,'1 mes'],[6,'6 meses'],[12,'12 meses'],[24,'24 meses']];
+/* Cláusulas de partida del contrato de mantenimiento. Son una plantilla editable:
+   se pueden cambiar, añadir y quitar en cada contrato. Revisar con la asesoría. */
+function clausulasFabrica(o){
+  const rev = o.periodicidad_meses === 12 ? 'una revisión al año'
+            : (o.periodicidad_meses === 6 ? 'dos revisiones al año'
+            : (o.periodicidad_meses === 1 ? 'una revisión al mes'
+            : 'una revisión cada ' + o.periodicidad_meses + ' meses'));
+  const c = [];
+  c.push('OBJETO. Ariza Puertas y Automatismos S.L.U. se encarga del mantenimiento preventivo de las puertas automáticas relacionadas en este contrato, en el estado y la ubicación que figuran en él.');
+  c.push('ALCANCE DEL MANTENIMIENTO PREVENTIVO. Se realiza ' + rev + ' por puerta. Cada revisión incluye la comprobación del funcionamiento, de los elementos de seguridad y de los sistemas de desbloqueo, el ajuste y engrase que procedan, y la entrega del informe de la revisión.');
+  if (o.mano_obra_incluida !== false)
+    c.push('INCLUIDO. La mano de obra de las revisiones preventivas está incluida en la cuota.');
+  if (o.desplazamiento_incluido !== false)
+    c.push('INCLUIDO. El desplazamiento para realizar las revisiones preventivas está incluido en la cuota.');
+  c.push('NO INCLUIDO. Las asistencias correctivas (averías) y sus desplazamientos no están incluidos en la cuota y se facturan aparte según la tarifa vigente. Tampoco se incluyen los repuestos y materiales, las reformas o mejoras de la instalación, ni los daños por mal uso, vandalismo, robo, accidente, obras de terceros o causas de fuerza mayor.');
+  if (+o.descuento_mano_obra > 0)
+    c.push('PRECIO ESPECIAL EN MANO DE OBRA. Las asistencias correctivas llevan un descuento del ' + (+o.descuento_mano_obra) + ' % sobre la tarifa de mano de obra vigente.');
+  if (+o.descuento_material > 0)
+    c.push('PRECIO ESPECIAL EN MATERIALES. Los materiales y repuestos llevan un descuento del ' + (+o.descuento_material) + ' % sobre el precio de tarifa.');
+  if (+o.prioridad_horas > 0)
+    c.push('ATENCIÓN PRIORITARIA. Las averías comunicadas por el titular se atienden en un plazo máximo de ' + (+o.prioridad_horas) + ' horas desde el aviso, en días laborables. Quedan al margen las causas de fuerza mayor y la falta de acceso a la instalación.');
+  c.push('OBLIGACIONES DEL TITULAR. Usar la puerta conforme a las instrucciones del fabricante, no anular ni manipular los elementos de seguridad, comunicar cualquier anomalía en cuanto se detecte y dar acceso a la instalación en el horario acordado para poder realizar las revisiones.');
+  c.push('VIGENCIA Y RENOVACIÓN. El contrato entra en vigor en la fecha de alta y se mantiene hasta la fecha de vencimiento. ' +
+         (o.renovacion_auto === false ? 'No se renueva automáticamente.' : 'Se renueva automáticamente por periodos iguales salvo que una de las partes comunique lo contrario antes del vencimiento.'));
+  c.push('FACTURACIÓN. La cuota se factura por adelantado, según la forma de pago acordada. Los importes no incluyen IVA, que se repercute en factura.');
+  c.push('PROTECCIÓN DE DATOS. Los datos del titular se tratan únicamente para gestionar este contrato y las asistencias derivadas, y se conservan mientras dure la relación y durante los plazos legales de conservación.');
+  return c;
+}
+const enlaceContrato = tok => BASE_QR + 'C-' + (tok || '');
+const puertasDeContrato = kid => S.contratoPuertas.filter(x => x.contrato_id === kid);
+/* Respuestas de cada punto del guión de revisión */
+const RESP = { ok:'Bien', mal:'Mal', na:'N/A' };
+/* Guiones de revisión de fábrica, por tipo de puerta. Se guardan en ajustes la primera vez
+   que entra el administrador; a partir de ahí mandan los que haya guardados. */
+const GUIONES_FABRICA = {"Corredera":[{"h":"Documentación e identificación"},{"t":"Placa de características y marcado CE legibles","n":"UNE-EN 13241"},{"t":"Instrucciones de uso y de desbloqueo visibles para el usuario","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Registro de mantenimiento disponible en la instalación","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Etiqueta ARIZA colocada, visible y legible"},{"h":"Estructura y mecánica"},{"t":"Anclajes y fijaciones apretados, sin holguras"},{"t":"Guías, carriles y rodamientos limpios y sin desgaste"},{"t":"Hoja sin deformaciones, roturas ni corrosión"},{"t":"Engrase de los puntos previstos por el fabricante"},{"t":"Cables, cadenas o correas y sus fijaciones en buen estado"},{"h":"Accionamiento y maniobra"},{"t":"Motorreductor sin ruidos, vibraciones, sobrecalentamiento ni fugas"},{"t":"Fijación del operador y de la transmisión"},{"t":"Finales de carrera bien ajustados"},{"t":"Cuadro de maniobra limpio, seco y con las bornas apretadas"},{"t":"Batería de respaldo, si la lleva"},{"t":"Consumo del motor en marcha","m":"num","u":"A"},{"h":"Propio de corredera"},{"t":"Cremallera: estado, fijación y holgura con el piñón"},{"t":"Rodillos de guía superior y carro inferior"},{"t":"Topes mecánicos de final de recorrido en ambos extremos"},{"t":"Sistema antidescarrilamiento y antivuelco"},{"t":"Hoja nivelada y aplomada"},{"t":"Separación entre hoja y elementos fijos, o protección equivalente","m":"num","u":"mm","n":"UNE-EN 12604"},{"t":"Protección del hueco de arrastre al abrir"},{"t":"Bucle magnético o radar de seguridad, si lo lleva"},{"h":"Seguridad (bloque crítico)"},{"t":"Fuerza dinámica máxima medida","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"Duración de la fuerza dinámica","m":"num","u":"s","n":"UNE-EN 12453"},{"t":"Fuerza estática residual","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"La puerta para e invierte ante un obstáculo en todo el recorrido","n":"UNE-EN 12453"},{"t":"Fotocélulas alineadas, limpias y con corte efectivo","n":"UNE-EN 12978"},{"t":"Banda de seguridad responde y su autocontrol funciona","n":"UNE-EN 12978"},{"t":"Zonas de aplastamiento, cizallamiento y arrastre protegidas","n":"UNE-EN 12604"},{"t":"Desbloqueo manual accesible, señalizado y operativo","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Parada de emergencia, si la lleva"},{"t":"Señalización de puerta automática, semáforo o baliza"},{"h":"Instalación eléctrica"},{"t":"Cuadro cerrado, con tapas y grado de protección adecuado","n":"REBT"},{"t":"Puesta a tierra y continuidad comprobadas","n":"REBT"},{"t":"Protección diferencial y magnetotérmica correctas","n":"REBT"},{"t":"Cableado, prensaestopas y canalizaciones en buen estado"},{"t":"Tensión de alimentación medida","m":"num","u":"V"},{"h":"Prueba de funcionamiento"},{"t":"Ciclo completo de apertura y cierre sin incidencias"},{"t":"Tiempo de apertura","m":"num","u":"s"},{"t":"Tiempo de cierre","m":"num","u":"s"},{"t":"Mandos, teclados, lectores y pulsadores responden"},{"t":"Maniobra de hombre presente, si aplica"}],"Batiente":[{"h":"Documentación e identificación"},{"t":"Placa de características y marcado CE legibles","n":"UNE-EN 13241"},{"t":"Instrucciones de uso y de desbloqueo visibles para el usuario","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Registro de mantenimiento disponible en la instalación","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Etiqueta ARIZA colocada, visible y legible"},{"h":"Estructura y mecánica"},{"t":"Anclajes y fijaciones apretados, sin holguras"},{"t":"Guías, carriles y rodamientos limpios y sin desgaste"},{"t":"Hoja sin deformaciones, roturas ni corrosión"},{"t":"Engrase de los puntos previstos por el fabricante"},{"t":"Cables, cadenas o correas y sus fijaciones en buen estado"},{"h":"Accionamiento y maniobra"},{"t":"Motorreductor sin ruidos, vibraciones, sobrecalentamiento ni fugas"},{"t":"Fijación del operador y de la transmisión"},{"t":"Finales de carrera bien ajustados"},{"t":"Cuadro de maniobra limpio, seco y con las bornas apretadas"},{"t":"Batería de respaldo, si la lleva"},{"t":"Consumo del motor en marcha","m":"num","u":"A"},{"h":"Propio de batiente"},{"t":"Bisagras y quicios: holguras y engrase"},{"t":"Brazos o pistones: fijación, estanqueidad y recorrido ajustado"},{"t":"Topes mecánicos de apertura y de cierre"},{"t":"Electrocerradura o golpe eléctrico"},{"t":"Desfase de hojas y solapamiento de cierre correctos"},{"t":"Zona de aplastamiento junto a la bisagra protegida","n":"UNE-EN 12604"},{"t":"Comportamiento con viento, si la hoja es ciega"},{"h":"Seguridad (bloque crítico)"},{"t":"Fuerza dinámica máxima medida","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"Duración de la fuerza dinámica","m":"num","u":"s","n":"UNE-EN 12453"},{"t":"Fuerza estática residual","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"La puerta para e invierte ante un obstáculo en todo el recorrido","n":"UNE-EN 12453"},{"t":"Fotocélulas alineadas, limpias y con corte efectivo","n":"UNE-EN 12978"},{"t":"Banda de seguridad responde y su autocontrol funciona","n":"UNE-EN 12978"},{"t":"Zonas de aplastamiento, cizallamiento y arrastre protegidas","n":"UNE-EN 12604"},{"t":"Desbloqueo manual accesible, señalizado y operativo","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Parada de emergencia, si la lleva"},{"t":"Señalización de puerta automática, semáforo o baliza"},{"h":"Instalación eléctrica"},{"t":"Cuadro cerrado, con tapas y grado de protección adecuado","n":"REBT"},{"t":"Puesta a tierra y continuidad comprobadas","n":"REBT"},{"t":"Protección diferencial y magnetotérmica correctas","n":"REBT"},{"t":"Cableado, prensaestopas y canalizaciones en buen estado"},{"t":"Tensión de alimentación medida","m":"num","u":"V"},{"h":"Prueba de funcionamiento"},{"t":"Ciclo completo de apertura y cierre sin incidencias"},{"t":"Tiempo de apertura","m":"num","u":"s"},{"t":"Tiempo de cierre","m":"num","u":"s"},{"t":"Mandos, teclados, lectores y pulsadores responden"},{"t":"Maniobra de hombre presente, si aplica"}],"Seccional":[{"h":"Documentación e identificación"},{"t":"Placa de características y marcado CE legibles","n":"UNE-EN 13241"},{"t":"Instrucciones de uso y de desbloqueo visibles para el usuario","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Registro de mantenimiento disponible en la instalación","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Etiqueta ARIZA colocada, visible y legible"},{"h":"Estructura y mecánica"},{"t":"Anclajes y fijaciones apretados, sin holguras"},{"t":"Guías, carriles y rodamientos limpios y sin desgaste"},{"t":"Hoja sin deformaciones, roturas ni corrosión"},{"t":"Engrase de los puntos previstos por el fabricante"},{"t":"Cables, cadenas o correas y sus fijaciones en buen estado"},{"h":"Accionamiento y maniobra"},{"t":"Motorreductor sin ruidos, vibraciones, sobrecalentamiento ni fugas"},{"t":"Fijación del operador y de la transmisión"},{"t":"Finales de carrera bien ajustados"},{"t":"Cuadro de maniobra limpio, seco y con las bornas apretadas"},{"t":"Batería de respaldo, si la lleva"},{"t":"Consumo del motor en marcha","m":"num","u":"A"},{"h":"Propio de seccional"},{"t":"Muelles de torsión: estado, tensión y ciclos consumidos"},{"t":"Paracaídas de muelle y paracaídas de cable"},{"t":"Cables de acero, tambores y ajuste de los tambores"},{"t":"Rodillos, herrajes y bisagras entre paneles"},{"t":"Protección contra atrapamiento de dedos entre paneles","n":"UNE-EN 12604"},{"t":"Equilibrado: la hoja se mantiene sola a media altura"},{"t":"Juntas perimetrales y burlete inferior"},{"t":"Puerta peatonal integrada: micro de seguridad y cierrapuertas"},{"h":"Seguridad (bloque crítico)"},{"t":"Fuerza dinámica máxima medida","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"Duración de la fuerza dinámica","m":"num","u":"s","n":"UNE-EN 12453"},{"t":"Fuerza estática residual","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"La puerta para e invierte ante un obstáculo en todo el recorrido","n":"UNE-EN 12453"},{"t":"Fotocélulas alineadas, limpias y con corte efectivo","n":"UNE-EN 12978"},{"t":"Banda de seguridad responde y su autocontrol funciona","n":"UNE-EN 12978"},{"t":"Zonas de aplastamiento, cizallamiento y arrastre protegidas","n":"UNE-EN 12604"},{"t":"Desbloqueo manual accesible, señalizado y operativo","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Parada de emergencia, si la lleva"},{"t":"Señalización de puerta automática, semáforo o baliza"},{"h":"Instalación eléctrica"},{"t":"Cuadro cerrado, con tapas y grado de protección adecuado","n":"REBT"},{"t":"Puesta a tierra y continuidad comprobadas","n":"REBT"},{"t":"Protección diferencial y magnetotérmica correctas","n":"REBT"},{"t":"Cableado, prensaestopas y canalizaciones en buen estado"},{"t":"Tensión de alimentación medida","m":"num","u":"V"},{"h":"Prueba de funcionamiento"},{"t":"Ciclo completo de apertura y cierre sin incidencias"},{"t":"Tiempo de apertura","m":"num","u":"s"},{"t":"Tiempo de cierre","m":"num","u":"s"},{"t":"Mandos, teclados, lectores y pulsadores responden"},{"t":"Maniobra de hombre presente, si aplica"}],"Enrollable":[{"h":"Documentación e identificación"},{"t":"Placa de características y marcado CE legibles","n":"UNE-EN 13241"},{"t":"Instrucciones de uso y de desbloqueo visibles para el usuario","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Registro de mantenimiento disponible en la instalación","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Etiqueta ARIZA colocada, visible y legible"},{"h":"Estructura y mecánica"},{"t":"Anclajes y fijaciones apretados, sin holguras"},{"t":"Guías, carriles y rodamientos limpios y sin desgaste"},{"t":"Hoja sin deformaciones, roturas ni corrosión"},{"t":"Engrase de los puntos previstos por el fabricante"},{"t":"Cables, cadenas o correas y sus fijaciones en buen estado"},{"h":"Accionamiento y maniobra"},{"t":"Motorreductor sin ruidos, vibraciones, sobrecalentamiento ni fugas"},{"t":"Fijación del operador y de la transmisión"},{"t":"Finales de carrera bien ajustados"},{"t":"Cuadro de maniobra limpio, seco y con las bornas apretadas"},{"t":"Batería de respaldo, si la lleva"},{"t":"Consumo del motor en marcha","m":"num","u":"A"},{"h":"Propio de enrollable"},{"t":"Eje, coronas y muelles compensadores"},{"t":"Lamas sin deformación y con ganchos antidescarrilamiento"},{"t":"Guías laterales limpias y engrasadas"},{"t":"Freno de caída o paracaídas"},{"t":"Barra final y perfil de seguridad inferior"},{"t":"Caja o tambor cerrado y accesible para mantenimiento"},{"h":"Seguridad (bloque crítico)"},{"t":"Fuerza dinámica máxima medida","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"Duración de la fuerza dinámica","m":"num","u":"s","n":"UNE-EN 12453"},{"t":"Fuerza estática residual","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"La puerta para e invierte ante un obstáculo en todo el recorrido","n":"UNE-EN 12453"},{"t":"Fotocélulas alineadas, limpias y con corte efectivo","n":"UNE-EN 12978"},{"t":"Banda de seguridad responde y su autocontrol funciona","n":"UNE-EN 12978"},{"t":"Zonas de aplastamiento, cizallamiento y arrastre protegidas","n":"UNE-EN 12604"},{"t":"Desbloqueo manual accesible, señalizado y operativo","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Parada de emergencia, si la lleva"},{"t":"Señalización de puerta automática, semáforo o baliza"},{"h":"Instalación eléctrica"},{"t":"Cuadro cerrado, con tapas y grado de protección adecuado","n":"REBT"},{"t":"Puesta a tierra y continuidad comprobadas","n":"REBT"},{"t":"Protección diferencial y magnetotérmica correctas","n":"REBT"},{"t":"Cableado, prensaestopas y canalizaciones en buen estado"},{"t":"Tensión de alimentación medida","m":"num","u":"V"},{"h":"Prueba de funcionamiento"},{"t":"Ciclo completo de apertura y cierre sin incidencias"},{"t":"Tiempo de apertura","m":"num","u":"s"},{"t":"Tiempo de cierre","m":"num","u":"s"},{"t":"Mandos, teclados, lectores y pulsadores responden"},{"t":"Maniobra de hombre presente, si aplica"}],"Basculante":[{"h":"Documentación e identificación"},{"t":"Placa de características y marcado CE legibles","n":"UNE-EN 13241"},{"t":"Instrucciones de uso y de desbloqueo visibles para el usuario","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Registro de mantenimiento disponible en la instalación","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Etiqueta ARIZA colocada, visible y legible"},{"h":"Estructura y mecánica"},{"t":"Anclajes y fijaciones apretados, sin holguras"},{"t":"Guías, carriles y rodamientos limpios y sin desgaste"},{"t":"Hoja sin deformaciones, roturas ni corrosión"},{"t":"Engrase de los puntos previstos por el fabricante"},{"t":"Cables, cadenas o correas y sus fijaciones en buen estado"},{"h":"Accionamiento y maniobra"},{"t":"Motorreductor sin ruidos, vibraciones, sobrecalentamiento ni fugas"},{"t":"Fijación del operador y de la transmisión"},{"t":"Finales de carrera bien ajustados"},{"t":"Cuadro de maniobra limpio, seco y con las bornas apretadas"},{"t":"Batería de respaldo, si la lleva"},{"t":"Consumo del motor en marcha","m":"num","u":"A"},{"h":"Propio de basculante"},{"t":"Contrapesos o muelles: estado, anclajes y recorrido"},{"t":"Brazos articulados y guías"},{"t":"Recorrido de los contrapesos protegido"},{"t":"Holguras del bastidor y del marco"},{"t":"Equilibrado de la hoja"},{"h":"Seguridad (bloque crítico)"},{"t":"Fuerza dinámica máxima medida","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"Duración de la fuerza dinámica","m":"num","u":"s","n":"UNE-EN 12453"},{"t":"Fuerza estática residual","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"La puerta para e invierte ante un obstáculo en todo el recorrido","n":"UNE-EN 12453"},{"t":"Fotocélulas alineadas, limpias y con corte efectivo","n":"UNE-EN 12978"},{"t":"Banda de seguridad responde y su autocontrol funciona","n":"UNE-EN 12978"},{"t":"Zonas de aplastamiento, cizallamiento y arrastre protegidas","n":"UNE-EN 12604"},{"t":"Desbloqueo manual accesible, señalizado y operativo","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Parada de emergencia, si la lleva"},{"t":"Señalización de puerta automática, semáforo o baliza"},{"h":"Instalación eléctrica"},{"t":"Cuadro cerrado, con tapas y grado de protección adecuado","n":"REBT"},{"t":"Puesta a tierra y continuidad comprobadas","n":"REBT"},{"t":"Protección diferencial y magnetotérmica correctas","n":"REBT"},{"t":"Cableado, prensaestopas y canalizaciones en buen estado"},{"t":"Tensión de alimentación medida","m":"num","u":"V"},{"h":"Prueba de funcionamiento"},{"t":"Ciclo completo de apertura y cierre sin incidencias"},{"t":"Tiempo de apertura","m":"num","u":"s"},{"t":"Tiempo de cierre","m":"num","u":"s"},{"t":"Mandos, teclados, lectores y pulsadores responden"},{"t":"Maniobra de hombre presente, si aplica"}],"Peatonal automática":[{"h":"Documentación e identificación"},{"t":"Placa de características y marcado CE legibles","n":"UNE-EN 13241"},{"t":"Instrucciones de uso y de desbloqueo visibles para el usuario","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Registro de mantenimiento disponible en la instalación","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Etiqueta ARIZA colocada, visible y legible"},{"h":"Estructura y mecánica"},{"t":"Anclajes y fijaciones apretados, sin holguras"},{"t":"Guías, carriles y rodamientos limpios y sin desgaste"},{"t":"Hoja sin deformaciones, roturas ni corrosión"},{"t":"Engrase de los puntos previstos por el fabricante"},{"t":"Cables, cadenas o correas y sus fijaciones en buen estado"},{"h":"Accionamiento y maniobra"},{"t":"Motorreductor sin ruidos, vibraciones, sobrecalentamiento ni fugas"},{"t":"Fijación del operador y de la transmisión"},{"t":"Finales de carrera bien ajustados"},{"t":"Cuadro de maniobra limpio, seco y con las bornas apretadas"},{"t":"Batería de respaldo, si la lleva"},{"t":"Consumo del motor en marcha","m":"num","u":"A"},{"h":"Propio de peatonal automática"},{"t":"Sensores de apertura: cobertura y ajuste","n":"UNE-EN 16005"},{"t":"Sensores de presencia: detectan persona parada en la línea de cierre","n":"UNE-EN 16005"},{"t":"Fuerza dinámica en la hoja","m":"num","u":"N","n":"UNE-EN 16005"},{"t":"Tiempo de mantenimiento en abierto","m":"num","u":"s"},{"t":"Zonas de atrapamiento entre hoja y jamba protegidas","n":"UNE-EN 16005"},{"t":"Señalización de los vidrios y estado del acristalamiento","n":"UNE-EN 16005"},{"t":"Apertura manual ante fallo de tensión con la fuerza admisible","n":"UNE 85121:2018"},{"t":"Si está en recorrido de evacuación: apertura garantizada y pulsador de emergencia","n":"UNE 85121:2018"},{"t":"Selector de modos y llave"},{"t":"Electroimán o bloqueo y su liberación"},{"t":"Modo de baja energía, si está configurado","n":"UNE-EN 16005"},{"h":"Seguridad (bloque crítico)"},{"t":"Fuerza dinámica máxima medida","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"Duración de la fuerza dinámica","m":"num","u":"s","n":"UNE-EN 12453"},{"t":"Fuerza estática residual","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"La puerta para e invierte ante un obstáculo en todo el recorrido","n":"UNE-EN 12453"},{"t":"Fotocélulas alineadas, limpias y con corte efectivo","n":"UNE-EN 12978"},{"t":"Banda de seguridad responde y su autocontrol funciona","n":"UNE-EN 12978"},{"t":"Zonas de aplastamiento, cizallamiento y arrastre protegidas","n":"UNE-EN 12604"},{"t":"Desbloqueo manual accesible, señalizado y operativo","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Parada de emergencia, si la lleva"},{"t":"Señalización de puerta automática, semáforo o baliza"},{"h":"Instalación eléctrica"},{"t":"Cuadro cerrado, con tapas y grado de protección adecuado","n":"REBT"},{"t":"Puesta a tierra y continuidad comprobadas","n":"REBT"},{"t":"Protección diferencial y magnetotérmica correctas","n":"REBT"},{"t":"Cableado, prensaestopas y canalizaciones en buen estado"},{"t":"Tensión de alimentación medida","m":"num","u":"V"},{"h":"Prueba de funcionamiento"},{"t":"Ciclo completo de apertura y cierre sin incidencias"},{"t":"Tiempo de apertura","m":"num","u":"s"},{"t":"Tiempo de cierre","m":"num","u":"s"},{"t":"Mandos, teclados, lectores y pulsadores responden"},{"t":"Maniobra de hombre presente, si aplica"}],"Barrera":[{"h":"Documentación e identificación"},{"t":"Placa de características y marcado CE legibles","n":"UNE-EN 13241"},{"t":"Instrucciones de uso y de desbloqueo visibles para el usuario","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Registro de mantenimiento disponible en la instalación","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Etiqueta ARIZA colocada, visible y legible"},{"h":"Estructura y mecánica"},{"t":"Anclajes y fijaciones apretados, sin holguras"},{"t":"Guías, carriles y rodamientos limpios y sin desgaste"},{"t":"Hoja sin deformaciones, roturas ni corrosión"},{"t":"Engrase de los puntos previstos por el fabricante"},{"t":"Cables, cadenas o correas y sus fijaciones en buen estado"},{"h":"Accionamiento y maniobra"},{"t":"Motorreductor sin ruidos, vibraciones, sobrecalentamiento ni fugas"},{"t":"Fijación del operador y de la transmisión"},{"t":"Finales de carrera bien ajustados"},{"t":"Cuadro de maniobra limpio, seco y con las bornas apretadas"},{"t":"Batería de respaldo, si la lleva"},{"t":"Consumo del motor en marcha","m":"num","u":"A"},{"h":"Propio de barrera"},{"t":"Mástil: estado, equilibrado y ajuste del muelle o contrapeso"},{"t":"Eje de giro y bisagra sin holguras"},{"t":"Fotocélula bajo el mástil"},{"t":"Bucle magnético de seguridad y de presencia"},{"t":"Banda de seguridad o faldón del mástil"},{"t":"Horquilla o apoyo de descanso"},{"t":"Desbloqueo manual y comportamiento ante fallo de tensión"},{"t":"Señalización reflectante del mástil"},{"t":"Lector, mando o sistema de control de accesos"},{"h":"Seguridad (bloque crítico)"},{"t":"Fuerza dinámica máxima medida","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"Duración de la fuerza dinámica","m":"num","u":"s","n":"UNE-EN 12453"},{"t":"Fuerza estática residual","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"La puerta para e invierte ante un obstáculo en todo el recorrido","n":"UNE-EN 12453"},{"t":"Fotocélulas alineadas, limpias y con corte efectivo","n":"UNE-EN 12978"},{"t":"Banda de seguridad responde y su autocontrol funciona","n":"UNE-EN 12978"},{"t":"Zonas de aplastamiento, cizallamiento y arrastre protegidas","n":"UNE-EN 12604"},{"t":"Desbloqueo manual accesible, señalizado y operativo","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Parada de emergencia, si la lleva"},{"t":"Señalización de puerta automática, semáforo o baliza"},{"h":"Instalación eléctrica"},{"t":"Cuadro cerrado, con tapas y grado de protección adecuado","n":"REBT"},{"t":"Puesta a tierra y continuidad comprobadas","n":"REBT"},{"t":"Protección diferencial y magnetotérmica correctas","n":"REBT"},{"t":"Cableado, prensaestopas y canalizaciones en buen estado"},{"t":"Tensión de alimentación medida","m":"num","u":"V"},{"h":"Prueba de funcionamiento"},{"t":"Ciclo completo de apertura y cierre sin incidencias"},{"t":"Tiempo de apertura","m":"num","u":"s"},{"t":"Tiempo de cierre","m":"num","u":"s"},{"t":"Mandos, teclados, lectores y pulsadores responden"},{"t":"Maniobra de hombre presente, si aplica"}],"Otro":[{"h":"Documentación e identificación"},{"t":"Placa de características y marcado CE legibles","n":"UNE-EN 13241"},{"t":"Instrucciones de uso y de desbloqueo visibles para el usuario","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Registro de mantenimiento disponible en la instalación","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Etiqueta ARIZA colocada, visible y legible"},{"h":"Estructura y mecánica"},{"t":"Anclajes y fijaciones apretados, sin holguras"},{"t":"Guías, carriles y rodamientos limpios y sin desgaste"},{"t":"Hoja sin deformaciones, roturas ni corrosión"},{"t":"Engrase de los puntos previstos por el fabricante"},{"t":"Cables, cadenas o correas y sus fijaciones en buen estado"},{"h":"Accionamiento y maniobra"},{"t":"Motorreductor sin ruidos, vibraciones, sobrecalentamiento ni fugas"},{"t":"Fijación del operador y de la transmisión"},{"t":"Finales de carrera bien ajustados"},{"t":"Cuadro de maniobra limpio, seco y con las bornas apretadas"},{"t":"Batería de respaldo, si la lleva"},{"t":"Consumo del motor en marcha","m":"num","u":"A"},{"h":"Propio de esta puerta"},{"t":"Comprobaciones específicas según el manual del fabricante"},{"h":"Seguridad (bloque crítico)"},{"t":"Fuerza dinámica máxima medida","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"Duración de la fuerza dinámica","m":"num","u":"s","n":"UNE-EN 12453"},{"t":"Fuerza estática residual","m":"num","u":"N","n":"UNE-EN 12453"},{"t":"La puerta para e invierte ante un obstáculo en todo el recorrido","n":"UNE-EN 12453"},{"t":"Fotocélulas alineadas, limpias y con corte efectivo","n":"UNE-EN 12978"},{"t":"Banda de seguridad responde y su autocontrol funciona","n":"UNE-EN 12978"},{"t":"Zonas de aplastamiento, cizallamiento y arrastre protegidas","n":"UNE-EN 12604"},{"t":"Desbloqueo manual accesible, señalizado y operativo","n":"UNE-EN 12453:2018+A1:2022"},{"t":"Parada de emergencia, si la lleva"},{"t":"Señalización de puerta automática, semáforo o baliza"},{"h":"Instalación eléctrica"},{"t":"Cuadro cerrado, con tapas y grado de protección adecuado","n":"REBT"},{"t":"Puesta a tierra y continuidad comprobadas","n":"REBT"},{"t":"Protección diferencial y magnetotérmica correctas","n":"REBT"},{"t":"Cableado, prensaestopas y canalizaciones en buen estado"},{"t":"Tensión de alimentación medida","m":"num","u":"V"},{"h":"Prueba de funcionamiento"},{"t":"Ciclo completo de apertura y cierre sin incidencias"},{"t":"Tiempo de apertura","m":"num","u":"s"},{"t":"Tiempo de cierre","m":"num","u":"s"},{"t":"Mandos, teclados, lectores y pulsadores responden"},{"t":"Maniobra de hombre presente, si aplica"}]};  /* GUIONES-AQUI */
+
+/* ================= Utilidades ================= */
+const $ = s => document.querySelector(s);
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+/* La fecha de hoy en hora local. Con toISOString, a partir de las 22:00 de
+   verano en España salía la fecha del día siguiente. */
+const hoy = () => { const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,10); };
+const fechaCorta = s => { if(!s) return '—'; const d=new Date(s); return d.toLocaleDateString('es-ES',{day:'numeric',month:'short',year:'numeric'}); };
+const fechaHora = s => { if(!s) return '—'; const d=new Date(s); return d.toLocaleDateString('es-ES',{day:'numeric',month:'short'})+' '+d.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}); };
+/* Días de diferencia contando días de calendario, no horas. Restar fechas a pelo
+   daba -1 para el día de hoy a partir del mediodía, porque una fecha suelta se
+   lee como medianoche UTC: una visita de hoy salía marcada como pasada de fecha. */
+const dias = s => {
+  if (!s) return 0;
+  const [a, m, d] = String(s).slice(0,10).split('-').map(Number);
+  if (!a || !m || !d) return 0;
+  const cuando = new Date(a, m-1, d);
+  const hoyCero = new Date(); hoyCero.setHours(0,0,0,0);
+  return Math.round((cuando - hoyCero) / 86400000);
+};
+function relativo(s){ const n=dias(s); if(n===0)return 'hoy'; if(n===1)return 'mañana'; if(n===-1)return 'ayer'; return n>0?('en '+n+' días'):('hace '+(-n)+' días'); }
+let toastT=0;
+function toast(m){ const t=$('#toast'); t.textContent=m; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,3400); }
+function fallo(e){ console.error(e); toast(e && e.message ? 'Error: '+e.message : 'No se pudo completar la operación.'); }
+function armar(btn,texto){ if(btn.dataset.armado) return true; btn.dataset.armado='1'; btn.dataset.orig=btn.textContent; btn.textContent=texto; btn.classList.add('armado');
+  setTimeout(()=>{ if(btn.isConnected&&btn.dataset.armado){ btn.textContent=btn.dataset.orig; delete btn.dataset.armado; btn.classList.remove('armado'); } },4000); return false; }
+function token(){ const abc='ACDEFHJKLMNPQRTUVWXY3479'; let s=''; for(let i=0;i<4;i++) s+=abc[Math.floor(Math.random()*abc.length)]; return s; }
+function estadoChip(e){ const x=ESTADOS[e]||ESTADOS.operativa; return '<span class="chip '+x.c+'">'+x.t+'</span>'; }
+
+/* ================= Estado ================= */
+const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etiquetas:[], equipo:[], clientes:[], ajustes:{},
+            contratos:[], contratoPuertas:[], ficha:null, fichaCliente:null, cargando:true, busca:'', buscaCli:'', filtroTec:'', sugerencias:[],
+            guionTipo:'', tarifas:null, catalogo:[], valoraciones:{}, resumen:null, mesGestion:'',
+            calVista:'mes', calAncla:null, calTec:'', buscaCon:'', conFiltro:'activos', borradorPuerta:null,
+            expedientes:[], expFotos:[], expDocs:[], exp:null, expPaso:'obra', expSucio:false,
+            fotosEquipo:{}, histBusca:'', histTec:'', histTipo:'', histDesde:'', histHasta:'', histArchivadas:false,
+            cliArchivados:false };
+/* Importes: solo existen para el administrador. Si no hay tarifas cargadas, no se enseña nada. */
+const valoracionDe = id => S.valoraciones[id] || null;
+const eur = n => (n == null || isNaN(n)) ? '—' :
+  new Intl.NumberFormat('es-ES', { style:'currency', currency:'EUR', maximumFractionDigits:2 }).format(n);
+const pct = (parte, total) => (!total) ? '—' : (Math.round(parte / total * 1000) / 10).toFixed(1).replace('.', ',') + '%';
+/* Mes en formato 2026-09, para los filtros de la pantalla de gestión */
+const mesDe = s => String(s || '').slice(0, 7);
+const mesActual = () => new Date().toISOString().slice(0, 7);
+const nombreMes = m => {
+  if (!m) return '';
+  const [a, x] = m.split('-');
+  return ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'][+x - 1] + ' ' + a;
+};
+const contratosDe = id => S.contratos.filter(c => c.cliente_id === id);
+const contratoVivo = id => contratosDe(id).find(c => c.estado === 'activo');
+/* Cada cuántos meses toca revisar esta puerta: manda la puerta, luego el contrato, luego lo general */
+function periodicidadDe(p){
+  if (!p) return 12;
+  if (p.periodicidad_meses) return p.periodicidad_meses;
+  const c = p.cliente_id ? contratoVivo(p.cliente_id) : null;
+  if (c && c.periodicidad_meses) return c.periodicidad_meses;
+  const d = S.ajustes.periodicidad_defecto;
+  return (typeof d === 'number' && d > 0) ? d : 12;
+}
+const nombrePeriodo = m => (PERIODOS.find(x => x[0] === m) || [m, 'Cada '+m+' meses'])[1];
+
+/* ---- Fechas, para el calendario ---- */
+const DIAS_SEM = ['L','M','X','J','V','S','D'];
+const iso = d => new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+const deIso = s => { const [a,m,d] = String(s).slice(0,10).split('-').map(Number); return new Date(a, m-1, d); };
+const sumaDias = (d, n) => { const x = new Date(d); x.setDate(x.getDate()+n); return x; };
+const sumaMeses = (d, n) => { const x = new Date(d); x.setDate(1); x.setMonth(x.getMonth()+n); return x; };
+/* lunes de la semana de una fecha */
+const lunesDe = d => { const x = new Date(d); const n = (x.getDay()+6)%7; x.setDate(x.getDate()-n); x.setHours(0,0,0,0); return x; };
+const mismoDia = (a, b) => iso(a) === iso(b);
+const esFinde = d => d.getDay() === 0 || d.getDay() === 6;
+const capital = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+const nombreMesAnio = d => capital(d.toLocaleDateString('es-ES', { month:'long', year:'numeric' }));
+const diaLargo = d => d.toLocaleDateString('es-ES', { weekday:'long', day:'numeric', month:'long' });
+/* Clave del guión de revisión de un tipo de puerta: "Peatonal automática" -> checklist_peatonal_automatica */
+const claveGuion = t => 'checklist_' + String(t||'Otro').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
+const guionDe = t => {
+  const g = S.ajustes[claveGuion(t)];
+  if (Array.isArray(g)) return g;
+  if (GUIONES_FABRICA[t]) return GUIONES_FABRICA[t];
+  return S.ajustes.checklist_otro || GUIONES_FABRICA['Otro'] || [];
+};
+const clienteDe = id => S.clientes.find(c => c.id === id);
+const nombreCliente = a => {
+  if (a.cliente_id){ const c = clienteDe(a.cliente_id); if (c) return c.nombre; }
+  const p = a.puerta_id ? puertaDe(a.puerta_id) : null;
+  return (p && p.cliente) || a.contacto_nombre || 'Sin cliente';
+};
+const dondeAsistencia = a => {
+  const p = a.puerta_id ? puertaDe(a.puerta_id) : null;
+  if (p) return [p.direccion, p.ubicacion].filter(Boolean).join(' · ');
+  const c = a.cliente_id ? clienteDe(a.cliente_id) : null;
+  if (c) return [c.direccion, c.poblacion].filter(Boolean).join(' · ');
+  return a.direccion_libre || '';
+};
+const tipoAsis = t => (S.ajustes.etiquetas_tipo && S.ajustes.etiquetas_tipo[t]) || ASISTENCIAS[t] || t;
+/* Listas que el administrador puede cambiar desde la app; si no hay nada guardado, valen las de fábrica. */
+const lista = (clave, defecto) => (Array.isArray(S.ajustes[clave]) && S.ajustes[clave].length) ? S.ajustes[clave] : defecto;
+const esAdmin = () => !!(S.perfil && S.perfil.rol === 'admin');
+/* Administrador y oficina: los dos ven precios, costes y lo pendiente de facturar.
+   Cambiar roles y tarifas sigue siendo solo del administrador. */
+const esGestion = () => !!(S.perfil && (S.perfil.rol === 'admin' || S.perfil.rol === 'oficina'));
+const activos = () => S.equipo.filter(t => t.activo);
+const nombreTec = id => { const t = S.equipo.find(x => x.id === id); return t ? (t.nombre || '') : ''; };
+
+/* ================= Vista pública por QR ================= */
+function codigoDeURL(){
+  const h = (location.hash||'').replace(/^#/,'').trim();
+  const m = h.match(/^([A-Z]{2}-?\d{3,6})-?([A-Z0-9]{4})$/i);
+  if (!m) return null;
+  const cod = m[1].toUpperCase().replace(/^([A-Z]{2})-?/,'$1-');
+  return { codigo: cod, token: m[2].toUpperCase() };
+}
+/* El QR del contrato: #C-XXXXXXXXXX */
+function contratoDeURL(){
+  const h = (location.hash||'').replace(/^#/,'').trim();
+  const m = h.match(/^C-([A-Z0-9]{8,16})$/i);
+  return m ? m[1].toUpperCase() : null;
+}
+async function vistaContratoPublico(token){
+  $('#arranque').hidden = true;
+  $('#publica').hidden = false;
+  const cont = $('#publica-in');
+  cont.innerHTML = '<p class="pie">Consultando…</p>';
+  const { data, error } = await sb.rpc('contrato_publico', { p_token: token });
+  if (error || !data){
+    cont.innerHTML = '<div class="tarjeta"><h1>Contrato no encontrado</h1>'+
+      '<p>Este código no corresponde a ningún contrato en vigor.</p>'+
+      '<a class="btn sec" href="./" style="text-align:center;text-decoration:none;display:block">Ir a ARIZA SAT</a></div>';
     return;
   }
-  if (url.origin === location.origin || url.hostname === 'cdn.jsdelivr.net' || url.hostname === 'cdnjs.cloudflare.com' || url.hostname.startsWith('fonts.')) {
-    e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(r => {
-      if (r.ok || r.type === 'opaque') { const c = r.clone(); caches.open(CACHE).then(x => x.put(req, c)); }
-      return r;
-    })));
+  const cada = data.a_peticion ? 'Revisiones a petición'
+             : (data.periodicidad_meses === 12 ? 'Una revisión al año'
+             : (data.periodicidad_meses === 6 ? 'Dos revisiones al año'
+             : (data.periodicidad_meses === 1 ? 'Una revisión al mes'
+             : 'Una revisión cada ' + data.periodicidad_meses + ' meses')));
+  let h = '<div class="tarjeta">'+
+    '<span class="marca" style="font-size:20px"><i></i>ARIZA <b>puertas automáticas</b></span>'+
+    '<h1>Contrato de mantenimiento</h1>'+
+    '<div class="estado-grande"><span class="bola" style="background:'+
+      (data.estado==='activo' ? '#2E7D46' : '#9A6206')+'"></span>'+
+      (data.estado==='activo' ? 'En vigor' : 'Suspendido')+'</div>'+
+    '<p style="margin:0">'+esc(data.cliente||'')+(data.referencia ? ' · '+esc(data.referencia) : '')+'</p>'+
+    '</div>';
+
+  h += '<div class="tarjeta"><dl class="datos" style="gap:12px">';
+  [['Alta', data.alta ? fechaCorta(data.alta) : ''],
+   ['Vencimiento', data.a_peticion ? 'Sin plazo' : (data.vence ? fechaCorta(data.vence) : '')],
+   ['Revisiones', cada],
+   ['Atención prioritaria', data.prioridad_horas ? ('En '+data.prioridad_horas+' horas desde el aviso') : ''],
+   ['Firmado', data.firmado_el ? fechaCorta(data.firmado_el) : '']]
+   .forEach(f => { if (f[1]) h += '<div><dt>'+f[0]+'</dt><dd>'+esc(f[1])+'</dd></div>'; });
+  h += '</dl></div>';
+
+  const ptas = data.puertas || [];
+  if (ptas.length){
+    h += '<div class="tarjeta"><h2 style="font-size:20px">Puertas cubiertas</h2>';
+    ptas.forEach(p => {
+      h += '<div style="border-top:1px solid rgba(255,255,255,.12);padding-top:10px;margin-top:10px">'+
+        '<b>'+esc(p.codigo||'')+'</b> '+esc([p.tipo, p.marca, p.modelo].filter(Boolean).join(' · '))+
+        '<div class="mini">'+esc([p.direccion, p.ubicacion].filter(Boolean).join(' · '))+'</div>'+
+        (p.proxima_revision ? '<div class="mini">Próxima revisión: '+esc(fechaCorta(p.proxima_revision))+'</div>' : '')+
+        '</div>';
+    });
+    h += '</div>';
+  }
+  if (data.incluye || data.excluye){
+    h += '<div class="tarjeta"><h2 style="font-size:20px">Qué cubre</h2>'+
+      (data.incluye ? '<p style="margin:0"><b>Incluye:</b> '+esc(data.incluye)+'</p>' : '')+
+      (data.excluye ? '<p style="margin:0"><b>No incluye:</b> '+esc(data.excluye)+'</p>' : '')+
+      '</div>';
+  }
+  const cl = Array.isArray(data.clausulas) ? data.clausulas : [];
+  if (cl.length){
+    h += '<div class="tarjeta"><h2 style="font-size:20px">Condiciones</h2><ol style="padding-left:18px;margin:0">'+
+      cl.map(t => '<li style="margin-bottom:8px">'+esc(t)+'</li>').join('')+'</ol></div>';
+  }
+  h += '<div class="tarjeta"><h2 style="font-size:20px">¿Necesitas algo?</h2>'+
+    '<p style="margin:0">Escanea el código QR de la propia puerta para avisarnos de una avería '+
+    'o pedir presupuesto: llega directamente a nuestro servicio técnico.</p></div>';
+  cont.innerHTML = h;
+}
+async function vistaPublica(ref){
+  $('#arranque').hidden = true;
+  $('#publica').hidden = false;
+  const cont = $('#publica-in');
+  cont.innerHTML = '<p class="pie">Consultando…</p>';
+  const { data, error } = await sb.rpc('ficha_publica', { p_codigo: ref.codigo, p_token: ref.token });
+  if (error || !data){
+    cont.innerHTML = '<div class="tarjeta"><h1>Etiqueta no encontrada</h1><p>Esta etiqueta todavía no está asignada a ninguna puerta, o el código no es correcto.</p><p class="mini">Si eres técnico de Ariza, entra en la aplicación para darla de alta.</p><a class="btn sec" href="./" style="text-align:center;text-decoration:none;display:block">Ir a ARIZA SAT</a></div>';
+    return;
+  }
+  const est = ESTADOS[data.estado] || ESTADOS.operativa;
+  let h = '<div class="tarjeta">';
+  h += '<span class="marca" style="font-size:20px"><i></i>ARIZA <b>puertas automáticas</b></span>';
+  h += '<h1>Puerta '+esc(data.codigo)+'</h1>';
+  h += '<div class="estado-grande"><span class="bola" style="background:'+est.b+'"></span>'+est.t+'</div>';
+  if (data.aviso){
+    const a = data.aviso;
+    h += '<p style="margin:0">Aviso de '+(a.tipo==='mantenimiento'?'mantenimiento':'avería')+' registrado el '+fechaCorta(a.creado)+'. Situación: <b>'+(EST_AVISO[a.estado]||a.estado)+'</b>'+
+         (a.fecha_prevista ? '. Visita prevista para el '+fechaCorta(a.fecha_prevista) : '')+'.</p>';
+  } else if (data.estado==='operativa'){
+    h += '<p style="margin:0">No hay ningún aviso abierto para esta puerta.</p>';
+  }
+  h += '</div>';
+
+  h += '<div class="tarjeta"><dl class="datos" style="gap:12px">';
+  const filas = [['Tipo',data.tipo],['Uso',data.uso],['Marca',data.marca],['Modelo',data.modelo],['Ubicación',data.ubicacion],
+                 ['Última revisión',data.ultima_revision?fechaCorta(data.ultima_revision):''],['Próxima revisión',data.proxima_revision?fechaCorta(data.proxima_revision):'']];
+  filas.forEach(f=>{ if(f[1]) h+='<div><dt>'+f[0]+'</dt><dd>'+esc(f[1])+'</dd></div>'; });
+  h += '</dl></div>';
+
+  const docs = data.documentos || [];
+  if (docs.length){
+    h += '<div class="tarjeta"><h2 style="font-size:20px">Documentos de esta puerta</h2>'+
+         '<p class="mini" style="margin:0;color:#A49E99">Desbloqueo de emergencia e instrucciones de uso.</p>'+
+         docs.map(d => '<a class="btn sec" style="text-decoration:none;display:block;text-align:center" target="_blank" rel="noopener" href="'+
+            esc(SUPA_URL + '/storage/v1/object/public/publicos/' + String(d.ruta).split('/').map(encodeURIComponent).join('/'))+'">'+esc(d.nombre)+'</a>').join('')+
+         '</div>';
+  }
+  h += '<div class="tarjeta"><h2 style="font-size:20px">¿Necesitas algo de esta puerta?</h2>'+
+       '<div class="campo"><label for="p-tipo">¿Qué quieres decirnos?</label>'+
+       '<select id="p-tipo">'+
+         '<option value="averia">Una avería: la puerta no funciona bien</option>'+
+         '<option value="comercial">Quiero presupuesto: puerta nueva, mejora o accesorios</option>'+
+       '</select></div>'+
+       '<div class="campo"><label for="p-desc" id="p-desc-eti">Cuéntanos qué pasa</label><textarea id="p-desc" rows="3" maxlength="500" placeholder="Ej.: la puerta no cierra del todo y hace ruido"></textarea></div>'+
+       '<div class="campo"><label for="p-nombre">Tu nombre</label><input id="p-nombre" type="text" maxlength="80" autocomplete="name" placeholder="Nombre y apellidos"></div>'+
+       '<div class="campo"><label for="p-tel">Tu teléfono</label><input id="p-tel" type="tel" inputmode="tel" maxlength="20" autocomplete="tel" placeholder="Para poder llamarte"></div>'+
+       '<div class="campo"><label for="p-mail">Tu correo (opcional)</label><input id="p-mail" type="email" maxlength="120" autocomplete="email"></div>'+
+       '<p class="err" id="p-err"></p><button class="btn" id="p-enviar">Enviar el aviso</button>'+
+       '<p class="mini" style="margin:10px 0 0;color:#A49E99">Usamos tus datos solo para atender esta solicitud.</p></div>';
+  h += '<p class="pie">Ariza Puertas y Automatismos · Instalación, mantenimiento y reparación</p>';
+  cont.innerHTML = h;
+
+  // El texto de ayuda cambia según lo que elija el cliente
+  const ajustarTipo = () => {
+    const comercial = $('#p-tipo').value === 'comercial';
+    $('#p-desc-eti').textContent = comercial ? 'Cuéntanos qué necesitas' : 'Cuéntanos qué pasa';
+    $('#p-desc').placeholder = comercial
+      ? 'Ej.: quiero presupuesto de una puerta igual para el otro portal'
+      : 'Ej.: la puerta no cierra del todo y hace ruido';
+    $('#p-enviar').textContent = comercial ? 'Pedir presupuesto' : 'Enviar el aviso';
+  };
+  $('#p-tipo').addEventListener('change', ajustarTipo);
+  ajustarTipo();
+
+  $('#p-enviar').addEventListener('click', async () => {
+    const tipo = $('#p-tipo').value;
+    const d = $('#p-desc').value.trim();
+    const nombre = $('#p-nombre').value.trim();
+    const tel = $('#p-tel').value.trim();
+    const mail = $('#p-mail').value.trim();
+    const err = m => { $('#p-err').textContent = m; };
+    if (d.length < 5) return err(tipo==='comercial' ? 'Cuéntanos brevemente qué necesitas.' : 'Escribe brevemente qué le pasa a la puerta.');
+    if (nombre.length < 2) return err('Escribe tu nombre.');
+    if (tel.replace(/\D/g,'').length < 9) return err('Escribe un teléfono de contacto válido.');
+    if (mail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) return err('Revisa el correo, no parece correcto.');
+    err(''); $('#p-enviar').disabled = true;
+    const original = $('#p-enviar').textContent;
+    $('#p-enviar').textContent = 'Enviando…';
+    const { data: r, error: e } = await sb.rpc('aviso_publico', {
+      p_codigo: ref.codigo, p_token: ref.token, p_tipo: tipo, p_descripcion: d,
+      p_nombre: nombre, p_telefono: tel, p_email: mail || null });
+    if (e || !r || !r.ok){
+      err(r && r.error === 'contacto' ? 'Revisa el nombre y el teléfono.' : 'No se ha podido enviar. Inténtalo de nuevo en un momento.');
+      $('#p-enviar').disabled = false; $('#p-enviar').textContent = original; return;
+    }
+    cont.innerHTML = '<div class="tarjeta"><h1>'+(tipo==='comercial'?'Petición enviada':'Aviso enviado')+'</h1>'+
+      '<p style="margin:0">Gracias, '+esc(nombre.split(' ')[0])+'. '+
+      (tipo==='comercial' ? 'Un comercial de Ariza te llamará al '+esc(tel)+' para darte presupuesto.'
+                          : 'Hemos registrado el aviso y te llamaremos al '+esc(tel)+'.')+'</p>'+
+      '<p class="mini" style="color:#A49E99">Puerta '+esc(ref.codigo)+'</p>'+
+      '<a class="btn sec" href="'+esc(location.pathname + location.hash)+'" onclick="location.reload();return false" style="text-align:center;text-decoration:none;display:block">Volver a la ficha</a></div>'+
+      '<p class="pie">Ariza Puertas y Automatismos · Instalación, mantenimiento y reparación</p>';
+    window.scrollTo({top:0});
+  });
+}
+
+/* ================= Datos ================= */
+async function cargar(){
+  S.cargando = true; pintar();
+  const [p, a, e, t, j, c, k] = await Promise.all([
+    sb.from('puertas').select('*').order('codigo'),
+    sb.from('avisos').select('*').order('creado', {ascending:false}),
+    sb.from('etiquetas').select('*').order('codigo'),
+    sb.from('perfiles').select('*').order('nombre'),
+    sb.from('ajustes').select('*'),
+    sb.from('clientes').select('*').order('nombre'),
+    sb.from('contratos').select('*').order('fecha_vencimiento')
+  ]);
+  if (!k.error) S.contratos = k.data || [];
+  // Puertas cubiertas por cada contrato, con su cuota. Solo las deja ver la
+  // base de datos al administrador y a la oficina; al técnico le viene vacío.
+  const cp = esGestion() ? await sb.from('contrato_puertas').select('*')
+                         : { data: [], error: null };
+  S.contratoPuertas = cp.error ? [] : (cp.data || []);
+  // Tarifas, catálogo y valoraciones: las tarifas y el margen solo los deja ver
+  // la base de datos al administrador, así que aquí puede venir vacío y no pasa nada.
+  const [tf, cat, val] = await Promise.all([
+    sb.from('tarifas').select('*').limit(1).maybeSingle(),
+    sb.from('catalogo').select('*').order('descripcion'),
+    esGestion() ? sb.from('valoraciones').select('*') : Promise.resolve({ data: [], error: null })
+  ]);
+  S.tarifas = (!tf.error && tf.data) ? tf.data : null;
+  S.catalogo = cat.error ? [] : (cat.data || []);
+  S.valoraciones = {};
+  if (!val.error) (val.data || []).forEach(v => { S.valoraciones[v.aviso_id] = v; });
+  if (p.error) fallo(p.error); else S.puertas = p.data || [];
+  if (a.error) fallo(a.error); else S.avisos = a.data || [];
+  if (e.error) fallo(e.error); else S.etiquetas = e.data || [];
+  if (!t.error) S.equipo = t.data || [];
+  if (!c.error) S.clientes = c.data || [];
+  await fotosDelEquipo();
+  const xp = await sb.from('expedientes').select('*').order('creado', {ascending:false});
+  S.expedientes = xp.error ? [] : (xp.data || []);
+  if (!j.error){ S.ajustes = {}; (j.data || []).forEach(x => { S.ajustes[x.clave] = x.valor; }); }
+  // materiales ya usados, para ir sugiriéndolos al técnico
+  const m = await sb.from('materiales').select('descripcion, unidad').limit(500);
+  if (!m.error){
+    const vistos = new Map();
+    (m.data || []).forEach(x => { const k = (x.descripcion||'').toLowerCase(); if (k && !vistos.has(k)) vistos.set(k, x); });
+    S.sugerencias = Array.from(vistos.values());
+  }
+  await sembrarGuiones();
+  S.cargando = false; pintar();
+}
+
+/* Enlaces firmados de las fotos del equipo. El cubo es privado: la foto de un
+   trabajador no se publica en internet. Se renuevan en cada carga. */
+async function fotosDelEquipo(){
+  const con = S.equipo.filter(t => t.foto_ruta);
+  S.fotosEquipo = {};
+  if (!con.length) return;
+  try {
+    const { data } = await sb.storage.from('equipo')
+      .createSignedUrls(con.map(t => t.foto_ruta), 7200);
+    (data || []).forEach((x, i) => { if (x && x.signedUrl) S.fotosEquipo[con[i].id] = x.signedUrl; });
+  } catch(_){ /* sin foto se enseñan las iniciales, no pasa nada */ }
+}
+
+/* La primera vez, deja escritos en ajustes los guiones de revisión que falten */
+async function sembrarGuiones(){
+  if (!esAdmin()) return;
+  const faltan = Object.entries(GUIONES_FABRICA)
+    .filter(([tipo]) => !Array.isArray(S.ajustes[claveGuion(tipo)]))
+    .map(([tipo, g]) => ({ clave: claveGuion(tipo), valor: g }));
+  if (!faltan.length) return;
+  const { error } = await sb.from('ajustes').upsert(faltan, { onConflict:'clave' });
+  if (error) return;                       // si no se puede, se sigue: los guiones salen igual de fábrica
+  faltan.forEach(x => { S.ajustes[x.clave] = x.valor; });
+}
+const puertaDe = id => S.puertas.find(x => x.id === id);
+const avisosDe = id => S.avisos.filter(x => x.puerta_id === id);
+const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comercial');
+
+/* ================= Arranque y sesión ================= */
+async function arranque(){
+  const tokenK = contratoDeURL();
+  if (tokenK){ await vistaContratoPublico(tokenK); return; }
+  const ref = codigoDeURL();
+  if (ref){ await vistaPublica(ref); return; }
+  sb.auth.onAuthStateChange((_ev, sesion) => entrar(sesion));
+  const { data } = await sb.auth.getSession();
+  entrar(data.session);
+}
+async function entrar(sesion){
+  $('#arranque').hidden = true;
+  S.user = sesion ? sesion.user : null;
+  if (!S.user){ $('#login').hidden = false; $('#app-root').hidden = true; return; }
+  $('#login').hidden = true; $('#app-root').hidden = false;
+  $('#quien').innerHTML = '<span class="dot"></span>' + esc(S.user.email);
+  // perfil
+  let { data: per } = await sb.from('perfiles').select('*').eq('id', S.user.id).maybeSingle();
+  if (!per){
+    const nombre = (S.user.email||'').split('@')[0];
+    const ins = await sb.from('perfiles').insert({ id:S.user.id, nombre, rol: (S.user.email===ADMIN?'admin':'tecnico') }).select().maybeSingle();
+    per = ins.data || { id:S.user.id, nombre, rol:(S.user.email===ADMIN?'admin':'tecnico'), activo:true };
+  }
+  S.perfil = per;
+  $('#quien').innerHTML = '<span class="dot"></span>' + esc(per.nombre || S.user.email) + (per.rol==='admin' ? ' · admin' : '');
+  // el técnico abre la app directamente en su trabajo del día
+  if (per.rol === 'tecnico' && !S.tabElegida) S.tab = 'trabajo';
+  $('#tabs button[data-tab="equipo"]').hidden = per.rol !== 'admin';
+  $('#tabs button[data-tab="gestion"]').hidden = !(per.rol === 'admin' || per.rol === 'oficina');
+  await cargar();
+}
+const yo = () => (S.perfil && S.perfil.nombre) || (S.user && S.user.email) || 'Técnico';
+
+/* ================= Render ================= */
+const raiz = $('#vista');
+let pend = 0;
+function pintar(){ if (pend) return; pend = requestAnimationFrame(()=>{ pend=0; render(); }); }
+function render(){
+  const act = document.activeElement, keep = act && act.id && raiz.contains(act)
+    ? {id:act.id, v:act.value, s:act.selectionStart, e:act.selectionEnd, txt:/^(text|email|password|search|number|date)$/.test(act.type)||act.tagName==='TEXTAREA'} : null;
+  document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab===S.tab ? 'true':'false'));
+  let h = '';
+  if (S.cargando) h = '<p class="cargando">Cargando datos…</p>';
+  else if (S.exp) h = vistaExpediente(S.exp);
+  else if (S.ficha) h = vistaFicha(S.ficha);
+  else if (S.fichaCliente) h = vistaFichaCliente(S.fichaCliente);
+  else if (S.tab === 'clientes') h = vistaClientes();
+  else if (S.tab === 'trabajo') h = vistaMiTrabajo();
+  else if (S.tab === 'contratos') h = vistaContratos();
+  else if (S.tab === 'calendario') h = vistaCalendario();
+  else if (S.tab === 'avisos') h = vistaAvisos();
+  else if (S.tab === 'realizadas') h = vistaRealizadas();
+  else if (S.tab === 'etiquetas') h = vistaEtiquetas();
+  else if (S.tab === 'gestion') h = esGestion() ? vistaGestion() : vistaPuertas();
+  else if (S.tab === 'equipo') h = vistaEquipo();
+  else h = vistaPuertas();
+  raiz.innerHTML = h;
+  if (keep){ const el = document.getElementById(keep.id); if (el){ if(keep.txt) el.value = keep.v; el.focus(); if(keep.txt){ try{ el.setSelectionRange(keep.s,keep.e); }catch(_){} } } }
+}
+
+/* ---- Puertas ---- */
+function vistaPuertas(){
+  const q = S.busca.toLowerCase();
+  const lista = S.puertas.filter(p => !q || [p.codigo,p.cliente,p.direccion,p.ubicacion,p.marca,p.modelo,p.tipo].join(' ').toLowerCase().includes(q));
+  let h = '<div class="stack">';
+  h += '<div class="fila"><div class="buscador sp"><input id="busca" type="search" placeholder="Buscar por código, cliente, dirección o marca" value="'+esc(S.busca)+'" data-act="busca"></div>'+
+       '<button class="btn pri" data-act="puerta-nueva">Nueva puerta</button></div>';
+  const libres = S.etiquetas.filter(e => !S.puertas.some(p => p.codigo === e.codigo)).length;
+  h += '<p class="mini" style="margin:0">'+S.puertas.length+' puertas dadas de alta · '+libres+' etiquetas libres en la furgoneta</p>';
+  if (!lista.length) h += '<div class="panel"><p class="muted" style="margin:0">'+(S.puertas.length?'Ninguna puerta coincide con la búsqueda.':'Todavía no hay puertas. Genera etiquetas y da de alta la primera.')+'</p></div>';
+  else {
+    h += '<div class="lista">';
+    lista.forEach(p => {
+      const av = abiertoDe(p.id);
+      h += '<button class="item" data-act="abrir" data-id="'+p.id+'">'+
+           '<span class="qr">'+esc((p.codigo||'—').replace(/^[A-Z]+-/,''))+'</span>'+
+           '<span><span class="tit">'+esc(p.cliente||'Sin cliente')+'</span><span class="sub">'+esc([p.direccion,p.ubicacion].filter(Boolean).join(' · ')||'Sin dirección')+'</span>'+
+           '<span class="sub">'+esc([p.tipo,p.marca,p.modelo].filter(Boolean).join(' · '))+'</span></span>'+
+           '<span>'+estadoChip(p.estado)+(av?'<span class="mini" style="display:block;text-align:right;margin-top:4px">'+(EST_AVISO[av.estado]||'')+'</span>':'')+'</span>'+
+           '</button>';
+    });
+    h += '</div>';
+  }
+  h += '</div>';
+  return h;
+}
+
+function vistaFicha(id){
+  const p = puertaDe(id);
+  if (!p) return '<p class="cargando">Puerta no encontrada.</p>';
+  const et = S.etiquetas.find(e => e.codigo === p.codigo);
+  const av = avisosDe(p.id), abierto = av.find(a => !a.cerrado);
+  let h = '<div class="stack">';
+  h += '<div class="fila"><button class="btn sm plana" data-act="volver">‹ Volver</button><span class="sp"></span>'+
+       '<button class="btn sm" data-act="puerta-editar" data-id="'+p.id+'">Editar ficha</button></div>';
+
+  h += '<div class="panel"><div class="ficha-h"><h2>'+esc(p.cliente||'Sin cliente')+'</h2><span class="codigo">'+esc(p.codigo||'')+'</span><span class="sp"></span>'+estadoChip(p.estado)+'</div>'+
+       '<p class="mini" style="margin:6px 0 0">'+esc([p.direccion,p.ubicacion].filter(Boolean).join(' · '))+'</p>'+
+       '<div class="fila" style="margin-top:12px"><button class="btn sm" data-act="estado" data-id="'+p.id+'">Cambiar estado</button>'+
+       (et ? '<button class="btn sm plana" data-act="ver-qr" data-cod="'+esc(p.codigo)+'">Ver QR</button>'+
+             '<button class="btn sm plana" data-act="etiqueta-imprimir" data-cod="'+esc(p.codigo)+'">Imprimir etiqueta</button>' : '')+
+       '<button class="btn sm" data-act="exp-nuevo" data-id="'+p.id+'">Documentación</button>'+
+       '<button class="btn sm pri" data-act="aviso-nuevo" data-id="'+p.id+'">Nuevo aviso</button></div>'+
+       '<p class="mini" style="margin:10px 0 0">Estado desde '+fechaCorta(p.estado_desde)+'</p></div>';
+
+  // Mantenimiento programado
+  const prevAbierta = av.find(a => a.tipo === 'mantenimiento' && !a.cerrado);
+  h += '<div class="panel"><div class="panel-h"><h3>Mantenimiento</h3>'+
+       '<button class="btn sm plana" data-act="planificar" data-id="'+p.id+'">Planificar</button></div>';
+  if (p.sin_mantenimiento) h += '<p class="muted" style="margin:0">Esta puerta está fuera del plan de mantenimiento.</p>';
+  else {
+    h += '<p class="mini" style="margin:0">'+esc(nombrePeriodo(periodicidadDe(p)))+
+      (p.periodicidad_meses ? ' (fijado en esta puerta)' : (p.cliente_id && contratoVivo(p.cliente_id) ? ' (según contrato)' : ' (por defecto)'))+'</p>';
+    h += '<div class="fila" style="margin-top:10px">'+
+      (p.proxima_revision ? chipRevision(dias(p.proxima_revision))+'<span class="mini">Toca el '+esc(fechaCorta(p.proxima_revision))+'</span>'
+                          : '<span class="chip gris sin">Sin fecha</span><span class="mini">Ponle fecha para que entre en el calendario</span>')+
+      '<span class="sp"></span>'+
+      (prevAbierta ? '<button class="btn sm pri" data-act="cerrar-asistencia" data-id="'+prevAbierta.id+'">Hacer la revisión</button>'
+                   : '<button class="btn sm" data-act="abrir-preventiva" data-id="'+p.id+'">Abrir revisión</button>')+
+      '</div>';
+    if (p.ultima_revision) h += '<p class="mini" style="margin:10px 0 0">Última revisión: '+esc(fechaCorta(p.ultima_revision))+'</p>';
+    h += '<div id="revs-'+p.id+'"></div>';
+  }
+  h += '</div>';
+
+  h += '<div class="panel"><div class="panel-h"><h3>Ficha técnica</h3></div><dl class="datos">';
+  const d = [['Tipo',p.tipo],['Uso',p.uso],['Tipo de cliente',p.tipo_cliente],['Marca',p.marca],['Modelo',p.modelo],
+    ['Cuadro de maniobra',p.cuadro],['Motor',p.motor],['Año',p.anio],['Instalador',p.instalador],
+    ['Medidas',(p.ancho_mm||p.alto_mm)?((p.ancho_mm||'?')+' x '+(p.alto_mm||'?')+' mm'):''],['Peso hoja',p.peso_kg?(p.peso_kg+' kg'):''],
+    ['Última revisión',p.ultima_revision?fechaCorta(p.ultima_revision):''],['Próxima revisión',p.proxima_revision?(fechaCorta(p.proxima_revision)+' · '+relativo(p.proxima_revision)):'']];
+  d.forEach(x => { if (x[1]) h += '<div><dt>'+x[0]+'</dt><dd>'+esc(x[1])+'</dd></div>'; });
+  h += '</dl>';
+  if ((p.seguridad||[]).length) h += '<div class="linea"><dt class="eti">Seguridad instalada</dt><p style="margin:6px 0 0">'+esc((p.seguridad||[]).join(' · '))+'</p></div>';
+  if (p.notas) h += '<div class="linea"><dt class="eti">Observaciones</dt><p style="margin:6px 0 0">'+esc(p.notas)+'</p></div>';
+  h += '</div>';
+
+  h += '<div class="panel"><div class="panel-h"><h3>Fotos</h3><label class="btn sm">Añadir fotos<input type="file" accept="image/*" multiple hidden data-act="subir-foto" data-id="'+p.id+'"></label></div>'+
+       '<div class="fotos" id="fotos-'+p.id+'"><p class="mini" style="margin:0">Cargando fotos…</p></div></div>';
+
+  h += '<div class="panel"><div class="panel-h"><h3>Documentación</h3>'+
+       '<span class="fila"><select id="doc-tipo-'+p.id+'" style="padding:6px 9px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:14px">'+
+       lista('tipos_doc', TIPOS_DOC).map(t => '<option>'+esc(t)+'</option>').join('')+'</select>'+
+       '<label style="display:inline-flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="doc-pub-'+p.id+'" style="accent-color:var(--amarillo);width:16px;height:16px">Visible para el cliente</label>'+
+       '<label class="btn sm">Subir PDF<input type="file" accept="application/pdf,.pdf" multiple hidden data-act="subir-doc" data-id="'+p.id+'"></label></span></div>'+
+       '<div id="docs-'+p.id+'"><p class="mini" style="margin:0">Cargando documentación…</p></div>'+
+       '<p class="mini" style="margin:10px 0 0">Manuales, esquemas y certificados de esta puerta. Solo los ve el equipo, salvo los que marques como visibles para el cliente: esos aparecen al escanear el QR, pensados para el desbloqueo de emergencia y las instrucciones de uso.</p></div>';
+
+  h += '<div class="panel"><div class="panel-h"><h3>Avisos y trabajos</h3><span class="mini">'+av.length+' en total</span></div>';
+  if (!av.length) h += '<p class="muted" style="margin:0">Sin avisos registrados.</p>';
+  else {
+    h += '<div class="avisos">';
+    av.slice(0,20).forEach(a => {
+      const cto = contactoAviso(a);
+      h += '<div class="aviso"><div class="cab">'+
+           (a.tipo==='comercial' ? '<span class="chip ok">Presupuesto</span>' : '')+
+           '<span class="chip '+(a.cerrado?'gris':'aviso')+'">'+(a.cerrado?'Cerrado':(EST_AVISO[a.estado]||a.estado))+'</span>'+
+           '<span class="mini">'+(TIPO_AVISO[a.tipo]||'Avería')+' · '+fechaHora(a.creado)+' · '+(a.origen==='cliente'?'lo pidió el cliente':'interno')+'</span>'+
+           '<span class="sp"></span>'+
+           (a.cerrado
+             ? '<button class="btn sm plana" data-act="parte" data-id="'+a.id+'">Parte</button>'
+             : '<button class="btn sm" data-act="aviso-editar" data-id="'+a.id+'">Editar</button>'+
+               '<button class="btn sm pri" data-act="cerrar-asistencia" data-id="'+a.id+'">Cerrar visita</button>')+'</div>'+
+           (a.descripcion ? '<p style="margin:0">'+esc(a.descripcion)+'</p>' : '')+
+           '<p class="mini" style="margin:0">'+esc('Técnico: '+((a.tecnico_id?nombreTec(a.tecnico_id):a.tecnico)||'sin asignar'))+
+             (a.fecha_prevista ? esc(' · Previsto: '+fechaCorta(a.fecha_prevista)) : '')+
+             (cto ? ' · '+cto : '')+'</p>'+
+           '</div>';
+    });
+    h += '</div>';
+  }
+  h += '</div>';
+
+  // Expedientes de documentación de esta puerta
+  const xs = S.expedientes.filter(x => x.puerta_id === p.id && !x.archivado);
+  h += '<div class="panel"><div class="panel-h"><h3>Documentación de normativa</h3>'+
+       '<span class="mini">'+xs.length+'</span><span class="sp"></span>'+
+       '<button class="btn sm" data-act="exp-nuevo" data-id="'+p.id+'">Nueva documentación</button></div>';
+  if (!xs.length)
+    h += '<p class="muted" style="margin:0">Esta puerta no tiene todavía expediente de documentación. '+
+         'Aquí se genera el libro que se entrega al cliente: declaraciones, comprobaciones de normativa, '+
+         'fotos de cada elemento y libro de mantenimiento.</p>';
+  else {
+    h += '<div class="lista">';
+    xs.forEach(x => {
+      const falta = expPendientes(x).length;
+      h += '<button class="item" data-act="exp-abrir" data-id="'+x.id+'">'+
+        '<span class="qr">DOC</span>'+
+        '<span><span class="tit">'+esc(x.referencia||'Expediente')+' · '+esc(EXP_SITUACION[x.situacion]||'')+'</span>'+
+        '<span class="sub">'+esc(EXP_FAMILIA[x.familia]||'')+' · '+
+          (x.fecha_puesta_servicio ? 'puesta en servicio '+esc(fechaCorta(x.fecha_puesta_servicio))
+                                   : 'sin fecha de puesta en servicio')+'</span></span>'+
+        '<span><span class="chip '+(x.estado==='emitido'?'ok':(x.estado==='completo'?'aviso':'gris'))+' sin">'+
+          (EXP_ESTADO[x.estado]||x.estado)+'</span>'+
+          (falta ? '<span class="mini" style="display:block;text-align:right;margin-top:4px">faltan '+falta+'</span>' : '')+
+        '</span></button>';
+    });
+    h += '</div>';
+  }
+  h += '</div></div>';
+
+  setTimeout(() => { pintarFotos(p.id); pintarDocs(p.id); pintarRevisiones(p.id); }, 0);
+  return h;
+}
+
+/* ---- Avisos (todos) ---- */
+const claveFecha = a => (a.fecha_prevista || (a.creado || '').slice(0, 10) || '9999-12-31');
+const porFecha = (a, b) => claveFecha(a) < claveFecha(b) ? -1 : (claveFecha(a) > claveFecha(b) ? 1 : 0);
+
+const TIPO_AVISO = ASISTENCIAS;
+function contactoAviso(a){
+  const tel = (a.contacto_telefono||'').trim();
+  const mail = (a.contacto_email||'').trim();
+  const nom = (a.contacto_nombre||'').trim();
+  if (!nom && !tel && !mail) return a.contacto ? esc(a.contacto) : '';
+  return [nom ? '<b>'+esc(nom)+'</b>' : '',
+          tel ? '<a href="tel:'+esc(tel.replace(/\s/g,''))+'">'+esc(tel)+'</a>' : '',
+          mail ? '<a href="mailto:'+esc(mail)+'">'+esc(mail)+'</a>' : ''].filter(Boolean).join(' · ');
+}
+/* A cada técnico, un color fijo, para reconocerlo de un vistazo en las listas */
+function chipTecnico(a){
+  if (!a.tecnico_id) return '<span class="chip mal">Sin asignar</span>';
+  const nom = nombreTec(a.tecnico_id) || a.tecnico || 'Asignada';
+  const i = Math.max(0, S.equipo.findIndex(t => t.id === a.tecnico_id)) % 6;
+  return '<span class="chip tec t'+i+'">'+esc(nom)+'</span>';
+}
+/* Color fijo por técnico, el mismo que usa el chip, para que cuadren */
+const colorTec = id => Math.max(0, S.equipo.findIndex(t => t.id === id)) % 6;
+const inicialesTec = n => String(n || '').trim().split(/\s+/).slice(0,2)
+  .map(x => x[0] || '').join('').toUpperCase() || '?';
+/* La cara del técnico: su foto si la tiene, y si no sus iniciales en su color.
+   Las fotos están en un cubo privado, así que se sirven con enlace firmado
+   que se renueva en cada carga. */
+function caraTec(id, grande){
+  const g = grande ? ' gr' : '';
+  if (!id) return '<span class="cara ini vacia'+g+'" title="Sin asignar">··</span>';
+  const t = S.equipo.find(x => x.id === id) || {};
+  const nom = t.nombre || 'Técnico';
+  const url = S.fotosEquipo[id];
+  if (url) return '<img class="cara'+g+'" src="'+esc(url)+'" alt="'+esc(nom)+'" title="'+esc(nom)+'">';
+  return '<span class="cara ini c'+colorTec(id)+g+'" title="'+esc(nom)+'">'+esc(inicialesTec(nom))+'</span>';
+}
+/* Marcas de una asistencia que ya no está en juego */
+function chipsEstadoAsis(a){
+  let h = '';
+  if (a.anulada) h += '<span class="chip anulada sin" title="'+esc(a.anulada_motivo||'')+'">Anulada</span>';
+  if (a.archivado) h += '<span class="chip gris sin">Archivada</span>';
+  return h;
+}
+/* Asignar en dos toques: técnico y fecha, sin abrir la asistencia entera */
+function dlgAsignar(id){
+  const a = S.avisos.find(x => x.id === id);
+  if (!a) return;
+  const h = '<h3>Asignar asistencia</h3>'+
+    '<p class="mini" style="margin:0 0 12px">'+esc(tipoAsis(a.tipo))+' · '+esc(nombreCliente(a))+
+    (dondeAsistencia(a) ? ' · '+esc(dondeAsistencia(a)) : '')+'</p><div class="campos">'+
+    '<div class="campo full"><label for="as-tec">Técnico</label><select id="as-tec"><option value="">Sin asignar</option>'+
+      activos().map(t => '<option value="'+t.id+'"'+(a.tecnico_id===t.id?' selected':'')+'>'+
+        esc(t.nombre||'—')+(t.rol==='admin'?' (admin)':'')+'</option>').join('')+
+      '</select><span class="pista">Le llega un correo y le aparece en «Mi trabajo»</span></div>'+
+    '<div class="campo full"><label for="as-fecha">Visita prevista</label>'+
+      '<input id="as-fecha" type="date" value="'+esc(a.fecha_prevista||'')+'">'+
+      '<div class="fila" style="margin-top:8px;gap:6px">'+
+        '<button type="button" class="btn sm" data-act="as-dia" data-n="0">Hoy</button>'+
+        '<button type="button" class="btn sm" data-act="as-dia" data-n="1">Mañana</button>'+
+        '<button type="button" class="btn sm" data-act="as-dia" data-n="2">Pasado</button>'+
+        '<button type="button" class="btn sm plana" data-act="as-dia" data-n="">Sin fecha</button>'+
+      '</div></div>'+
+    '</div><p class="err"></p><div class="pie">'+
+    '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Asignar</button></div>';
+  abrirDlg(h, async () => {
+    const tid = val('as-tec') || null;
+    const o = { tecnico_id: tid, tecnico: tid ? nombreTec(tid) : '',
+                fecha_prevista: val('as-fecha') || null,
+                actualizado: new Date().toISOString() };
+    if (tid && a.estado === 'recibido') o.estado = 'asignado';
+    try {
+      const { error } = await sb.from('avisos').update(o).eq('id', a.id);
+      if (error) throw error;
+      if (a.puerta_id && o.estado === 'asignado' && !SIN_COBRO.includes(a.tipo))
+        await sb.from('puertas').update({ estado:'tecnico_asignado', estado_desde: new Date().toISOString() })
+                .eq('id', a.puerta_id);
+      cerrarDlg(); await cargar();
+      toast(tid ? ('Asignada a ' + nombreTec(tid) + '.') : 'Asistencia sin asignar.');
+    } catch(e){ setErr(e.message); }
+  });
+}
+
+function tarjetaAviso(a){
+  const p = a.puerta_id ? (puertaDe(a.puerta_id) || {}) : {};
+  const cont = contactoAviso(a);
+  const donde = dondeAsistencia(a);
+  const firmada = !!a.firma_ruta;
+  return '<div class="aviso'+(a.anulada?' anulada':'')+(a.archivado?' archivada':'')+'"><div class="cab">'+
+    caraTec(a.tecnico_id)+
+    '<span class="chip '+(a.tipo==='comercial'?'ok':(a.tipo==='mantenimiento'?'gris':'aviso'))+'">'+esc(tipoAsis(a.tipo))+'</span>'+
+    (a.anulada ? '' : '<span class="chip gris sin">'+(EST_AVISO[a.estado]||a.estado)+'</span>')+
+    (a.prioridad==='urgente' && !a.cerrado ? '<span class="chip aviso sin">Urgente</span>' : '')+
+    chipsEstadoAsis(a)+
+    chipTecnico(a)+
+    '<b>'+esc(nombreCliente(a))+'</b>'+
+    '<span class="mini">'+esc([p.codigo, donde].filter(Boolean).join(' · '))+'</span><span class="sp"></span>'+
+    (a.puerta_id ? '<button class="btn sm plana" data-act="abrir" data-id="'+a.puerta_id+'">Ver puerta</button>' : '')+
+    (!a.cerrado && esGestion() ? '<button class="btn sm" data-act="asignar" data-id="'+a.id+'">Asignar</button>' : '')+
+    '<button class="btn sm plana" data-act="aviso-editar" data-id="'+a.id+'">'+(a.cerrado?'Ver':'Editar')+'</button>'+
+    (a.cerrado
+      ? (a.anulada ? '' : '<button class="btn sm" data-act="parte" data-id="'+a.id+'">Parte</button>')
+      : '<button class="btn sm pri" data-act="cerrar-asistencia" data-id="'+a.id+'">Cerrar visita</button>')+
+    '</div>'+
+    (a.descripcion?'<p style="margin:0">'+esc(a.descripcion)+'</p>':'')+
+    (a.notas_oficina?'<p class="nota-oficina">Oficina: '+esc(a.notas_oficina)+'</p>':'')+
+    (a.anulada ? '<p class="mini" style="margin:0"><b>Anulada</b> el '+fechaHora(a.anulada_en)+
+       (a.anulada_por?(' por '+esc(a.anulada_por)):'')+': '+esc(a.anulada_motivo||'')+'</p>' : '')+
+    '<p class="mini" style="margin:0">'+
+      (a.fecha_prevista ? ('Visita: '+fechaCorta(a.fecha_prevista)+' · '+relativo(a.fecha_prevista)+' · ') : '')+
+      'Entró el '+fechaHora(a.creado)+(a.origen==='cliente'?' por el QR':'')+
+    '</p>'+
+    (cont ? '<p class="mini" style="margin:0">'+cont+'</p>' : '')+
+    accionesAsis(a, firmada)+
+    '</div>';
+}
+
+/* Segunda fila: duplicar, anular, archivar y borrar. Se separa de los botones
+   de trabajo para que nadie borre nada por querer cerrar una visita. */
+function accionesAsis(a, firmada){
+  const b = [];
+  b.push('<button class="btn sm plana" data-act="aviso-duplicar" data-id="'+a.id+'">Duplicar</button>');
+  if (!a.cerrado && esGestion())
+    b.push('<button class="btn sm plana" data-act="aviso-anular" data-id="'+a.id+'">Anular sin parte</button>');
+  if (a.anulada && esGestion())
+    b.push('<button class="btn sm plana" data-act="aviso-reabrir" data-id="'+a.id+'">Volver a abrirla</button>');
+  if (esAdmin()){
+    b.push('<button class="btn sm plana" data-act="aviso-archivar" data-id="'+a.id+'" data-v="'+(a.archivado?'0':'1')+'">'+
+           (a.archivado?'Sacar del archivo':'Archivar')+'</button>');
+    if (firmada)
+      b.push('<span class="mini" title="La firma del cliente es la prueba de que el trabajo se hizo y de que lo aceptó">Firmada: no se borra</span>');
+    else
+      b.push('<button class="btn sm plana" data-act="aviso-borrar" data-id="'+a.id+'">Borrar</button>');
+  }
+  if (!b.length) return '';
+  return '<div class="fila" style="gap:6px;flex-wrap:wrap;margin-top:2px;padding-top:6px;border-top:1px solid var(--line)">'+
+         '<span class="sp"></span>'+b.join('')+'</div>';
+}
+
+/* ---- Mi trabajo: la jornada del técnico ---- */
+const MAPA = d => 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(d);
+
+/* Tarjeta de trabajo: lo justo para salir a la calle y los atajos a un toque */
+function tarjetaTrabajo(a){
+  const p = a.puerta_id ? (puertaDe(a.puerta_id) || {}) : {};
+  const donde = dondeAsistencia(a);
+  const tel = (a.contacto_telefono || '').trim();
+  const cli = nombreCliente(a);
+  const vencida = a.fecha_prevista && dias(a.fecha_prevista) < 0;
+  return '<div class="trab'+(a.prioridad==='urgente'?' urg':'')+'">'+
+    '<div class="cab">'+
+      '<span class="chip '+(a.tipo==='comercial'?'ok':(a.tipo==='mantenimiento'?'gris':'aviso'))+'">'+esc(tipoAsis(a.tipo))+'</span>'+
+      (a.prioridad==='urgente' ? '<span class="chip mal sin">Urgente</span>' : '')+
+      (vencida ? '<span class="chip mal sin">Se pasó de fecha</span>' : '')+
+      '<span class="chip gris sin">'+(EST_AVISO[a.estado]||a.estado)+'</span>'+
+      '<span class="sp"></span>'+
+      (a.fecha_prevista ? '<span class="mini">'+esc(fechaCorta(a.fecha_prevista))+'</span>' : '<span class="mini">Sin fecha</span>')+
+    '</div>'+
+    '<b class="trab-cli">'+esc(cli)+'</b>'+
+    (donde ? '<div class="trab-dir">'+esc(donde)+'</div>' : '')+
+    (p.codigo ? '<div class="mini">'+esc([p.codigo, p.tipo, p.marca, p.modelo].filter(Boolean).join(' · '))+'</div>' : '')+
+    (a.descripcion ? '<p class="trab-desc">'+esc(a.descripcion)+'</p>' : '')+
+    (a.notas_oficina ? '<p class="nota-oficina">Oficina: '+esc(a.notas_oficina)+'</p>' : '')+
+    '<div class="trab-btns">'+
+      (tel ? '<a class="btn sm" href="tel:'+esc(tel.replace(/\s/g,''))+'">Llamar'+
+             (a.contacto_nombre ? ' a '+esc(a.contacto_nombre.split(' ')[0]) : '')+'</a>' : '')+
+      (donde ? '<a class="btn sm" target="_blank" rel="noopener" href="'+esc(MAPA(donde))+'">Cómo llegar</a>' : '')+
+      (a.puerta_id ? '<button class="btn sm" data-act="abrir" data-id="'+a.puerta_id+'">Ficha de la puerta</button>' : '')+
+      '<button class="btn sm plana" data-act="aviso-editar" data-id="'+a.id+'">Detalles</button>'+
+      '<span class="sp"></span>'+
+      '<button class="btn sm pri" data-act="cerrar-asistencia" data-id="'+a.id+'">Cerrar visita</button>'+
+    '</div></div>';
+}
+
+function vistaMiTrabajo(){
+  const yoId = S.perfil ? S.perfil.id : null;
+  const mias = S.avisos.filter(a => !a.cerrado && !a.archivado && a.tecnico_id === yoId);
+  const hoyISO = iso(new Date());
+  const manana = iso(sumaDias(new Date(), 1));
+  const finSemana = iso(sumaDias(new Date(), 7));
+
+  const bloques = [
+    ['Se pasaron de fecha', mias.filter(a => a.fecha_prevista && a.fecha_prevista < hoyISO), 'mal'],
+    ['Hoy',                 mias.filter(a => a.fecha_prevista === hoyISO), 'hoy'],
+    ['Mañana',              mias.filter(a => a.fecha_prevista === manana), ''],
+    ['Esta semana',         mias.filter(a => a.fecha_prevista > manana && a.fecha_prevista <= finSemana), ''],
+    ['Más adelante',        mias.filter(a => a.fecha_prevista > finSemana), ''],
+    ['Sin fecha puesta',    mias.filter(a => !a.fecha_prevista), 'sin'],
+  ];
+  const orden = (x, y) => {
+    if (x.prioridad === 'urgente' && y.prioridad !== 'urgente') return -1;
+    if (y.prioridad === 'urgente' && x.prioridad !== 'urgente') return 1;
+    return (x.creado || '') < (y.creado || '') ? -1 : 1;
+  };
+
+  const hoyN = bloques[1][1].length, vencidasN = bloques[0][1].length;
+  let h = '<div class="stack">';
+  h += '<div class="fila"><div><h2 style="font-size:20px">Mi trabajo</h2>'+
+       '<p class="mini" style="margin:2px 0 0">'+
+       (mias.length
+         ? (hoyN ? ('<b>'+hoyN+' visita'+(hoyN===1?'':'s')+' para hoy</b>') : 'Nada señalado para hoy')+
+           ' · '+mias.length+' asistencia'+(mias.length===1?'':'s')+' abierta'+(mias.length===1?'':'s')+
+           (vencidasN ? ' · '+vencidasN+' se pasaron de fecha' : '')
+         : 'No tienes asistencias asignadas')+
+       '</p></div><span class="sp"></span>'+
+       '<button class="btn" data-act="asistencia-nueva">Nueva asistencia</button></div>';
+
+  if (!mias.length){
+    h += '<div class="panel"><p class="muted" style="margin:0">Ahora mismo no tienes ninguna asistencia asignada. '+
+         'Cuando la oficina te asigne un trabajo, aparecerá aquí y te llegará un correo.</p>'+
+         '<p class="mini" style="margin:8px 0 0">Mientras tanto puedes ver lo que tiene el resto del equipo en '+
+         '<button class="btn sm plana" data-act="ir-avisos">Asistencias</button></p></div>';
+  } else {
+    bloques.forEach(([titulo, lista, clase]) => {
+      if (!lista.length) return;
+      h += '<div class="panel bloque-'+(clase||'normal')+'"><div class="panel-h"><h2>'+titulo+'</h2>'+
+           '<span class="mini">'+lista.length+'</span></div>'+
+           '<div class="avisos">'+lista.sort(orden).map(tarjetaTrabajo).join('')+'</div></div>';
+    });
+  }
+
+  // revisiones que le tocan por sus puertas, como aviso suave
+  const sinAbrir = planMantenimiento().filter(x => x.fecha && !x.abierta && x.d <= 7);
+  if (sinAbrir.length && esGestion()){
+    h += '<div class="panel"><div class="panel-h"><h2>Revisiones que tocan</h2>'+
+         '<span class="mini">'+sinAbrir.length+'</span></div>'+
+         '<p class="mini" style="margin:0 0 10px">Todavía no se han abierto como asistencia.</p>'+
+         '<div class="lista">'+sinAbrir.slice(0,8).map(x =>
+           '<button class="item" data-act="abrir-preventiva" data-id="'+x.p.id+'">'+
+           '<span class="qr">'+esc((x.p.codigo||'').replace(/^[A-Z]+-/,''))+'</span>'+
+           '<span><span class="tit">'+esc(x.p.cliente||'')+'</span>'+
+           '<span class="sub">'+esc([x.p.direccion, x.p.ubicacion].filter(Boolean).join(' · '))+'</span></span>'+
+           '<span>'+chipRevision(x.d)+'</span></button>').join('')+'</div></div>';
+  }
+  return h + '</div>';
+}
+/* Reparto del trabajo: quién lleva qué, de un vistazo y en un toque.
+   Cada cara es también el filtro, así que se ve y se usa en el mismo sitio. */
+function tiraTecnicos(abiertos){
+  const cuenta = id => abiertos.filter(a => a.tecnico_id === id).length;
+  const sinAsignar = abiertos.filter(a => !a.tecnico_id).length;
+  const vencidas = id => abiertos.filter(a => a.tecnico_id === id && a.fecha_prevista && dias(a.fecha_prevista) < 0).length;
+  const sel = v => S.filtroTec === v ? ' pri' : ' plana';
+  let h = '<div class="panel"><div class="panel-h"><h2>Reparto del trabajo</h2>'+
+          '<span class="mini">'+abiertos.length+' abierta'+(abiertos.length===1?'':'s')+'</span></div>'+
+          '<div class="fila" style="gap:8px;flex-wrap:wrap">'+
+          '<button class="btn sm'+sel('')+'" data-act="filtra-tec" data-v="">Todas</button>';
+  activos().forEach(t => {
+    const n = cuenta(t.id), v = vencidas(t.id);
+    h += '<button class="btn sm'+sel(t.id)+'" data-act="filtra-tec" data-v="'+t.id+'" '+
+         'style="display:inline-flex;align-items:center;gap:7px">'+
+         caraTec(t.id)+'<span>'+esc((t.nombre||'—').split(' ')[0])+'</span>'+
+         '<b>'+n+'</b>'+(v?'<span class="chip mal sin" title="Se pasaron de fecha">'+v+'</span>':'')+
+         '</button>';
+  });
+  if (sinAsignar)
+    h += '<button class="btn sm'+sel('sin')+'" data-act="filtra-tec" data-v="sin">Sin asignar <b>'+sinAsignar+'</b></button>';
+  h += '</div>';
+  if (S.filtroTec)
+    h += '<p class="mini" style="margin:10px 0 0">Estás viendo solo '+
+         (S.filtroTec === 'sin' ? 'lo que no tiene técnico' : esc(nombreTec(S.filtroTec)||''))+
+         '. <button class="btn sm plana" data-act="filtra-tec" data-v="">Quitar el filtro</button></p>';
+  return h + '</div>';
+}
+
+function vistaAvisos(){
+  const abiertos = S.avisos.filter(a => !a.cerrado && !a.archivado);
+  const yoId = S.perfil ? S.perfil.id : null;
+  const pasa = a => !S.filtroTec || (S.filtroTec === 'sin' ? !a.tecnico_id : a.tecnico_id === S.filtroTec);
+  const vistos = abiertos.filter(pasa);
+  const mios = vistos.filter(a => a.tecnico_id === yoId).sort(porFecha);
+  const comerciales = vistos.filter(a => a.tipo === 'comercial' && a.tecnico_id !== yoId).sort(porFecha);
+  const resto = vistos.filter(a => a.tecnico_id !== yoId && a.tipo !== 'comercial').sort(porFecha);
+  let h = '<div class="stack">';
+  h += '<div class="fila"><span class="sp"></span><button class="btn pri" data-act="asistencia-nueva">Nueva asistencia</button></div>';
+
+  if (esGestion()) h += tiraTecnicos(abiertos);
+
+  h += '<div class="panel"><div class="panel-h"><h2>Mis asistencias</h2><span class="mini">'+mios.length+'</span></div>';
+  if (!mios.length) h += '<p class="muted" style="margin:0">No tienes ninguna asistencia asignada ahora mismo.</p>';
+  else h += '<div class="avisos">'+mios.map(tarjetaAviso).join('')+'</div>';
+  h += '</div>';
+
+  if (comerciales.length){
+    h += '<div class="panel"><div class="panel-h"><h2>Peticiones de presupuesto</h2><span class="mini">'+comerciales.length+'</span></div>'+
+         '<p class="mini" style="margin:0 0 10px">Clientes que han pedido oferta al escanear el QR de una puerta.</p>'+
+         '<div class="avisos">'+comerciales.map(tarjetaAviso).join('')+'</div></div>';
+  }
+
+  h += '<div class="panel"><div class="panel-h"><h2>'+(esAdmin()?'Resto de avisos abiertos':'Otros avisos del equipo')+'</h2>'+
+       '<span class="sp"></span><span class="mini">'+resto.length+'</span></div>';
+  if (!resto.length) h += '<p class="muted" style="margin:0">'+(abiertos.length?'Nada más abierto con ese filtro.':'No hay avisos abiertos. Todo en orden.')+'</p>';
+  else h += '<div class="avisos">'+resto.map(tarjetaAviso).join('')+'</div>';
+  h += '</div>';
+
+  const rev = S.puertas.filter(p => p.proxima_revision).sort((a,b)=>a.proxima_revision<b.proxima_revision?-1:1).slice(0,15);
+  h += '<div class="panel"><div class="panel-h"><h2>Próximas revisiones</h2></div>';
+  if (!rev.length) h += '<p class="muted" style="margin:0">Ninguna puerta tiene fecha de próxima revisión.</p>';
+  else {
+    h += '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Puerta</th><th>Cliente</th><th>Fecha</th><th></th></tr></thead><tbody>';
+    rev.forEach(p => {
+      const n = dias(p.proxima_revision);
+      h += '<tr><td class="num">'+esc(p.codigo||'')+'</td><td>'+esc(p.cliente||'')+'<span class="sub mini" style="display:block">'+esc(p.direccion||'')+'</span></td>'+
+           '<td class="num">'+fechaCorta(p.proxima_revision)+'<span class="mini" style="display:block;color:'+(n<0?'var(--mal)':'var(--muted)')+'">'+relativo(p.proxima_revision)+'</span></td>'+
+           '<td style="text-align:right"><button class="btn sm plana" data-act="abrir" data-id="'+p.id+'">Abrir</button></td></tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+  h += '</div></div>';
+  return h;
+}
+
+/* ---- Realizadas: el historial de lo que ya está hecho ---- */
+function vistaRealizadas(){
+  const q = S.histBusca.trim().toLowerCase();
+  const diaCierre = a => String(a.cerrado || '').slice(0, 10);
+  let filas = S.avisos.filter(a => a.cerrado);
+  if (!S.histArchivadas) filas = filas.filter(a => !a.archivado);
+  // Un técnico solo ve lo suyo; administración y oficina lo ven todo.
+  if (!esGestion()) filas = filas.filter(a => a.tecnico_id === (S.perfil ? S.perfil.id : null));
+  if (S.histTec)   filas = filas.filter(a => S.histTec === 'sin' ? !a.tecnico_id : a.tecnico_id === S.histTec);
+  if (S.histTipo)  filas = filas.filter(a => S.histTipo === 'anuladas' ? a.anulada
+                                           : (!a.anulada && a.tipo === S.histTipo));
+  if (S.histDesde) filas = filas.filter(a => diaCierre(a) >= S.histDesde);
+  if (S.histHasta) filas = filas.filter(a => diaCierre(a) <= S.histHasta);
+  if (q) filas = filas.filter(a => {
+    const p = a.puerta_id ? (puertaDe(a.puerta_id) || {}) : {};
+    return [nombreCliente(a), p.codigo, p.marca, p.modelo, dondeAsistencia(a),
+            a.descripcion, a.diagnostico, a.trabajo, a.contacto_nombre,
+            a.tecnico, nombreTec(a.tecnico_id), a.anulada_motivo]
+           .filter(Boolean).join(' ').toLowerCase().includes(q);
+  });
+  filas.sort((x, y) => (x.cerrado || '') < (y.cerrado || '') ? 1 : -1);
+
+  const hechas  = filas.filter(a => !a.anulada).length;
+  const anulada = filas.filter(a => a.anulada).length;
+  const tipos = lista('tipos_asistencia', Object.keys(ASISTENCIAS));
+
+  let h = '<div class="stack">';
+  h += '<div class="fila"><div><h2 style="font-size:20px">Asistencias realizadas</h2>'+
+       '<p class="mini" style="margin:2px 0 0">'+hechas+' visita'+(hechas===1?'':'s')+' cerrada'+(hechas===1?'':'s')+
+       (anulada ? ' · '+anulada+' anulada'+(anulada===1?'':'s') : '')+
+       '</p></div><span class="sp"></span></div>';
+
+  h += '<div class="panel"><div class="campos">'+
+    '<div class="campo full"><label for="h-busca">Buscar</label>'+
+      '<input id="h-busca" type="search" data-act="busca-hist" value="'+esc(S.histBusca)+'" '+
+      'placeholder="Cliente, puerta, dirección, avería, trabajo hecho o técnico"></div>'+
+    '<div class="campo"><label for="h-tec">Técnico</label><select id="h-tec" data-act="hist-tec">'+
+      '<option value="">Todos</option>'+
+      (esGestion() ? '<option value="sin"'+(S.histTec==='sin'?' selected':'')+'>Sin técnico</option>' : '')+
+      activos().map(t => '<option value="'+t.id+'"'+(S.histTec===t.id?' selected':'')+'>'+esc(t.nombre||'—')+'</option>').join('')+
+      '</select></div>'+
+    '<div class="campo"><label for="h-tipo">Tipo</label><select id="h-tipo" data-act="hist-tipo">'+
+      '<option value="">Todos los tipos</option>'+
+      tipos.map(t => '<option value="'+esc(t)+'"'+(S.histTipo===t?' selected':'')+'>'+esc(ASISTENCIAS[t]||t)+'</option>').join('')+
+      '<option value="anuladas"'+(S.histTipo==='anuladas'?' selected':'')+'>Solo las anuladas</option>'+
+      '</select></div>'+
+    '<div class="campo"><label for="h-desde">Cerradas desde</label>'+
+      '<input id="h-desde" type="date" data-act="hist-desde" value="'+esc(S.histDesde)+'"></div>'+
+    '<div class="campo"><label for="h-hasta">Hasta</label>'+
+      '<input id="h-hasta" type="date" data-act="hist-hasta" value="'+esc(S.histHasta)+'"></div>'+
+    '</div>'+
+    '<div class="fila" style="gap:6px;flex-wrap:wrap;margin-top:10px">'+
+      '<button class="btn sm plana" data-act="hist-rango" data-n="30">Último mes</button>'+
+      '<button class="btn sm plana" data-act="hist-rango" data-n="90">Último trimestre</button>'+
+      '<button class="btn sm plana" data-act="hist-rango" data-n="365">Último año</button>'+
+      '<button class="btn sm plana" data-act="hist-limpiar">Quitar filtros</button>'+
+      '<span class="sp"></span>'+
+      (esAdmin() ? '<button class="btn sm'+(S.histArchivadas?' pri':' plana')+'" data-act="hist-archivadas">'+
+         (S.histArchivadas?'Ocultar archivadas':'Ver también las archivadas')+'</button>' : '')+
+    '</div></div>';
+
+  if (!filas.length){
+    h += '<div class="panel"><p class="muted" style="margin:0">'+
+         (S.avisos.some(a => a.cerrado)
+           ? 'Ninguna asistencia cerrada coincide con lo que has puesto.'
+           : 'Todavía no hay ninguna asistencia cerrada. Aquí irán apareciendo a medida que se cierren las visitas.')+
+         '</p></div>';
+    return h + '</div>';
+  }
+
+  // Agrupadas por mes, que es como se consulta un historial
+  const meses = [];
+  filas.forEach(a => {
+    const m = mesDe(a.cerrado);
+    if (!meses.length || meses[meses.length-1][0] !== m) meses.push([m, []]);
+    meses[meses.length-1][1].push(a);
+  });
+  meses.forEach(([m, arr]) => {
+    h += '<div class="panel"><div class="panel-h"><h2 style="text-transform:capitalize">'+esc(nombreMes(m))+'</h2>'+
+         '<span class="mini">'+arr.length+'</span></div>'+
+         '<div class="avisos">'+arr.slice(0, 120).map(tarjetaAviso).join('')+'</div>'+
+         (arr.length > 120 ? '<p class="mini" style="margin:10px 0 0">Se enseñan las 120 primeras de este mes. Acota con el buscador o las fechas.</p>' : '')+
+         '</div>';
+  });
+  return h + '</div>';
+}
+
+/* ---- Contratos de mantenimiento ---- */
+function chipContrato(c){
+  if (c.estado === 'baja') return '<span class="chip gris sin">De baja</span>';
+  if (c.estado === 'suspendido') return '<span class="chip aviso">Suspendido</span>';
+  if (!c.fecha_vencimiento) return '<span class="chip ok">Activo</span>';
+  const d = dias(c.fecha_vencimiento);
+  if (d < 0) return '<span class="chip mal">Vencido '+(-d)+' d</span>';
+  if (d <= (c.aviso_dias || 30)) return '<span class="chip aviso">Renovar en '+d+' d</span>';
+  return '<span class="chip ok">Activo</span>';
+}
+function estadoReal(c){
+  if (c.estado !== 'activo') return c.estado;
+  if (!c.fecha_vencimiento) return 'activo';
+  const d = dias(c.fecha_vencimiento);
+  if (d < 0) return 'vencido';
+  if (d <= (c.aviso_dias || 30)) return 'renovar';
+  return 'activo';
+}
+function vistaContratos(){
+  const q = (S.buscaCon || '').toLowerCase();
+  const todos = S.contratos.slice().sort((a,b) => {
+    const na = (clienteDe(a.cliente_id)||{}).nombre || '', nb = (clienteDe(b.cliente_id)||{}).nombre || '';
+    return na.localeCompare(nb, 'es');
+  });
+  const cuenta = f => todos.filter(c => f(estadoReal(c))).length;
+  const FILTROS = [
+    ['activos',  'Activos',       e => e === 'activo' || e === 'renovar'],
+    ['renovar',  'Por renovar',   e => e === 'renovar'],
+    ['vencidos', 'Vencidos',      e => e === 'vencido'],
+    ['bajas',    'Suspendidos y bajas', e => e === 'suspendido' || e === 'baja'],
+    ['todos',    'Todos',         () => true],
+  ];
+  const filtro = FILTROS.find(f => f[0] === (S.conFiltro || 'activos')) || FILTROS[0];
+  const lista = todos
+    .filter(c => filtro[2](estadoReal(c)))
+    .filter(c => { if (!q) return true;
+      const cli = clienteDe(c.cliente_id) || {};
+      return [c.referencia, cli.nombre, cli.poblacion, cli.nif].filter(Boolean).join(' ').toLowerCase().includes(q); });
+
+  let h = '<div class="stack">';
+  h += '<div class="fila"><div><h2 style="font-size:20px">Contratos de mantenimiento</h2>'+
+       '<p class="mini" style="margin:2px 0 0">'+cuenta(e => e==='activo'||e==='renovar')+
+       (cuenta(e => e==='activo'||e==='renovar')===1?' activo · ':' activos · ')+
+       cuenta(e => e==='renovar')+' por renovar · '+cuenta(e => e==='vencido')+
+       (cuenta(e => e==='vencido')===1?' vencido':' vencidos')+'</p></div>'+
+       '<span class="sp"></span>'+
+       (esGestion() ? '<button class="btn pri" data-act="contrato-nuevo">Nuevo contrato</button>' : '')+'</div>';
+
+  h += '<div class="fila"><div class="buscador sp"><input id="busca-con" type="search" placeholder="Buscar por cliente, referencia o NIF" value="'+esc(S.buscaCon||'')+'" data-act="busca-con"></div></div>';
+  h += '<div class="filtros">'+FILTROS.map(f =>
+        '<button class="btn sm'+(f[0]===filtro[0]?' pri':'')+'" data-act="con-filtro" data-f="'+f[0]+'">'+
+        f[1]+' <span class="mini">'+todos.filter(c => f[2](estadoReal(c))).length+'</span></button>').join('')+'</div>';
+
+  if (!lista.length){
+    h += '<div class="panel"><p class="muted" style="margin:0">'+
+      (S.contratos.length ? 'Ningún contrato en este filtro.' : 'Todavía no hay contratos. Da de alta el primero con «Nuevo contrato».')+
+      '</p></div>';
+  } else {
+    h += '<div class="lista">';
+    lista.forEach(c => {
+      const cli = clienteDe(c.cliente_id) || {};
+      const cubiertas = puertasDeContrato(c.id);
+      const puertas = cubiertas.length ? cubiertas.map(x => puertaDe(x.puerta_id)).filter(Boolean)
+                                       : S.puertas.filter(p => p.cliente_id === c.cliente_id && !p.sin_mantenimiento);
+      const prox = puertas.map(p => p.proxima_revision).filter(Boolean).sort()[0] || null;
+      h += '<div class="item-plano"><button class="item"'+(esGestion()?' data-act="contrato-editar" data-id="'+c.id+'"':' disabled style="cursor:default"')+'>'+
+        '<span class="qr">'+(c.periodicidad_meses||12)+'m</span>'+
+        '<span><span class="tit">'+esc(cli.nombre || 'Cliente borrado')+'</span>'+
+        '<span class="sub">'+esc([c.referencia, cli.poblacion].filter(Boolean).join(' · ') || 'Sin referencia')+'</span>'+
+        '<span class="sub">'+esc(nombrePeriodo(c.periodicidad_meses||12))+' · '+puertas.length+' puerta'+(puertas.length===1?'':'s')+
+          (cubiertas.length ? ' en el contrato' : ' del cliente, sin marcar')+
+          (prox ? ' · próxima revisión '+esc(fechaCorta(prox)) : '')+
+          (esGestion() && c.precio_anual != null ? ' · '+esc(eur(c.precio_anual))+'/año' : '')+'</span></span>'+
+        '<span>'+chipContrato(c)+
+        (c.fecha_vencimiento ? '<span class="mini" style="display:block;text-align:right;margin-top:4px">Vence '+esc(fechaCorta(c.fecha_vencimiento))+'</span>' : '')+
+        (c.firmado_el ? '<span class="mini" style="display:block;text-align:right">Firmado</span>' : '')+
+        '</span></button>'+
+        (esGestion() ? ('<div class="fila" style="padding:0 14px 12px;gap:6px">'+
+          '<button class="btn sm" data-act="contrato-hoja" data-id="'+c.id+'">Ver contrato</button>'+
+          '<button class="btn sm" data-act="contrato-firmar" data-id="'+c.id+'">'+(c.firmado_el?'Volver a firmar':'Firmar')+'</button>'+
+          (cli.email ? '<button class="btn sm" data-act="contrato-enviar" data-id="'+c.id+'">Enviar al cliente</button>' : '')+
+          '<span class="sp"></span></div>') : '')+'</div>';
+    });
+    h += '</div>';
+  }
+  h += '<p class="mini" style="margin:0">Los contratos fijan cada cuánto se revisan las puertas del cliente. '+
+       'Cada puerta puede llevar su propia periodicidad desde su ficha.'+
+       (esGestion() ? '' : ' Los contratos los expiden la oficina y el administrador.')+'</p>';
+  return h + '</div>';
+}
+
+/* ---- Calendario de mantenimientos ---- */
+/* Puertas que entran en el plan de mantenimiento, con la fecha que les toca */
+function planMantenimiento(){
+  return S.puertas
+    .filter(p => !p.sin_mantenimiento)
+    .map(p => {
+      const abierta = S.avisos.find(a => a.puerta_id === p.id && a.tipo === 'mantenimiento' && !a.cerrado);
+      return { p, fecha: p.proxima_revision || null, meses: periodicidadDe(p), abierta,
+               d: p.proxima_revision ? dias(p.proxima_revision) : null };
+    })
+    .sort((x,y) => {
+      if (x.fecha && y.fecha) return x.fecha < y.fecha ? -1 : 1;
+      return x.fecha ? -1 : (y.fecha ? 1 : 0);
+    });
+}
+function chipRevision(d){
+  if (d === null) return '<span class="chip gris sin">Sin fecha</span>';
+  if (d < 0) return '<span class="chip mal">Vencida '+(-d)+' d</span>';
+  if (d <= 7) return '<span class="chip aviso">Esta semana</span>';
+  if (d <= 30) return '<span class="chip gris">Este mes</span>';
+  return '<span class="chip gris sin">'+fechaCorta(new Date(Date.now()+d*86400000).toISOString())+'</span>';
+}
+/* Lo que hay que hacer cada día: asistencias con fecha prevista y revisiones que vencen */
+function agendaPorDia(desde, hasta){
+  const dias_ = {};
+  const meter = (f, x) => { if (!f) return; const k = String(f).slice(0,10);
+    if (k < iso(desde) || k > iso(hasta)) return; (dias_[k] = dias_[k] || []).push(x); };
+
+  S.avisos.filter(a => !a.cerrado && !a.archivado && a.fecha_prevista)
+    .filter(a => !S.calTec || (S.calTec === 'sin' ? !a.tecnico_id : a.tecnico_id === S.calTec))
+    .forEach(a => meter(a.fecha_prevista, { clase:'asis', aviso:a }));
+
+  // revisiones que vencen y todavía no tienen asistencia abierta
+  planMantenimiento().filter(x => x.fecha && !x.abierta)
+    .filter(() => !S.calTec || S.calTec === 'sin')
+    .forEach(x => meter(x.fecha, { clase:'rev', puerta:x.p, meses:x.meses }));
+
+  return dias_;
+}
+function pastillaAgenda(x){
+  if (x.clase === 'rev'){
+    const p = x.puerta;
+    return '<button class="pastilla rev" data-act="abrir-preventiva" data-id="'+p.id+'" '+
+      'title="Revisión pendiente de abrir">🔧 '+esc((p.codigo||'').replace(/^[A-Z]+-/,''))+' '+
+      esc(((p.cliente_id && (clienteDe(p.cliente_id)||{}).nombre) || p.cliente || '').slice(0,18))+'</button>';
+  }
+  const a = x.aviso;
+  const cl = a.prioridad === 'urgente' ? 'urg' : (a.tipo === 'mantenimiento' ? 'mto' : (a.tipo === 'comercial' ? 'com' : ''));
+  return '<button class="pastilla '+cl+'" data-act="cerrar-asistencia" data-id="'+a.id+'" '+
+    'title="'+esc(tipoAsis(a.tipo)+' · '+nombreCliente(a))+'">'+
+    esc(nombreCliente(a).slice(0,20))+
+    (a.tecnico ? '<span class="quien">'+esc(a.tecnico.slice(0,8))+'</span>' : '<span class="quien sin">sin asignar</span>')+
+    '</button>';
+}
+function rejillaMes(ancla){
+  const primero = new Date(ancla.getFullYear(), ancla.getMonth(), 1);
+  const ini = lunesDe(primero);
+  const fin = sumaDias(ini, 41);                 // seis semanas, siempre igual de alto
+  const agenda = agendaPorDia(ini, fin);
+  const hoyD = new Date(); hoyD.setHours(0,0,0,0);
+  let h = '<div class="cal-rejilla">';
+  DIAS_SEM.forEach(d => h += '<div class="cal-cab">'+d+'</div>');
+  for (let i = 0; i < 42; i++){
+    const d = sumaDias(ini, i), k = iso(d);
+    const fuera = d.getMonth() !== ancla.getMonth();
+    const cosas = agenda[k] || [];
+    h += '<div class="cal-dia'+(fuera?' fuera':'')+(esFinde(d)?' finde':'')+(mismoDia(d,hoyD)?' hoy':'')+'">'+
+      '<button class="cal-num" data-act="dia-nuevo" data-fecha="'+k+'" title="Nueva asistencia el '+esc(diaLargo(d))+'">'+d.getDate()+'</button>'+
+      '<div class="cal-cosas">'+cosas.slice(0,4).map(pastillaAgenda).join('')+
+      (cosas.length > 4 ? '<span class="mas">+'+(cosas.length-4)+'</span>' : '')+'</div></div>';
+  }
+  return h + '</div>';
+}
+function filaSemana(ancla){
+  const ini = lunesDe(ancla);
+  const agenda = agendaPorDia(ini, sumaDias(ini, 6));
+  const hoyD = new Date(); hoyD.setHours(0,0,0,0);
+  let h = '<div class="cal-semana">';
+  for (let i = 0; i < 7; i++){
+    const d = sumaDias(ini, i), k = iso(d);
+    const cosas = agenda[k] || [];
+    h += '<div class="cal-col'+(esFinde(d)?' finde':'')+(mismoDia(d,hoyD)?' hoy':'')+'">'+
+      '<div class="cal-colcab">'+DIAS_SEM[i]+' <b>'+d.getDate()+'</b></div>'+
+      '<div class="cal-cosas">'+cosas.map(pastillaAgenda).join('')+
+      (cosas.length ? '' : '<span class="vacio">—</span>')+'</div>'+
+      '<button class="btn sm plana cal-anadir" data-act="dia-nuevo" data-fecha="'+k+'">+ Añadir</button>'+
+      '</div>';
+  }
+  return h + '</div>';
+}
+
+function tituloSemana(ancla){
+  const ini = lunesDe(ancla), fin = sumaDias(ini, 6);
+  return 'Semana del ' + ini.toLocaleDateString('es-ES', { day:'numeric', month:'short' }) +
+         ' al ' + fin.toLocaleDateString('es-ES', { day:'numeric', month:'short', year:'numeric' });
+}
+function vistaCalendario(){
+  const plan = planMantenimiento();
+  const conFecha = plan.filter(x => x.fecha !== null);
+  const vencidas = conFecha.filter(x => x.d < 0);
+  const semana   = conFecha.filter(x => x.d >= 0 && x.d <= 7);
+  const mes      = conFecha.filter(x => x.d > 7 && x.d <= 30);
+  const sinFecha = plan.filter(x => x.fecha === null);
+  const porAbrir = conFecha.filter(x => x.d <= 21 && !x.abierta);
+  const ancla = S.calAncla ? deIso(S.calAncla) : new Date();
+  const porMes = S.calVista === 'mes';
+
+  let h = '<div class="stack">';
+  h += '<div class="fila"><div><h2 style="font-size:20px">Calendario</h2>'+
+       '<p class="mini" style="margin:2px 0 0">'+plan.length+' puerta'+(plan.length===1?'':'s')+' en mantenimiento · '+
+       (() => { const n = S.contratos.filter(c=>c.estado==='activo').length;
+                return n + ' contrato' + (n===1?' activo':'s activos'); })()+'</p></div>'+
+       '<span class="sp"></span>'+
+       (porAbrir.length ? '<button class="btn pri" data-act="abrir-vencidas">'+
+          (porAbrir.length === 1 ? 'Abrir la revisión que toca' : 'Abrir las '+porAbrir.length+' revisiones que tocan')+'</button>' : '')+
+       '</div>';
+
+  // ---- barra de navegación ----
+  h += '<div class="panel cal-panel"><div class="cal-barra">'+
+    '<button class="btn sm" data-act="cal-mover" data-n="-1" title="Anterior">‹</button>'+
+    '<button class="btn sm" data-act="cal-hoy">Hoy</button>'+
+    '<button class="btn sm" data-act="cal-mover" data-n="1" title="Siguiente">›</button>'+
+    '<b class="cal-titulo">'+esc(porMes ? nombreMesAnio(ancla) : tituloSemana(ancla))+'</b>'+
+    '<span class="sp"></span>'+
+    (esAdmin() ? '<select data-act="cal-tec" class="cal-sel">'+
+        '<option value="">Todo el equipo</option><option value="sin"'+(S.calTec==='sin'?' selected':'')+'>Sin asignar</option>'+
+        activos().map(t => '<option value="'+t.id+'"'+(S.calTec===t.id?' selected':'')+'>'+esc(t.nombre||'—')+'</option>').join('')+
+        '</select>' : '')+
+    '<span class="cal-cambio">'+
+      '<button class="btn sm'+(porMes?' pri':'')+'" data-act="cal-vista" data-v="mes">Mes</button>'+
+      '<button class="btn sm'+(porMes?'':' pri')+'" data-act="cal-vista" data-v="semana">Semana</button>'+
+    '</span></div>';
+  h += porMes ? rejillaMes(ancla) : filaSemana(ancla);
+  h += '<p class="mini" style="margin:10px 0 0">Toca el número de un día para abrir una asistencia con esa fecha. '+
+       'Las pastillas con llave inglesa son revisiones que tocan y todavía no se han abierto.'+
+       '<span class="solo-movil"> En el móvil el mes resume cada día con puntos de color: '+
+       'rojo urgencia, gris avería, verde revisión ya abierta, naranja revisión pendiente de abrir, amarillo comercial. '+
+       'Cambia a «Semana» para ver los nombres.</span></p></div>';
+
+  h += '<div class="cifras">'+
+    '<div class="cifra'+(vencidas.length?' mal':'')+'"><b>'+vencidas.length+'</b><span>Vencidas</span></div>'+
+    '<div class="cifra"><b>'+semana.length+'</b><span>Esta semana</span></div>'+
+    '<div class="cifra"><b>'+mes.length+'</b><span>Este mes</span></div>'+
+    '<div class="cifra"><b>'+sinFecha.length+'</b><span>Sin planificar</span></div>'+
+    '</div>';
+
+  // Contratos que hay que renovar
+  const renovar = S.contratos.filter(c => c.estado === 'activo' && c.fecha_vencimiento &&
+                                          dias(c.fecha_vencimiento) <= (c.aviso_dias || 30));
+  if (renovar.length){
+    h += '<div class="panel"><div class="panel-h"><h3>Contratos por renovar</h3><span class="mini">'+renovar.length+'</span></div><div class="lista">';
+    renovar.forEach(c => {
+      const cli = clienteDe(c.cliente_id);
+      h += '<button class="item" data-act="abrir-cliente" data-id="'+c.cliente_id+'">'+
+           '<span class="qr">'+esc((cli&&cli.nombre||'?').slice(0,2).toUpperCase())+'</span>'+
+           '<span><span class="tit">'+esc(cli?cli.nombre:'Cliente')+'</span>'+
+           '<span class="sub">Vence '+relativo(c.fecha_vencimiento)+' · '+fechaCorta(c.fecha_vencimiento)+
+             (c.precio_anual?(' · '+c.precio_anual+' €/año'):'')+'</span></span>'+
+           '<span>'+(dias(c.fecha_vencimiento)<0?'<span class="chip mal">Vencido</span>':'<span class="chip aviso">Renovar</span>')+'</span></button>';
+    });
+    h += '</div></div>';
+  }
+
+  if (!plan.length){
+    h += '<div class="panel"><p class="muted" style="margin:0">Todavía no hay puertas en mantenimiento. '+
+         'Dale fecha de próxima revisión a una puerta, o dale de alta un contrato al cliente.</p></div>';
+    return h + '</div>';
+  }
+
+  const bloque = (titulo, arr, abierto) => {
+    if (!arr.length) return '';
+    let x = '<div class="panel"><div class="panel-h"><h3>'+titulo+'</h3><span class="mini">'+arr.length+'</span></div><div class="lista">';
+    arr.forEach(it => {
+      const p = it.p, cli = p.cliente_id ? clienteDe(p.cliente_id) : null;
+      x += '<div class="item-plano">'+
+        '<button class="item sp" data-act="abrir" data-id="'+p.id+'">'+
+          '<span class="qr">'+esc((p.codigo||'—').replace(/^[A-Z]+-/,''))+'</span>'+
+          '<span><span class="tit">'+esc((cli&&cli.nombre)||p.cliente||'Sin cliente')+'</span>'+
+          '<span class="sub">'+esc([p.tipo,p.direccion,p.ubicacion].filter(Boolean).join(' · '))+'</span>'+
+          '<span class="sub">'+esc(nombrePeriodo(it.meses))+(it.fecha?(' · toca '+relativo(it.fecha)):'')+'</span></span>'+
+          '<span>'+chipRevision(it.d)+'</span>'+
+        '</button>'+
+        '<div class="fila" style="padding:0 12px 12px">'+
+          (it.abierta
+            ? '<button class="btn sm" data-act="cerrar-asistencia" data-id="'+it.abierta.id+'">Hacer la revisión</button>'+
+              '<span class="mini">Asistencia abierta'+(it.abierta.tecnico?(' · '+esc(it.abierta.tecnico)):' · sin asignar')+'</span>'
+            : '<button class="btn sm pri" data-act="abrir-preventiva" data-id="'+p.id+'">Abrir revisión</button>')+
+          '<span class="sp"></span>'+
+          '<button class="btn sm plana" data-act="planificar" data-id="'+p.id+'">Cambiar fecha</button>'+
+        '</div></div>';
+    });
+    return x + '</div></div>';
+  };
+
+  h += bloque('Vencidas', vencidas, true);
+  h += bloque('Esta semana', semana, true);
+  h += bloque('Este mes', mes, false);
+  const resto = conFecha.filter(x => x.d > 30);
+  h += bloque('Más adelante', resto.slice(0,40), false);
+  h += bloque('Sin fecha de revisión', sinFecha.slice(0,40), false);
+  return h + '</div>';
+}
+
+/* ---- Clientes ---- */
+function vistaClientes(){
+  const q = S.buscaCli.toLowerCase();
+  const enJuego = S.clientes.filter(c => S.cliArchivados ? c.archivado : !c.archivado);
+  const nArch = S.clientes.filter(c => c.archivado).length;
+  const lista = enJuego.filter(c => !q || [c.nombre,c.nif,c.telefono,c.email,c.direccion,c.poblacion].join(' ').toLowerCase().includes(q));
+  let h = '<div class="stack">';
+  h += '<div class="fila"><div class="buscador sp"><input id="busca-cli" type="search" placeholder="Buscar cliente por nombre, NIF, teléfono o dirección" value="'+esc(S.buscaCli)+'" data-act="busca-cli"></div>'+
+       '<button class="btn pri" data-act="cliente-nuevo">Nuevo cliente</button></div>';
+  h += '<div class="fila" style="gap:8px;flex-wrap:wrap"><p class="mini" style="margin:0">'+
+       enJuego.length+(S.cliArchivados?' clientes archivados':' clientes')+' · '+
+       enJuego.filter(c=>c.contrato).length+' con contrato de mantenimiento</p><span class="sp"></span>'+
+       (nArch || S.cliArchivados
+         ? '<button class="btn sm'+(S.cliArchivados?' pri':' plana')+'" data-act="cli-archivados">'+
+           (S.cliArchivados?'Volver a los activos':'Ver los archivados ('+nArch+')')+'</button>' : '')+
+       '</div>';
+  if (!lista.length) h += '<div class="panel"><p class="muted" style="margin:0">'+
+       (S.cliArchivados ? 'No hay ningún cliente archivado.'
+         : (S.clientes.length?'Ningún cliente coincide con la búsqueda.':'Todavía no hay clientes. Se van creando solos al dar de alta puertas y asistencias.'))+'</p></div>';
+  else {
+    h += '<div class="lista">';
+    lista.slice(0,300).forEach(c => {
+      const nP = S.puertas.filter(p => p.cliente_id === c.id).length;
+      const nA = S.avisos.filter(a => a.cliente_id === c.id || (a.puerta_id && (puertaDe(a.puerta_id)||{}).cliente_id === c.id)).length;
+      h += '<button class="item" data-act="abrir-cliente" data-id="'+c.id+'">'+
+           '<span class="qr">'+esc((c.nombre||'?').slice(0,2).toUpperCase())+'</span>'+
+           '<span><span class="tit">'+esc(c.nombre)+(c.contrato?' · contrato':'')+(c.archivado?' · archivado':'')+'</span>'+
+           '<span class="sub">'+esc([c.direccion,c.poblacion].filter(Boolean).join(' · ')||'Sin dirección')+'</span>'+
+           '<span class="sub">'+esc([c.telefono,c.email].filter(Boolean).join(' · '))+'</span></span>'+
+           '<span class="mini">'+nP+' puerta'+(nP===1?'':'s')+'<span style="display:block">'+nA+' asistencia'+(nA===1?'':'s')+'</span></span>'+
+           '</button>';
+    });
+    h += '</div>';
+  }
+  return h + '</div>';
+}
+
+function vistaFichaCliente(id){
+  const c = clienteDe(id);
+  if (!c) return '<p class="cargando">Cliente no encontrado.</p>';
+  const puertas = S.puertas.filter(p => p.cliente_id === c.id);
+  const asis = S.avisos.filter(a => a.cliente_id === c.id || (a.puerta_id && (puertaDe(a.puerta_id)||{}).cliente_id === c.id)).sort((x,y)=>x.creado<y.creado?1:-1);
+  let h = '<div class="stack">';
+  h += '<div class="fila"><button class="btn plana" data-act="volver-cliente">‹ Volver</button><span class="sp"></span>'+
+       '<button class="btn" data-act="cliente-editar" data-id="'+c.id+'">Editar cliente</button>'+
+       '<button class="btn pri" data-act="asistencia-nueva-cliente" data-id="'+c.id+'">Nueva asistencia</button></div>';
+  if (esAdmin()){
+    const vacio = !puertas.length && !asis.length && !contratosDe(c.id).length;
+    h += '<div class="fila" style="gap:6px;flex-wrap:wrap"><span class="sp"></span>'+
+      '<button class="btn sm plana" data-act="cliente-archivar" data-id="'+c.id+'" data-v="'+(c.archivado?'0':'1')+'">'+
+        (c.archivado?'Sacar del archivo':'Archivar cliente')+'</button>'+
+      (vacio
+        ? '<button class="btn sm plana" data-act="cliente-borrar" data-id="'+c.id+'">Borrar cliente</button>'
+        : '<span class="mini" title="Tiene historial: se archiva, no se borra">No se puede borrar: tiene historial</span>')+
+      '</div>';
+  }
+  h += '<div class="panel"><div class="panel-h"><h2>'+esc(c.nombre)+'</h2>'+
+       (c.contrato?'<span class="chip ok sin">Contrato</span>':'')+
+       (c.archivado?'<span class="chip gris sin">Archivado</span>':'')+'</div><dl class="datos">';
+  if (c.archivado)
+    h += '<div><dt>Archivado</dt><dd>'+fechaHora(c.archivado_en)+(c.archivado_por?(' por '+esc(c.archivado_por)):'')+'</dd></div>';
+  [['NIF',c.nif],['Teléfono',c.telefono],['Correo',c.email],['Dirección',c.direccion],['Población',c.poblacion],['Tipo',c.tipo]]
+    .forEach(f => { if (f[1]) h += '<div><dt>'+f[0]+'</dt><dd>'+esc(f[1])+'</dd></div>'; });
+  h += '</dl>';
+  if (c.notas) h += '<p class="nota-oficina" style="margin-top:10px">'+esc(c.notas)+'</p>';
+  h += '</div>';
+
+  // Contratos de mantenimiento
+  const ks = contratosDe(c.id);
+  h += '<div class="panel"><div class="panel-h"><h3>Contrato de mantenimiento</h3>'+
+       '<button class="btn sm" data-act="contrato-nuevo" data-id="'+c.id+'">Nuevo contrato</button></div>';
+  if (!ks.length) h += '<p class="muted" style="margin:0">Sin contrato. Dale de alta uno y sus puertas entran solas en el calendario de revisiones.</p>';
+  else {
+    h += '<div class="lista">';
+    ks.forEach(k => {
+      const d = k.fecha_vencimiento ? dias(k.fecha_vencimiento) : null;
+      const chip = k.estado !== 'activo' ? '<span class="chip gris">'+EST_CONTRATO[k.estado]+'</span>'
+        : (d === null ? '<span class="chip ok">Activo</span>'
+          : (d < 0 ? '<span class="chip mal">Vencido</span>'
+            : (d <= (k.aviso_dias||30) ? '<span class="chip aviso">Renovar '+relativo(k.fecha_vencimiento)+'</span>'
+              : '<span class="chip ok">Activo</span>')));
+      h += '<button class="item" data-act="contrato-editar" data-id="'+k.id+'">'+
+        '<span class="qr">MTO</span>'+
+        '<span><span class="tit">'+esc(k.referencia || 'Contrato')+' · '+esc(nombrePeriodo(k.periodicidad_meses))+'</span>'+
+        '<span class="sub">'+esc(fechaCorta(k.fecha_alta))+(k.fecha_vencimiento?(' → '+esc(fechaCorta(k.fecha_vencimiento))):'')+
+          (k.precio_anual!=null?(' · '+k.precio_anual+' €/año'):'')+(k.forma_pago?(' · '+esc(k.forma_pago)):'')+'</span>'+
+        (k.incluye?'<span class="sub">Incluye: '+esc(k.incluye)+'</span>':'')+'</span>'+
+        '<span>'+chip+'</span></button>';
+    });
+    h += '</div>';
+  }
+  h += '</div>';
+
+  h += '<div class="panel"><div class="panel-h"><h3>Puertas</h3><span class="mini">'+puertas.length+'</span></div>';
+  if (!puertas.length) h += '<p class="muted" style="margin:0">Este cliente todavía no tiene puertas dadas de alta.</p>';
+  else {
+    h += '<div class="lista">';
+    puertas.forEach(p => h += '<button class="item" data-act="abrir" data-id="'+p.id+'">'+
+      '<span class="qr">'+esc((p.codigo||'—').replace(/^[A-Z]+-/,''))+'</span>'+
+      '<span><span class="tit">'+esc([p.tipo,p.marca,p.modelo].filter(Boolean).join(' · ')||'Puerta')+'</span>'+
+      '<span class="sub">'+esc([p.direccion,p.ubicacion].filter(Boolean).join(' · '))+'</span></span>'+
+      '<span>'+estadoChip(p.estado)+'</span></button>');
+    h += '</div>';
+  }
+  h += '</div>';
+
+  h += '<div class="panel"><div class="panel-h"><h3>Historial de asistencias</h3><span class="mini">'+asis.length+'</span></div>';
+  if (!asis.length) h += '<p class="muted" style="margin:0">Sin asistencias registradas.</p>';
+  else h += '<div class="avisos">'+asis.slice(0,30).map(tarjetaAviso).join('')+'</div>';
+  h += '</div></div>';
+  return h;
+}
+
+/* ---- Etiquetas ---- */
+function vistaEtiquetas(){
+  const usadas = new Set(S.puertas.map(p => p.codigo));
+  const libres = S.etiquetas.filter(e => !usadas.has(e.codigo));
+  let h = '<div class="stack">';
+  h += '<div class="fila"><div><h2 style="font-size:20px">Etiquetas con QR</h2><p class="mini" style="margin:2px 0 0">'+S.etiquetas.length+' generadas · '+libres.length+' sin asignar</p></div><span class="sp"></span>'+
+       '<button class="btn" data-act="hoja" '+(libres.length?'':'disabled')+'>Hoja para imprimir</button>'+
+       '<button class="btn pri" data-act="generar">Generar serie</button></div>';
+  h += '<div class="panel"><p class="mini" style="margin:0 0 10px">Cada etiqueta lleva el número visible y un QR con un código de seguridad. Genera la serie, mándala a imprimir y pega las etiquetas; después, al escanearlas, la app te ofrece dar de alta la puerta.</p>';
+  if (!S.etiquetas.length) h += '<p class="muted" style="margin:0">Todavía no has generado ninguna etiqueta.</p>';
+  else {
+    h += '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Código</th><th>Estado</th><th>Puerta</th><th></th></tr></thead><tbody>';
+    S.etiquetas.slice().reverse().slice(0,200).forEach(e => {
+      const p = S.puertas.find(x => x.codigo === e.codigo);
+      h += '<tr><td class="num">'+esc(e.codigo)+'</td>'+
+           '<td>'+(p?'<span class="chip gris sin">Asignada</span>':'<span class="chip ok sin">Libre</span>')+'</td>'+
+           '<td>'+(p?esc([p.cliente,p.direccion].filter(Boolean).join(' · ')):'<span class="muted">—</span>')+'</td>'+
+           '<td style="text-align:right"><button class="btn sm plana" data-act="ver-qr" data-cod="'+esc(e.codigo)+'">QR</button>'+
+           '<button class="btn sm plana" data-act="etiqueta-imprimir" data-cod="'+esc(e.codigo)+'">Imprimir</button>'+
+           (p?'<button class="btn sm plana" data-act="abrir" data-id="'+p.id+'">Abrir</button>':'')+'</td></tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+  h += '</div>';
+  h += '<div class="panel"><div class="panel-h"><h2>Impresora térmica</h2></div>'+
+    '<p class="mini" style="margin:0 0 10px">El botón «Imprimir» de cada fila saca <b>una etiqueta suelta a tamaño real, 62 x 100 mm</b>, '+
+    'para la Brother QL-500 con rollo DK-11202. En el diálogo de impresión elige la QL-500, papel 62 mm x 100 mm y <b>escala 100 %</b>: '+
+    'si la dejas en «ajustar al papel», el QR sale más pequeño y pierde lectura.</p>'+
+    (esAdmin() ? ('<div class="campos"><div class="campo full"><label for="eti-tel">Teléfono que sale impreso en la etiqueta</label>'+
+      '<div class="fila"><input id="eti-tel" type="tel" maxlength="30" class="sp" value="'+esc(S.ajustes.telefono_avisos||'')+'" placeholder="Ej.: 956 00 00 00">'+
+      '<button class="btn" data-act="guardar-tel">Guardar</button></div>'+
+      '<span class="pista">Déjalo vacío si no quieres que salga ningún teléfono</span></div></div>') :
+      (S.ajustes.telefono_avisos ? '<p class="mini" style="margin:0">Teléfono impreso: <b>'+esc(S.ajustes.telefono_avisos)+'</b></p>' : ''))+
+    '</div>';
+  h += '</div>';
+  return h;
+}
+
+/* ---- Gestión (solo administrador) ---- */
+function vistaGestion(){
+  const mes = S.mesGestion || mesActual();
+  // Una visita anulada no se hizo: no entra en facturación, coste ni margen.
+  const cerradas = S.avisos.filter(a => a.cerrado && !a.anulada);
+  const delMes = cerradas.filter(a => mesDe(a.cerrado) === mes);
+  const meses = [...new Set(cerradas.map(a => mesDe(a.cerrado)))].sort().reverse().slice(0, 18);
+  if (!meses.includes(mes)) meses.unshift(mes);
+
+  const con = a => valoracionDe(a.id);
+  const suma = (arr, campo) => arr.reduce((t, a) => { const v = con(a); return t + (v ? +v[campo] : 0); }, 0);
+  const facturable = suma(delMes, 'imp_total');
+  const coste = suma(delMes, 'coste_total');
+  const margen = suma(delMes, 'margen');
+
+  // pendiente de facturar: cerradas, no cobradas en obra, no marcadas como facturadas
+  const pendientes = cerradas.filter(a => {
+    const v = con(a);
+    return v && !v.facturado && !a.cobrado && !a.sin_cargo && +v.imp_total > 0;
+  }).sort((x, y) => x.cerrado < y.cerrado ? -1 : 1);
+  const totalPendiente = pendientes.reduce((t, a) => t + (+con(a).imp_total), 0);
+  const sinValorar = cerradas.filter(a => !con(a));
+
+  let h = '<div class="stack">';
+  h += '<div class="fila"><div><h2 style="font-size:20px">Gestión</h2>'+
+       '<p class="mini" style="margin:2px 0 0">Lo que ves aquí no lo ven los técnicos.</p></div>'+
+       '<span class="sp"></span>'+
+       '<select id="g-mes" data-act="gestion-mes" style="padding:6px 9px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);font-size:14px">'+
+       meses.map(m => '<option value="'+m+'"'+(m===mes?' selected':'')+'>'+esc(nombreMes(m))+'</option>').join('')+'</select>'+
+       '<button class="btn" data-act="tarifas">Tarifas</button></div>';
+
+  if (!S.tarifas){
+    h += '<div class="panel"><p class="muted" style="margin:0">No se han podido leer las tarifas. '+
+         'Si acabas de instalar esta parte, ejecuta el SQL de la fase 4 y vuelve a entrar.</p></div>';
+    return h + '</div>';
+  }
+
+  // --- Cifras del mes ---
+  h += '<div class="cifras">'+
+    '<div class="cifra"><b>'+delMes.length+'</b><span>Visitas cerradas</span></div>'+
+    '<div class="cifra"><b>'+eur(facturable)+'</b><span>Facturable, sin IVA</span></div>'+
+    '<div class="cifra"><b>'+eur(coste)+'</b><span>Coste</span></div>'+
+    '<div class="cifra'+(margen < 0 ? ' mal' : '')+'"><b>'+eur(margen)+'</b><span>Margen · '+pct(margen, facturable)+'</span></div>'+
+    '</div>';
+  h += '<p class="mini" style="margin:0">El margen es sobre la venta: lo que queda de cada euro facturado, '+
+       'después de pagar las horas, el desplazamiento y el material. No confundir con el recargo sobre el coste del material.</p>';
+
+  // --- Pendiente de facturar ---
+  h += '<div class="panel"><div class="panel-h"><h3>Pendiente de facturar</h3>'+
+       '<span class="mini">'+pendientes.length+' · '+eur(totalPendiente)+'</span></div>';
+  if (!pendientes.length) h += '<p class="muted" style="margin:0">Nada pendiente. Todo lo cerrado está cobrado o facturado.</p>';
+  else {
+    h += '<p class="mini" style="margin:0 0 10px">Visitas cerradas que nadie ha cobrado todavía. Márcalas cuando emitas la factura.</p><div class="lista">';
+    pendientes.slice(0, 60).forEach(a => {
+      const v = con(a), p = a.puerta_id ? puertaDe(a.puerta_id) : null;
+      const dias_ = -dias(a.cerrado);
+      h += '<div class="item-plano">'+
+        '<button class="item sp" data-act="ver-valoracion" data-id="'+a.id+'">'+
+          '<span class="qr">'+esc(((p&&p.codigo)||'—').replace(/^[A-Z]+-/,''))+'</span>'+
+          '<span><span class="tit">'+esc(nombreCliente(a))+'</span>'+
+          '<span class="sub">'+esc(tipoAsis(a.tipo))+' · cerrada '+esc(fechaCorta(a.cerrado))+
+            (dias_ > 30 ? ' · <b style="color:var(--mal)">hace '+dias_+' días</b>' : ' · hace '+dias_+' días')+'</span>'+
+          '<span class="sub">'+esc(dondeAsistencia(a))+'</span></span>'+
+          '<span style="text-align:right"><span class="tit">'+eur(v.imp_total)+'</span>'+
+          '<span class="sub">margen '+eur(v.margen)+'</span></span>'+
+        '</button>'+
+        '<div class="fila" style="padding:0 12px 12px">'+
+          '<button class="btn sm pri" data-act="marcar-facturado" data-id="'+a.id+'">Marcar facturada</button>'+
+          '<button class="btn sm plana" data-act="parte" data-id="'+a.id+'">Parte</button>'+
+          '<span class="sp"></span>'+
+          '<button class="btn sm plana" data-act="revalorar" data-id="'+a.id+'">Volver a calcular</button>'+
+        '</div></div>';
+    });
+    h += '</div>';
+  }
+  h += '</div>';
+
+  // --- Margen de las visitas del mes ---
+  h += '<div class="panel"><div class="panel-h"><h3>Margen de '+esc(nombreMes(mes))+'</h3><span class="mini">'+delMes.length+'</span></div>';
+  if (!delMes.length) h += '<p class="muted" style="margin:0">No hay visitas cerradas en este mes.</p>';
+  else {
+    const orden = delMes.slice().sort((x, y) => {
+      const a1 = con(x), b1 = con(y);
+      return (a1 ? +a1.margen : 0) - (b1 ? +b1.margen : 0);
+    });
+    h += '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Cliente</th><th>Tipo</th>'+
+         '<th style="text-align:right">Factura</th><th style="text-align:right">Coste</th><th style="text-align:right">Margen</th></tr></thead><tbody>';
+    orden.forEach(a => {
+      const v = con(a);
+      const col = !v ? 'var(--muted)' : (+v.margen < 0 ? 'var(--mal)' : (+v.margen === 0 ? 'var(--muted)' : 'var(--ok)'));
+      h += '<tr><td>'+esc(nombreCliente(a))+
+           '<span class="sub mini" style="display:block">'+esc(fechaCorta(a.cerrado))+
+             (a.cobrado ? ' · cobrada en obra' : '')+(a.sin_cargo ? ' · sin cargo' : '')+'</span></td>'+
+           '<td>'+esc(tipoAsis(a.tipo))+'</td>'+
+           '<td class="num" style="text-align:right">'+(v ? eur(v.imp_total) : '—')+'</td>'+
+           '<td class="num" style="text-align:right">'+(v ? eur(v.coste_total) : '—')+'</td>'+
+           '<td class="num" style="text-align:right;color:'+col+'">'+(v ? eur(v.margen) : 'sin valorar')+'</td></tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+  h += '</div>';
+
+  // --- Rentabilidad de los contratos ---
+  const activos = S.contratos.filter(c => c.estado === 'activo');
+  if (activos.length){
+    h += '<div class="panel"><div class="panel-h"><h3>Contratos de mantenimiento</h3><span class="mini">últimos 12 meses</span></div>'+
+      '<p class="mini" style="margin:0 0 10px">En un contrato, la revisión no se factura: el ingreso es la cuota anual. '+
+      'Aquí ves si la cuota cubre lo que cuestan las visitas.</p>'+
+      '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Cliente</th>'+
+      '<th style="text-align:right">Cuota/año</th><th style="text-align:right">Coste visitas</th>'+
+      '<th style="text-align:right">Diferencia</th></tr></thead><tbody>';
+    activos.forEach(k => {
+      const cli = clienteDe(k.cliente_id);
+      const suyas = cerradas.filter(a => {
+        if (dias(a.cerrado) < -365) return false;
+        const pu = a.puerta_id ? puertaDe(a.puerta_id) : null;
+        return a.cliente_id === k.cliente_id || (pu && pu.cliente_id === k.cliente_id);
+      });
+      const cst = suyas.reduce((t, a) => { const v = con(a); return t + (v ? +v.coste_total : 0); }, 0);
+      const dif = (+k.precio_anual || 0) - cst;
+      h += '<tr><td>'+esc(cli ? cli.nombre : '—')+
+           '<span class="sub mini" style="display:block">'+suyas.length+' visita'+(suyas.length===1?'':'s')+' · '+esc(nombrePeriodo(k.periodicidad_meses))+'</span></td>'+
+           '<td class="num" style="text-align:right">'+eur(k.precio_anual)+'</td>'+
+           '<td class="num" style="text-align:right">'+eur(cst)+'</td>'+
+           '<td class="num" style="text-align:right;color:'+(dif < 0 ? 'var(--mal)' : 'var(--ok)')+'">'+eur(dif)+'</td></tr>';
+    });
+    h += '</tbody></table></div></div>';
+  }
+
+  // --- Avisos de cosas a corregir ---
+  if (sinValorar.length){
+    h += '<div class="panel"><div class="panel-h"><h3>Visitas sin valorar</h3><span class="mini">'+sinValorar.length+'</span></div>'+
+      '<p class="mini" style="margin:0 0 10px">Se cerraron antes de poner las tarifas, o el cálculo falló. '+
+      'Dale a recalcular y quedan valoradas.</p>'+
+      '<button class="btn pri" data-act="revalorar-todo">Recalcular las '+sinValorar.length+'</button></div>';
+  }
+  const sinCoste = S.catalogo.length ? [] : ['catalogo'];
+  if (sinCoste.length){
+    h += '<div class="panel"><div class="panel-h"><h3>Catálogo de materiales vacío</h3></div>'+
+      '<p class="mini" style="margin:0 0 10px">Mientras no haya materiales con su precio de compra, el material de las visitas '+
+      'no se valora y el margen sale más alto de lo real. Dale de alta los veinte o treinta que más usáis.</p>'+
+      '<button class="btn pri" data-act="articulo-nuevo">Añadir material al catálogo</button></div>';
+  } else {
+    h += '<div class="panel"><div class="panel-h"><h3>Catálogo de materiales</h3><span class="mini">'+S.catalogo.length+'</span>'+
+      '<button class="btn sm" data-act="articulo-nuevo">Añadir</button></div>'+
+      '<div class="lista-simple">';
+    S.catalogo.slice(0, 40).forEach(x => {
+      h += '<div class="fila" style="padding:6px 0;border-bottom:1px solid var(--line)">'+
+        '<span class="sp">'+esc(x.descripcion)+' <span class="mini">'+esc(x.unidad||'ud')+
+        (x.referencia ? ' · '+esc(x.referencia) : '')+'</span></span>'+
+        '<button class="btn sm plana" data-act="articulo-editar" data-id="'+x.id+'">Editar</button></div>';
+    });
+    h += '</div></div>';
+  }
+
+  return h + '</div>';
+}
+
+/* ---- Equipo ---- */
+function vistaEquipo(){
+  let h = '<div class="stack"><div class="panel"><div class="panel-h"><h2>Técnicos con acceso</h2><span class="mini">'+S.equipo.length+'</span></div>';
+  if (!S.equipo.length) h += '<p class="muted" style="margin:0">Todavía no hay técnicos dados de alta.</p>';
+  else {
+    h += '<div class="tabla-wrap"><table class="tabla"><thead><tr><th style="width:62px">Foto</th><th>Nombre</th><th>Rol</th><th>Estado</th><th></th></tr></thead><tbody>';
+    S.equipo.forEach(t => {
+      const rolCelda = t.rol === 'admin'
+        ? 'Administrador'
+        : '<select class="cal-sel" data-act="equipo-rol" data-id="'+t.id+'">'+
+          '<option value="tecnico"'+(t.rol==='tecnico'?' selected':'')+'>Técnico</option>'+
+          '<option value="oficina"'+(t.rol==='oficina'?' selected':'')+'>Oficina</option></select>';
+      h += '<tr><td>'+caraTec(t.id, true)+
+           '<div style="margin-top:4px"><label class="btn sm plana" style="cursor:pointer;padding:3px 7px;font-size:12px">'+
+             (t.foto_ruta?'Cambiar':'Poner')+
+             '<input type="file" accept="image/*" hidden data-act="subir-cara" data-id="'+t.id+'"></label>'+
+             (t.foto_ruta?'<button class="btn sm plana" style="padding:3px 7px;font-size:12px" data-act="quitar-cara" data-id="'+t.id+'">Quitar</button>':'')+
+           '</div></td>'+
+           '<td>'+esc(t.nombre||'—')+'</td><td>'+rolCelda+'</td>'+
+           '<td>'+(t.activo?'<span class="chip ok sin">Activo</span>':'<span class="chip gris sin">Sin acceso</span>')+'</td>'+
+           '<td style="text-align:right">'+(t.rol==='admin'?'':'<button class="btn sm" data-act="equipo-activo" data-id="'+t.id+'" data-v="'+(t.activo?'0':'1')+'">'+(t.activo?'Quitar acceso':'Dar acceso')+'</button>')+'</td></tr>';
+    });
+    h += '</tbody></table></div>';
+    h += '<p class="mini" style="margin:10px 0 0">La foto sale junto a cada asistencia y en el parte que firma el cliente, '+
+         'así que conviene una foto de carné, de frente y con buena luz. Se recorta en cuadrado y se guarda reducida.</p>';
+  }
+  h += '</div>';
+  h += '<p class="mini" style="margin:-4px 0 0">'+
+       '<b>Técnico:</b> ve las puertas, sus asistencias y cierra visitas; no ve precios ni márgenes. '+
+       '<b>Oficina:</b> además expide contratos y ve precios, costes, margen y lo pendiente de facturar. '+
+       'Cambiar tarifas y tocar el equipo sigue siendo solo tuyo.</p>';
+  h += '<div class="panel"><div class="panel-h"><h3>Dar de alta a alguien del equipo</h3></div>'+
+       '<div class="campos" style="max-width:640px">'+
+       '<div class="campo"><label for="t-nombre">Nombre</label><input id="t-nombre" type="text" placeholder="Ej.: Juan"></div>'+
+       '<div class="campo"><label for="t-mail">Correo</label><input id="t-mail" type="email" autocomplete="off" placeholder="juan@correo.com"></div>'+
+       '<div class="campo"><label for="t-pass">Contraseña provisional</label><input id="t-pass" type="text" autocomplete="off" placeholder="Mínimo 6 caracteres"></div>'+
+       '<div class="campo"><label for="t-rol">Rol</label><select id="t-rol">'+
+         '<option value="tecnico">Técnico</option><option value="oficina">Oficina</option></select></div>'+
+       '<div class="campo" style="align-content:end"><button class="btn pri" data-act="equipo-alta">Dar de alta</button></div>'+
+       '</div><p class="err" id="t-err" role="alert" style="margin:10px 0 0"></p>'+
+       '<p class="mini" style="margin:8px 0 0">Dale la contraseña en persona. Él puede cambiarla desde la pantalla de entrada, con «He olvidado mi contraseña».</p></div>';
+  h += panelEmpresa();
+  h += panelCPF();
+  h += panelLista('seguridad', 'Elementos de seguridad', SEGURIDAD,
+        'Es la lista de casillas que sale al dar de alta o editar una puerta. Cada técnico puede añadir uno suelto en una puerta concreta sin tocar esta lista.');
+  h += panelLista('tipos_doc', 'Tipos de documento', TIPOS_DOC,
+        'Las opciones del desplegable al subir un PDF a una puerta.');
+  h += panelLista('tipos', 'Tipos de puerta', TIPOS, 'Desplegable «Tipo» de la ficha.');
+  h += panelGuiones();
+  h += '</div>';
+  return h;
+}
+
+/* Datos de la empresa: salen en las portadas y, sobre todo, en las declaraciones,
+   donde el NIF y el domicilio completo son obligatorios. */
+function panelEmpresa(){
+  const em = datosEmpresa(), lim = limitesFuerza();
+  const campo = (k, et, pista, ancho) =>
+    '<div class="campo'+(ancho?' full':'')+'"><label>'+esc(et)+'</label>'+
+    '<input type="text" data-emp="'+k+'" value="'+esc(em[k]||'')+'">'+
+    (pista?'<span class="pista">'+esc(pista)+'</span>':'')+'</div>';
+  const faltan = ['nif','domicilio','poblacion','cp','representante','responsable_tecnico']
+    .filter(k => !em[k]);
+  let h = '<div class="panel"><div class="panel-h"><h3>Datos de la empresa</h3></div>'+
+    '<p class="mini" style="margin:0 0 10px">Van en la portada del libro de documentación y en las '+
+    'declaraciones de conformidad y de prestaciones, donde la razón social, el NIF y el domicilio completo '+
+    'son obligatorios.</p>';
+  if (faltan.length)
+    h += '<p class="nota-oficina" style="margin:0 0 10px">Faltan '+faltan.length+' datos obligatorios para '+
+         'poder firmar una declaración: '+esc(faltan.join(', '))+'.</p>';
+  h += '<div class="campos" style="max-width:860px">'+
+    campo('razon_social','Razón social','Tal cual figura en el registro mercantil',1)+
+    campo('nif','NIF o CIF')+
+    campo('nombre_comercial','Nombre comercial')+
+    campo('domicilio','Domicilio social','Calle y número',1)+
+    campo('cp','Código postal')+
+    campo('poblacion','Población')+
+    campo('provincia','Provincia')+
+    campo('telefono','Teléfono')+
+    campo('email','Correo')+
+    campo('web','Web')+
+    campo('registro','Datos registrales','Registro mercantil, tomo, folio y hoja, si quieres que salgan',1)+
+    campo('representante','Representante que firma las declaraciones',
+      'Nombre y apellidos de quien firma en nombre de la empresa',1)+
+    campo('cargo_firmante','Cargo de quien firma')+
+    campo('responsable_tecnico','Persona facultada para reunir el expediente técnico',
+      'La Directiva de máquinas exige nombrarla en la declaración de conformidad. '+
+      'Puede ser la misma persona que firma o no serlo',1)+
+    '</div>'+
+    '<div class="fila" style="margin-top:12px"><span class="sp"></span>'+
+    '<button class="btn pri" data-act="guardar-empresa">Guardar datos de la empresa</button></div></div>';
+
+  /* Tabla de protección exigida por combinación. Vacía de fábrica: la rellena quien
+     tiene la norma delante. La aplicación no inventa qué exige cada casilla. */
+  {
+    const tabla = S.ajustes.proteccion || {};
+    h += '<div class="panel"><div class="panel-h"><h3>Protección exigida según accionamiento y usuario</h3></div>'+
+      '<p class="nota-oficina" style="margin:0 0 10px">Lo que ves cargado es una <b>interpretación</b> de la matriz '+
+      'de protección mínima de la UNE-EN 12453:2018+A1:2022, procedente de un documento de trabajo, no del texto de '+
+      'la norma. <b>Contrástala con tu ejemplar</b> y corrige lo que no cuadre: lo que escribas aquí manda sobre lo '+
+      'cargado de serie, y los expedientes dirán que el texto es tuyo.</p>'+
+      '<p class="mini" style="margin:0 0 10px"><b>Niveles:</b> '+
+      Object.values(NIVELES_PROTECCION).map(n => esc(n.nombre)+' — '+esc(n.detalle)).join('<br>')+
+      '<br><b>Ojo:</b> C+D no es «poner una fotocélula». Primero hay que proteger el impacto y el '+
+      'aplastamiento con C, y la D es una protección añadida, no un sustituto.</p>'+
+      '<p class="mini" style="margin:0 0 10px">Esta matriz <b>no se aplica a las puertas exclusivamente '+
+      'peatonales</b>: esas van por la UNE-EN 16005+A1:2024, que tiene su propio método.</p>'+
+      '<div class="tabla-wrap"><table class="tabla"><thead><tr><th style="width:190px">Cómo se acciona</th>'+
+      '<th style="width:170px">Quién la usa</th><th style="width:90px">Mínimo</th>'+
+      '<th>Protección exigida</th></tr></thead><tbody>';
+    Object.entries(MODOS_ACCIONAMIENTO).forEach(([mk, mv]) => {
+      Object.entries(TIPOS_USUARIO).forEach(([uk, ut]) => {
+        const clave = mk + '|' + uk;
+        const base = MATRIZ_PROTECCION_FABRICA[clave] || {};
+        h += '<tr'+(base.admisible === false ? ' style="background:var(--mal-bg)"' : '')+'>'+
+          '<td>'+esc(mv.nombre)+'</td><td>'+esc(ut)+'</td>'+
+          '<td>'+(base.admisible === false
+            ? '<span class="chip mal sin">No admisible</span>'
+            : '<b>'+esc(base.niveles||'—')+'</b>')+'</td>'+
+          '<td><input type="text" data-prot="'+esc(clave)+'" value="'+esc(tabla[clave]||'')+'" '+
+          'placeholder="'+esc(base.elementos||'')+'" '+
+          'style="width:100%;padding:5px 7px;border:1px solid var(--line);border-radius:5px;'+
+          'background:var(--surface);color:var(--ink);font-size:13px"></td></tr>';
+      });
+    });
+    h += '</tbody></table></div>'+
+      '<div class="fila" style="margin-top:12px"><span class="sp"></span>'+
+      '<button class="btn pri" data-act="guardar-proteccion">Guardar la tabla de protección</button></div></div>';
+  }
+
+  h += '<div class="panel"><div class="panel-h"><h3>Límites de fuerza</h3></div>'+
+    '<p class="nota-oficina" style="margin:0 0 10px">Estos valores los tomé de reproducciones sectoriales de la '+
+    'UNE-EN 12453, no del texto de la norma, que es de pago. <b>Contrástalos con tu ejemplar</b> y corrígelos aquí '+
+    'si no cuadran: son los que la aplicación usa para decir si una puerta pasa el ensayo.</p>'+
+    '<div class="campos" style="max-width:860px">'+
+    [['fd_aplastamiento_n','Fuerza de aplastamiento (N)'],
+     ['fd_impacto_n','Fuerza de impacto (N)'],
+     ['fs_estatica_n','Fuerza estática (N)'],
+     ['fs_tiempo_s','Tiempo de la fuerza estática (s)'],
+     ['fe_residual_n','Fuerza residual (N)'],
+     ['td_dinamico_s','Tiempo por encima de la estática (s)']]
+    .map(([k, et]) => '<div class="campo"><label>'+esc(et)+'</label>'+
+      '<input type="number" step="any" data-lim="'+k+'" value="'+esc(lim[k])+'"></div>').join('')+
+    '</div>'+
+    '<div class="fila" style="margin-top:12px"><span class="sp"></span>'+
+    '<button class="btn" data-act="guardar-limites">Guardar límites</button></div></div>';
+  return h;
+}
+
+/* Guiones de revisión: los puntos que rellena el técnico en cada tipo de puerta */
+function panelGuiones(){
+  const tipos = lista('tipos', TIPOS);
+  const sel = S.guionTipo || tipos[0] || 'Otro';
+  const g = guionDe(sel);
+  let h = '<div class="panel"><div class="panel-h"><h3>Guiones de revisión</h3>'+
+    '<select id="guion-tipo" data-act="guion-tipo" style="padding:6px 9px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:14px">'+
+    tipos.map(t => '<option'+(t===sel?' selected':'')+'>'+esc(t)+'</option>').join('')+'</select></div>';
+  h += '<p class="mini" style="margin:0 0 10px">Lo que el técnico va marcando cuando hace la revisión de una puerta '+esc(sel.toLowerCase())+'. '+
+       'Las cabeceras agrupan los puntos en bloques.</p>';
+  if (!g.length) h += '<p class="muted" style="margin:0">Este tipo no tiene guión todavía. Añade puntos abajo.</p>';
+  else {
+    h += '<div class="lista-simple">';
+    g.forEach((x, i) => {
+      h += '<div class="fila" style="padding:6px 0;border-bottom:1px solid var(--line)">'+
+        '<span class="sp">'+(x.h ? '<b>'+esc(x.h)+'</b>' : esc(x.t)+
+          (x.m==='num'?' <span class="mini">(valor en '+esc(x.u||'')+')</span>':'')+
+          (x.n?' <span class="g-norma">'+esc(x.n)+'</span>':''))+'</span>'+
+        '<button class="btn sm plana" data-act="guion-subir" data-i="'+i+'"'+(i===0?' disabled':'')+'>↑</button>'+
+        '<button class="btn sm plana" data-act="guion-bajar" data-i="'+i+'"'+(i===g.length-1?' disabled':'')+'>↓</button>'+
+        '<button class="btn sm" data-act="guion-quitar" data-i="'+i+'">Quitar</button></div>';
+    });
+    h += '</div>';
+  }
+  h += '<div class="campos" style="margin-top:12px">'+
+    '<div class="campo full"><label for="gn-texto">Punto nuevo (o cabecera de bloque)</label><input id="gn-texto" type="text" maxlength="180" placeholder="Ej.: Comprobar el par del motor"></div>'+
+    '<div class="campo"><label for="gn-modo">Cómo se responde</label><select id="gn-modo">'+
+      '<option value="ok">Bien / Mal / N/A</option><option value="num">Con un valor medido</option><option value="h">Es una cabecera de bloque</option></select></div>'+
+    '<div class="campo"><label for="gn-uni">Unidad</label><input id="gn-uni" type="text" maxlength="8" placeholder="N, s, mm, V"></div>'+
+    '<div class="campo"><label for="gn-norma">Norma</label><input id="gn-norma" type="text" maxlength="40" placeholder="UNE-EN 12453"></div>'+
+    '<div class="campo" style="align-content:end"><button class="btn pri" data-act="guion-anadir">Añadir al guión</button></div>'+
+    '</div>';
+  h += '<p class="mini" style="margin:10px 0 0">Los guiones de fábrica siguen UNE-EN 13241, 12453, 12604 y 12978 y, en peatonales, UNE-EN 16005 y UNE 85121. '+
+       'Si los cambias, revisa que no te dejas fuera ninguna comprobación de seguridad.</p></div>';
+  return h;
+}
+
+/* Lista editable (añadir, quitar, ordenar) guardada en la tabla ajustes */
+function panelLista(clave, titulo, defecto, ayuda){
+  const arr = lista(clave, defecto);
+  let h = '<div class="panel"><div class="panel-h"><h3>'+esc(titulo)+'</h3><span class="mini">'+arr.length+'</span></div>';
+  h += '<div class="lista-simple">';
+  arr.forEach((s, i) => {
+    h += '<div class="fila" style="padding:6px 0;border-bottom:1px solid var(--line)">'+
+         '<span class="sp">'+esc(s)+'</span>'+
+         '<button class="btn sm plana" data-act="lista-subir" data-clave="'+clave+'" data-i="'+i+'"'+(i===0?' disabled':'')+'>↑</button>'+
+         '<button class="btn sm plana" data-act="lista-bajar" data-clave="'+clave+'" data-i="'+i+'"'+(i===arr.length-1?' disabled':'')+'>↓</button>'+
+         '<button class="btn sm" data-act="lista-quitar" data-clave="'+clave+'" data-i="'+i+'">Quitar</button></div>';
+  });
+  h += '</div><span class="fila" style="margin-top:10px"><input id="nuevo-'+clave+'" type="text" placeholder="Escribe el elemento nuevo" style="flex:1">'+
+       '<button class="btn pri" data-act="lista-anadir" data-clave="'+clave+'">Añadir</button></span>';
+  h += '<p class="mini" style="margin:8px 0 0">'+esc(ayuda)+'</p></div>';
+  return h;
+}
+
+/* ================= Fotos ================= */
+/* Historial de revisiones de una puerta */
+async function pintarRevisiones(puertaId){
+  const cont = document.getElementById('revs-'+puertaId);
+  if (!cont) return;
+  const { data } = await sb.from('revisiones').select('*').eq('puerta_id', puertaId).order('fecha', {ascending:false}).limit(12);
+  if (!data || !data.length){ cont.innerHTML = ''; return; }
+  const nombreRes = { apta:'Apta', reservas:'Apta con reservas', no_apta:'No apta' };
+  const claseRes = { apta:'ok', reservas:'aviso', no_apta:'mal' };
+  let h = '<div class="linea" style="margin-top:12px"><dt class="eti">Revisiones hechas</dt><div class="lista" style="margin-top:8px">';
+  data.forEach(r => {
+    const malos = (r.puntos||[]).filter(x => x.r === 'mal').length;
+    const res = r.resultado || (r.apta === false ? 'no_apta' : 'apta');
+    h += '<button class="item" data-act="ver-revision" data-id="'+r.id+'">'+
+      '<span class="qr">'+esc(String(r.fecha||'').slice(8,10)+'/'+String(r.fecha||'').slice(5,7))+'</span>'+
+      '<span><span class="tit">'+esc(fechaCorta(r.fecha))+' · '+esc(r.tecnico||'')+'</span>'+
+      '<span class="sub">'+(malos ? malos+' punto'+(malos===1?'':'s')+' no conforme'+(malos===1?'':'s') : 'Todo conforme')+
+        (r.riesgo ? ' · riesgo para las personas' : '')+'</span></span>'+
+      '<span><span class="chip '+claseRes[res]+'">'+nombreRes[res]+'</span></span></button>';
+  });
+  cont.innerHTML = h + '</div></div>';
+  cont._revs = data;
+}
+function dlgRevision(id){
+  let rev = null;
+  document.querySelectorAll('[id^="revs-"]').forEach(c => { if (c._revs) { const f = c._revs.find(x => x.id === id); if (f) rev = f; } });
+  if (!rev) return;
+  const nombreRes = { apta:'Apta para el servicio', reservas:'Apta con reservas', no_apta:'No apta' };
+  const marca = { ok:'Bien', mal:'Mal', na:'N/A' };
+  let h = '<h3>Revisión del '+esc(fechaCorta(rev.fecha))+'</h3>'+
+    '<p class="mini" style="margin:0 0 12px">'+esc(rev.tipo_puerta||'')+' · '+esc(rev.tecnico||'')+' · '+
+    esc(nombreRes[rev.resultado || (rev.apta===false?'no_apta':'apta')])+(rev.riesgo?' · riesgo para las personas':'')+'</p>';
+  const malos = (rev.puntos||[]).filter(x => x.r === 'mal');
+  if (malos.length){
+    h += '<div class="grupo"><h3>Puntos no conformes</h3><ul style="margin:0;padding-left:18px">'+
+      malos.map(x => '<li>'+esc(x.t)+(x.v!=null?(' · '+esc(x.v)):'')+(x.nota?(' · '+esc(x.nota)):'')+'</li>').join('')+'</ul></div>';
+  }
+  const medidos = (rev.puntos||[]).filter(x => x.v != null && x.r !== 'mal');
+  if (medidos.length){
+    h += '<div class="grupo"><h3>Valores medidos</h3><dl class="datos">'+
+      medidos.map(x => '<div><dt>'+esc(x.t)+'</dt><dd>'+esc(x.v)+'</dd></div>').join('')+'</dl></div>';
+  }
+  if (rev.deficiencias) h += '<div class="grupo"><h3>Deficiencias</h3><p style="margin:0;white-space:pre-wrap">'+esc(rev.deficiencias)+'</p></div>';
+  if (rev.recomendaciones) h += '<div class="grupo"><h3>Recomendaciones</h3><p style="margin:0;white-space:pre-wrap">'+esc(rev.recomendaciones)+'</p></div>';
+  h += '<div class="grupo"><h3>Guión completo</h3><dl class="datos">'+
+    (rev.puntos||[]).map(x => '<div><dt>'+esc(x.t)+'</dt><dd>'+esc(marca[x.r]||'—')+(x.v!=null?(' · '+esc(x.v)):'')+'</dd></div>').join('')+'</dl></div>';
+  h += '<div class="pie"><span class="sp"></span><button type="button" class="btn pri" data-cerrar>Cerrar</button></div>';
+  abrirDlg(h, () => cerrarDlg());
+}
+
+async function pintarFotos(puertaId){
+  const cont = document.getElementById('fotos-'+puertaId);
+  if (!cont) return;
+  const { data, error } = await sb.from('fotos').select('*').eq('puerta_id', puertaId).order('creado', {ascending:false});
+  if (error){ cont.innerHTML = '<p class="mini">No se pudieron cargar las fotos.</p>'; return; }
+  if (!data.length){ cont.innerHTML = '<p class="mini" style="margin:0">Sin fotos todavía.</p>'; return; }
+  const urls = await Promise.all(data.map(f => sb.storage.from('fotos').createSignedUrl(f.ruta, 3600)));
+  cont.innerHTML = data.map((f,i) => {
+    const u = urls[i] && urls[i].data ? urls[i].data.signedUrl : '';
+    FOTOS[f.id] = { url:u, autor:f.autor||'', creado:f.creado, ruta:f.ruta, puerta:puertaId };
+    return '<div class="foto">'+
+      '<img src="'+esc(u)+'" alt="Foto de la puerta" loading="lazy" data-act="foto-ver" data-id="'+f.id+'" style="cursor:zoom-in" '+
+        'onerror="this.replaceWith(Object.assign(document.createElement(\'a\'),{href:this.src,target:\'_blank\',rel:\'noopener\',className:\'foto-rota\',textContent:\'Foto guardada · abrir\'}))">'+
+      '<span class="pie-foto">'+esc([f.autor||'', f.creado?fechaCorta(f.creado):''].filter(Boolean).join(' · '))+'</span>'+
+      '<button data-act="foto-borrar" data-id="'+f.id+'" data-ruta="'+esc(f.ruta)+'" data-puerta="'+puertaId+'">Borrar</button></div>';
+  }).join('');
+}
+const FOTOS = {};
+function dlgFoto(id){
+  const f = FOTOS[id];
+  if (!f) return;
+  abrirDlg('<h3>Foto de la puerta</h3>'+
+    '<div style="background:#000;border-radius:8px;display:grid;place-items:center;max-height:70vh;overflow:auto">'+
+    '<img src="'+esc(f.url)+'" alt="Foto de la puerta" style="max-width:100%;height:auto;display:block">'+
+    '</div>'+
+    '<p class="mini" style="margin:10px 0 0">'+esc([f.autor?('Subida por '+f.autor):'', f.creado?fechaHora(f.creado):''].filter(Boolean).join(' · '))+'</p>'+
+    '<div class="pie"><a class="btn plana" href="'+esc(f.url)+'" target="_blank" rel="noopener" style="text-decoration:none">Abrir aparte</a>'+
+    '<span class="sp"></span><button type="button" class="btn" data-cerrar>Cerrar</button></div>', null);
+}
+async function subirFotos(puertaId, ficheros){
+  let n = 0, tal = 0;
+  for (const file of ficheros){
+    const esImagen = file.type.startsWith('image/') || /\.(jpe?g|png|heic|heif|webp|gif|tiff?)$/i.test(file.name||'');
+    if (!esImagen) continue;
+    try {
+      let blob, tipo = 'image/jpeg', ext = 'jpg';
+      try {
+        blob = await reducir(file);                      // caso normal: se reduce a 1600 px
+      } catch(_){
+        if (file.size > 25*1024*1024) throw new Error('La foto «'+(file.name||'')+'» pesa demasiado (más de 25 MB).');
+        blob = file;                                     // formatos que el navegador no sabe procesar (HEIC del iPhone): se sube tal cual
+        tipo = file.type || 'application/octet-stream';
+        ext = ((file.name||'').split('.').pop() || 'jpg').toLowerCase().slice(0,5);
+        tal++;
+      }
+      const ruta = puertaId+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'.'+ext;
+      const { error } = await sb.storage.from('fotos').upload(ruta, blob, { contentType: tipo });
+      if (error) throw error;
+      await sb.from('fotos').insert({ puerta_id: puertaId, ruta, autor: yo() });
+      n++;
+    } catch(e){ fallo(e); }
+  }
+  if (n) toast(n === 1 ? 'Foto subida.' : n+' fotos subidas.');
+  if (tal) toast(tal+(tal===1?' foto se ha guardado en su formato original (HEIC): se ve desde el iPhone y con «abrir».':' fotos se han guardado en su formato original (HEIC).'));
+  pintarFotos(puertaId);
+}
+function reducir(file, max=1600, calidad=0.82){
+  return new Promise((res, rej) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const r = Math.min(1, max/Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width*r); c.height = Math.round(img.height*r);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      c.toBlob(b => b ? res(b) : rej(new Error('No se pudo procesar la imagen')), 'image/jpeg', calidad);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Imagen no válida')); };
+    img.src = url;
+  });
+}
+
+/* Foto de carné: recorta el centro en cuadrado y la deja en 320 px. Así pesa
+   poco y se ve igual de bien en la lista, en el móvil y en el parte impreso. */
+function cuadrada(file, lado = 320, calidad = 0.85){
+  return new Promise((res, rej) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const l = Math.min(img.width, img.height);
+      const sx = Math.round((img.width - l) / 2), sy = Math.round((img.height - l) / 2);
+      const c = document.createElement('canvas');
+      c.width = c.height = lado;
+      const cx = c.getContext('2d');
+      cx.imageSmoothingQuality = 'high';
+      cx.drawImage(img, sx, sy, l, l, 0, 0, lado, lado);
+      URL.revokeObjectURL(url);
+      c.toBlob(b => b ? res(b) : rej(new Error('No se pudo procesar la imagen')), 'image/jpeg', calidad);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Imagen no válida')); };
+    img.src = url;
+  });
+}
+
+async function subirCara(tecnicoId, file){
+  if (!file) return;
+  if (!/^image\//.test(file.type)) { toast('Eso no es una imagen.'); return; }
+  toast('Subiendo la foto…');
+  try {
+    const blob = await cuadrada(file);
+    const ruta = tecnicoId + '/cara-' + Date.now() + '.jpg';
+    const { error } = await sb.storage.from('equipo')
+      .upload(ruta, blob, { contentType:'image/jpeg', upsert:true });
+    if (error) throw error;
+    const t = S.equipo.find(x => x.id === tecnicoId) || {};
+    const vieja = t.foto_ruta;
+    const { error: e2 } = await sb.from('perfiles').update({ foto_ruta: ruta }).eq('id', tecnicoId);
+    if (e2) throw e2;
+    if (vieja && vieja !== ruta) { try { await sb.storage.from('equipo').remove([vieja]); } catch(_){} }
+    await cargar(); toast('Foto puesta.');
+  } catch(e){ fallo(e); }
+}
+
+async function quitarCara(tecnicoId){
+  const t = S.equipo.find(x => x.id === tecnicoId);
+  if (!t || !t.foto_ruta) return;
+  try {
+    const { error } = await sb.from('perfiles').update({ foto_ruta: null }).eq('id', tecnicoId);
+    if (error) throw error;
+    try { await sb.storage.from('equipo').remove([t.foto_ruta]); } catch(_){}
+    await cargar(); toast('Foto quitada.');
+  } catch(e){ fallo(e); }
+}
+
+/* ================= Documentación ================= */
+async function pintarDocs(puertaId){
+  const cont = document.getElementById('docs-'+puertaId);
+  if (!cont) return;
+  const { data, error } = await sb.from('documentos').select('*').eq('puerta_id', puertaId).order('creado', {ascending:false});
+  if (error){ cont.innerHTML = '<p class="mini" style="margin:0">No se pudo cargar la documentación.</p>'; return; }
+  if (!data.length){ cont.innerHTML = '<p class="mini" style="margin:0">Sin documentos todavía.</p>'; return; }
+  const urls = await Promise.all(data.map(d => d.publico
+    ? Promise.resolve({ data: { signedUrl: urlPublica(d.ruta) } })
+    : sb.storage.from('documentos').createSignedUrl(d.ruta, 3600)));
+  cont.innerHTML = '<div class="tabla-wrap"><table class="tabla"><tbody>' + data.map((d,i) => {
+    const u = urls[i] && urls[i].data ? urls[i].data.signedUrl : '';
+    return '<tr><td><b style="font-weight:600">'+esc(d.nombre)+'</b>'+(d.publico?' <span class="chip ok sin" style="vertical-align:2px">Visible para el cliente</span>':'')+
+           '<span class="sub">'+esc(d.tipo||'')+' · '+fechaCorta(d.creado)+(d.autor?(' · '+esc(d.autor)):'')+'</span></td>'+
+           '<td style="text-align:right;white-space:nowrap"><a class="btn sm" href="'+esc(u)+'" target="_blank" rel="noopener">Abrir</a> '+
+           '<button class="btn sm plana" data-act="doc-visible" data-id="'+d.id+'" data-puerta="'+puertaId+'">'+(d.publico?'Ocultar al cliente':'Mostrar al cliente')+'</button> '+
+           '<button class="btn sm plana" data-act="doc-borrar" data-id="'+d.id+'" data-ruta="'+esc(d.ruta)+'" data-bucket="'+(d.publico?'publicos':'documentos')+'" data-puerta="'+puertaId+'">Borrar</button></td></tr>';
+  }).join('') + '</tbody></table></div>';
+}
+function urlPublica(ruta){ return SUPA_URL + '/storage/v1/object/public/publicos/' + ruta.split('/').map(encodeURIComponent).join('/'); }
+async function subirDocs(puertaId, ficheros, tipo, publico){
+  const bucket = publico ? 'publicos' : 'documentos';
+  for (const file of ficheros){
+    try {
+      if (file.size > 20*1024*1024) throw new Error('El archivo "'+file.name+'" pasa de 20 MB');
+      const limpio = file.name.replace(/[^A-Za-z0-9._-]/g,'_');
+      const ruta = puertaId+'/'+Date.now()+'-'+limpio;
+      const { error } = await sb.storage.from(bucket).upload(ruta, file, { contentType: file.type || 'application/pdf' });
+      if (error) throw error;
+      await sb.from('documentos').insert({ puerta_id: puertaId, nombre: file.name, tipo, ruta, autor: yo(), publico: !!publico, bucket });
+    } catch(e){ fallo(e); }
+  }
+  toast('Documentación subida.');
+  pintarDocs(puertaId);
+}
+async function cambiarVisibilidad(docId, puertaId){
+  try {
+    const { data: d, error: e1 } = await sb.from('documentos').select('*').eq('id', docId).maybeSingle();
+    if (e1 || !d) throw (e1 || new Error('Documento no encontrado'));
+    const origen = d.publico ? 'publicos' : 'documentos';
+    const destino = d.publico ? 'documentos' : 'publicos';
+    const { data: fichero, error: e2 } = await sb.storage.from(origen).download(d.ruta);
+    if (e2) throw e2;
+    const { error: e3 } = await sb.storage.from(destino).upload(d.ruta, fichero, { contentType: fichero.type || 'application/pdf', upsert: true });
+    if (e3) throw e3;
+    await sb.storage.from(origen).remove([d.ruta]);
+    const { error: e4 } = await sb.from('documentos').update({ publico: !d.publico, bucket: destino }).eq('id', docId);
+    if (e4) throw e4;
+    toast(d.publico ? 'Ya no lo ve el cliente.' : 'Ahora el cliente lo ve al escanear el QR.');
+    pintarDocs(puertaId);
+  } catch(err){ fallo(err); }
+}
+
+/* ================= QR ================= */
+function svgQR(texto, tam){
+  if (typeof qrcode === 'undefined') return '<p class="mini">No se pudo cargar el generador de códigos QR.</p>';
+  const q = qrcode(0, 'Q'); q.addData(texto); q.make();
+  return q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }).replace('<svg', '<svg style="width:'+tam+';height:'+tam+'"');
+}
+function enlaceQR(codigo){
+  const e = S.etiquetas.find(x => x.codigo === codigo);
+  return BASE_QR + (codigo.replace('-','')) + (e ? e.token : '');
+}
+
+/* ================= Expediente de documentación de puerta =================
+   Genera la documentación obligatoria de una puerta: instalación nueva,
+   adecuación a normativa y modificación sustancial.
+
+   Marco legal manejado, verificado el 3 de octubre de 2026:
+     · Reglamento (UE) 305/2011 de productos de construcción → Declaración de
+       Prestaciones, con el modelo del Reglamento Delegado (UE) 574/2014.
+     · Directiva 2006/42/CE (RD 1644/2008) → Declaración CE de conformidad,
+       anexo II.1.A. Última fecha útil: 19 de enero de 2027.
+     · Reglamento (UE) 2023/1230 → Declaración UE de conformidad, anexo V.A.
+       Aplicable desde el 20 de enero de 2027.
+     · Directiva 2014/30/UE de compatibilidad electromagnética (RD 186/2016).
+   Lo que decide el marco no es la fecha de la firma, sino la de puesta en
+   servicio, así que la calcula la aplicación y no se deja a criterio de nadie. */
+
+const EXP_SITUACION = {
+  nueva_fabricante: 'Puerta nueva que montamos nosotros',
+  nueva_instalador: 'Puerta nueva de kit completo',
+  adecuacion:       'Adecuación a normativa',
+  modificacion:     'Motorización o modificación sustancial',
+};
+const EXP_SIT_AYUDA = {
+  nueva_fabricante: 'Ensamblamos la puerta combinando componentes de distintos proveedores. '+
+    'Somos fabricante: emitimos declaración de prestaciones, declaración de conformidad y marcado CE propios.',
+  nueva_instalador: 'Montamos un kit completo de un único fabricante siguiendo sus instrucciones. '+
+    'Somos mero instalador: no emitimos declaraciones, las recopilamos y transmitimos.',
+  adecuacion: 'Ponemos seguridades en una puerta existente sin tocar la lógica del cuadro. '+
+    'El documento es el informe de riesgos y deficiencias y la certificación en el libro de mantenimiento.',
+  modificacion: 'Motorizamos una puerta manual o cambiamos el cuadro por otro de tipo distinto. '+
+    'Es modificación sustancial: pasamos a ser fabricante de la máquina.',
+};
+const EXP_FAMILIA = {
+  industrial:  'Industrial, comercial o de garaje',
+  peatonal:    'Peatonal automática',
+  barrera:     'Barrera de vehículos',
+  cortafuegos: 'Resistente al fuego',
+};
+const EXP_ESTADO = { borrador:'Borrador', completo:'Lista para emitir', emitido:'Emitida' };
+
+/* Somos fabricante de la máquina en estas dos situaciones. Motorizar una puerta
+   manual es modificación sustancial y convierte al instalador en fabricante:
+   lo dice la nota informativa del Ministerio sobre automatización de puertas. */
+const EXP_ES_FABRICANTE = s => s === 'nueva_fabricante' || s === 'modificacion';
+const EXP_ES_NUEVA      = s => s === 'nueva_fabricante' || s === 'nueva_instalador';
+
+/* Normas de referencia por familia. Se imprimen en el libro y se citan en las
+   declaraciones. Las versiones son las que localicé vigentes en octubre de 2026. */
+const EXP_NORMAS = {
+  industrial: [
+    ['UNE-EN 13241:2004+A2:2017',    'Norma de producto armonizada. Base de la declaración de prestaciones y del marcado CE por el Reglamento de Productos de Construcción.'],
+    ['UNE-EN 12453:2018+A1:2022',    'Seguridad en el uso de puertas motorizadas: requisitos y métodos de ensayo de fuerzas. Absorbió la EN 12445.'],
+    ['UNE-EN 12604:2018+A1:2021',    'Aspectos mecánicos: requisitos y métodos de ensayo. Absorbió la EN 12605.'],
+    ['UNE-EN 12978:2025',            'Dispositivos de protección para puertas motorizadas: requisitos y métodos de ensayo.'],
+    ['UNE 85635:2012',               'Norma española de requisitos de instalación, uso, mantenimiento y modificación.'],
+  ],
+  peatonal: [
+    ['UNE-EN 16361:2014+A1:2017',    'Norma de producto de puertas peatonales motorizadas, excepto batientes. NO está citada en el DOUE como norma armonizada del Reglamento 305/2011: de ella no sale declaración de prestaciones.'],
+    ['UNE-EN 16005+A1:2024',    'Seguridad en el uso de puertas peatonales motorizadas. Es la norma de referencia de esta familia: la matriz de protección de la UNE-EN 12453 no se aplica a las puertas exclusivamente peatonales.'],
+    ['UNE 85121:2018',           'Norma española de instalación, uso y mantenimiento de puertas peatonales automáticas.'],
+    ['UNE-EN 12978:2025',            'Dispositivos de protección: requisitos y métodos de ensayo.'],
+  ],
+  barrera: [
+    ['UNE-EN 13241:2004+A2:2017',    'Norma de producto armonizada. Cubre las barreras instaladas en zonas accesibles a personas; las de uso exclusivo para tráfico de vehículos quedan excluidas de su ámbito.'],
+    ['UNE-EN 12453:2018+A1:2022',    'Seguridad en el uso: limitación de fuerzas y detección de presencia.'],
+    ['UNE-EN 12978:2025',            'Dispositivos de protección.'],
+    ['UNE 85635:2012',               'Requisitos de instalación, uso, mantenimiento y modificación.'],
+  ],
+  cortafuegos: [
+    ['UNE-EN 16034:2015',            'Prestaciones de resistencia al fuego y control de humos. Solo se aplica junto a la UNE-EN 13241 o la UNE-EN 14351-1, nunca sola. Sistema 1: la declaración la emite el fabricante con certificado de organismo notificado.'],
+    ['UNE-EN 13241:2004+A2:2017',    'Norma de producto, cuando se trata de puerta industrial, comercial o de garaje.'],
+    ['UNE-EN 12453:2018+A1:2022',    'Seguridad en el uso, si es motorizada.'],
+  ],
+};
+
+/* ===== Régimen legal de cada familia =====
+   Verificado el 6 de octubre de 2026 contra el informe del Ministerio de Industria
+   «Requisitos de marcado CE, instalación y modificación de puertas industriales,
+   comerciales, de garaje, portones y barreras» y la nota «Marcado CE de las puertas
+   cortafuegos» de 26 de febrero de 2020.
+
+   Lo que decide si hay declaración de prestaciones es si la familia está cubierta por
+   una norma armonizada citada en el DOUE bajo el Reglamento (UE) 305/2011, y en qué
+   sistema de evaluación de la constancia de las prestaciones está:
+
+     · Sistema 3  Los ensayos de tipo los hace un laboratorio notificado. Una
+                  microempresa puede tratarlo como sistema 4 por el artículo 37,
+                  documentando la equivalencia de sus métodos. Es nuestro caso.
+     · Sistema 1  Certificado de un organismo notificado, inspección inicial de la
+                  fábrica y vigilancia continua. Los artículos 36.2 y 38.2 cierran
+                  las vías simplificadas y el 37 solo alcanza a los sistemas 3 y 4.
+                  Aquí NO cabe autocertificar de ninguna manera.
+
+   Ojo con las peatonales: la EN 16361 no aparece en la lista de normas armonizadas
+   del Reglamento 305/2011, así que su marcado CE no sale de ahí sino de la Directiva
+   de máquinas y de la de compatibilidad electromagnética. */
+const EXP_REGIMEN = {
+  industrial: {
+    ddp: true, sistema: '3', norma: 'UNE-EN 13241:2004+A2:2017',
+    nota: 'Sistema 3. Como microempresa lo tratamos como sistema 4 por el artículo 37 '+
+          'del Reglamento 305/2011, justificándolo en la documentación técnica específica.',
+  },
+  barrera: {
+    ddp: true, sistema: '3', norma: 'UNE-EN 13241:2004+A2:2017',
+    depende: 'puerta.acceso_personas',
+    nota: 'Igual que una puerta industrial, siempre que la barrera esté en una zona '+
+          'accesible a personas.',
+    sinDdp: {
+      ddp: false, sistema: null, norma: null,
+      nota: 'Barrera de uso exclusivo para tráfico de vehículos: queda fuera del ámbito '+
+            'de la UNE-EN 13241, así que no lleva declaración de prestaciones. Solo '+
+            'declaración de conformidad como máquina y compatibilidad electromagnética.',
+    },
+  },
+  peatonal: {
+    ddp: false, sistema: null, norma: 'UNE-EN 16361:2014+A1:2017',
+    nota: 'La UNE-EN 16361 no está citada en el DOUE como norma armonizada del '+
+          'Reglamento 305/2011, de modo que esta puerta no lleva declaración de '+
+          'prestaciones. Su marcado CE sale de la directiva de máquinas y de la de '+
+          'compatibilidad electromagnética.',
+  },
+  cortafuegos: {
+    ddp: false, sistema: '1', norma: 'UNE-EN 16034:2015', bloqueaFabricante: true,
+    nota: 'Sistema 1: exige certificado de un organismo notificado, inspección de '+
+          'fábrica y vigilancia continua. No se puede autocertificar. Con una puerta '+
+          'cortafuegos solo cabe actuar como mero instalador de un kit completo del '+
+          'fabricante, montado según sus instrucciones y sin sustituir ningún '+
+          'componente del conjunto ensayado.',
+  },
+};
+
+/* El régimen que toca, mirando también la respuesta a la pregunta de la que depende
+   (hoy solo las barreras: cambia según estén o no al alcance de personas). */
+/* Reparte las normas del expediente entre europeas y nacionales. Que una norma
+   esté vigente en UNE no demuestra que esté citada en el DOUE bajo un acto concreto:
+   la condición de armonizada queda marcada como pendiente de verificar, en vez de
+   darse por supuesta. UNE 85635 es norma española y no puede figurar como europea. */
+function normasDe(e){
+  const todas = EXP_NORMAS[e.familia] || [];
+  return {
+    europeas: todas.filter(([n]) => /^UNE-EN /.test(n)),
+    nacionales: todas.filter(([n]) => !/^UNE-EN /.test(n)),
+  };
+}
+
+function regimenDe(e){
+  const r = EXP_REGIMEN[e && e.familia] || EXP_REGIMEN.industrial;
+  if (r.depende && r.sinDdp){
+    const v = ((((e||{}).datos||{}).puerta)||{})[r.depende.split('.')[1]];
+    if (v === 'no') return r.sinDdp;
+  }
+  /* Al motorizar una puerta manual existente pasamos a ser fabricante de la máquina:
+     eso no se discute. Lo que está sin confirmar es si además hay que emitir
+     declaración de prestaciones, porque la puerta como producto de construcción ya
+     estaba puesta en el mercado. Mientras no haya respuesta del Ministerio, lo decide
+     quien rellena el expediente, y queda escrito en el libro qué criterio se siguió. */
+  if (e && e.situacion === 'modificacion' && r.ddp
+      && ((((e.datos||{}).prest)||{}).emitir_ddp) === 'no')
+    return Object.assign({}, r, { ddp:false,
+      etiqueta:'no se emite declaración de prestaciones nueva',
+      nota:'En esta intervención hemos motorizado una puerta que ya estaba puesta en el '+
+           'mercado como producto de construcción. Pasamos a ser fabricante de la máquina '+
+           'y emitimos la declaración de conformidad que corresponde, pero no se emite '+
+           'declaración de prestaciones nueva por el Reglamento (UE) 305/2011, al no '+
+           'haberse alterado las prestaciones declaradas de la puerta como producto de '+
+           'construcción.' });
+  return r;
+}
+
+/* Legislación según el marco que toque por la fecha de puesta en servicio */
+const EXP_MARCO = {
+  directiva: {
+    nombre: 'Directiva 2006/42/CE de máquinas, transpuesta por el Real Decreto 1644/2008',
+    documento: 'Declaración CE de conformidad',
+    anexo: 'anexo II, parte 1, sección A del Real Decreto 1644/2008',
+    expediente: 'anexo VII, parte A de la Directiva 2006/42/CE',
+    hasta: 'Aplicable a puertas puestas en servicio hasta el 19 de enero de 2027.',
+  },
+  reglamento: {
+    nombre: 'Reglamento (UE) 2023/1230 relativo a las máquinas y los productos relacionados',
+    documento: 'Declaración UE de conformidad',
+    anexo: 'anexo V, parte A del Reglamento (UE) 2023/1230',
+    expediente: 'anexo IV, parte A del Reglamento (UE) 2023/1230',
+    hasta: 'Aplicable a puertas puestas en servicio a partir del 20 de enero de 2027.',
+  },
+};
+const marcoDeFecha = f => !f ? 'pendiente' : (f < '2027-01-20' ? 'directiva' : 'reglamento');
+
+/* ===== Base normativa =====
+   Cada norma con su estado y, lo que más importa, bajo qué acto legal está armonizada.
+   Que una norma esté vigente en UNE no significa que esté citada en el DOUE bajo un
+   acto concreto: son dos cosas distintas y aquí van separadas.
+
+   Todo lleva fuente y fecha de la última comprobación. Lo que no se ha podido verificar
+   va como 'sin verificar' y la aplicación lo dice en los documentos en vez de callarlo. */
+const BASE_NORMAS = {
+  'UNE-EN 13241:2004+A2:2017': {
+    titulo: 'Puertas industriales, comerciales y de garaje y portones. Norma de producto, características de prestación.',
+    edicion: '2017-04-26', estado: 'vigente',
+    familia: ['industrial','barrera','cortafuegos'], funcion: 'producto',
+    armonizada: 'cpr_2011',
+    nota_armonizacion: 'La versión exacta citada en el DOUE está pendiente de contrastar con la lista '+
+      'consolidada de la Comisión: puede ser la EN 13241-1:2003+A1:2011 en lugar de esta.',
+    fuente: 'une.org', verificada: '2026-10-06',
+  },
+  'UNE-EN 12453:2018+A1:2022': {
+    titulo: 'Seguridad de uso de puertas motorizadas. Requisitos y métodos de ensayo.',
+    edicion: '2022-10-19', estado: 'vigente',
+    familia: ['industrial','barrera','cortafuegos'], funcion: 'seguridad de uso',
+    armonizada: 'sin_verificar',
+    fuente: 'une.org', verificada: '2026-10-06',
+  },
+  'UNE-EN 12604:2018+A1:2021': {
+    titulo: 'Aspectos mecánicos. Requisitos y métodos de ensayo.',
+    edicion: '2021-09-29', estado: 'vigente',
+    familia: ['industrial','barrera','cortafuegos'], funcion: 'mecánica',
+    armonizada: 'sin_verificar',
+    fuente: 'une.org', verificada: '2026-10-06',
+  },
+  'UNE-EN 12978:2025': {
+    titulo: 'Dispositivos de protección para puertas y portones motorizados. Requisitos y métodos de ensayo.',
+    edicion: '2025-11-05', estado: 'vigente',
+    familia: ['industrial','barrera','peatonal','cortafuegos'], funcion: 'dispositivos de protección',
+    armonizada: 'sin_verificar',
+    sustituye: 'UNE-EN 12978:2003+A1:2010',
+    fuente: 'une.org', verificada: '2026-10-06',
+  },
+  'UNE-EN 16005+A1:2024': {
+    titulo: 'Puertas automáticas peatonales. Seguridad de uso. Requisitos y métodos de ensayo.',
+    edicion: '2024-12-04', estado: 'vigente',
+    familia: ['peatonal'], funcion: 'seguridad de uso',
+    armonizada: 'sin_verificar',
+    fuente: 'une.org', verificada: '2026-10-06',
+  },
+  'UNE-EN 16361:2014+A1:2017': {
+    titulo: 'Puertas peatonales automáticas. Norma de producto, características de prestación.',
+    edicion: '2017-05-31', estado: 'vigente',
+    familia: ['peatonal'], funcion: 'producto',
+    armonizada: 'no_cpr',
+    nota_armonizacion: 'No consta citada en el DOUE como norma armonizada a efectos del régimen de '+
+      'productos de construcción aplicable a este producto. Una eventual armonización bajo otro acto '+
+      'de la Unión no genera por sí misma una declaración de prestaciones.',
+    fuente: 'une.org', verificada: '2026-10-06',
+  },
+  'UNE-EN 16034:2015': {
+    titulo: 'Prestaciones de resistencia al fuego y control de humos.',
+    edicion: '2015', estado: 'vigente',
+    familia: ['cortafuegos'], funcion: 'producto',
+    armonizada: 'cpr_2011',
+    nota_armonizacion: 'Solo se aplica junto a la norma de producto que corresponda, nunca sola.',
+    fuente: 'documento de trabajo de la empresa', verificada: '2026-10-06',
+  },
+  'UNE 85635:2012': {
+    titulo: 'Puertas industriales, comerciales, de garaje y portones ya instalados o de nueva instalación. '+
+            'Requisitos de instalación, uso, mantenimiento y modificación.',
+    edicion: '2012-09-26', estado: 'vigente',
+    familia: ['industrial','barrera'], funcion: 'instalación y mantenimiento',
+    armonizada: 'nacional',
+    fuente: 'une.org', verificada: '2026-10-06',
+  },
+  'UNE 85121:2018': {
+    titulo: 'Puertas peatonales automáticas. Instalación, uso y mantenimiento.',
+    edicion: '2018-12-05', estado: 'vigente',
+    familia: ['peatonal'], funcion: 'instalación y mantenimiento',
+    armonizada: 'nacional',
+    fuente: 'une.org', verificada: '2026-10-06',
+  },
+};
+const ARMONIZACION = {
+  cpr_2011:     'Armonizada bajo el Reglamento (UE) nº 305/2011',
+  cpr_2024:     'Armonizada bajo el Reglamento (UE) 2024/3110',
+  maquinas:     'Armonizada bajo la legislación de máquinas',
+  no_cpr:       'No armonizada a efectos de productos de construcción',
+  nacional:     'Norma nacional, no armonizada',
+  sin_verificar:'Condición de norma armonizada sin verificar',
+};
+
+/* ===== Régimen de productos de construcción =====
+   Verificado el 6 de octubre de 2026 en fuentes oficiales.
+
+   El Reglamento (UE) 2024/3110 entró en vigor el 7-1-2025 y se aplica desde el 8-1-2026,
+   pero NO de golpe: se aplica familia de producto por familia de producto, y solo cuando
+   existe una norma armonizada de prestaciones citada en el DOUE bajo él (considerando 110).
+
+   Para puertas no existe ninguna: la Comisión señala que las primeras serán las del
+   cemento, previsiblemente en 2027, y el mandato de normalización de puertas se envió a
+   CEN a finales de 2025. Prueba de que el régimen anterior sigue vivo: la Decisión de
+   Ejecución (UE) 2026/284, de 6 de febrero de 2026, sigue añadiendo normas armonizadas
+   en apoyo del Reglamento (UE) nº 305/2011.
+
+   Por eso el régimen de puertas se mantiene en el 305/2011. El día que se cite una norma
+   de puertas bajo el 2024/3110, se cambia aquí y toda la aplicación lo sigue. */
+const REGIMEN_CPR = {
+  familias: {
+    industrial:  { acto:'cpr_2011', desde:null },
+    barrera:     { acto:'cpr_2011', desde:null },
+    cortafuegos: { acto:'cpr_2011', desde:null },
+    peatonal:    { acto:null,       desde:null },   // no lleva declaración de prestaciones
+  },
+  actos: {
+    cpr_2011: {
+      nombre: 'Reglamento (UE) nº 305/2011 de productos de construcción',
+      modelo: 'modelo del Reglamento Delegado (UE) 574/2014',
+      nota: 'El Reglamento (UE) 2024/3110 se aplica desde el 8 de enero de 2026, pero las '+
+            'obligaciones de cada familia de producto solo son exigibles doce meses después de '+
+            'la entrada en vigor de la especificación técnica armonizada que la cubra. A la fecha '+
+            'de este documento no existe ninguna para puertas, de modo que sigue siendo de '+
+            'aplicación el Reglamento (UE) nº 305/2011.',
+    },
+    cpr_2024: {
+      nombre: 'Reglamento (UE) 2024/3110 de productos de construcción',
+      modelo: 'modelo que establezca el propio Reglamento',
+      nota: '',
+    },
+  },
+  revisar: '2027-06-30',   // fecha en la que conviene volver a comprobar si ya hay norma de puertas
+};
+function regimenCPR(e){
+  const f = (REGIMEN_CPR.familias[(e||{}).familia] || {});
+  if (!f.acto) return null;
+  return Object.assign({ clave: f.acto }, REGIMEN_CPR.actos[f.acto] || {});
+}
+
+/* ===================================================================
+   MOTOR DE DECISIÓN DEL TIPO DE INTERVENCIÓN
+   ===================================================================
+   Decisión previa y obligatoria: hasta que no está resuelta, no se genera
+   ningún documento. La regla de fondo es que intervenir sobre una puerta
+   existente NO convierte automáticamente la intervención en una máquina
+   nueva. Eso hay que demostrarlo, no suponerlo.
+
+   Lo que hay verificado en fuente oficial, a 7 de octubre de 2026:
+
+   · NO existe ninguna guía de la Comisión Europea sobre modificación
+     sustancial de máquinas. El criterio oficial de la Comisión hoy es el
+     apartado 2.1 de la «Guía azul» 2022 (2022/C 247/01, DOUE 29-6-2022):
+     tres condiciones CUMULATIVAS para que el producto modificado sea
+     producto nuevo. Se modifican prestaciones, propósito o tipo originales
+     sin estar previsto en la evaluación inicial del riesgo; la naturaleza
+     del peligro cambia o el nivel de riesgo aumenta; y se comercializa o
+     pone en servicio.
+   · El INSST (Guía Técnica del RD 1215/1997, 3ª ed. 2021) sigue el mismo
+     criterio y lo resume en que el marcado CE original pierde su validez y
+     el modificador pasa a ser fabricante.
+   · El artículo 3.16 del Reglamento (UE) 2023/1230 SÍ define «modificación
+     sustancial», pero NO es derecho aplicable hasta el 20 de enero de 2027
+     (art. 54). Su criterio es MÁS AMPLIO que el de la Guía azul: no exige
+     cambio de función ni de prestaciones, basta un nuevo peligro o un
+     riesgo aumentado que exija (a) resguardos o dispositivos cuyo
+     procesamiento necesite modificar el sistema de control de seguridad, o
+     (b) nuevas medidas de estabilidad o resistencia mecánica.
+
+   Consecuencia de diseño: el motor va VERSIONADO POR FECHA. Una misma
+   intervención puede no ser sustancial hoy y sí serlo a partir del
+   20-1-2027. Por eso cada regla declara con qué criterio se juzga.
+
+   PENDIENTE DE DAVID: los resultados B, C, D y E. Están declarados pero sin
+   definir, y mientras lo estén BLOQUEAN la emisión en vez de inventarse un
+   desenlace. */
+
+const TIPOS_INTERVENCION = {
+  nueva_propia:      { n:1,  nombre:'Puerta nueva / fabricación propia' },
+  nueva_kit:         { n:2,  nombre:'Puerta nueva / kit completo de fabricante' },
+  producto_tercero:  { n:3,  nombre:'Instalación de producto acabado de tercero' },
+  mantenimiento:     { n:4,  nombre:'Mantenimiento' },
+  reparacion:        { n:5,  nombre:'Reparación' },
+  sustitucion_equiv: { n:6,  nombre:'Sustitución equivalente de componente' },
+  mejora_seguridad:  { n:7,  nombre:'Mejora o adición de dispositivos de seguridad' },
+  adecuacion:        { n:8,  nombre:'Adecuación de puerta existente' },
+  modif_sustancial:  { n:9,  nombre:'Modificación sustancial' },
+  motorizacion:      { n:10, nombre:'Motorización de puerta manual existente' },
+  cambio_cuadro:     { n:11, nombre:'Cambio sustancial de cuadro o lógica de control' },
+  modif_cortafuegos: { n:12, nombre:'Modificación de una puerta resistente al fuego' },
+  no_clasificable:   { n:13, nombre:'Otros / caso no clasificable automáticamente' },
+};
+
+/* Tipos que, por sí solos, no abren el cuestionario de modificación porque la
+   puerta se pone en el mercado nueva y somos nosotros quienes la documentamos
+   desde cero. El resto SÍ pasa por las doce preguntas. */
+const TIPOS_SIN_CUESTIONARIO = ['nueva_propia', 'nueva_kit', 'producto_tercero'];
+
+const RESPUESTAS_MODIF = {
+  si:          'Sí',
+  no:          'No',
+  desconocido: 'Desconocido',
+  revision:    'Requiere revisión técnica',
+};
+/* «Desconocido» y «Requiere revisión técnica» NUNCA se tratan como «No».
+   Cualquiera de las dos deja el expediente en no puede determinarse. */
+const RESPUESTAS_ABIERTAS = ['desconocido', 'revision'];
+
+/* Las doce preguntas, con la severidad que le toca a cada una y el criterio
+   oficial bajo el que pesa. No es un recuento de síes: cada pregunta entra en
+   el motor por su vía.
+
+     via 'funcion'    → condición i) de la Guía azul: prestaciones, propósito o
+                        tipo originales
+     via 'riesgo'     → condición ii) de la Guía azul y núcleo del art. 3.16:
+                        nuevo peligro o riesgo aumentado
+     via 'control'    → art. 3.16.a: exige modificar el sistema de control de
+                        seguridad
+     via 'estructura' → art. 3.16.b: exige medidas de estabilidad o resistencia
+                        mecánica
+
+   severidad 'decisiva' → una sola respuesta afirmativa basta para descartar
+                        que la intervención sea ordinaria, sin ponderar nada más. */
+const PREGUNTAS_MODIFICACION = [
+  { id:'q1',  texto:'¿Se modifica la función prevista de la puerta?',
+    via:'funcion',    severidad:'decisiva' },
+  { id:'q2',  texto:'¿Se modifica el modo de accionamiento o funcionamiento?',
+    via:'funcion',    severidad:'alta' },
+  { id:'q3',  texto:'¿Se modifica la lógica de seguridad o el sistema de mando?',
+    via:'control',    severidad:'alta' },
+  { id:'q4',  texto:'¿Se modifica la velocidad de movimiento?',
+    via:'riesgo',     severidad:'media' },
+  { id:'q5',  texto:'¿Se modifican los valores de fuerza, par o potencia relevantes para la seguridad?',
+    via:'riesgo',     severidad:'alta' },
+  { id:'q6',  texto:'¿Se modifica el recorrido de la hoja o de los elementos móviles?',
+    via:'riesgo',     severidad:'media' },
+  { id:'q7',  texto:'¿Se introducen nuevos riesgos o aumentan riesgos existentes?',
+    via:'riesgo',     severidad:'decisiva' },
+  { id:'q8',  texto:'¿Se modifica de forma sustancial el sistema de control o el cuadro de maniobra?',
+    via:'control',    severidad:'alta' },
+  { id:'q9',  texto:'¿Se motoriza una puerta que anteriormente era manual?',
+    via:'funcion',    severidad:'decisiva' },
+  { id:'q10', texto:'¿Se modifica la estructura portante, hoja, guías, herrajes o elementos '+
+                    'resistentes de forma que pueda afectar a la seguridad?',
+    via:'estructura', severidad:'alta' },
+  { id:'q11', texto:'¿Se modifica alguna prestación esencial declarada del producto de construcción?',
+    via:'funcion',    severidad:'decisiva' },
+  { id:'q12', texto:'¿Se modifica el uso previsto o, en una puerta resistente al fuego, se altera '+
+                    'una configuración no contemplada por la documentación o certificación del fabricante?',
+    via:'funcion',    severidad:'decisiva' },
+];
+
+/* Los cinco resultados */
+const RESULTADOS_INTERVENCION = {
+  A: {
+    nombre: 'Mantenimiento / reparación ordinaria',
+    /* Las siete condiciones, todas en negativo: basta que falle una para que A
+       no aplique. */
+    condiciones: [
+      { clave:'funcion',      texto:'conserva la función' },
+      { clave:'uso',          texto:'conserva el uso previsto' },
+      { clave:'logica',       texto:'no altera sustancialmente la lógica de seguridad' },
+      { clave:'riesgos',      texto:'no introduce nuevos riesgos' },
+      { clave:'prestaciones', texto:'no modifica prestaciones esenciales' },
+      { clave:'motoriza',     texto:'no convierte una puerta manual en motorizada' },
+      { clave:'certificada',  texto:'no altera una configuración certificada relevante' },
+    ],
+    documentacion: ['Parte de mantenimiento', 'Registro de intervención',
+                    'Comprobaciones', 'Piezas'],
+    emite_declaracion: false,
+    cerrable: true,
+  },
+  B: {
+    nombre: 'Adecuación o mejora de seguridad sin modificación sustancial',
+    documentacion: ['Informe de adecuación', 'Evaluación de riesgos y deficiencias',
+      'Relación de medidas correctoras', 'Comprobaciones realizadas',
+      'Registro de mantenimiento o intervención', 'Documentación de los dispositivos instalados',
+      'Actualización del libro de mantenimiento'],
+    regla: 'No se genera automáticamente una Declaración CE propia nueva.',
+    emite_declaracion: false,
+    cerrable: true,
+  },
+  C: {
+    nombre: 'Modificación que requiere evaluación técnica adicional',
+    documentacion: ['Evaluación técnica específica', 'Análisis de riesgos',
+      'Comprobación de compatibilidad', 'Ensayos adicionales',
+      'Documentación del fabricante', 'Revisión de prestaciones', 'Decisión técnica firmada'],
+    regla: 'No se emite declaración de conformidad ni declaración de prestaciones nuevas hasta '+
+           'que la evaluación adicional determine el resultado definitivo.',
+    estado: 'EXPEDIENTE EN REVISIÓN / NO CERRABLE',
+    emite_declaracion: false,
+    cerrable: false,
+  },
+  D: {
+    nombre: 'Modificación sustancial / nueva máquina o conjunto a evaluar',
+    documentacion: ['Nueva evaluación de riesgos', 'Expediente técnico interno', 'Esquemas',
+      'Documentación de componentes', 'Cálculos', 'Ensayos', 'Comprobación de seguridad',
+      'Declaración de conformidad que corresponda', 'Marcado', 'Instrucciones de uso',
+      'Libro de mantenimiento',
+      'Declaración de prestaciones si además procede por el producto de construcción'],
+    regla: 'Se trata como nueva máquina o conjunto modificado sujeto a evaluación completa. '+
+           'La empresa que realiza la modificación puede asumir las obligaciones del '+
+           'fabricante o integrador del conjunto resultante, según el caso.',
+    estado: 'TRATAR COMO NUEVA MÁQUINA / CONJUNTO MODIFICADO SUJETO A EVALUACIÓN COMPLETA',
+    emite_declaracion: true,
+    cerrable: false,   // no se cierra hasta completar todas las obligaciones documentales
+  },
+  E: {
+    nombre: 'Caso no resoluble automáticamente / revisión técnica obligatoria',
+    documentacion: ['Informe de incidencias', 'Relación de la información que falta',
+      'Preguntas que impiden la clasificación', 'Registro de quién revisa el caso'],
+    regla: 'Revisión humana obligatoria. Queda bloqueada la emisión de la declaración '+
+           'definitiva. Un técnico autorizado puede seleccionar después A, B, C o D con '+
+           'justificación escrita.',
+    estado: 'NO ES POSIBLE DETERMINAR AUTOMÁTICAMENTE LA NATURALEZA DE LA INTERVENCIÓN. '+
+            'SE REQUIERE REVISIÓN TÉCNICA.',
+    emite_declaracion: false,
+    cerrable: false,
+  },
+};
+
+/* Qué condición de A tumba cada pregunta cuando se contesta que sí */
+const PREGUNTA_TUMBA = {
+  q1:'funcion', q2:'funcion', q3:'logica', q4:'riesgos', q5:'riesgos', q6:'riesgos',
+  q7:'riesgos', q8:'logica', q9:'motoriza', q10:'riesgos', q11:'prestaciones',
+  q12:'certificada',
+};
+
+/* ---- Encaminamiento de cada pregunta afirmativa ----
+   DECISIÓN DE DISEÑO, pendiente de validación: el encargo describe los cinco
+   resultados en prosa y da una regla de prioridad, pero no dice pregunta por
+   pregunta a cuál va cada una. Esto es el reparto que se ha codificado, y está
+   aquí a la vista para poder corregirlo sin tocar la lógica.
+
+   A D van las que el encargo cita literalmente como casos típicos de D y que no
+   admiten matiz: motorizar una puerta manual, cambiar la función prevista,
+   introducir nuevos riesgos, tocar una prestación esencial declarada.
+
+   A C van las que el encargo cita a la vez en C y en D, donde la diferencia está
+   en si el cambio es «relevante» o «significativo»: velocidad, fuerzas, recorrido,
+   lógica de control, cuadro de maniobra, estructura, modo de accionamiento. La
+   aplicación NO puede decidir sola si un cambio de velocidad es relevante, así
+   que manda a evaluación técnica en vez de concluir. */
+const PREGUNTA_DESTINO = {
+  q1:'D', q7:'D', q9:'D', q11:'D',
+  q2:'C', q3:'C', q4:'C', q5:'C', q6:'C', q8:'C', q10:'C',
+  q12:'D',   // salvo en cortafuegos, donde va a E. Ver evaluarIntervencion.
+};
+
+/* Preguntas críticas: un «desconocido» en cualquiera de ellas impide clasificar
+   y manda el expediente a revisión humana. Son las de severidad decisiva.
+   DECISIÓN DE DISEÑO: el encargo habla de «pregunta crítica» sin enumerarlas. */
+const PREGUNTAS_CRITICAS = ['q1', 'q7', 'q9', 'q11', 'q12'];
+
+/* Tipos que por sí mismos ya declaran el desenlace */
+const TIPO_FUERZA_RESULTADO = {
+  modif_sustancial: 'D',
+  motorizacion:     'D',
+  no_clasificable:  'E',
+};
+/* Tipos cuyo objeto es mejorar la seguridad: con todo contestado que no, el
+   resultado es B y no A. Es lo que separa «mantenimiento ordinario» de
+   «adecuación o mejora de seguridad». */
+const TIPOS_MEJORA_SEGURIDAD = ['mejora_seguridad', 'adecuacion'];
+
+const CRITERIOS_MODIFICACION = {
+  guia_azul: {
+    nombre: 'apartado 2.1 de la «Guía azul» 2022 de la Comisión Europea',
+    referencia: 'Comunicación 2022/C 247/01, DOUE de 29 de junio de 2022',
+    nota: 'Exige tres condiciones cumulativas: que se modifiquen las prestaciones, el '+
+          'propósito o el tipo originales sin estar previsto en la evaluación inicial del '+
+          'riesgo; que la naturaleza del peligro haya cambiado o el nivel de riesgo haya '+
+          'aumentado; y que el producto se comercialice o se ponga en servicio.',
+    verificado: '2026-10-07',
+  },
+  reglamento_2023: {
+    nombre: 'artículo 3, punto 16, del Reglamento (UE) 2023/1230 de máquinas',
+    referencia: 'aplicable desde el 20 de enero de 2027 (artículo 54)',
+    nota: 'No exige cambio de función ni de prestaciones. Basta un nuevo peligro o un '+
+          'riesgo aumentado que exija la incorporación de resguardos o dispositivos de '+
+          'protección cuyo procesamiento necesite modificar el sistema de control de '+
+          'seguridad, o nuevas medidas de estabilidad o resistencia mecánica.',
+    verificado: '2026-10-07',
+  },
+};
+/* El criterio lo decide la fecha de puesta en servicio, igual que el marco de
+   máquinas. Son dos criterios distintos y el segundo es más amplio: una misma
+   intervención puede no ser sustancial hoy y sí serlo desde el 20-1-2027. */
+const criterioModificacion = f =>
+  marcoDeFecha(f) === 'reglamento' ? 'reglamento_2023' : 'guia_azul';
+
+function respuestasIntervencion(e){
+  const d = (((e||{}).datos||{}).interv) || {};
+  const r = {};
+  PREGUNTAS_MODIFICACION.forEach(p => { r[p.id] = (d[p.id] || {}).v || ''; });
+  return r;
+}
+
+/* Devuelve el estado del motor. NUNCA devuelve una letra que no esté definida,
+   y NUNCA convierte un «desconocido» en un «no». */
+function evaluarIntervencion(e){
+  const d  = (((e||{}).datos||{}).interv) || {};
+  const out = {
+    tipo: d.tipo || '',
+    tipoNombre: (TIPOS_INTERVENCION[d.tipo] || {}).nombre || '',
+    criterio: criterioModificacion((e||{}).fecha_puesta_servicio),
+    resultado: null,          // la letra, solo si se puede determinar de verdad
+    clase: 'indeterminada',   // ordinaria | no_ordinaria | indeterminada
+    motivos: [],
+    abiertas: [],             // preguntas sin contestar o que piden revisión
+    decisivas: [],            // preguntas decisivas contestadas que sí
+    condiciones_falladas: [],
+    bloqueos: [],
+    requiere_cuestionario: false,
+  };
+  if (!out.tipo){
+    out.bloqueos.push('No se ha decidido el tipo de intervención. Es la decisión previa: '+
+      'hasta que no esté tomada no puede generarse ningún documento.');
+    return out;
+  }
+  if (TIPOS_SIN_CUESTIONARIO.indexOf(out.tipo) >= 0){
+    out.clase = 'puerta_nueva';
+    out.motivos.push('La puerta se pone en el mercado nueva, de modo que no procede '+
+      'evaluar si hay modificación sustancial de una máquina ya existente.');
+    return out;
+  }
+
+  out.requiere_cuestionario = true;
+  const r = respuestasIntervencion(e);
+  const crit = out.criterio;
+  const cierra = (letra, porque) => {
+    out.resultado = letra;
+    const res = RESULTADOS_INTERVENCION[letra];
+    out.clase = letra === 'A' ? 'ordinaria' : (letra === 'B' ? 'mejora_seguridad' :
+                letra === 'D' ? 'sustancial' : 'revision');
+    out.emite_declaracion = !!res.emite_declaracion;
+    out.cerrable = !!res.cerrable;
+    if (porque) out.motivos.unshift(porque);
+    out.motivos.push('Criterio aplicado: '+CRITERIOS_MODIFICACION[crit].nombre+'. '+
+      CRITERIOS_MODIFICACION[crit].nota);
+    if (res.regla) out.regla = res.regla;
+    if (res.estado) out.estado = res.estado;
+    if (!res.cerrable)
+      out.bloqueos.push(res.estado+' '+(res.regla||''));
+    return out;
+  };
+
+  const dichoSi = [];
+  PREGUNTAS_MODIFICACION.forEach(p => {
+    const v = r[p.id];
+    if (!v || RESPUESTAS_ABIERTAS.indexOf(v) >= 0){
+      out.abiertas.push({ id:p.id, texto:p.texto, valor:v || '',
+                          critica: PREGUNTAS_CRITICAS.indexOf(p.id) >= 0 });
+      return;
+    }
+    if (v !== 'si') return;
+    dichoSi.push(p);
+    const cond = PREGUNTA_TUMBA[p.id];
+    if (cond && out.condiciones_falladas.indexOf(cond) < 0) out.condiciones_falladas.push(cond);
+    if (p.severidad === 'decisiva') out.decisivas.push({ id:p.id, texto:p.texto, via:p.via });
+  });
+
+  /* El tipo elegido puede declarar el desenlace por sí solo */
+  const forzado = TIPO_FUERZA_RESULTADO[out.tipo];
+
+  /* Sin contestar NO es lo mismo que desconocido. Una pregunta en blanco deja el
+     cuestionario incompleto y no se clasifica nada, salvo que el tipo elegido ya
+     declare el desenlace. */
+  const enBlanco = out.abiertas.filter(x => !x.valor);
+  if (enBlanco.length && !forzado){
+    out.bloqueos.push('Cuestionario incompleto: faltan '+enBlanco.length+' de las doce '+
+      'preguntas de modificación por contestar.');
+    return out;
+  }
+
+  /* ---- REGLA DE PRIORIDAD POR SEVERIDAD, no por recuento de síes ---- */
+
+  /* 1. D: condición claramente encuadrable en modificación sustancial */
+  if (forzado === 'D')
+    return cierra('D', 'El tipo de intervención elegido, «'+out.tipoNombre+'», es por sí mismo '+
+      'una modificación sustancial.');
+  const aD = dichoSi.filter(p => {
+    if (p.id === 'q12') return (e||{}).familia !== 'cortafuegos';  // en cortafuegos va a E
+    return PREGUNTA_DESTINO[p.id] === 'D';
+  });
+  if (aD.length){
+    aD.forEach(p => out.motivos.push('Respuesta decisiva: '+p.texto));
+    return cierra('D', 'La intervención produce un cambio que obliga a evaluar de nuevo el '+
+      'conjunto resultante como máquina completa.');
+  }
+
+  /* 2. E: condición crítica que impide decidir, o cortafuegos fuera de certificación */
+  if (forzado === 'E')
+    return cierra('E', 'El tipo de intervención elegido es «'+out.tipoNombre+'».');
+  const cortafuegosFuera = dichoSi.some(p => p.id === 'q12') && (e||{}).familia === 'cortafuegos';
+  if (cortafuegosFuera){
+    out.motivos.push('Se altera una configuración no contemplada por la documentación o la '+
+      'certificación del fabricante en una puerta resistente al fuego. El encargo deja este '+
+      'caso entre D y E según evaluación técnica, y la aplicación no lo decide sola.');
+    return cierra('E', 'Puerta resistente al fuego con una configuración fuera de lo certificado.');
+  }
+  const criticasDesconocidas = out.abiertas.filter(x => x.critica && x.valor === 'desconocido');
+  if (criticasDesconocidas.length){
+    criticasDesconocidas.forEach(x =>
+      out.motivos.push('Sin determinar, y es crítica: '+x.texto));
+    return cierra('E', 'Hay '+criticasDesconocidas.length+' pregunta(s) crítica(s) marcadas como '+
+      'desconocidas, y sin ellas no puede decidirse entre B, C y D.');
+  }
+  if (enBlanco.length){
+    enBlanco.forEach(x => out.motivos.push('Sin contestar: '+x.texto));
+    return cierra('E', 'Quedan preguntas sin contestar y el tipo elegido no permite clasificar '+
+      'el caso sin ellas.');
+  }
+
+  /* 3. C: modificación relevante que necesita estudio adicional */
+  const paraRevisar  = out.abiertas.filter(x => x.valor === 'revision');
+  const desconocidas = out.abiertas.filter(x => x.valor === 'desconocido');
+  const aC = dichoSi.filter(p => PREGUNTA_DESTINO[p.id] === 'C');
+  if (aC.length || paraRevisar.length || desconocidas.length){
+    aC.forEach(p => out.motivos.push('Cambio que hay que valorar: '+p.texto));
+    paraRevisar.forEach(x => out.motivos.push('Marcada para revisión técnica: '+x.texto));
+    desconocidas.forEach(x => out.motivos.push('Sin determinar: '+x.texto));
+    out.motivos.push('La aplicación no decide por su cuenta si estos cambios son relevantes '+
+      'para la seguridad. Eso es precisamente lo que tiene que resolver la evaluación técnica.');
+    return cierra('C', 'Hay cambios que no son mantenimiento ordinario pero tampoco permiten '+
+      'concluir directamente que haya modificación sustancial.');
+  }
+
+  /* 4. B: solo mejora de seguridad, sin modificación sustancial */
+  if (TIPOS_MEJORA_SEGURIDAD.indexOf(out.tipo) >= 0)
+    return cierra('B', 'La intervención tiene por objeto mejorar la seguridad de la puerta y '+
+      'ninguna de las doce preguntas señala modificación sustancial.');
+
+  /* 5. A: mantenimiento o reparación ordinaria */
+  return cierra('A', 'Ninguna de las doce preguntas señala cambio: la intervención conserva la '+
+    'función y el uso previsto, no altera la lógica de seguridad, no introduce riesgos nuevos, '+
+    'no toca prestaciones esenciales, no motoriza una puerta manual y no altera una '+
+    'configuración certificada.');
+}
+
+/* ---- Componentes de la instalación, con foto de cada uno ----
+   clave, nombre, ayuda para el técnico, si lleva marca/modelo/serie. */
+/* ===== Modo de accionamiento y tipo de usuario =====
+   La UNE-EN 12453 hace depender el nivel de protección exigido de dos cosas: cómo se
+   da la orden de maniobra y quién usa la puerta. Hasta ahora la aplicación guardaba
+   las dos como texto y no las usaba para nada.
+
+   Lo que se modela aquí es la combinación, no la tabla de la norma. Los requisitos
+   concretos los rellena la empresa en Equipo, contrastándolos con su ejemplar: la
+   tabla nace vacía a propósito. Poner aquí de memoria qué protección exige cada
+   casilla sería inventarse el contenido de una norma que no tengo. */
+const MODOS_ACCIONAMIENTO = {
+  hombre_presente: {
+    nombre: 'Hombre presente',
+    ayuda: 'La maniobra solo avanza mientras se mantiene pulsado el mando, y se detiene '+
+           'al soltarlo. Quien acciona tiene el hueco de paso a la vista.',
+    exigeVista: true,
+  },
+  impulso_vista: {
+    nombre: 'Impulso con el hueco a la vista',
+    ayuda: 'Un toque lanza la maniobra completa. Quien acciona ve el hueco de paso.',
+    exigeVista: true,
+  },
+  impulso_sin_vista: {
+    nombre: 'Impulso sin ver el hueco',
+    ayuda: 'Un toque lanza la maniobra completa y quien acciona no ve el hueco: mando a '+
+           'distancia desde el coche, pulsador en otra estancia, control de accesos.',
+    exigeVista: false,
+  },
+  automatico: {
+    nombre: 'Funcionamiento automático',
+    ayuda: 'La puerta se mueve sola: detector de presencia, bucle, temporizador de cierre '+
+           'automático. Nadie da una orden consciente en cada maniobra.',
+    exigeVista: false,
+  },
+};
+const TIPOS_USUARIO = {
+  informados_privado: 'Personas informadas, uso privado',
+  informados_publico: 'Personas informadas, uso público',
+  no_informados:      'Personas no informadas, uso público',
+};
+
+/* Guía de clasificación por entorno. No decide por el técnico: le enseña cómo se
+   clasifica normalmente cada caso y qué hay que mirar. La norma considera informado
+   al usuario autorizado que ha recibido instrucciones de uso; lo determinante no es
+   que la puerta sea «residencial» o «industrial», sino quién puede llegar hasta ella.
+   Procede del documento de trabajo aportado por la empresa el 6 de octubre de 2026. */
+const GUIA_USUARIOS = [
+  ['Vivienda unifamiliar privada', 'informados_privado',
+   'Solo la usa la familia, identificada, y el público no está expuesto.'],
+  ['Garaje de comunidad', 'informados_privado',
+   'Grupo limitado e instruido, pero hay que mirar si la puerta da a zona pública: '+
+   'si la calle llega hasta ella, la cara exterior cambia de clasificación.'],
+  ['Industria, recinto cerrado', 'informados_privado',
+   'Personal formado en área privada.'],
+  ['Industria con puerta hacia la vía pública', 'no_informados',
+   'En la cara accesible al público hay que aplicar el nivel más alto.'],
+  ['Parking de empleados', 'informados_privado',
+   'Grupo identificado y formado, según dónde esté la puerta.'],
+  ['Parking público', 'no_informados', 'Público general.'],
+  ['Centro comercial', 'no_informados', 'Público general.'],
+  ['Supermercado', 'no_informados', 'Público general.'],
+  ['Hotel', 'no_informados', 'Público general en los accesos de clientes.'],
+  ['Hospital', 'no_informados',
+   'Público general y usuarios vulnerables: la valoración debe ser conservadora.'],
+  ['Colegio o guardería', 'no_informados',
+   'Público y presencia de menores: análisis reforzado del riesgo.'],
+  ['Logística 24 horas', '',
+   'La intensidad de uso aumenta las exigencias de fiabilidad y mantenimiento, '+
+   'pero no cambia por sí sola la clasificación del usuario: depende de quién accede.'],
+];
+
+/* ===== Peligros propios de cada tipo de puerta =====
+   Procedencia: documento de trabajo aportado por la empresa el 6 de octubre de 2026.
+   La idea que lo sostiene es importante: proteger el borde principal de cierre con el
+   nivel que exige la matriz NO agota las obligaciones. Cada movimiento tiene sus
+   puntos peligrosos y hay que valorarlos uno a uno.
+
+   Cada punto lleva el peligro y los elementos que habitualmente lo protegen. Lo
+   segundo es orientación, no una lista cerrada: la configuración definitiva depende
+   de distancias, velocidades, fuerzas, geometría, accesibilidad y del análisis de
+   riesgos de la instalación concreta. */
+const PELIGROS_POR_TIPO = {
+  corredera: [
+    ['cor_borde',    'Aplastamiento en el borde principal de cierre',
+                     'Limitación de fuerzas o borde sensible'],
+    ['cor_poste',    'Atrapamiento contra el poste o jamba de cierre',
+                     'Distancias de seguridad, resguardo o dispositivo sensible'],
+    ['cor_posterior','Atrapamiento en el borde posterior al abrir',
+                     'Protección del borde posterior o detección en esa zona'],
+    ['cor_arrastre', 'Arrastre hacia el hueco de recogida de la hoja',
+                     'Resguardo, malla o protección de la zona de arrastre'],
+    ['cor_cizalla',  'Cizallamiento entre la hoja y los elementos fijos',
+                     'Separaciones seguras o protección física'],
+  ],
+  batiente: [
+    ['bat_impacto', 'Impacto de la hoja en su barrido',
+                    'Limitación de fuerzas, detección o barrido señalizado y libre'],
+    ['bat_fijos',   'Aplastamiento entre la hoja y elementos fijos',
+                    'Distancias de seguridad o dispositivo sensible'],
+    ['bat_bisagra', 'Cizallamiento en la zona de bisagras',
+                    'Protección de la zona de bisagra'],
+    ['bat_atrapa',  'Atrapamiento en el cierre entre hojas',
+                    'Borde sensible o detección en la línea de cierre'],
+  ],
+  seccional: [
+    ['sec_inferior','Aplastamiento del borde inferior',
+                    'Limitación de fuerzas o banda de seguridad'],
+    ['sec_caida',   'Caída de la hoja por rotura de muelle o cable',
+                    'Paracaídas de muelle y de cable'],
+    ['sec_paneles', 'Atrapamiento de dedos entre paneles',
+                    'Perfilería de panel con protección antiatrapamiento'],
+    ['sec_cables',  'Riesgo de cables, muelles y tambores accesibles',
+                    'Protección o situación fuera de alcance'],
+  ],
+  basculante: [
+    ['bas_impacto', 'Impacto y aplastamiento del borde de cierre',
+                    'Limitación de fuerzas o borde sensible'],
+    ['bas_barrido', 'Barrido de la hoja hacia fuera o hacia dentro',
+                    'Zona de barrido libre y señalizada, o detección'],
+    ['bas_caida',   'Caída de la hoja',
+                    'Dispositivo anticaída'],
+    ['bas_brazos',  'Brazos, contrapesos y puntos de cizallamiento',
+                    'Protección o situación fuera de alcance'],
+  ],
+  rapida: [
+    ['rap_borde',    'Impacto del borde inferior con cierre rápido',
+                     'Borde sensible o sistema equivalente'],
+    ['rap_optica',   'Paso de personas durante el cierre',
+                     'Barrera óptica o fotocélulas que cubran el hueco'],
+    ['rap_velocidad','Fuerzas y velocidades por encima de lo admisible',
+                     'Control de fuerza y velocidad comprobado'],
+    ['rap_laterales','Arrastre o atrapamiento en guías y recogida',
+                     'Protección de las zonas laterales y de recogida'],
+  ],
+  enrollable: [
+    ['enr_borde',   'Aplastamiento del borde inferior',
+                    'Limitación de fuerzas o borde sensible'],
+    ['enr_caida',   'Caída o desenrollamiento de la lama',
+                    'Dispositivo anticaída o freno'],
+    ['enr_lateral', 'Atrapamiento lateral en las guías',
+                    'Guías con protección o separaciones seguras'],
+  ],
+  plegable: [
+    ['ple_cizalla',  'Cizallamiento entre hojas al plegarse',
+                     'Bordes sensibles en los puntos peligrosos'],
+    ['ple_borde',    'Aplastamiento del borde de cierre',
+                     'Limitación de fuerzas o borde sensible'],
+    ['ple_articula', 'Atrapamiento en las articulaciones accesibles',
+                     'Protección de las articulaciones'],
+  ],
+  barrera: [
+    ['bar_impacto', 'Impacto del mástil en su recorrido',
+                    'Limitación de fuerzas o mástil amortiguado'],
+    ['bar_descenso','Descenso sobre vehículos o personas',
+                    'Fotocélula, lazo de detección o detector de presencia'],
+    ['bar_senal',   'Mástil poco visible',
+                    'Señalización reflectante del mástil'],
+  ],
+};
+
+/* Qué grupo toca según el tipo de puerta. Si el tipo no se reconoce no se inventa
+   ninguno: el expediente avisará de que hay que valorarlo a mano. */
+function peligrosDe(e){
+  const t = (((e||{}).datos||{}).puerta||{}).tipo || '';
+  if (!t) return null;
+  const cual =
+      /corredera/i.test(t)  ? 'corredera'
+    : /batiente/i.test(t)   ? 'batiente'
+    : /seccional/i.test(t)  ? 'seccional'
+    : /basculante/i.test(t) ? 'basculante'
+    : /r[áa]pida/i.test(t)  ? 'rapida'
+    : /enrollable/i.test(t) ? 'enrollable'
+    : /plegable/i.test(t)   ? 'plegable'
+    : /barrera/i.test(t)    ? 'barrera' : null;
+  return cual ? { clave: cual, lista: PELIGROS_POR_TIPO[cual] } : null;
+}
+
+/* ===== Niveles de protección de la UNE-EN 12453 =====
+   Procedencia: documento de trabajo aportado por la empresa el 6 de octubre de 2026,
+   que interpreta la matriz de protección mínima del borde principal de cierre de la
+   UNE-EN 12453:2018+A1:2022. NO es el texto de la norma: es una lectura de ella.
+   Por eso la tabla es editable y cada expediente deja constancia de su origen.
+
+   La propia norma no se ha podido consultar: es de pago. Lo que aquí hay sirve para
+   trabajar y para discutirlo con la norma delante, no para darlo por bueno sin más. */
+const NIVELES_PROTECCION = {
+  A: { nombre:'A · Hombre presente',
+       detalle:'Pulsador mantenido. Al soltarlo, el movimiento debe detenerse.' },
+  B: { nombre:'B · Hombre presente con acceso restringido',
+       detalle:'Pulsador mantenido más llave, selector controlado o equivalente.' },
+  C: { nombre:'C · Limitación de fuerzas',
+       detalle:'Automatismo con limitación de fuerza verificada, o dispositivo sensible '+
+               'como banda o borde de seguridad.' },
+  D: { nombre:'D · Dispositivo adicional que reduce la probabilidad de contacto',
+       detalle:'Fotocélulas, barreras fotoeléctricas o detectores de presencia, según la '+
+               'geometría y el riesgo. Se usa junto con C, nunca en lugar de C.' },
+  E: { nombre:'E · Detección de presencia que impide el contacto',
+       detalle:'Sistema de presencia diseñado e instalado de modo que la hoja no pueda '+
+               'alcanzar a una persona en la zona peligrosa.' },
+};
+
+/* Matriz de protección mínima. Cada casilla lleva los niveles exigidos, los elementos
+   que normalmente los materializan y si la combinación es admisible.
+   Origen: el mismo documento de trabajo. Editable en Equipo. */
+const MATRIZ_PROTECCION_FABRICA = {
+  'hombre_presente|informados_privado': { niveles:'A', admisible:true,
+    elementos:'Pulsador mantenido situado de forma que permita controlar la maniobra.' },
+  'hombre_presente|informados_publico': { niveles:'B', admisible:true,
+    elementos:'Pulsador mantenido más llave o selector de acceso restringido.' },
+  'hombre_presente|no_informados': { niveles:'', admisible:false,
+    elementos:'No basta el funcionamiento a hombre presente. Hay que cambiar el sistema.' },
+
+  'impulso_vista|informados_privado': { niveles:'C o E', admisible:true,
+    elementos:'Limitación de fuerza o borde sensible; como alternativa, detección de presencia que impida el contacto.' },
+  'impulso_vista|informados_publico': { niveles:'C o E', admisible:true,
+    elementos:'Limitación de fuerza o borde sensible; como alternativa, detección de presencia equivalente.' },
+  'impulso_vista|no_informados': { niveles:'C+D o E', admisible:true,
+    elementos:'Limitación de fuerza más detección adicional de presencia; como alternativa, sistema de nivel E.' },
+
+  'impulso_sin_vista|informados_privado': { niveles:'C o E', admisible:true,
+    elementos:'Limitación de fuerza o borde sensible; como alternativa, sistema de nivel E.' },
+  'impulso_sin_vista|informados_publico': { niveles:'C+D o E', admisible:true,
+    elementos:'Limitación de fuerza más fotocélula o detector; como alternativa, sistema de nivel E.' },
+  'impulso_sin_vista|no_informados': { niveles:'C+D o E', admisible:true,
+    elementos:'Limitación de fuerza más detección adicional; como alternativa, sistema de nivel E.' },
+
+  'automatico|informados_privado': { niveles:'C+D o E', admisible:true,
+    elementos:'Limitación de fuerzas más detección de presencia; como alternativa, sistema de nivel E.' },
+  'automatico|informados_publico': { niveles:'C+D o E', admisible:true,
+    elementos:'Limitación de fuerzas más detección de presencia; como alternativa, sistema de nivel E.' },
+  'automatico|no_informados': { niveles:'C+D o E', admisible:true,
+    elementos:'Limitación de fuerzas más detección de presencia; como alternativa, sistema de nivel E.' },
+};
+
+
+/* Las puertas exclusivamente peatonales no se evalúan con esta matriz: su norma de
+   seguridad de uso es la UNE-EN 16005+A1:2024, con su propio método. */
+const MATRIZ_NO_APLICA_A = ['peatonal'];
+
+/* Lo que la empresa haya registrado para esta combinación. Vacío mientras no se
+   rellene en Equipo, y entonces la aplicación lo dice en vez de suponer. */
+function exigenciaProteccion(e){
+  const pu = ((e||{}).datos||{}).puerta || {};
+  const clave = (pu.modo || '') + '|' + (pu.usuarios || '');
+  const propia = (S.ajustes.proteccion || {})[clave];
+  const base = MATRIZ_PROTECCION_FABRICA[clave];
+  const fuera = MATRIZ_NO_APLICA_A.includes((e||{}).familia);
+  return {
+    clave, modo: pu.modo, usuarios: pu.usuarios, fuera,
+    // lo que la empresa haya escrito manda sobre la matriz de partida
+    ficha: propia || (base ? base.elementos : null),
+    niveles: base ? base.niveles : '',
+    admisible: base ? base.admisible !== false : true,
+    propia: !!propia,
+  };
+}
+
+const EXP_COMPONENTES = {
+  industrial: [
+    ['hoja',        'Hoja de la puerta',            'Paneles o bastidor. Retrata la puerta entera desde fuera.', 1],
+    ['guias',       'Guías, herrajes y rodamientos','Estado de guías, poleas y rodamientos.', 0],
+    ['equilibrado', 'Muelles o contrapesos',        'Sistema de equilibrado de la hoja.', 0],
+    ['paracaidas',  'Paracaídas o antirrotura',     'Dispositivo contra caída de la hoja por rotura de muelle o cable.', 1],
+    ['motor',       'Automatismo o motorreductor',  'Incluye la placa de características, legible.', 1],
+    ['cuadro',      'Cuadro de maniobra',           'Interior del cuadro, con las conexiones a la vista.', 1],
+    ['desbloqueo',  'Desbloqueo manual',            'Maniobra de emergencia y su señalización.', 1],
+    ['fotocelulas', 'Fotocélulas',                  'Cada pareja instalada, con su altura respecto al suelo.', 1],
+    ['banda',       'Banda de seguridad',           'Banda del canto de cierre y su cuadro de control.', 1],
+    ['limitador',   'Limitador de fuerza',          'Dispositivo o función del cuadro que limita la fuerza.', 1],
+    ['finales',     'Finales de carrera y topes',   'Finales eléctricos y topes mecánicos.', 0],
+    ['destellante', 'Destellante y señal acústica', 'Si la instalación lo lleva.', 0],
+    ['mandos',      'Mandos y pulsadores',          'Emisores, pulsador, selector de llave, columna.', 0],
+    ['paro',        'Parada de emergencia',         'Seta de parada, si procede por tratarse de centro de trabajo.', 0],
+    ['electrico',   'Protecciones eléctricas',      'Cuadro de alimentación, diferencial y magnetotérmico.', 0],
+    ['placa',       'Placa de características y marcado CE', 'Etiqueta colocada en la puerta, legible.', 0],
+    ['senal',       'Señalización de peligro',      'Señales de riesgo y de uso colocadas en la puerta.', 0],
+  ],
+  peatonal: [
+    ['hoja',        'Hojas de la puerta',           'Conjunto de la puerta desde el exterior.', 1],
+    ['operador',    'Operador',                     'Mecanismo y su placa de características.', 1],
+    ['cuadro',      'Electrónica de control',       'Cuadro o central con sus conexiones.', 1],
+    ['radar_ext',   'Radar exterior de apertura',   'Detector de apertura por el lado exterior.', 1],
+    ['radar_int',   'Radar interior de apertura',   'Detector de apertura por el lado interior.', 1],
+    ['presencia',   'Sensores de presencia',        'Sensores que vigilan el hueco de paso en ambos sentidos.', 1],
+    ['laterales',   'Protección lateral y de dedos','Protección de las zonas de arrastre y atrapamiento.', 0],
+    ['breakout',    'Apertura antipánico o breakout','Sistema de apertura manual en sentido de evacuación.', 1],
+    ['bateria',     'Batería de emergencia',        'Alimentación de apoyo para la apertura ante fallo de red.', 1],
+    ['pulsador',    'Pulsador de emergencia',       'Pulsador de apertura y parada, y su señalización.', 1],
+    ['selector',    'Selector de programa',         'Mando de modos de funcionamiento.', 1],
+    ['vinilos',     'Señalización en el vidrio',    'Marcas a la altura de la vista en superficies transparentes.', 0],
+    ['vidrio',      'Vidrio de seguridad',          'Marcado del vidrio donde se vea su clasificación.', 0],
+    ['placa',       'Placa de características y marcado CE', 'Etiqueta colocada en la puerta, legible.', 0],
+  ],
+  barrera: [
+    ['mastil',      'Mástil',                       'Barrera completa, en posición cerrada.', 1],
+    ['cuerpo',      'Cuerpo o armario',             'Conjunto motriz y su placa de características.', 1],
+    ['cuadro',      'Cuadro de maniobra',           'Interior del cuadro con sus conexiones.', 1],
+    ['bucle',       'Bucle magnético',              'Detector de masa metálica y su central.', 1],
+    ['fotocelulas', 'Fotocélulas',                  'Cada pareja instalada.', 1],
+    ['banda',       'Banda de seguridad del mástil','Protección del canto del mástil, si la lleva.', 1],
+    ['desbloqueo',  'Desbloqueo manual',            'Maniobra de emergencia y su señalización.', 1],
+    ['reflectante', 'Señalización reflectante',     'Bandas reflectantes del mástil.', 0],
+    ['semaforo',    'Semáforo o destellante',       'Si la instalación lo lleva.', 0],
+    ['mandos',      'Mandos y pulsadores',          'Emisores, lector, columna de acceso.', 0],
+    ['electrico',   'Protecciones eléctricas',      'Cuadro de alimentación y protecciones.', 0],
+    ['placa',       'Placa de características y marcado CE', 'Etiqueta colocada en la barrera, legible.', 0],
+  ],
+  cortafuegos: [
+    ['hoja',        'Hoja resistente al fuego',     'Puerta completa cerrada.', 1],
+    ['marco',       'Marco y sellado perimetral',   'Fijación al hueco y sellado.', 0],
+    ['juntas',      'Juntas intumescentes',         'Juntas del perímetro de la hoja.', 0],
+    ['cierrapuertas','Cierrapuertas',               'Mecanismo y su regulación.', 1],
+    ['retenedor',   'Retenedor electromagnético',   'Electroimán de retención, si lo lleva.', 1],
+    ['selector',    'Selector de cierre',           'Dispositivo de secuencia en puertas de dos hojas.', 1],
+    ['antipanico',  'Barra antipánico o manilla',   'Herraje de apertura en sentido de evacuación.', 1],
+    ['deteccion',   'Conexión a central de detección', 'Enlace con el sistema de detección de incendios.', 1],
+    ['motor',       'Automatismo',                  'Si la puerta es motorizada, con su placa.', 1],
+    ['etiqueta',    'Etiqueta de clasificación EI', 'Etiqueta con la clase de resistencia al fuego, legible.', 0],
+    ['placa',       'Placa de características y marcado CE', 'Etiqueta colocada en la puerta, legible.', 0],
+  ],
+};
+
+/* ---- Comprobaciones de cumplimiento ----
+   c: clave · t: qué se comprueba · n: de dónde sale la exigencia
+   f: pide foto · critico: si falla, la puerta no cumple */
+/* ===== Cuándo procede cada comprobación =====
+   Una puerta de una hoja no tiene selector de secuencia, y una seccional no se sale
+   de las guías como una corredera. Marcar esas comprobaciones como conformes sería
+   inventar un resultado favorable. Aquí se decide si procede preguntarlas.
+
+   Cada regla devuelve true (procede), false (no procede, con su motivo) o null
+   (no se sabe todavía, porque falta el dato de configuración: entonces se pregunta). */
+const APLICA_COMPROBACION = {
+  descarrile: (pu) => !pu.tipo ? null
+    : /corredera/i.test(pu.tipo) ? true
+    : { no:'La puerta no es corredera: no tiene guías de las que descarrilar.' },
+  secuencia: (pu) => !pu.hojas ? null
+    : (+pu.hojas >= 2) ? true
+    : { no:'La puerta tiene una sola hoja: no hay secuencia de cierre que ordenar.' },
+  caida: (pu) => !pu.tipo ? null
+    : /corredera|barrera/i.test(pu.tipo)
+      ? { no:'La hoja no se sostiene por muelle ni cable sobre el hueco de paso.' }
+      : true,
+};
+/* Lo mismo para los elementos de la instalación. */
+const APLICA_COMPONENTE = {
+  selector: (pu) => !pu.hojas ? null
+    : (+pu.hojas >= 2) ? true
+    : { no:'Puerta de una sola hoja.' },
+  paracaidas: (pu) => !pu.tipo ? null
+    : /corredera|barrera/i.test(pu.tipo)
+      ? { no:'La hoja no cuelga de muelle ni cable sobre el hueco de paso.' }
+      : true,
+};
+/* Devuelve true, false o null según la regla y los datos de la puerta. */
+function procede(mapa, clave, e){
+  const regla = mapa[clave];
+  if (!regla) return true;
+  const pu = ((e||{}).datos||{}).puerta || {};
+  const r = regla(pu);
+  return r === null ? null : (r === true ? true : r);
+}
+
+const EXP_COMPROBACIONES = {
+  industrial: [
+    ['limitacion',  'La fuerza de la puerta está limitada y medida dentro de los valores de la norma',
+       'UNE-EN 12453, anexo A', 0, 1],
+    ['presencia',   'Hay detección de presencia en todo el recorrido peligroso (fotocélulas, banda o cortina)',
+       'UNE-EN 12453 · UNE-EN 12978', 1, 1],
+    ['aplastamiento','Las zonas de aplastamiento, cizallamiento y arrastre están protegidas o fuera de alcance',
+       'UNE-EN 12604 · UNE-EN 12453', 1, 1],
+    ['caida',       'La hoja no puede caer ante rotura de muelle o cable (paracaídas o doble cable)',
+       'UNE-EN 12604 · RD 486/1997 anexo I.A.6.5.º', 1, 1],
+    ['manual',      'La puerta se puede abrir a mano si falla la corriente, y el desbloqueo está señalizado',
+       'UNE-EN 12453 · RD 486/1997 anexo I.A.6.6.º', 1, 1],
+    ['parada',      'Hay parada de emergencia identificable y accesible, cuando la puerta está en centro de trabajo',
+       'RD 486/1997 anexo I.A.6.6.º', 1, 0],
+    ['descarrile',  'La corredera lleva sistema que impide que se salga de las guías y caiga',
+       'RD 486/1997 anexo I.A.6.4.º', 1, 0],
+    ['paso',        'Los peatones pueden pasar sin riesgo, o hay puerta peatonal próxima y señalizada',
+       'RD 486/1997 anexo I.A.6.8.º', 1, 0],
+    ['finales',     'Finales de carrera y topes mecánicos correctamente puestos y fijados',
+       'UNE-EN 12604', 0, 0],
+    ['electrico',   'Instalación eléctrica con protección diferencial y magnetotérmica, y puesta a tierra',
+       'Reglamento Electrotécnico de Baja Tensión', 0, 1],
+    ['marcado',     'Marcado CE y placa de características colocados en la puerta y legibles',
+       'Reglamento (UE) 305/2011 · marco de máquinas vigente', 1, 1],
+    ['senal',       'Señalización de riesgos colocada y visible',
+       'UNE 85635:2012', 1, 0],
+    ['libro',       'Libro de mantenimiento entregado y cumplimentado',
+       'UNE-EN 12453:2018+A1:2022', 0, 1],
+    ['manual_uso',  'Manual de uso y mantenimiento entregado al titular',
+       'UNE-EN 12453:2018+A1:2022 · Código Técnico de la Edificación', 0, 1],
+  ],
+  peatonal: [
+    ['presencia',   'Sensores de presencia que vigilan el hueco de paso por los dos lados',
+       'UNE-EN 16005', 1, 1],
+    ['apertura',    'Sensores de apertura con cobertura suficiente a ambos lados',
+       'UNE-EN 16005', 1, 1],
+    ['laterales',   'Zonas de arrastre y atrapamiento lateral protegidas o con distancia de seguridad',
+       'UNE-EN 16005', 1, 1],
+    ['dedos',       'Protección contra atrapamiento de dedos en los cantos principales',
+       'UNE-EN 16005', 1, 0],
+    ['fuerzas',     'Fuerzas de la puerta dentro de los límites, medidas y registradas',
+       'UNE-EN 16005', 0, 1],
+    ['evacuacion',  'Si está en recorrido de evacuación: abre ante fallo de corriente y tiene apertura manual señalizada',
+       'UNE-EN 16005 · Código Técnico de la Edificación DB-SI', 1, 1],
+    ['breakout',    'Apertura antipánico en el sentido de evacuación, con la fuerza admisible',
+       'UNE-EN 16005', 1, 0],
+    ['pulsador',    'Pulsador de emergencia accesible y señalizado',
+       'UNE-EN 16005', 1, 0],
+    ['vidrio',      'Superficies transparentes señalizadas a la altura de la vista',
+       'RD 486/1997 anexo I.A.6.1.º', 1, 1],
+    ['rotura',      'Vidrio de seguridad o protegido contra rotura peligrosa',
+       'RD 486/1997 anexo I.A.6.2.º', 0, 1],
+    ['electrico',   'Instalación eléctrica con protecciones y puesta a tierra',
+       'Reglamento Electrotécnico de Baja Tensión', 0, 1],
+    ['marcado',     'Marcado CE y placa de características colocados y legibles',
+       'Reglamento (UE) 305/2011 · marco de máquinas vigente', 1, 1],
+    ['libro',       'Libro de mantenimiento entregado y cumplimentado',
+       'UNE-EN 16005', 0, 1],
+    ['manual_uso',  'Manual de uso y mantenimiento entregado al titular',
+       'UNE-EN 16005', 0, 1],
+  ],
+  barrera: [
+    ['limitacion',  'La fuerza del mástil está limitada y medida dentro de los valores de la norma',
+       'UNE-EN 12453, anexo A', 0, 1],
+    ['presencia',   'Detección de presencia en la zona de barrido del mástil',
+       'UNE-EN 12453 · UNE-EN 12978', 1, 1],
+    ['aplastamiento','Zona de aplastamiento bajo el mástil protegida o con distancia de seguridad',
+       'UNE-EN 12453', 1, 1],
+    ['manual',      'Desbloqueo manual accesible y señalizado',
+       'UNE-EN 12453', 1, 1],
+    ['reflectante', 'Mástil señalizado con bandas reflectantes visibles de día y de noche',
+       'UNE 85635:2012', 1, 0],
+    ['peaton',      'El paso de peatones está resuelto fuera de la zona de barrido del mástil',
+       'RD 486/1997 anexo I.A.6.8.º', 1, 0],
+    ['electrico',   'Instalación eléctrica con protecciones y puesta a tierra',
+       'Reglamento Electrotécnico de Baja Tensión', 0, 1],
+    ['marcado',     'Marcado CE y placa de características colocados y legibles',
+       'Reglamento (UE) 305/2011 · marco de máquinas vigente', 1, 1],
+    ['libro',       'Libro de mantenimiento entregado y cumplimentado',
+       'UNE-EN 12453:2018+A1:2022', 0, 1],
+  ],
+  cortafuegos: [
+    ['clase',       'La clase de resistencia al fuego declarada es la que exige el proyecto',
+       'UNE-EN 16034 · Código Técnico de la Edificación DB-SI', 0, 1],
+    ['etiqueta',    'Etiqueta de clasificación colocada en la hoja y legible',
+       'UNE-EN 16034', 1, 1],
+    ['cierre',      'La puerta cierra por completo por sí sola desde cualquier posición',
+       'UNE-EN 16034 · DB-SI', 1, 1],
+    ['secuencia',   'En puertas de dos hojas, el selector de cierre ordena la secuencia correctamente',
+       'UNE-EN 16034', 1, 0],
+    ['retenedor',   'Los retenedores liberan la puerta al activarse la detección de incendios',
+       'UNE-EN 16034 · DB-SI', 1, 1],
+    ['evacuacion',  'Abre en el sentido de evacuación con el herraje y la fuerza admisibles',
+       'DB-SI · DB-SUA', 1, 1],
+    ['sellado',     'Marco sellado al hueco con material compatible con la clase declarada',
+       'UNE-EN 16034', 1, 1],
+    ['juntas',      'Juntas intumescentes completas y sin cortes',
+       'UNE-EN 16034', 1, 1],
+    ['organismo',   'Consta el organismo notificado que interviene en la evaluación',
+       'Reglamento (UE) 305/2011', 0, 1],
+    ['marcado',     'Marcado CE y declaración de prestaciones disponibles',
+       'Reglamento (UE) 305/2011', 1, 1],
+    ['libro',       'Libro de mantenimiento entregado y cumplimentado',
+       'UNE-EN 12453:2018+A1:2022', 0, 0],
+  ],
+};
+
+/* ---- Prestaciones declaradas en la declaración de prestaciones ----
+   Las obligatorias no admiten "prestación no determinada". El desglose procede
+   de la tabla ZA.1 de la norma de producto: hay que contrastarlo con el
+   ejemplar de la UNE-EN 13241:2004+A2:2017, que es de pago. */
+const EXP_PRESTACIONES = {
+  industrial: [
+    ['resist_mec',  'Resistencia mecánica y estabilidad',        'UNE-EN 12604', 1],
+    ['vidrio_geo',  'Geometría segura de componentes de vidrio', 'UNE-EN 12604', 1],
+    ['fuerzas',     'Fuerzas de maniobra (puertas motorizadas)', 'UNE-EN 12453', 1],
+    ['apertura_seg','Apertura segura (puertas de movimiento vertical)', 'UNE-EN 12453', 1],
+    ['agua',        'Estanquidad al agua',                        'UNE-EN 12425', 0],
+    ['sustancias',  'Emisión de sustancias peligrosas',           '—', 0],
+    ['viento',      'Resistencia a la carga de viento',           'UNE-EN 12424', 0],
+    ['termica',     'Resistencia térmica',                        'UNE-EN 12428', 0],
+    ['aire',        'Permeabilidad al aire',                      'UNE-EN 12426', 0],
+    ['durabilidad', 'Durabilidad de las prestaciones (ciclos)',    'UNE-EN 12604', 0],
+  ],
+  peatonal: [
+    ['fuerzas',     'Fuerzas de maniobra',                        'UNE-EN 16005', 1],
+    ['resist_mec',  'Resistencia mecánica',                       'UNE-EN 16361', 1],
+    ['sustancias',  'Emisión de sustancias peligrosas',           '—', 0],
+    ['agua',        'Estanquidad al agua',                        'UNE-EN 16361', 0],
+    ['viento',      'Resistencia a la carga de viento',           'UNE-EN 16361', 0],
+    ['termica',     'Transmitancia térmica',                      'UNE-EN 16361', 0],
+    ['aire',        'Permeabilidad al aire',                      'UNE-EN 16361', 0],
+    ['durabilidad', 'Durabilidad (ciclos)',                       'UNE-EN 16361', 0],
+  ],
+  barrera: [
+    ['resist_mec',  'Resistencia mecánica y estabilidad',         'UNE-EN 12604', 1],
+    ['fuerzas',     'Fuerzas de maniobra',                        'UNE-EN 12453', 1],
+    ['durabilidad', 'Durabilidad (ciclos)',                       'UNE-EN 12604', 0],
+  ],
+  cortafuegos: [
+    ['fuego',       'Resistencia al fuego (clase EI)',            'UNE-EN 16034', 1],
+    ['humos',       'Control de humos (clase Sa / S200)',         'UNE-EN 16034', 0],
+    ['autocierre',  'Capacidad de cierre automático (ciclos)',    'UNE-EN 16034', 1],
+    ['resist_mec',  'Resistencia mecánica y estabilidad',         'UNE-EN 12604', 1],
+    ['fuerzas',     'Fuerzas de maniobra, si es motorizada',      'UNE-EN 12453', 0],
+    ['durabilidad', 'Durabilidad (ciclos)',                       'UNE-EN 12604', 0],
+  ],
+};
+
+/* Puntos donde la norma pide medir la fuerza. Para correderas y plegables son
+   tres alturas; para abatibles, el centro y los extremos. */
+const EXP_PUNTOS_FUERZA = {
+  industrial: ['Canto de cierre, a 50 mm del suelo', 'Canto de cierre, a 1,5 m', 'Canto de cierre, parte alta'],
+  peatonal:   ['Canto principal de cierre', 'Canto secundario', 'Zona de arrastre lateral'],
+  barrera:    ['Extremo del mástil', 'Centro del mástil', 'Zona próxima al eje'],
+  cortafuegos:['Canto de cierre, a 50 mm del suelo', 'Canto de cierre, a 1,5 m', 'Canto de cierre, parte alta'],
+};
+
+const LIM_FUERZA_FABRICA = { fd_aplastamiento_n:400, fd_impacto_n:1400, fs_estatica_n:150,
+                             fs_tiempo_s:5, fe_residual_n:25, td_dinamico_s:0.75 };
+const limitesFuerza = () => Object.assign({}, LIM_FUERZA_FABRICA, S.ajustes.limites_fuerza || {});
+
+/* ===== Perfiles de ensayo de fuerzas =====
+   Una puerta industrial, una peatonal y una barrera no se ensayan igual: cambian la
+   norma, los puntos de medida y los límites. Hasta ahora la aplicación aplicaba a
+   todas el mismo juego de límites, que además procede de reproducciones sectoriales
+   y no del texto de la norma.
+
+   Por eso cada perfil nace con validado:false. Mientras un perfil no esté contrastado
+   con el ejemplar de la norma y marcado como validado en Equipo, la aplicación registra
+   las medidas pero NO dictamina: imprime «Pendiente de evaluación» en lugar de «Pasa».
+   Esto no es una limitación provisional del programa, es lo que corresponde: sin fuente
+   verificada no hay dictamen. */
+const PERFILES_FUERZA = {
+  industrial: {
+    nombre: 'Puertas industriales, comerciales y de garaje',
+    norma: 'UNE-EN 12453:2018+A1:2022', apartado: 'pendiente de concretar',
+    magnitudes: 'Fd fuerza dinámica máxima (N), Fs fuerza estática (N), '+
+                'Fe fuerza residual (N), td tiempo por encima de la fuerza estática (s)',
+    validado: false,
+  },
+  peatonal: {
+    nombre: 'Puertas peatonales automáticas',
+    norma: 'UNE-EN 16005+A1:2024', apartado: 'pendiente de concretar',
+    magnitudes: 'Fd fuerza dinámica máxima (N), Fs fuerza estática (N), '+
+                'Fe fuerza residual (N), td tiempo por encima de la fuerza estática (s)',
+    validado: false,
+  },
+  barrera: {
+    nombre: 'Barreras de vehículos',
+    norma: 'UNE-EN 12453:2018+A1:2022', apartado: 'pendiente de concretar',
+    magnitudes: 'Fd fuerza dinámica máxima (N), Fs fuerza estática (N), '+
+                'Fe fuerza residual (N), td tiempo por encima de la fuerza estática (s)',
+    validado: false,
+  },
+  cortafuegos: {
+    nombre: 'Puertas con función de resistencia al fuego',
+    norma: 'UNE-EN 12453:2018+A1:2022 para el funcionamiento ordinario',
+    apartado: 'pendiente de concretar',
+    magnitudes: 'Fd fuerza dinámica máxima (N), Fs fuerza estática (N), '+
+                'Fe fuerza residual (N), td tiempo por encima de la fuerza estática (s)',
+    nota: 'El cierre en caso de incendio se rige por el diseño del conjunto certificado '+
+          'y no se evalúa con este perfil.',
+    validado: false,
+  },
+};
+/* El perfil que toca, con lo que el usuario haya guardado en ajustes encima. */
+function perfilFuerza(e){
+  const base = PERFILES_FUERZA[(e||{}).familia] || PERFILES_FUERZA.industrial;
+  const guardado = (S.ajustes.perfiles_fuerza || {})[(e||{}).familia] || {};
+  return Object.assign({}, base, guardado);
+}
+/* Datos de la empresa. Los que vienen de serie son los que David confirmó; el resto
+   se dejan vacíos a propósito, porque un dato inventado en una declaración firmada es
+   peor que un hueco. El código postal y la web no constan: no se rellenan solos. */
+const datosEmpresa = () => Object.assign({
+  razon_social:'Ariza p y automatismos S.L.U.', nombre_comercial:'ARIZA Puertas Automáticas',
+  nif:'B72004849', domicilio:'Calle Orilla 19', poblacion:'El Puerto de Santa María',
+  provincia:'Cádiz', cp:'', telefono:'661 352 795 · 610 411 032',
+  email:'arizapuertasautomaticas@gmail.com', web:'', registro:'',
+  representante:'David Ariza Arana', cargo_firmante:'Administrador único',
+  responsable_tecnico:''
+}, S.ajustes.empresa || {});
+
+/* ---- Estado del expediente abierto ---- */
+const expDe = id => S.expedientes.find(x => x.id === id);
+const expFotos = (ap) => (S.expFotos || []).filter(f => f.apartado === ap)
+  .sort((a,b) => (a.orden||0) - (b.orden||0));
+
+function expVal(ruta, def){
+  const e = expDe(S.exp); if (!e) return def;
+  const partes = ruta.split('.');
+  let v = e.datos || {};
+  for (const p of partes){ if (v == null) return def; v = v[p]; }
+  return v === undefined || v === null ? def : v;
+}
+function expPon(ruta, valor){
+  const e = expDe(S.exp); if (!e) return;
+  const partes = ruta.split('.');
+  e.datos = e.datos || {};
+  let v = e.datos;
+  for (let i = 0; i < partes.length - 1; i++){
+    if (typeof v[partes[i]] !== 'object' || v[partes[i]] === null) v[partes[i]] = {};
+    v = v[partes[i]];
+  }
+  v[partes[partes.length-1]] = valor;
+  guardarExpediente();
+}
+let expGuardaT = 0;
+function guardarExpediente(){
+  const e = expDe(S.exp); if (!e) return;
+  S.expSucio = true;
+  clearTimeout(expGuardaT);
+  expGuardaT = setTimeout(async () => {
+    try {
+      const { error } = await sb.from('expedientes')
+        .update({ datos: e.datos, actualizado: new Date().toISOString() }).eq('id', e.id);
+      if (error) throw error;
+      S.expSucio = false;
+      const av = document.getElementById('exp-guardado');
+      if (av){ av.textContent = 'Guardado'; setTimeout(()=>{ if(av.isConnected) av.textContent=''; }, 1800); }
+    } catch(err){ fallo(err); }
+  }, 700);
+}
+
+/* Qué secciones tiene este expediente, según la situación y la familia */
+function expSecciones(e){
+  const s = [
+    /* Decisión previa y obligatoria: va la primera a propósito. */
+    ['intervencion','Tipo de intervención'],
+    ['obra',        'Dónde y para quién'],
+    ['puerta',      'La puerta'],
+    ['componentes', 'Elementos de la instalación'],
+    ['cumplimiento','Cumplimiento de normativa'],
+  ];
+  if (expVal('puerta.motorizada', 'si') === 'si') s.push(['fuerzas', 'Ensayo de fuerzas']);
+  /* Las prestaciones declaradas solo tienen sentido si de esta familia sale una
+     declaración de prestaciones. En peatonales y en barreras de solo vehículos no
+     sale ninguna, así que no se pide. */
+  if (EXP_ES_FABRICANTE(e.situacion) && regimenDe(e).ddp) s.push(['prestaciones', 'Prestaciones declaradas']);
+  s.push(['docs', 'Documentación de fabricantes']);
+  s.push(['riesgos', e.situacion === 'adecuacion' ? 'Riesgos y deficiencias' : 'Riesgos residuales']);
+  s.push(['entrega', 'Entrega y firma']);
+  return s;
+}
+
+/* Lo que falta por rellenar, para que nadie emita un expediente a medias */
+/* ===== Validador de emisión =====
+   Separa lo que impide emitir (bloqueo) de lo que solo hay que saber (advertencia).
+   Un borrador se puede exportar siempre; un documento definitivo, solo si no hay
+   ningún bloqueo. La regla de fondo: antes decir «no puede determinarse» que afirmar
+   algo que no se sostiene. */
+function validarExpediente(e){
+  const bloqueos = [], avisos = [], d = e.datos || {};
+  const em = datosEmpresa();
+  const reg = regimenDe(e);
+  const fab = EXP_ES_FABRICANTE(e.situacion);
+
+  const B = (area, texto) => bloqueos.push({ area, texto });
+  const A = (area, texto) => avisos.push({ area, texto });
+
+  /* --- Intervención: la decisión previa manda sobre todo lo demás ---
+     Si el motor no puede determinar la naturaleza de la intervención, o la
+     determina en un resultado que el encargo declara no cerrable, no se emite
+     nada. Es la regla de fondo: antes «no puede determinarse» que un documento
+     jurídicamente dudoso. */
+  const iv = evaluarIntervencion(e);
+  iv.bloqueos.forEach(t => B('Intervención', t));
+  if (iv.resultado && !iv.cerrable && !iv.bloqueos.length)
+    B('Intervención', 'El resultado '+iv.resultado+' no permite cerrar el expediente: '+
+      (iv.estado || RESULTADOS_INTERVENCION[iv.resultado].nombre));
+  if (iv.resultado === 'B' || iv.resultado === 'A'){
+    if (fab) B('Intervención', 'El motor clasifica esta intervención como «'+
+      RESULTADOS_INTERVENCION[iv.resultado].nombre+'», que no genera una declaración propia '+
+      'nueva, pero el expediente está planteado como fabricante. No pueden ser las dos cosas: '+
+      'revisa el tipo de intervención o la situación del expediente.');
+  }
+
+  /* --- Legal --- */
+  if (!e.fecha_puesta_servicio) B('Legal', 'Falta la fecha de puesta en servicio, que decide el marco legal aplicable.');
+  if (fab){
+    if (!((d.entrega||{}).firmante || em.representante))
+      B('Legal', 'No consta el representante que firma la declaración.');
+    if (!em.responsable_tecnico)
+      B('Legal', 'No puede emitirse la declaración definitiva hasta identificar a la persona '+
+        'facultada para reunir el expediente técnico.');
+    if (!em.nif || !em.domicilio || !em.cp || !em.poblacion)
+      B('Legal', 'Faltan datos de la empresa que son obligatorios en una declaración: '+
+        [!em.nif&&'NIF', !em.domicilio&&'domicilio', !em.cp&&'código postal',
+         !em.poblacion&&'población'].filter(Boolean).join(', ')+'.');
+  }
+
+  /* --- Prestaciones y declaración de prestaciones --- */
+  if (fab && reg.ddp){
+    const pz = d.prest || {};
+    const pv = pz.v || {};
+    const lista = EXP_PRESTACIONES[e.familia] || [];
+    const declaradas = lista.filter(([k]) => {
+      const v = (pv[k]||'').trim();
+      return v && !/^npd$/i.test(v) && !/^pendiente$/i.test(v);
+    });
+    if (lista.length && !declaradas.length)
+      B('Prestaciones', 'No puede emitirse una declaración de prestaciones con todas las '+
+        'características esenciales como NPD: hay que declarar la prestación de al menos una.');
+    if (!pz.via) B('Prestaciones', 'No consta por qué vía se declaran las prestaciones.');
+    /* Artículo 37: no basta con que exista un código de DTE */
+    if (['micro','unidad'].includes(pz.via)){
+      const art = pz.via === 'micro' ? '37' : '38';
+      if (!pz.dte_codigo) B('DTE', 'Falta la referencia de la Documentación Técnica Específica.');
+      if (pz.dte_ok !== 'si')
+        B('DTE', 'No puede emitirse la declaración de prestaciones mediante el procedimiento '+
+          'del artículo '+art+' sin confirmar que se cumplen sus condiciones.');
+      if (!pz.dte_responsable)
+        B('DTE', 'La Documentación Técnica Específica no tiene responsable identificado.');
+      if (!pz.dte_fecha)
+        B('DTE', 'La Documentación Técnica Específica no tiene fecha.');
+      if (!pz.dte_ubicacion)
+        B('DTE', 'No consta dónde está archivada la Documentación Técnica Específica: '+
+          'un número de referencia no demuestra que el documento exista.');
+      if (pz.via === 'micro' && pz.micro_comprobada !== 'si')
+        B('DTE', 'No consta comprobada la condición de microempresa, que es la que habilita '+
+          'el procedimiento del artículo 37.');
+    }
+  }
+
+  /* --- Ensayo de fuerzas --- */
+  const f = d.fuerzas || {};
+  const motor = (d.puerta||{}).motorizada !== 'no';
+  if (motor && f.incluir !== 'no'){
+    const perfil = perfilFuerza(e);
+    const puntos = EXP_PUNTOS_FUERZA[e.familia] || [];
+    const conMedida = puntos.filter((p, i) => { const m = f['m'+i]||{};
+      return (+m.fd||0)||(+m.fs||0)||(+m.fe||0)||(+m.td||0); });
+    if (!conMedida.length)
+      B('Ensayo', 'El ensayo de fuerzas está marcado como procedente pero no tiene ninguna medición.');
+    if (!f.instrumento) B('Ensayo', 'El ensayo de fuerzas no identifica el instrumento de medida.');
+    if (!f.calibracion) B('Ensayo', 'Falta la referencia de calibración del instrumento de medida.');
+    if (!f.fecha) B('Ensayo', 'El ensayo de fuerzas no tiene fecha.');
+    if (!(d.entrega||{}).tecnico) A('Ensayo', 'No consta el técnico que ejecutó el ensayo.');
+    if (!perfil.validado)
+      A('Ensayo', 'El perfil de ensayo aplicado no está contrastado con el texto de la norma: '+
+        'las medidas quedan registradas pero la aplicación no dictamina el resultado.');
+  }
+
+  /* --- Protección: sin datos no se calcula nivel --- */
+  {
+    const pu = d.puerta || {};
+    if (motor && !MATRIZ_NO_APLICA_A.includes(e.familia)){
+      if (!pu.modo || !pu.usuarios)
+        B('Protección', 'No es posible determinar el nivel mínimo de protección: faltan el modo '+
+          'de accionamiento o el tipo de usuario.');
+      else {
+        const base = MATRIZ_PROTECCION_FABRICA[pu.modo+'|'+pu.usuarios];
+        if (base && base.admisible === false)
+          B('Protección', 'La combinación de accionamiento y tipo de usuario declarada no es '+
+            'admisible: hay que cambiar el sistema antes de certificar.');
+      }
+      if (pu.modo === 'hombre_presente' && pu.hp_comprobado !== 'si')
+        B('Protección', 'Se ha declarado hombre presente sin comprobar que la puerta se detiene '+
+          'al soltar el mando.');
+    }
+  }
+
+  /* --- Identificación original --- */
+  {
+    const pu = d.puerta || {};
+    const MOV = ['corredera','seccional','batiente','enrollable','basculante','plegable'];
+    const enTipo = MOV.find(m => new RegExp(m,'i').test(pu.tipo||''));
+    const enDen  = MOV.find(m => new RegExp(m,'i').test(pu.denominacion||''));
+    if (enTipo && enDen && enTipo !== enDen)
+      B('Identificación', 'El tipo dice «'+pu.tipo+'» y la denominación comercial dice «'+
+        pu.denominacion+'»: no pueden ser las dos.');
+    if (e.situacion === 'adecuacion' || e.situacion === 'modificacion'){
+      const o = d.orig || {};
+      if (!o.marcado)
+        B('Identificación', 'No consta en qué estado estaba el marcado CE original de la puerta.');
+      if (['ilegible','ausente','desconocido'].includes(o.marcado)){
+        A('Identificación', 'El marcado CE original no se ha podido comprobar: la comprobación '+
+          'de marcado no puede darse por conforme, y nuestra etiqueta de mantenimiento no lo sustituye.');
+        const kd2 = d.cumple || {};
+        if ((kd2.marcado||{}).v === 'si')
+          B('Identificación', 'La comprobación del marcado CE está marcada como conforme, pero el '+
+            'marcado original consta como no comprobado o inexistente. No pueden ser las dos cosas.');
+      }
+      if (!o.fabricante) A('Identificación', 'No consta el fabricante original de la puerta.');
+    }
+  }
+
+  /* --- Temporal --- */
+  {
+    const hoyStr = hoy(), ps = e.fecha_puesta_servicio, fe = (d.fuerzas||{}).fecha;
+    const firma = (d.entrega||{}).fecha;
+    if (ps && ps > hoyStr)
+      B('Fechas', 'La puesta en servicio está fechada en el futuro ('+fechaCorta(ps)+').');
+    if (fe && fe > hoyStr) B('Fechas', 'El ensayo de fuerzas está fechado en el futuro.');
+    if (firma && ps && firma < ps)
+      A('Fechas', 'El documento se firma el '+fechaCorta(firma)+', antes de la puesta en servicio '+
+        'del '+fechaCorta(ps)+': lo que se describe como estado final es el previsto, no el comprobado.');
+  }
+
+  /* --- Comprobaciones y peligros --- */
+  {
+    const chk = EXP_COMPROBACIONES[e.familia] || [];
+    const kd = d.cumple || {};
+    const sin = chk.filter(c => {
+      const ap = procede(APLICA_COMPROBACION, c[0], e);
+      if (ap && ap.no) return false;
+      return !(kd[c[0]]||{}).v;
+    });
+    if (sin.length) B('Comprobaciones', sin.length+' comprobaciones de normativa sin contestar.');
+    const nc = chk.filter(c => (kd[c[0]]||{}).v === 'nc');
+    if (nc.length) A('Comprobaciones', nc.length+' comprobaciones marcadas como no comprobadas: '+
+      'quedan fuera del alcance de este documento.');
+    const sinMotivo = chk.filter(c => { const x = kd[c[0]]||{};
+      return (x.v === 'na' || x.v === 'nc') && !x.motivo; });
+    if (sinMotivo.length) B('Comprobaciones', 'Falta el motivo de '+sinMotivo.length+
+      ' comprobaciones marcadas como no aplicables o no comprobadas.');
+
+    const pel = peligrosDe(e);
+    if (pel){
+      const pd = d.peligro || {};
+      const sinV = pel.lista.filter(([pk]) => !(pd[pk]||{}).v);
+      if (sinV.length) B('Peligros', sinV.length+' peligros propios del tipo de puerta sin valorar.');
+      const sinComo = pel.lista.filter(([pk]) => (pd[pk]||{}).v === 'si' && !(pd[pk]||{}).como);
+      if (sinComo.length) B('Peligros', 'Falta explicar cómo se han resuelto '+sinComo.length+
+        ' peligros marcados como resueltos: una casilla no es una prueba.');
+    } else if ((d.puerta||{}).tipo) {
+      A('Peligros', 'El tipo de puerta no corresponde a ninguno de los grupos de peligros '+
+        'previstos: hay que valorarlos a mano.');
+    }
+  }
+
+  /* --- Documentación --- */
+  {
+    const marcados = ['ddp_fab','dc_fab','manual'].filter(k => ((d.entrega||{}).docs||{})[k] === 'si');
+    if (marcados.length && !(S.expDocs||[]).length)
+      B('Documentación', 'Se ha marcado como entregada documentación del fabricante que no está '+
+        'subida: el anexo quedaría anunciado y vacío.');
+    if ((d.ficticio) === 'si')
+      B('Documentación', 'El expediente está marcado como caso de prueba con datos ficticios.');
+  }
+
+  return { bloqueos, avisos, puedeEmitir: bloqueos.length === 0 };
+}
+
+function expPendientes(e){
+  const falta = [];
+  const d = e.datos || {};
+  if (!e.fecha_puesta_servicio) falta.push('la fecha de puesta en servicio, que decide el marco legal');
+  /* Un documento no puede dar por hecho lo que todavía no ha pasado. */
+  {
+    const f = (d.fuerzas||{}).fecha, ps = e.fecha_puesta_servicio;
+    const hoyStr = hoy();
+    if (ps && ps > hoyStr && (d.entrega||{}).firmante_ok)
+      falta.push('la puesta en servicio está fechada en el futuro ('+fechaCorta(ps)+'): '+
+        'no se puede emitir como realizada una intervención que aún no ha ocurrido');
+    if (f && f > hoyStr)
+      falta.push('el ensayo de fuerzas está fechado en el futuro');
+  }
+  if (!(d.obra && d.obra.emplazamiento)) falta.push('el emplazamiento de la puerta');
+  if (!(d.puerta && d.puerta.tipo)) falta.push('el tipo de puerta');
+  const comps = EXP_COMPONENTES[e.familia] || [];
+  const sinResponder = comps.filter(c => !((d.comp||{})[c[0]]||{}).estado);
+  if (sinResponder.length) falta.push(sinResponder.length + ' elementos de la instalación sin contestar');
+  const chk = EXP_COMPROBACIONES[e.familia] || [];
+  const sinChk = chk.filter(c => {
+    const ap = procede(APLICA_COMPROBACION, c[0], e);
+    if (ap && ap.no) return false;            // no procede: no es un hueco
+    const x = (d.cumple||{})[c[0]] || {};
+    return !x.v;
+  });
+  if (sinChk.length) falta.push(sinChk.length + ' comprobaciones de normativa sin contestar');
+  /* De cómo se acciona la puerta y quién la usa depende qué protección exige la
+     norma: sin esas dos respuestas no se puede certificar nada. */
+  {
+    const pu = d.puerta || {};
+    if (pu.motorizada !== 'no'){
+      if (!pu.modo) falta.push('cómo se da la orden de maniobra, en el paso «La puerta»');
+      if (!pu.usuarios) falta.push('quién usa la puerta, en el paso «La puerta»');
+      if (pu.modo === 'hombre_presente' && pu.hp_comprobado !== 'si')
+        falta.push('comprobar que la puerta se detiene al soltar el mando: sin eso no es '+
+          'hombre presente y la protección exigible es otra');
+      if (pu.modo && pu.usuarios && !MATRIZ_NO_APLICA_A.includes(e.familia)){
+        const base = MATRIZ_PROTECCION_FABRICA[pu.modo+'|'+pu.usuarios];
+        if (base && base.admisible === false)
+          falta.push('cambiar el modo de accionamiento o el nivel de protección: «'+
+            ((MODOS_ACCIONAMIENTO[pu.modo]||{}).nombre||'')+'» con «'+
+            (TIPOS_USUARIO[pu.usuarios]||'')+'» no es una combinación admisible, '+
+            'y no se puede certificar una puerta así');
+      }
+    }
+  }
+
+  /* Si se marca que se entrega documentación del fabricante, tiene que estar
+     subida: si no, el libro anuncia un anexo que no existe. */
+  const marcadosFab = ['ddp_fab','dc_fab','manual'].filter(k => ((d.entrega||{}).docs||{})[k] === 'si');
+  if (marcadosFab.length && !(S.expDocs||[]).length)
+    falta.push('subir la documentación del fabricante que se ha marcado como entregada: '+
+      'ahora mismo el anexo quedaría anunciado pero vacío');
+
+  /* El tipo y la denominación tienen que hablar de la misma puerta. No se corrige
+     sola: se avisa para que lo arregle quien sabe cuál de los dos está mal. */
+  {
+    const pu = d.puerta || {};
+    const MOV = ['corredera','seccional','batiente','enrollable','basculante','plegable'];
+    const enTipo = MOV.find(m => new RegExp(m,'i').test(pu.tipo||''));
+    const enDen  = MOV.find(m => new RegExp(m,'i').test(pu.denominacion||''));
+    if (enTipo && enDen && enTipo !== enDen)
+      falta.push('aclarar la identificación: el tipo dice «'+pu.tipo+'» y la denominación '+
+        'comercial dice «'+pu.denominacion+'». No pueden ser las dos');
+  }
+
+  /* Un peligro propio del tipo de puerta sin contestar es un hueco igual que una
+     comprobación general, y uno resuelto sin decir cómo no vale como prueba. */
+  {
+    const pel = peligrosDe(e);
+    if (pel){
+      const pd = d.peligro || {};
+      const sinV = pel.lista.filter(([pk]) => !((pd[pk]||{}).v));
+      if (sinV.length) falta.push(sinV.length + ' peligros propios del tipo de puerta sin valorar');
+      const sinComo = pel.lista.filter(([pk]) => (pd[pk]||{}).v === 'si' && !(pd[pk]||{}).como);
+      if (sinComo.length) falta.push('explicar cómo se han resuelto ' + sinComo.length +
+        ' de los peligros marcados como resueltos');
+      const sinPor = pel.lista.filter(([pk]) => {
+        const x = pd[pk] || {};
+        return ['no','na','nc'].includes(x.v) && !x.motivo;
+      });
+      if (sinPor.length) falta.push('el motivo de ' + sinPor.length +
+        ' peligros marcados como no resueltos, no aplicables o no comprobados');
+    }
+  }
+
+  const sinMotivo = chk.filter(c => {
+    const x = (d.cumple||{})[c[0]] || {};
+    return (x.v === 'na' || x.v === 'nc') && !x.motivo;
+  });
+  if (sinMotivo.length) falta.push('el motivo de '+sinMotivo.length+
+    ' comprobación(es) marcadas como no aplicables o no comprobadas');
+  const incumple = chk.filter(c => c[4] && ((d.cumple||{})[c[0]]||{}).v === 'no');
+  if (incumple.length) falta.push('hay ' + incumple.length + ' incumplimiento(s) de los que impiden certificar');
+  if (EXP_ES_FABRICANTE(e.situacion) && !(d.entrega && d.entrega.firmante_ok))
+    falta.push('confirmar quién firma la declaración');
+
+  /* Quién firma y quién reúne el expediente son datos de la empresa, no del
+     expediente: sin ellos la declaración sale incompleta. */
+  if (EXP_ES_FABRICANTE(e.situacion)){
+    const em = datosEmpresa();
+    if (!((d.entrega||{}).firmante || em.representante))
+      falta.push('el nombre del representante que firma, en Equipo → Datos de la empresa');
+    if (!em.responsable_tecnico)
+      falta.push('la persona facultada para reunir el expediente técnico, en Equipo → Datos de la empresa');
+  }
+
+  /* Una declaración de prestaciones en la que todas las características van como NPD
+     no declara nada. El artículo 6.3.c del Reglamento (UE) 305/2011 exige declarar la
+     prestación de al menos una característica esencial. */
+  if (EXP_ES_FABRICANTE(e.situacion) && regimenDe(e).ddp){
+    const pv = ((d.prest||{}).v) || {};
+    const lista = EXP_PRESTACIONES[e.familia] || [];
+    const declaradas = lista.filter(([k]) => {
+      const v = (pv[k] || '').trim();
+      return v && !/^npd$/i.test(v) && !/^pendiente$/i.test(v);
+    });
+    if (lista.length && !declaradas.length)
+      falta.push('declarar la prestación de al menos una característica esencial: '+
+        'con todas en NPD la declaración de prestaciones no declara nada');
+  }
+  // Con la vía simplificada, la declaración de prestaciones se apoya en la DTE:
+  // si la DTE no está, la declaración queda coja y hay que decirlo.
+  const pz = d.prest || {};
+  if (['micro','unidad'].includes(pz.via)){
+    if (!pz.dte_codigo) falta.push('el código de la Documentación Técnica Específica');
+    if (pz.dte_ok !== 'si') falta.push('confirmar que se cumplen las condiciones del artículo '+
+      (pz.via === 'micro' ? '37' : '38'));
+    const sinMetodo = (EXP_PRESTACIONES[e.familia]||[]).filter(([k,, , obl]) => {
+      const v = (pz.v||{})[k] || '';
+      const declarada = obl || (v && !/^npd$/i.test(v.trim()));
+      return declarada && !((pz.dte||{})[k]||{}).metodo;
+    });
+    if (sinMetodo.length) falta.push(sinMetodo.length +
+      ' prestación(es) declaradas sin decir en la DTE cómo se han demostrado');
+  }
+  return falta;
+}
+function expIncumple(e){
+  const chk = EXP_COMPROBACIONES[e.familia] || [];
+  return chk.filter(c => c[4] && (((e.datos||{}).cumple||{})[c[0]]||{}).v === 'no');
+}
+
+/* ---- Pantalla del expediente ---- */
+function vistaExpediente(id){
+  const e = expDe(id);
+  if (!e) return '<p class="cargando">Expediente no encontrado.</p>';
+  const p = e.puerta_id ? (puertaDe(e.puerta_id) || {}) : {};
+  const c = e.cliente_id ? (clienteDe(e.cliente_id) || {}) : {};
+  const secs = expSecciones(e);
+  const actual = secs.some(x => x[0] === S.expPaso) ? S.expPaso : secs[0][0];
+  const marco = marcoDeFecha(e.fecha_puesta_servicio);
+  const falta = expPendientes(e);
+
+  let h = '<div class="stack">';
+  h += '<div class="fila"><button class="btn plana" data-act="exp-volver">‹ Volver</button>'+
+       '<span class="sp"></span><span class="mini" id="exp-guardado"></span>'+
+       '<button class="btn sm plana" data-act="exp-marcado" data-id="'+e.id+'">Marcado CE</button>'+
+       '<button class="btn sm plana" data-act="exp-hoja-campo" data-id="'+e.id+'">Hoja de campo</button>'+
+       '<button class="btn sm plana" data-act="exp-libro-mant" data-id="'+e.id+'">Libro de mantenimiento</button>'+
+       '<button class="btn" data-act="exp-libro" data-id="'+e.id+'">Ver el libro</button>'+
+       (esGestion() && e.estado !== 'emitido'
+         ? '<button class="btn pri" data-act="exp-emitir" data-id="'+e.id+'">Emitir</button>' : '')+
+       '</div>';
+
+  h += '<div class="panel"><div class="panel-h"><h2>'+esc(e.referencia||'Expediente')+'</h2>'+
+       '<span class="chip '+(e.estado==='emitido'?'ok':(e.estado==='completo'?'aviso':'gris'))+' sin">'+
+       (EXP_ESTADO[e.estado]||e.estado)+'</span></div>'+
+       '<p class="mini" style="margin:0">'+esc(EXP_SITUACION[e.situacion]||'')+' · '+
+       esc(EXP_FAMILIA[e.familia]||'')+' · '+esc(c.nombre || p.cliente || 'Sin cliente')+
+       (p.codigo ? ' · '+esc(p.codigo) : '')+'</p>'+
+       '<p class="mini" style="margin:6px 0 0">'+esc(EXP_SIT_AYUDA[e.situacion]||'')+'</p>';
+
+  /* Qué sale y qué no sale de esta familia, a la vista desde el primer momento.
+     Si alguien abrió un expediente de cortafuegos como fabricante antes de que esto
+     estuviera puesto, aquí se le avisa de que esa declaración no la puede firmar. */
+  {
+    const reg = regimenDe(e);
+    const esFab = EXP_ES_FABRICANTE(e.situacion);
+    if (reg.bloqueaFabricante && esFab)
+      h += '<div class="mal-caja" style="margin-top:12px"><b>Esta puerta no se puede autocertificar.</b><br>'+
+           esc(reg.nota)+'<br>Pasa el expediente a «Puerta nueva de kit completo» y recopila la '+
+           'declaración del fabricante en lugar de emitir la nuestra.</div>';
+    else if (!reg.ddp && esFab)
+      h += '<div class="aviso-caja" style="margin-top:12px"><b>Sin declaración de prestaciones.</b><br>'+
+           esc(reg.nota)+'</div>';
+  }
+
+  // El marco legal no se elige: lo decide la fecha de puesta en servicio
+  h += '<div class="campos" style="margin-top:12px">'+
+    '<div class="campo"><label for="exp-fps">Fecha de puesta en servicio</label>'+
+    '<input id="exp-fps" type="date" data-act="exp-fps" value="'+esc(e.fecha_puesta_servicio||'')+'">'+
+    '<span class="pista">Decide bajo qué norma se firma. No es la fecha de la firma.</span></div>'+
+    '<div class="campo"><label>Marco legal que corresponde</label>'+
+    (marco === 'pendiente'
+      ? '<p class="nota-oficina" style="margin:0">Pon la fecha y te digo qué documento toca.</p>'
+      : '<p class="nota-oficina" style="margin:0"><b>'+esc(EXP_MARCO[marco].documento)+'</b><br>'+
+        esc(EXP_MARCO[marco].nombre)+'</p>')+
+    '</div></div>';
+
+  // Aviso cuando la puesta en servicio queda cerca del cambio de marco
+  const alCambio = e.fecha_puesta_servicio
+    ? Math.round((new Date('2027-01-20') - new Date(e.fecha_puesta_servicio)) / 86400000) : null;
+  if (marco === 'directiva' && alCambio !== null && alCambio <= 180)
+    h += '<p class="nota-oficina" style="margin:10px 0 0">Quedan '+alCambio+' días para el '+
+         '<b>20 de enero de 2027</b>, cuando el Reglamento (UE) 2023/1230 deroga la Directiva 2006/42/CE. '+
+         'Si la puesta en servicio se retrasa a esa fecha o más allá, el documento deja de ser «Declaración CE» '+
+         'y pasa a ser «Declaración UE de conformidad», con apartados distintos. Revisa la fecha antes de firmar.</p>';
+  h += '</div>';
+
+  if (falta.length)
+    h += '<div class="panel bloque-sin"><div class="panel-h"><h3>Falta por rellenar</h3>'+
+         '<span class="mini">'+falta.length+'</span></div><ul class="mini" style="margin:0;padding-left:18px">'+
+         falta.map(x => '<li>'+esc(x)+'</li>').join('')+'</ul></div>';
+
+  // Navegación por secciones
+  h += '<div class="fila" style="gap:6px;flex-wrap:wrap">'+
+    secs.map(([k, t]) => '<button class="btn sm'+(k===actual?' pri':' plana')+'" data-act="exp-paso" data-v="'+k+'">'+esc(t)+'</button>').join('')+
+    '</div>';
+
+  h += '<div class="panel">';
+  if (actual === 'intervencion')  h += expSecIntervencion(e);
+  else if (actual === 'obra')     h += expSecObra(e, p, c);
+  else if (actual === 'puerta')   h += expSecPuerta(e, p);
+  else if (actual === 'componentes') h += expSecComponentes(e);
+  else if (actual === 'cumplimiento') h += expSecCumplimiento(e);
+  else if (actual === 'fuerzas')  h += expSecFuerzas(e);
+  else if (actual === 'prestaciones') h += expSecPrestaciones(e);
+  else if (actual === 'docs')     h += expSecDocs(e);
+  else if (actual === 'riesgos')  h += expSecRiesgos(e);
+  else if (actual === 'entrega')  h += expSecEntrega(e);
+  h += '</div>';
+
+  const i = secs.findIndex(x => x[0] === actual);
+  h += '<div class="fila">'+
+    (i > 0 ? '<button class="btn plana" data-act="exp-paso" data-v="'+secs[i-1][0]+'">‹ '+esc(secs[i-1][1])+'</button>' : '')+
+    '<span class="sp"></span>'+
+    (i < secs.length-1 ? '<button class="btn" data-act="exp-paso" data-v="'+secs[i+1][0]+'">'+esc(secs[i+1][1])+' ›</button>' : '')+
+    '</div>';
+
+  setTimeout(() => pintarFotosExp(), 0);
+  return h + '</div>';
+}
+
+/* Campos sueltos, para no repetir el mismo HTML cincuenta veces */
+const expTxt = (ruta, etiqueta, pista, ancho) =>
+  '<div class="campo'+(ancho?' full':'')+'"><label>'+esc(etiqueta)+'</label>'+
+  '<input type="text" data-exp="'+ruta+'" value="'+esc(expVal(ruta,''))+'">'+
+  (pista?'<span class="pista">'+esc(pista)+'</span>':'')+'</div>';
+const expNum = (ruta, etiqueta, pista, paso) =>
+  '<div class="campo"><label>'+esc(etiqueta)+'</label>'+
+  '<input type="number" step="'+(paso||'any')+'" data-exp="'+ruta+'" value="'+esc(expVal(ruta,''))+'">'+
+  (pista?'<span class="pista">'+esc(pista)+'</span>':'')+'</div>';
+const expArea = (ruta, etiqueta, pista, filas) =>
+  '<div class="campo full"><label>'+esc(etiqueta)+'</label>'+
+  '<textarea rows="'+(filas||3)+'" data-exp="'+ruta+'">'+esc(expVal(ruta,''))+'</textarea>'+
+  (pista?'<span class="pista">'+esc(pista)+'</span>':'')+'</div>';
+const expSel = (ruta, etiqueta, opciones, pista) =>
+  '<div class="campo"><label>'+esc(etiqueta)+'</label><select data-exp="'+ruta+'">'+
+  opciones.map(o => { const [v,t] = Array.isArray(o)?o:[o,o];
+    return '<option value="'+esc(v)+'"'+(String(expVal(ruta,''))===String(v)?' selected':'')+'>'+esc(t)+'</option>'; }).join('')+
+  '</select>'+(pista?'<span class="pista">'+esc(pista)+'</span>':'')+'</div>';
+
+/* ---- Decisión previa: qué estamos haciendo exactamente ---- */
+function expSecIntervencion(e){
+  const v = evaluarIntervencion(e);
+  const crit = CRITERIOS_MODIFICACION[v.criterio] || {};
+  let h = '<div class="panel-h"><h3>Tipo de intervención</h3></div>'+
+    '<p class="mini" style="margin:0 0 12px">Primera decisión y obligatoria. Intervenir sobre una '+
+    'puerta que ya existe <b>no</b> la convierte por sí solo en una máquina nueva: eso hay que '+
+    'demostrarlo con las doce preguntas, no suponerlo.</p>'+
+    '<div class="campos">'+
+    expSel('interv.tipo', 'Qué estamos haciendo',
+      [['', 'Sin decidir']].concat(Object.entries(TIPOS_INTERVENCION)
+        .sort((a,b) => a[1].n - b[1].n)
+        .map(([k, t]) => [k, t.n + '. ' + t.nombre])),
+      'De aquí sale qué documentación procede y si pasamos a ser fabricante')+
+    '</div>';
+
+  if (!v.tipo)
+    return h + '<p class="nota-oficina" style="margin:14px 0 0">Elige el tipo de intervención '+
+      'para continuar. Mientras no esté decidido no se emite ningún documento.</p>';
+
+  if (!v.requiere_cuestionario)
+    return h + '<p class="nota-oficina" style="margin:14px 0 0">'+esc(v.motivos[0] || '')+'</p>';
+
+  const r = (((e.datos||{}).interv) || {});
+  h += '<div class="panel-h" style="margin-top:18px"><h3>Evaluación de modificación</h3>'+
+       '<span class="mini">'+(12 - v.abiertas.length)+' de 12</span></div>'+
+    '<p class="mini" style="margin:0 0 4px">Criterio que se aplica por la fecha de puesta en '+
+    'servicio: <b>'+esc(crit.nombre || '')+'</b>.</p>'+
+    '<p class="mini" style="margin:0 0 12px">'+esc(crit.nota || '')+'</p>'+
+    '<p class="mini" style="margin:0 0 12px"><b>Desconocido</b> y <b>Requiere revisión técnica</b> '+
+    'no cuentan como un «no»: dejan el expediente en «no puede determinarse».</p>';
+
+  PREGUNTAS_MODIFICACION.forEach((p, i) => {
+    const val = (r[p.id] || {}).v || '';
+    const abierta = !val || RESPUESTAS_ABIERTAS.indexOf(val) >= 0;
+    h += '<div class="campos'+(abierta ? ' bloque-sin' : '')+'" style="margin-bottom:10px">'+
+      expSel('interv.'+p.id+'.v', (i+1)+'. '+p.texto,
+        [['', 'Sin contestar']].concat(Object.entries(RESPUESTAS_MODIF)),
+        '')+
+      (val === 'si' || val === 'revision'
+        ? expArea('interv.'+p.id+'.nota', 'En qué consiste', 'Concreta el cambio o lo que hay que revisar', 2)
+        : '')+
+      '</div>';
+  });
+
+  h += '<div class="panel-h" style="margin-top:18px"><h3>Resultado del motor</h3></div>';
+  if (v.resultado){
+    const res = RESULTADOS_INTERVENCION[v.resultado];
+    h += '<div'+(v.cerrable ? '' : ' class="bloque-sin" style="padding:12px"')+'>'+
+      '<p class="'+(v.cerrable ? 'nota-oficina' : '')+'" style="margin:0 0 10px"><b>'+
+      esc(v.resultado)+'. '+esc(res.nombre)+'</b></p>'+
+      (v.estado ? '<p style="margin:0 0 10px"><b>'+esc(v.estado)+'</b></p>' : '')+
+      '<ul class="mini" style="margin:0 0 10px;padding-left:18px">'+
+      v.motivos.map(m => '<li>'+esc(m)+'</li>').join('')+'</ul>'+
+      (v.regla ? '<p class="mini" style="margin:0 0 10px"><b>'+esc(v.regla)+'</b></p>' : '')+
+      '<p class="mini" style="margin:0"><b>Documentación que procede:</b> '+
+      esc(res.documentacion.join('; '))+'.</p>'+
+      '</div>';
+  } else {
+    h += '<div class="bloque-sin" style="padding:12px"><p style="margin:0 0 8px"><b>NO PUEDE '+
+      'DETERMINARSE</b></p><ul class="mini" style="margin:0;padding-left:18px">'+
+      v.bloqueos.map(m => '<li>'+esc(m)+'</li>').join('')+'</ul>'+
+      (v.motivos.length
+        ? '<p class="mini" style="margin:10px 0 0"><b>Lo que sí se sabe:</b></p>'+
+          '<ul class="mini" style="margin:0;padding-left:18px">'+
+          v.motivos.map(m => '<li>'+esc(m)+'</li>').join('')+'</ul>'
+        : '')+
+      '</div>';
+  }
+  return h;
+}
+
+function expSecObra(e, p, c){
+  return '<div class="panel-h"><h3>Dónde y para quién</h3></div>'+
+    '<p class="mini" style="margin:0 0 12px">Lo que irá en la portada y en el encabezado de cada documento.</p>'+
+    '<div class="campos">'+
+    expSel('ficticio', '¿Es un caso de prueba?',
+      [['', 'No, es una instalación real'], ['si','Sí, datos y mediciones ficticios']],
+      'Un caso de prueba sale marcado en todas las páginas y nunca se confunde con una instalación real')+
+    expTxt('obra.emplazamiento', 'Emplazamiento de la puerta',
+      'Calle, número y población donde está instalada', 1)+
+    expTxt('obra.ubicacion', 'Situación dentro del edificio', 'Ej.: rampa de garaje, muelle 2, acceso principal')+
+    expSel('obra.uso_edificio', 'Uso del edificio',
+      ['', 'Vivienda', 'Comunidad de propietarios', 'Comercio', 'Industria', 'Oficinas', 'Hotel', 'Sanitario', 'Docente', 'Pública concurrencia', 'Otro'])+
+    expSel('obra.centro_trabajo', '¿Hay trabajadores en el lugar?',
+      [['', 'Sin contestar'], ['si','Sí, es centro de trabajo'], ['no','No hay trabajadores']],
+      'Si los hay se le exige además el Real Decreto 486/1997')+
+    expTxt('obra.titular', 'Titular de la instalación', 'Quien queda como responsable de conservarla')+
+    expTxt('obra.nif_titular', 'NIF o CIF del titular')+
+    expTxt('obra.contacto', 'Persona de contacto')+
+    expTxt('obra.referencia_obra', 'Referencia de obra o presupuesto')+
+    '</div>'+
+    (c && c.nombre ? '<p class="mini" style="margin:12px 0 0">Cliente de la ficha: <b>'+esc(c.nombre)+'</b>'+
+      (c.nif?(' · '+esc(c.nif)):'')+(c.direccion?(' · '+esc(c.direccion)):'')+'. '+
+      '<button class="btn sm plana" data-act="exp-copiar-cliente">Copiar estos datos</button></p>' : '');
+}
+
+function expSecPuerta(e, p){
+  const tipos = lista('tipos', TIPOS);
+  /* En las barreras hay que preguntarlo: la UNE-EN 13241 cubre las que están al
+     alcance de personas y deja fuera las de uso exclusivo para tráfico de vehículos.
+     De la respuesta depende que haya declaración de prestaciones o no. */
+  const barrera = e.familia === 'barrera'
+    ? expSel('puerta.acceso_personas', '¿Está al alcance de personas?',
+        [['si','Sí, pasan o pueden pasar peatones'], ['no','No, es de uso exclusivo para vehículos']],
+        'Si solo pasan vehículos queda fuera de la UNE-EN 13241 y no lleva declaración de prestaciones')
+    : '';
+  /* Motorizar una puerta existente nos hace fabricante de la máquina, pero si además
+     arrastra declaración de prestaciones nueva está sin confirmar. Se pregunta en vez
+     de decidirlo por su cuenta la aplicación. */
+  /* En una puerta que ya existía hay dos momentos: cómo estaba la identificación
+     cuando llegamos y cómo queda al terminar. Sin separarlos, el documento dice a la
+     vez «sin placa» y «placa legible», que fue lo que pasó. */
+  /* En una puerta que ya existía hay que separar dos cosas que no son lo mismo:
+     la identificación del FABRICANTE ORIGINAL (placa, marcado CE, número de serie) y
+     nuestra ETIQUETA INTERNA de mantenimiento. Poner una etiqueta AR no convierte en
+     conforme un marcado CE que no se ha podido comprobar. */
+  const previa = (e.situacion === 'adecuacion' || e.situacion === 'modificacion')
+    ? '<div class="campo full"><p class="nota-oficina" style="margin:0">'+
+        '<b>Fabricación original.</b> Lo que había antes de nuestra intervención. '+
+        'Nuestra etiqueta de mantenimiento no sustituye a esta identificación.</p></div>'+
+      expTxt('orig.fabricante', 'Fabricante original', 'Si no se puede determinar, déjalo vacío')+
+      expTxt('orig.modelo', 'Modelo original')+
+      expTxt('orig.serie', 'Número de serie original')+
+      expSel('orig.marcado', 'Marcado CE original',
+        [['', 'Sin contestar'],
+         ['comprobado','Comprobado y legible'],
+         ['ilegible','Presente pero ilegible o incompleto'],
+         ['ausente','No existe'],
+         ['desconocido','No se ha podido comprobar']],
+        'Si no se puede comprobar, no es «conforme»: es «no comprobado»')+
+      expSel('orig.ddp', 'Declaración de prestaciones original',
+        [['', 'Sin contestar'], ['disponible','Disponible'], ['no','No disponible'],
+         ['desconocido','Se desconoce si existió']])+
+      expSel('orig.declaracion', 'Declaración de conformidad original',
+        [['', 'Sin contestar'], ['disponible','Disponible'], ['no','No disponible'],
+         ['desconocido','Se desconoce si existió']])+
+      '<div class="campo full"><p class="nota-oficina" style="margin:0">'+
+        '<b>Identificación interna.</b> La nuestra, para mantenimiento. No es un marcado CE.</p></div>'+
+      expTxt('puerta.placa_despues', 'Qué hemos hecho con la identificación',
+        'Ej.: se ha colocado etiqueta de identificación de la instalación con el código AR. '+
+        'Si no se ha tocado la placa del fabricante, dilo', 1)
+    : '';
+  const modif = (e.situacion === 'modificacion' && (EXP_REGIMEN[e.familia]||{}).ddp)
+    ? expSel('prest.emitir_ddp', '¿Emitimos declaración de prestaciones nueva?',
+        [['si','Sí, hemos alterado las prestaciones de la puerta'],
+         ['no','No, solo hemos motorizado: las prestaciones no cambian']],
+        'La declaración de conformidad de máquina se emite en los dos casos. Lo que está '+
+        'pendiente de confirmar con el Ministerio es si una motorización obliga además a '+
+        'declaración de prestaciones nueva')
+    : '';
+  return '<div class="panel-h"><h3>La puerta</h3></div>'+
+    '<p class="mini" style="margin:0 0 12px">Identificación que irá en la declaración y en la placa de características.</p>'+
+    '<div class="campos">'+
+    expSel('puerta.tipo', 'Tipo de puerta', [''].concat(tipos))+
+    previa + barrera + modif+
+    expTxt('puerta.denominacion', 'Denominación comercial', 'Como la llamas tú en el presupuesto')+
+    expTxt('puerta.marca', 'Marca')+
+    expTxt('puerta.modelo', 'Modelo')+
+    expTxt('puerta.serie', 'Número de serie o identificación única',
+      'El mismo que irá en el marcado CE')+
+    expNum('puerta.ancho', 'Ancho del hueco (mm)')+
+    expNum('puerta.alto', 'Alto del hueco (mm)')+
+    expNum('puerta.peso', 'Peso de la hoja (kg)')+
+    expNum('puerta.hojas', 'Número de hojas', '', '1')+
+    expSel('puerta.motorizada', '¿Es motorizada?',
+      [['si','Sí'], ['no','No, es manual']],
+      'Si es manual no hay declaración de conformidad de máquina')+
+    expSel('puerta.uso_puerta', 'Destino de la puerta',
+      ['', 'Residencial', 'Comercial', 'Industrial', 'Pública concurrencia'],
+      'Dónde está instalada. Quién la usa se pregunta aparte')+
+    expSel('puerta.usuarios', 'Quién usa la puerta',
+      [['', 'Sin contestar']].concat(Object.entries(TIPOS_USUARIO)),
+      'Una persona informada conoce la puerta y sus riesgos: vive o trabaja allí y se le '+
+      'ha instruido. Un visitante, un cliente o quien pasa por la calle no está informado')+
+    '<div class="campo full"><details class="guia-usuarios"><summary>Cómo se clasifica cada caso</summary>'+
+      '<table class="datos chk" style="margin-top:8px"><tbody>'+
+      GUIA_USUARIOS.map(([caso, sug, nota]) =>
+        '<tr><td style="width:34%">'+esc(caso)+'</td>'+
+        '<td style="width:26%">'+esc(sug ? TIPOS_USUARIO[sug] : 'Según el acceso')+'</td>'+
+        '<td class="min">'+esc(nota)+'</td></tr>').join('')+
+      '</tbody></table>'+
+      '<p class="mini">Esto es una guía: la clasificación la decides tú mirando quién puede '+
+      'llegar hasta la puerta, no el nombre del edificio.</p></details></div>'+
+    expSel('puerta.modo', 'Cómo se da la orden de maniobra',
+      [['', 'Sin contestar']].concat(Object.entries(MODOS_ACCIONAMIENTO).map(([k,v]) => [k, v.nombre])),
+      'De esto depende qué protección exige la norma')+
+    /* Hombre presente no se deduce de que haya un pulsador: hay que comprobar que la
+       maniobra se para al soltar. Un pulsador que lanza el ciclo completo es impulso. */
+    (expVal('puerta.modo','') === 'hombre_presente'
+      ? expSel('puerta.hp_comprobado', '¿Se ha comprobado que la puerta se para al soltar?',
+          [['', 'Sin contestar'], ['si','Sí, comprobado en obra'], ['no','No se ha comprobado']],
+          'Si no se para al soltar, no es hombre presente aunque lo ponga el cuadro')
+      : '')+
+    expTxt('puerta.activacion', 'Dispositivos de accionamiento instalados',
+      'Ej.: emisor a distancia, pulsador de llave en la entrada, lector de matrícula', 1)+
+    expNum('puerta.ciclos_dia', 'Ciclos previstos al día')+
+    expTxt('puerta.alimentacion', 'Alimentación eléctrica', 'Ej.: 230 V monofásica, 400 V trifásica')+
+    '</div>'+
+    expFotoBloque('puerta:general', 'Fotos generales de la puerta',
+      'Una del conjunto cerrada, otra abierta, y una del hueco desde dentro.');
+}
+
+/* ---- Elementos de la instalación, con foto de cada uno ---- */
+function expSecComponentes(e){
+  const comps = EXP_COMPONENTES[e.familia] || [];
+  const d = (e.datos||{}).comp || {};
+  const hechos = comps.filter(c => (d[c[0]]||{}).estado).length;
+  let h = '<div class="panel-h"><h3>Elementos de la instalación</h3>'+
+    '<span class="mini">'+hechos+' de '+comps.length+'</span></div>'+
+    '<p class="mini" style="margin:0 0 14px">Contesta uno por uno y hazle una foto. '+
+    'Las fotos son las que hacen que el libro valga como documento y como prueba de lo que se dejó montado.</p>';
+  comps.forEach(([k, nombre, ayuda, pideDatos]) => {
+    const v = (d[k]||{}).estado || '';
+    h += '<div class="exp-item'+(v==='no'?' falta':'')+'">'+
+      '<div class="fila" style="gap:8px;flex-wrap:wrap;align-items:baseline">'+
+        '<b>'+esc(nombre)+'</b><span class="sp"></span>'+
+        '<select data-exp="comp.'+k+'.estado" class="cal-sel">'+
+          '<option value=""'  +(v===''  ?' selected':'')+'>Sin contestar</option>'+
+          '<option value="si"'+(v==='si'?' selected':'')+'>Instalado</option>'+
+          '<option value="no"'+(v==='no'?' selected':'')+'>No lo lleva</option>'+
+          '<option value="na"'+(v==='na'?' selected':'')+'>No aplica</option>'+
+        '</select></div>'+
+      '<p class="mini" style="margin:4px 0 0">'+esc(ayuda)+'</p>';
+    if (v === 'si'){
+      h += '<div class="campos" style="margin-top:8px">';
+      if (pideDatos){
+        h += expTxt('comp.'+k+'.marca', 'Marca')+
+             expTxt('comp.'+k+'.modelo', 'Modelo')+
+             expTxt('comp.'+k+'.serie', 'Nº de serie o lote');
+      }
+      h += expTxt('comp.'+k+'.nota', 'Observación', '', 1)+'</div>';
+      h += expFotoBloque('comp:'+k, 'Foto de ' + nombre.toLowerCase(), '');
+    }
+    if (v === 'no')
+      h += '<div class="campos" style="margin-top:8px">'+
+           expTxt('comp.'+k+'.nota', 'Por qué no lo lleva y qué consecuencia tiene', '', 1)+'</div>';
+    h += '</div>';
+  });
+
+  /* Elementos que no están en la lista de fábrica: se añaden aquí mismo */
+  const extras = Object.entries(((e.datos||{}).compx) || {});
+  extras.forEach(([k, x]) => {
+    h += '<div class="exp-item'+((x.estado==='no')?' falta':'')+'">'+
+      '<div class="fila" style="gap:8px;flex-wrap:wrap;align-items:baseline">'+
+        '<input type="text" list="cat-articulos" placeholder="Qué elemento es" '+
+          'style="flex:1 1 220px;font-weight:600" data-exp="compx.'+k+'.nombre" value="'+esc(x.nombre||'')+'">'+
+        '<select data-exp="compx.'+k+'.estado" class="cal-sel">'+
+          '<option value=""'  +(!x.estado    ?' selected':'')+'>Sin contestar</option>'+
+          '<option value="si"'+(x.estado==='si'?' selected':'')+'>Instalado</option>'+
+          '<option value="no"'+(x.estado==='no'?' selected':'')+'>No lo lleva</option>'+
+          '<option value="na"'+(x.estado==='na'?' selected':'')+'>No aplica</option>'+
+        '</select>'+
+        '<button class="btn sm plana" data-act="exp-comp-quitar" data-k="'+esc(k)+'">Quitar</button>'+
+      '</div>';
+    if (x.estado === 'si'){
+      h += '<div class="campos" style="margin-top:8px">'+
+        expTxt('compx.'+k+'.marca', 'Marca')+
+        expTxt('compx.'+k+'.modelo', 'Modelo')+
+        expTxt('compx.'+k+'.serie', 'Nº de serie o lote')+
+        expTxt('compx.'+k+'.nota', 'Observación', '', 1)+'</div>';
+      h += expFotoBloque('comp:'+k, 'Foto de ' + ((x.nombre||'este elemento').toLowerCase()), '');
+    }
+    if (x.estado === 'no')
+      h += '<div class="campos" style="margin-top:8px">'+
+           expTxt('compx.'+k+'.nota', 'Por qué no lo lleva y qué consecuencia tiene', '', 1)+'</div>';
+    h += '</div>';
+  });
+
+  // Sugerencias del catálogo de materiales, para no escribirlo todo a mano
+  h += '<datalist id="cat-articulos">'+
+    S.catalogo.slice(0, 300).map(a => '<option value="'+esc(a.descripcion)+'">').join('')+
+    '</datalist>'+
+    '<div class="fila" style="margin-top:4px"><span class="sp"></span>'+
+    '<button class="btn" data-act="exp-comp-anadir">Añadir otro elemento</button></div>'+
+    '<p class="mini" style="margin:8px 0 0">Para lo que no esté en la lista: un detector concreto, un '+
+    'accesorio, una protección que hayas tenido que fabricar. Al escribir te sugiere los materiales '+
+    'que ya tienes en el catálogo.</p>';
+  return h;
+}
+
+/* ---- Comprobaciones de normativa ---- */
+function expSecCumplimiento(e){
+  const chk = EXP_COMPROBACIONES[e.familia] || [];
+  const d = (e.datos||{}).cumple || {};
+  const aplicables = chk.filter(c => { const ap = procede(APLICA_COMPROBACION, c[0], e);
+                                        return !(ap && ap.no); });
+  const hechos = aplicables.filter(c => (d[c[0]]||{}).v).length;
+  const mal = chk.filter(c => (d[c[0]]||{}).v === 'no');
+  /* Antes de las comprobaciones, la combinación que decide el nivel de protección.
+     Si falta algún dato o la tabla de la empresa no está rellena, se dice. */
+  const ex = exigenciaProteccion(e);
+  const pu2 = (e.datos||{}).puerta || {};
+  let cab = '';
+  if (!ex.modo || !ex.usuarios){
+    cab = '<div class="aviso-caja" style="margin:0 0 14px"><b>Falta decir cómo se acciona la puerta '+
+      'y quién la usa.</b><br>De esas dos respuestas depende qué dispositivos de seguridad exige la '+
+      'norma. Están en el paso «La puerta».</div>';
+  } else {
+    const m = MODOS_ACCIONAMIENTO[ex.modo] || {};
+    const hpMal = ex.modo === 'hombre_presente' && pu2.hp_comprobado !== 'si';
+    if (ex.fuera){
+      cab = '<div class="aviso-caja" style="margin:0 0 14px">'+
+        '<b>'+esc(m.nombre||'')+' · '+esc(TIPOS_USUARIO[ex.usuarios]||'')+'</b><br>'+
+        'Esta es una puerta exclusivamente peatonal: su seguridad de uso se evalúa con la '+
+        '<b>UNE-EN 16005+A1:2024</b>, no con la matriz de protección de la UNE-EN 12453. '+
+        'Las exigencias de esa norma no están cargadas en la aplicación.</div>';
+    } else if (!ex.admisible){
+      cab = '<div class="mal-caja" style="margin:0 0 14px">'+
+        '<b>'+esc(m.nombre||'')+' · '+esc(TIPOS_USUARIO[ex.usuarios]||'')+': combinación no admisible.</b><br>'+
+        esc(ex.ficha||'')+'<br>Hay que cambiar el modo de accionamiento o el nivel de protección: '+
+        'no se puede certificar una puerta en esta situación.</div>';
+    } else {
+      cab = '<div class="aviso-caja" style="margin:0 0 14px">'+
+        '<b>'+esc(m.nombre||'')+' · '+esc(TIPOS_USUARIO[ex.usuarios]||'')+'</b>'+
+        (ex.niveles ? ' · Protección mínima <b>'+esc(ex.niveles)+'</b>' : '')+'<br>'+
+        esc(ex.ficha||'')+
+        (ex.propia
+          ? '<br><span class="mini">Texto propio de la empresa.</span>'
+          : '<br><span class="mini">Interpretación de la UNE-EN 12453:2018+A1:2022 cargada de '+
+            'serie. Contrástala con tu ejemplar y edítala en Equipo si no cuadra.</span>')+
+        '</div>';
+    }
+    if (hpMal)
+      cab += '<div class="mal-caja" style="margin:0 0 14px"><b>Hombre presente sin comprobar.</b><br>'+
+        'Has indicado hombre presente, pero no consta que se haya comprobado que la puerta se '+
+        'detiene al soltar el mando. Un pulsador que lanza el ciclo completo es impulso, no hombre '+
+        'presente, y la protección exigible es otra.</div>';
+  }
+
+  let h = '<div class="panel-h"><h3>Cumplimiento de normativa</h3>'+
+    '<span class="mini">'+hechos+' de '+aplicables.length+'</span></div>'+ cab +
+    '<p class="mini" style="margin:0 0 14px">Cada línea dice de dónde sale la exigencia. '+
+    'Las marcadas como imprescindibles impiden certificar la puerta si no se cumplen.</p>';
+  if (mal.length)
+    h += '<p class="nota-oficina" style="margin:0 0 14px"><b>'+mal.length+' sin cumplir.</b> '+
+         'Lo que no se cumple sale en el libro como deficiencia, con su propuesta de arreglo. '+
+         'No se oculta: ese es el valor del documento.</p>';
+
+  /* Peligros propios del tipo de puerta. Van aparte de las comprobaciones de la
+     familia porque dependen del movimiento: una corredera y una seccional no tienen
+     los mismos puntos. Se guardan en «peligro», no en «cumple». */
+  const pel = peligrosDe(e);
+  if (pel){
+    const pd = (e.datos||{}).peligro || {};
+    h += '<div class="panel-h" style="margin-top:18px"><h3>Puntos peligrosos de una '+
+      esc(pel.clave)+'</h3></div>'+
+      '<p class="nota-oficina" style="margin:0 0 14px">Proteger el borde principal con el nivel '+
+      'que exige la matriz no agota las obligaciones: estos puntos se valoran uno a uno. '+
+      'Los elementos que se citan son la protección habitual, no una lista cerrada.</p>';
+    pel.lista.forEach(([pk, peligro, elementos]) => {
+      const v = (pd[pk]||{}).v || '';
+      h += '<div class="exp-item'+(v==='no'?' falta':(v==='si'?' bien':''))+'">'+
+        '<div class="fila" style="gap:8px;flex-wrap:wrap;align-items:baseline">'+
+          '<span style="flex:1 1 260px">'+esc(peligro)+
+            '<span class="sub mini" style="display:block">'+esc(elementos)+'</span></span>'+
+          '<select data-exp="peligro.'+pk+'.v" class="cal-sel">'+
+            '<option value=""'  +(v===''  ?' selected':'')+'>Pendiente</option>'+
+            '<option value="si"'+(v==='si'?' selected':'')+'>Resuelto</option>'+
+            '<option value="no"'+(v==='no'?' selected':'')+'>No resuelto</option>'+
+            '<option value="nc"'+(v==='nc'?' selected':'')+'>No comprobado</option>'+
+            '<option value="na"'+(v==='na'?' selected':'')+'>No aplicable</option>'+
+          '</select></div>'+
+        (v === 'si'
+          ? '<div class="campos" style="margin-top:8px">'+
+            expTxt('peligro.'+pk+'.como', 'Cómo se ha resuelto en esta puerta', '', 1)+'</div>'
+          : (v === 'na' || v === 'nc'
+            ? '<div class="campos" style="margin-top:8px">'+
+              expTxt('peligro.'+pk+'.motivo',
+                v === 'na' ? 'Por qué no aplica' : 'Por qué no se ha comprobado', '', 1)+'</div>'
+            : (v === 'no'
+              ? '<div class="campos" style="margin-top:8px">'+
+                expTxt('peligro.'+pk+'.motivo', 'Qué falta y qué hay que hacer', '', 1)+'</div>'
+              : '')))+
+        '</div>';
+    });
+    h += '<div class="panel-h" style="margin-top:18px"><h3>Comprobaciones de normativa</h3></div>';
+  }
+
+  chk.forEach(([k, texto, norma, pideFoto, critico]) => {
+    const v = (d[k]||{}).v || '';
+    /* Lo que no procede por la configuración de la puerta no se pregunta: se deja
+       dicho por qué no procede, y así queda en el documento sin fingir un resultado. */
+    const ap = procede(APLICA_COMPROBACION, k, e);
+    if (ap && ap.no){
+      h += '<div class="exp-item" style="opacity:.72">'+
+        '<div class="fila" style="gap:8px;flex-wrap:wrap;align-items:baseline">'+
+          '<span style="flex:1 1 260px">'+esc(texto)+'</span>'+
+          '<span class="chip gris sin">No aplicable</span></div>'+
+        '<p class="mini" style="margin:4px 0 0">'+esc(ap.no)+'</p></div>';
+      return;
+    }
+    h += '<div class="exp-item'+(v==='no'?' falta':(v==='si'?' bien':''))+'">'+
+      '<div class="fila" style="gap:8px;flex-wrap:wrap;align-items:baseline">'+
+        '<span style="flex:1 1 260px">'+esc(texto)+(critico?' <span class="chip mal sin">Imprescindible</span>':'')+'</span>'+
+        '<select data-exp="cumple.'+k+'.v" class="cal-sel">'+
+          '<option value=""'  +(v===''  ?' selected':'')+'>Pendiente</option>'+
+          '<option value="si"'+(v==='si'?' selected':'')+'>Conforme</option>'+
+          '<option value="no"'+(v==='no'?' selected':'')+'>No conforme</option>'+
+          '<option value="nc"'+(v==='nc'?' selected':'')+'>No comprobado</option>'+
+          '<option value="na"'+(v==='na'?' selected':'')+'>No aplicable</option>'+
+        '</select></div>'+
+      '<p class="mini" style="margin:4px 0 0">'+esc(norma)+'</p>'+
+      /* Un «no aplicable» o un «no comprobado» sin motivo no vale de nada: quien lea
+         el documento tiene que saber por qué esa comprobación no tiene resultado. */
+      (v === 'na' || v === 'nc'
+        ? '<div class="campos" style="margin-top:8px">'+
+          expTxt('cumple.'+k+'.motivo',
+            v === 'na' ? 'Por qué no aplica a esta puerta' : 'Por qué no se ha podido comprobar', '', 1)+
+          '</div>' : '');
+    if (v === 'no')
+      h += '<div class="campos" style="margin-top:8px">'+
+           expTxt('cumple.'+k+'.def', 'Qué se ha encontrado', '', 1)+
+           expTxt('cumple.'+k+'.sol', 'Qué hay que hacer para resolverlo', '', 1)+
+           expSel('cumple.'+k+'.grav', 'Gravedad',
+             [['', 'Sin valorar'], ['leve','Leve'], ['grave','Grave'], ['muy_grave','Muy grave, la puerta no debería usarse']])+
+           '</div>';
+    if (v === 'na')
+      h += '<div class="campos" style="margin-top:8px">'+
+           expTxt('cumple.'+k+'.nota', 'Por qué no aplica', '', 1)+'</div>';
+    if (pideFoto && (v === 'si' || v === 'no'))
+      h += expFotoBloque('cumple:'+k, 'Foto que lo acredita', '');
+    h += '</div>';
+  });
+  return h;
+}
+
+/* ---- Ensayo de fuerzas ---- */
+function expSecFuerzas(e){
+  const lim = limitesFuerza();
+  const puntos = EXP_PUNTOS_FUERZA[e.familia] || EXP_PUNTOS_FUERZA.industrial;
+  const incluir = expVal('fuerzas.incluir', 'si') !== 'no';
+  let h = '<div class="panel-h"><h3>Ensayo de fuerzas</h3>'+
+    (incluir ? '<span class="chip ok sin">Va en el libro</span>'
+             : '<span class="chip gris sin">Fuera del libro</span>')+'</div>'+
+    '<div class="campos" style="margin:0 0 14px">'+
+    expSel('fuerzas.incluir', '¿Se incluye el ensayo en el libro?',
+      [['si','Sí, se imprime en el libro'], ['no','No, no se imprime']],
+      'Lo que midas se guarda igualmente aunque no se imprima')+
+    '</div>'+
+    (!incluir
+      ? '<p class="nota-oficina" style="margin:0 0 14px">El ensayo no saldrá en el libro. '+
+        'Ten en cuenta que, en una puerta motorizada, las fuerzas de maniobra son una de las características '+
+        'que se declaran en la declaración de prestaciones, así que conviene tener el ensayo hecho aunque '+
+        'decidas no imprimirlo.</p>'
+      : '')+
+    '<p class="mini" style="margin:0 0 6px">Mide en cada punto y apunta lo que marque el instrumento. '+
+    'La aplicación compara sola con los límites y te dice si pasa.</p>'+
+    '<p class="nota-oficina" style="margin:0 0 14px">Los límites de abajo proceden de reproducciones '+
+    'sectoriales de la UNE-EN 12453, no del texto de la norma, que es de pago. '+
+    'Contrástalos con tu ejemplar antes de certificar con ellos. Se cambian en Equipo.</p>'+
+    '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Límite</th><th>Valor</th></tr></thead><tbody>'+
+    '<tr><td>Fuerza de aplastamiento (huecos reducidos)</td><td class="num">'+lim.fd_aplastamiento_n+' N</td></tr>'+
+    '<tr><td>Fuerza de impacto (sin riesgo de aplastamiento)</td><td class="num">'+lim.fd_impacto_n+' N</td></tr>'+
+    '<tr><td>Fuerza estática, máximo '+lim.fs_tiempo_s+' s</td><td class="num">'+lim.fs_estatica_n+' N</td></tr>'+
+    '<tr><td>Fuerza residual, tiempo ilimitado</td><td class="num">'+lim.fe_residual_n+' N</td></tr>'+
+    '<tr><td>Tiempo por encima de la fuerza estática</td><td class="num">'+lim.td_dinamico_s+' s</td></tr>'+
+    '</tbody></table></div>';
+
+  h += '<div class="campos" style="margin-top:14px">'+
+    expTxt('fuerzas.instrumento', 'Instrumento de medida', 'Marca y modelo del medidor de fuerzas')+
+    expTxt('fuerzas.calibracion', 'Calibración', 'Fecha o referencia del certificado de calibración')+
+    '<div class="campo"><label>Fecha del ensayo</label>'+
+      '<input type="date" data-exp="fuerzas.fecha" value="'+esc(expVal('fuerzas.fecha',''))+'"></div>'+
+    expSel('fuerzas.hueco', 'Tipo de hueco en el canto de cierre',
+      [['', 'Sin contestar'], ['aplastamiento','Puede aplastar: límite '+lim.fd_aplastamiento_n+' N'],
+       ['impacto','Sin riesgo de aplastamiento: límite '+lim.fd_impacto_n+' N']])+
+    '</div>';
+
+  const tope = expVal('fuerzas.hueco','') === 'impacto' ? lim.fd_impacto_n : lim.fd_aplastamiento_n;
+  h += '<div class="tabla-wrap" style="margin-top:14px"><table class="tabla"><thead><tr>'+
+    '<th>Punto de medida</th><th>Fd (N)</th><th>Fs (N)</th><th>Fe (N)</th><th>td (s)</th><th>Resultado</th>'+
+    '</tr></thead><tbody>';
+  puntos.forEach((pt, i) => {
+    const fd = +expVal('fuerzas.m'+i+'.fd', '') || 0, fs = +expVal('fuerzas.m'+i+'.fs', '') || 0;
+    const fe = +expVal('fuerzas.m'+i+'.fe', '') || 0, td = +expVal('fuerzas.m'+i+'.td', '') || 0;
+    const hay = fd || fs || fe || td;
+    const pasa = hay && fd <= tope && fs <= lim.fs_estatica_n && fe <= lim.fe_residual_n && td <= lim.td_dinamico_s;
+    h += '<tr><td>'+esc(pt)+'</td>'+
+      ['fd','fs','fe','td'].map(c =>
+        '<td><input type="number" step="any" style="width:72px" data-exp="fuerzas.m'+i+'.'+c+'" value="'+
+        esc(expVal('fuerzas.m'+i+'.'+c,''))+'"></td>').join('')+
+      '<td>'+(!hay ? '<span class="mini">Sin medir</span>'
+            : (pasa ? '<span class="chip ok sin">Pasa</span>' : '<span class="chip mal sin">No pasa</span>'))+'</td></tr>';
+  });
+  h += '</tbody></table></div>';
+  h += '<div class="campos" style="margin-top:12px">'+
+       expArea('fuerzas.observaciones', 'Observaciones del ensayo', '', 2)+'</div>';
+  h += expFotoBloque('fuerzas:medida', 'Fotos del ensayo',
+       'La pantalla del instrumento en cada punto, si puedes.');
+  return h;
+}
+
+/* ---- Prestaciones declaradas ---- */
+function expSecPrestaciones(e){
+  const pr = EXP_PRESTACIONES[e.familia] || [];
+  let h = '<div class="panel-h"><h3>Prestaciones declaradas</h3></div>'+
+    '<p class="mini" style="margin:0 0 6px">Lo que vas a declarar en la declaración de prestaciones. '+
+    'Las imprescindibles no admiten «prestación no determinada».</p>'+
+    '<p class="nota-oficina" style="margin:0 0 14px">No relleno yo ningún valor: lo que se declara aquí '+
+    'lo firmas tú y tiene que estar respaldado por tus ensayos o por los del fabricante de los componentes. '+
+    'El desglose de obligatorias procede de la tabla ZA.1 de la norma de producto; contrástalo con tu ejemplar.</p>'+
+    '<div class="campos">'+
+    expSel('prest.via', 'Por qué vía declaras las prestaciones',
+      [['', 'Sin contestar'],
+       ['ensayos','Ensayos iniciales de tipo de laboratorio notificado'],
+       ['cascada','Ensayos del fabricante del componente, en cascada (art. 36)'],
+       ['micro','Documentación Técnica Específica por microempresa (art. 37)'],
+       ['unidad','Documentación Técnica Específica por producto fabricado por unidad (art. 38)']],
+      'Los artículos son del Reglamento (UE) 305/2011')+
+    expSel('prest.sistema', 'Sistema de evaluación del producto',
+      [['3','Sistema 3'], ['4','Sistema 4'], ['1','Sistema 1'], ['1+','Sistema 1+'], ['2+','Sistema 2+']],
+      'Apartado 5 de la declaración. Para estas puertas el más habitual es el sistema 3')+
+    expTxt('prest.laboratorio', 'Laboratorio u organismo notificado', 'Nombre y número, si interviene')+
+    expTxt('prest.informe', 'Referencia del informe de ensayo')+
+    expTxt('prest.codigo_tipo', 'Código de identificación única del producto tipo',
+      'Apartado 1 de la declaración de prestaciones', 1)+
+    '</div>';
+  if (e.situacion === 'modificacion')
+    h += '<p class="nota-oficina" style="margin:14px 0 0">Esto es una modificación sustancial. Que obliga a '+
+         'nueva declaración de conformidad de máquina y nuevo marcado está confirmado. Que obligue además a '+
+         'una declaración de prestaciones nueva es discutible, porque la hoja no la has fabricado tú: '+
+         'consúltalo con tu asesoría. Si te dicen que no procede, deja este apartado sin rellenar.</p>';
+  if (['micro','unidad'].includes(expVal('prest.via','')))
+    h += expBloqueDTE(e, pr);
+
+  h += '<div class="tabla-wrap" style="margin-top:14px"><table class="tabla"><thead><tr>'+
+    '<th>Característica esencial</th><th>Prestación declarada</th><th>Norma de ensayo</th></tr></thead><tbody>';
+  pr.forEach(([k, nombre, norma, obligatoria]) => {
+    h += '<tr><td>'+esc(nombre)+(obligatoria?' <span class="chip mal sin">Obligatoria</span>':'')+'</td>'+
+      '<td><input type="text" data-exp="prest.v.'+k+'" style="width:100%" placeholder="'+
+        (obligatoria?'Clase, valor o «Conforme»':'Clase, valor o NPD')+'" value="'+esc(expVal('prest.v.'+k,''))+'"></td>'+
+      '<td class="mini">'+esc(norma)+'</td></tr>';
+  });
+  h += '</tbody></table></div>';
+  return h;
+}
+
+/* ---- Riesgos y deficiencias ---- */
+function expSecRiesgos(e){
+  const adec = e.situacion === 'adecuacion';
+  const d = (e.datos||{}).cumple || {};
+  const defs = (EXP_COMPROBACIONES[e.familia]||[]).filter(c => (d[c[0]]||{}).v === 'no');
+  let h = '<div class="panel-h"><h3>'+(adec?'Riesgos y deficiencias':'Riesgos residuales')+'</h3></div>';
+  if (adec)
+    h += '<p class="mini" style="margin:0 0 14px">Este es el documento con nombre propio de una adecuación: '+
+         'el informe de riesgos y deficiencias detectadas, que se entrega al titular y se deja junto a la puerta.</p>';
+  else
+    h += '<p class="mini" style="margin:0 0 14px">Los riesgos que quedan después de poner todas las protecciones. '+
+         'La norma de máquinas obliga a informar de ellos en el manual.</p>';
+
+  if (defs.length){
+    h += '<p class="mini" style="margin:0 0 8px"><b>Deficiencias que vienen de las comprobaciones:</b></p>'+
+      '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Deficiencia</th><th>Gravedad</th><th>Actuación</th></tr></thead><tbody>';
+    defs.forEach(([k, texto]) => {
+      const x = d[k] || {};
+      h += '<tr><td>'+esc(x.def || texto)+'</td>'+
+        '<td>'+esc({leve:'Leve',grave:'Grave',muy_grave:'Muy grave'}[x.grav] || 'Sin valorar')+'</td>'+
+        '<td>'+esc(x.sol || '—')+'</td></tr>';
+    });
+    h += '</tbody></table></div>';
+  } else {
+    h += '<p class="muted" style="margin:0 0 14px">No hay deficiencias marcadas en las comprobaciones.</p>';
+  }
+
+  h += '<div class="campos" style="margin-top:14px">'+
+    expArea('riesgos.residuales', 'Riesgos residuales que debe conocer el usuario',
+      'Lo que no se puede eliminar y hay que advertir', 3)+
+    expArea('riesgos.limitaciones', 'Limitaciones de este informe',
+      'Qué no se ha podido comprobar y por qué', 2)+
+    expArea('riesgos.recomendaciones', 'Recomendaciones al titular', '', 3)+
+    '</div>';
+  if (adec)
+    h += '<div class="campos">'+
+      expSel('riesgos.apta', '¿La puerta queda apta para el uso?',
+        [['', 'Sin contestar'], ['si','Sí, queda conforme'],
+         ['condicionada','Sí, con las limitaciones indicadas'],
+         ['no','No, no debería usarse hasta resolver lo señalado']])+
+      '</div>';
+  return h;
+}
+
+/* ---- Entrega y firma ---- */
+function expSecEntrega(e){
+  const fab = EXP_ES_FABRICANTE(e.situacion);
+  const marco = marcoDeFecha(e.fecha_puesta_servicio);
+  const em = datosEmpresa();
+  const reg = regimenDe(e);
+  const docs = fab
+    ? [].concat(
+       reg.ddp ? [['ddp','Declaración de prestaciones']] : [],
+       [['dc', marco === 'pendiente' ? 'Declaración de conformidad' : EXP_MARCO[marco].documento],
+       ['marcado','Marcado CE colocado en la puerta'],
+       ['manual','Manual de uso y mantenimiento'],
+       ['libro','Libro de mantenimiento'],
+       ['expediente','Expediente técnico archivado (se conserva 10 años, no se entrega)']])
+    : e.situacion === 'nueva_instalador'
+    ? [['ddp_fab','Declaración de prestaciones del fabricante, recopilada'],
+       ['dc_fab','Declaración de conformidad del fabricante, recopilada'],
+       ['marcado','Marcado CE comprobado en la puerta'],
+       ['manual','Manual del fabricante entregado'],
+       ['libro','Libro de mantenimiento entregado'],
+       ['cert_inst','Certificado de instalación firmado por nosotros']]
+    : [['informe','Informe de riesgos y deficiencias detectadas'],
+       ['libro','Certificación en el libro de mantenimiento'],
+       ['manual','Instrucciones de uso entregadas']];
+
+  let h = '<div class="panel-h"><h3>Entrega y firma</h3></div>'+
+    '<p class="mini" style="margin:0 0 14px">Lo que se entrega al titular y quién lo firma.</p>';
+  h += '<div class="lista">';
+  docs.forEach(([k, t]) => {
+    const v = expVal('entrega.docs.'+k, '') === 'si';
+    h += '<label class="item" style="cursor:pointer"><input type="checkbox" data-exp-chk="entrega.docs.'+k+'"'+
+      (v?' checked':'')+' style="margin-right:10px"><span><span class="tit">'+esc(t)+'</span></span></label>';
+  });
+  h += '</div>';
+
+  h += '<div class="campos" style="margin-top:14px">'+
+    expTxt('entrega.recibido_por', 'Recibido por', 'Nombre de quien recibe la documentación')+
+    '<div class="campo"><label>Fecha de entrega</label>'+
+      '<input type="date" data-exp="entrega.fecha" value="'+esc(expVal('entrega.fecha',''))+'"></div>'+
+    expTxt('entrega.tecnico', 'Técnico que ha ejecutado la intervención',
+      'Quien ha hecho el trabajo y las pruebas. Puede no ser quien firma')+
+    expTxt('entrega.firmante', 'Firma por la empresa',
+      'Quien firma las declaraciones en nombre de Ariza. No es la persona del cliente que recibe')+
+    expTxt('entrega.cargo', 'Cargo')+
+    expArea('entrega.observaciones', 'Observaciones', '', 2)+
+    '</div>';
+
+  if (fab){
+    h += '<p class="nota-oficina" style="margin:14px 0 0"><b>Lo que estás firmando.</b> '+
+      'En esta situación la empresa es fabricante de la puerta a efectos legales: respondes de su conformidad, '+
+      'tienes que conservar el expediente técnico diez años y la declaración se emite bajo tu exclusiva responsabilidad.</p>';
+    if (!em.nif || !em.domicilio)
+      h += '<p class="nota-oficina" style="margin:10px 0 0">Faltan el NIF y el domicilio de la empresa, '+
+        'que son obligatorios en la declaración. Se rellenan en Equipo, en «Datos de la empresa».</p>';
+    h += '<div class="campos" style="margin-top:10px"><div class="campo full">'+
+      '<label style="cursor:pointer"><input type="checkbox" data-exp-chk="entrega.firmante_ok"'+
+      (expVal('entrega.firmante_ok','')==='si'?' checked':'')+' style="margin-right:8px">'+
+      'He leído lo anterior y asumo la firma de esta documentación</label></div></div>';
+  }
+  return h;
+}
+
+/* ---- Fotos del expediente ---- */
+function expFotoBloque(apartado, titulo, ayuda){
+  const id = apartado.replace(/[^a-z0-9]/gi, '_');
+  return '<div class="exp-fotos"><div class="fila" style="gap:8px;align-items:baseline">'+
+    '<b class="mini">'+esc(titulo)+'</b><span class="sp"></span>'+
+    '<label class="btn sm plana" style="cursor:pointer">Añadir foto'+
+    '<input type="file" accept="image/*" multiple hidden data-act="exp-subir-foto" data-ap="'+esc(apartado)+'"></label>'+
+    '</div>'+
+    (ayuda?'<p class="mini" style="margin:2px 0 0">'+esc(ayuda)+'</p>':'')+
+    '<div class="tiras" id="expf-'+id+'" data-ap="'+esc(apartado)+'"></div></div>';
+}
+
+async function pintarFotosExp(){
+  const e = expDe(S.exp); if (!e) return;
+  document.querySelectorAll('.tiras[data-ap]').forEach(async cont => {
+    const ap = cont.dataset.ap;
+    const fs = expFotos(ap);
+    if (!fs.length){ cont.innerHTML = '<p class="mini" style="margin:6px 0 0">Sin fotos todavía.</p>'; return; }
+    const rutas = fs.map(f => f.ruta);
+    let urls = {};
+    try {
+      const { data } = await sb.storage.from('expedientes').createSignedUrls(rutas, 7200);
+      (data||[]).forEach((x,i) => { if (x && x.signedUrl) urls[rutas[i]] = x.signedUrl; });
+    } catch(_){}
+    cont.innerHTML = fs.map(f =>
+      '<figure class="tira"><img src="'+esc(urls[f.ruta]||'')+'" alt="'+esc(f.pie||'')+'">'+
+      '<figcaption><input type="text" class="pie" placeholder="Pie de foto" value="'+esc(f.pie||'')+'" '+
+      'data-act="exp-pie" data-id="'+f.id+'">'+
+      '<button class="btn sm plana" data-act="exp-quitar-foto" data-id="'+f.id+'">Quitar</button>'+
+      '</figcaption></figure>').join('');
+  });
+}
+
+async function subirFotosExp(apartado, ficheros){
+  const e = expDe(S.exp); if (!e) return;
+  toast('Subiendo ' + ficheros.length + ' foto' + (ficheros.length===1?'':'s') + '…');
+  let n = 0;
+  for (const f of ficheros){
+    if (!/^image\//.test(f.type)) continue;
+    try {
+      const blob = await reducir(f, 1600, 0.8);
+      const ruta = e.id + '/' + apartado.replace(/[^a-z0-9]/gi,'_') + '-' + Date.now() + '-' + (n++) + '.jpg';
+      const { error } = await sb.storage.from('expedientes')
+        .upload(ruta, blob, { contentType:'image/jpeg', upsert:true });
+      if (error) throw error;
+      const { error: e2 } = await sb.from('expediente_fotos').insert({
+        expediente_id: e.id, apartado, ruta, orden: expFotos(apartado).length + n, autor: yo() });
+      if (e2) throw e2;
+    } catch(err){ fallo(err); }
+  }
+  await cargarFotosExp(e.id);
+  pintarFotosExp();
+  toast('Fotos añadidas.');
+}
+
+async function cargarFotosExp(id){
+  const { data, error } = await sb.from('expediente_fotos').select('*')
+    .eq('expediente_id', id).order('orden');
+  S.expFotos = error ? [] : (data || []);
+}
+
+/* Alta de expediente: lo único que hay que decidir al empezar es qué estamos
+   documentando y qué familia de puerta es, porque de ahí sale todo lo demás. */
+function dlgExpedienteNuevo(puertaId){
+  const p = puertaDe(puertaId) || {};
+  const sug = /peatonal/i.test(p.tipo||'') ? 'peatonal'
+            : /barrera/i.test(p.tipo||'')  ? 'barrera' : 'industrial';
+  const h = '<h3>Nueva documentación de normativa</h3>'+
+    '<p class="mini" style="margin:0 0 12px">'+esc([p.codigo, p.cliente, p.direccion].filter(Boolean).join(' · '))+'</p>'+
+    '<div class="campos">'+
+    '<div class="campo full"><label for="xp-sit">Qué estamos documentando</label><select id="xp-sit">'+
+      Object.entries(EXP_SITUACION).map(([k,v]) => '<option value="'+k+'">'+esc(v)+'</option>').join('')+
+      '</select><span class="pista" id="xp-ayuda">'+esc(EXP_SIT_AYUDA.nueva_fabricante)+'</span></div>'+
+    '<div class="campo full"><label for="xp-fam">Familia de puerta</label><select id="xp-fam">'+
+      Object.entries(EXP_FAMILIA).map(([k,v]) => '<option value="'+k+'"'+(k===sug?' selected':'')+'>'+esc(v)+'</option>').join('')+
+      '</select><span class="pista">Decide las normas y el cuestionario. Una peatonal automática no va por la '+
+      'EN 13241 sino por la EN 16361 y la EN 16005.</span></div>'+
+    '</div><div id="xp-regimen"></div><p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Empezar</button></div>';
+  abrirDlg(h, async () => {
+    try {
+      /* Una puerta cortafuegos va por el sistema 1 del Reglamento 305/2011: hace falta
+         certificado de un organismo notificado. Por eso no dejamos abrir un expediente
+         en el que seamos nosotros quienes declaramos. */
+      if (val('xp-fam') === 'cortafuegos' && EXP_ES_FABRICANTE(val('xp-sit')))
+        return setErr('Una puerta resistente al fuego no se puede autocertificar: va por el sistema 1 '+
+          'del Reglamento 305/2011 y necesita certificado de un organismo notificado. Con una '+
+          'cortafuegos solo cabe «Puerta nueva de kit completo», montada según las instrucciones '+
+          'del fabricante y sin sustituir ningún componente del conjunto ensayado.');
+      const { data, error } = await sb.rpc('crear_expediente', {
+        p_puerta: puertaId, p_situacion: val('xp-sit'), p_familia: val('xp-fam'), p_aviso: null });
+      if (error) throw error;
+      if (!data || !data.ok) return setErr(textoFallo(data));
+      cerrarDlg(); await cargar();
+      S.exp = data.id; S.expPaso = 'intervencion'; S.ficha = null;
+      await cargarFotosExp(data.id); await cargarDocsExp(data.id);
+      pintar(); window.scrollTo({top:0});
+      toast('Expediente ' + (data.referencia||'') + ' abierto.');
+    } catch(err){ setErr(err.message); }
+  });
+  const sel = document.getElementById('xp-sit');
+  const fam = document.getElementById('xp-fam');
+  /* Avisa antes de empezar de qué sale y qué no sale de esta combinación, para que
+     nadie rellene un expediente entero y se lleve el chasco al final. */
+  const pintarRegimen = () => {
+    const caja = document.getElementById('xp-regimen');
+    if (!caja || !fam || !sel) return;
+    const reg = EXP_REGIMEN[fam.value] || {};
+    const esFab = EXP_ES_FABRICANTE(sel.value);
+    let clase = 'aviso-caja', txt = reg.nota || '';
+    if (reg.bloqueaFabricante && esFab){
+      clase = 'mal-caja';
+      txt = 'No se puede autocertificar. ' + reg.nota;
+    } else if (!reg.ddp && esFab && reg.sistema !== '1'){
+      txt = 'De esta puerta no sale declaración de prestaciones. ' + reg.nota;
+    }
+    caja.innerHTML = txt
+      ? '<div class="'+clase+'" style="margin:0 0 12px">'+esc(txt)+'</div>' : '';
+  };
+  /* Al cambiar la elección, el error anterior deja de valer: si no se borra,
+     queda en pantalla un «no se puede autocertificar» que ya no es cierto. */
+  const limpiarErr = () => { const p = document.querySelector('#dlg .err');
+    if (p) p.textContent = ''; };
+  if (sel) sel.addEventListener('change', () => {
+    const a = document.getElementById('xp-ayuda');
+    if (a) a.textContent = EXP_SIT_AYUDA[sel.value] || '';
+    limpiarErr(); pintarRegimen();
+  });
+  if (fam) fam.addEventListener('change', () => { limpiarErr(); pintarRegimen(); });
+  pintarRegimen();
+}
+
+function dlgEmitirExpediente(id){
+  const e = expDe(id); if (!e) return;
+  const em = datosEmpresa();
+  const v = validarExpediente(e);
+  const incum = expIncumple(e);
+
+  /* Estado del expediente, de un vistazo: lo que impide emitir arriba y en rojo,
+     lo que solo hay que saber debajo. Un bloqueo no se puede saltar desde aquí. */
+  let h = '<h3>Emitir el expediente</h3>'+
+    '<p class="mini" style="margin:0 0 10px"><b>Estado del expediente</b> · '+
+    (v.bloqueos.length
+      ? '<span style="color:var(--mal)">'+v.bloqueos.length+' bloqueo(s)</span>'
+      : '<span style="color:var(--ok)">sin bloqueos</span>')+
+    ' · '+v.avisos.length+' advertencia(s)</p>';
+
+  if (v.bloqueos.length){
+    h += '<div class="mal-caja" style="margin:0 0 12px"><b>No puede emitirse el documento definitivo.</b>'+
+      '<ul style="margin:6px 0 0;padding-left:18px">'+
+      v.bloqueos.map(x => '<li><b>'+esc(x.area)+':</b> '+esc(x.texto)+'</li>').join('')+
+      '</ul><p class="mini" style="margin:8px 0 0">Puedes seguir trabajando y exportar el borrador, '+
+      'que sale marcado como no válido para declarar conformidad.</p></div>';
+  }
+  if (v.avisos.length)
+    h += '<div class="aviso-caja" style="margin:0 0 12px"><b>Advertencias</b>'+
+      '<ul style="margin:6px 0 0;padding-left:18px">'+
+      v.avisos.map(x => '<li><b>'+esc(x.area)+':</b> '+esc(x.texto)+'</li>').join('')+'</ul></div>';
+  if (incum.length)
+    h += '<p class="nota-oficina" style="margin:0 0 12px"><b>Hay '+incum.length+
+         ' incumplimiento(s) de los imprescindibles.</b> Si emites, el libro los recoge como deficiencias '+
+         'y la puerta no queda certificada como conforme. Es correcto hacerlo así en una adecuación, '+
+         'pero no en una puerta nueva.</p>';
+
+  h += '<p class="mini" style="margin:0 0 12px">Al emitir se fija la fecha y quién firma. '+
+       'El expediente deja de poder borrarse, porque es documentación entregada.</p>'+
+    '<div class="campos">'+
+    '<div class="campo full"><label for="xe-firm">Quién firma</label>'+
+      '<input id="xe-firm" type="text" value="'+esc(e.firmante || (e.datos&&e.datos.entrega&&e.datos.entrega.firmante) || em.representante || '')+'"></div>'+
+    '<div class="campo full"><label for="xe-cargo">Cargo</label>'+
+      '<input id="xe-cargo" type="text" value="'+esc(e.firmante_cargo || em.cargo_firmante || '')+'"></div>'+
+    '</div><p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    (v.puedeEmitir
+      ? '<button type="submit" class="btn pri">Emitir</button>'
+      : '<button type="button" class="btn pri" disabled style="opacity:.5;cursor:not-allowed">Emitir</button>')+
+    '</div>';
+  abrirDlg(h, async () => {
+    try {
+      const { data, error } = await sb.rpc('emitir_expediente',
+        { p_exp: id, p_firmante: val('xe-firm'), p_cargo: val('xe-cargo') });
+      if (error) throw error;
+      if (!data || !data.ok) return setErr(data && data.motivo === 'sin_firmante'
+        ? 'Pon quién firma el documento.' : textoFallo(data));
+      cerrarDlg(); await cargar(); toast('Expediente emitido.');
+    } catch(err){ setErr(err.message); }
+  });
+}
+
+/* ================= Documentación Técnica Específica =================
+   El artículo 37 del Reglamento (UE) 305/2011 permite a una microempresa
+   sustituir los ensayos iniciales de tipo por una Documentación Técnica
+   Específica, y el 38 hace lo mismo para el producto fabricado por unidad.
+   Esa DTE es un documento con contenido propio y código propio: tiene que
+   decir con qué método distinto del de la norma se ha demostrado cada
+   prestación y en qué se apoya. Sin ella, la declaración de prestaciones
+   por la vía simplificada está incompleta. */
+
+const DTE_METODOS = [
+  'Ensayo inicial de tipo del fabricante del componente',
+  'Documentación técnica y ensayos del fabricante de la hoja',
+  'Documentación técnica y ensayos del fabricante del automatismo',
+  'Medición en obra con instrumento calibrado',
+  'Cálculo a partir de los datos del fabricante',
+  'Inspección y comprobación funcional documentada',
+  'Ensayo propio documentado',
+  'Prestación no determinada: no se declara',
+];
+
+const codigoDTE = e => (e.datos && e.datos.prest && e.datos.prest.dte_codigo)
+  || ((e.referencia || 'DTE') + '-DTE');
+
+function expBloqueDTE(e, pr){
+  const via = expVal('prest.via', '');
+  const art = via === 'micro' ? '37' : '38';
+  const nDocs = (S.expDocs || []).length;
+  let h = '<div class="panel" style="margin-top:16px;border:2px solid var(--line)">'+
+    '<div class="panel-h"><h3>Documentación Técnica Específica</h3>'+
+    '<span class="chip aviso sin">Artículo '+art+'</span></div>'+
+    '<p class="mini" style="margin:0 0 6px">Este es el documento que sustituye a los ensayos de laboratorio. '+
+    'Es obligatorio: la declaración de prestaciones lo cita por su código, y si no existe, la declaración '+
+    'queda coja.</p>'+
+    '<p class="nota-oficina" style="margin:0 0 14px">'+
+    (via === 'micro'
+      ? 'El artículo 37 es solo para microempresas. Antes de firmar, confirma con tu asesoría que Ariza lo es '+
+        'teniendo en cuenta las empresas vinculadas o asociadas, si las hay.'
+      : 'El artículo 38 es solo para producto fabricado por unidad o a medida, no en serie. '+
+        'Confirma con tu asesoría que tus puertas encajan.')+
+    '</p>'+
+    '<div class="campos">'+
+    expTxt('prest.dte_codigo', 'Código de identificación de la DTE',
+      'Si usas la misma DTE para varias puertas del mismo tipo, repite aquí el mismo código', 1)+
+    '<div class="campo"><label>Fecha de la DTE</label>'+
+      '<input type="date" data-exp="prest.dte_fecha" value="'+esc(expVal('prest.dte_fecha',''))+'"></div>'+
+    expTxt('prest.dte_tipo', 'Producto tipo que ampara',
+      'A qué conjunto de puertas se aplica esta DTE', 1)+
+    expArea('prest.dte_base', 'En qué documentación te apoyas',
+      'Informes de ensayo de tus proveedores, fichas técnicas, certificados de componentes', 3)+
+    expArea('prest.dte_motivo', 'Por qué el método empleado es válido',
+      'Por qué lo que has hecho demuestra el cumplimiento igual que el ensayo de la norma', 3)+
+    /* Un número de DTE no demuestra que el documento exista. Estos tres campos son los
+       que convierten la referencia en un documento localizable y con responsable. */
+    expTxt('prest.dte_responsable', 'Quién ha elaborado y firma la DTE', '', 1)+
+    expTxt('prest.dte_ubicacion', 'Dónde está archivada',
+      'Carpeta, expediente o ubicación física donde se guarda el documento', 1)+
+    expTxt('prest.dte_revision', 'Revisión', 'Ej.: 01')+
+    (via === 'micro'
+      ? expSel('prest.micro_comprobada', '¿Está comprobada la condición de microempresa?',
+          [['', 'Sin contestar'],
+           ['si','Sí, comprobada teniendo en cuenta empresas vinculadas y asociadas'],
+           ['no','No se ha comprobado']],
+          'Menos de 10 personas y volumen de negocio o balance no superior a 2 millones. '+
+          'No se deduce solo del número de trabajadores')
+      : '')+
+    '</div>';
+
+  if (!expVal('prest.dte_codigo','')) {
+    h += '<p class="mini" style="margin:4px 0 10px">Sugerencia de código: <b>'+esc((e.referencia||'')+'-DTE')+
+         '</b>. <button class="btn sm plana" data-act="exp-dte-codigo">Ponerlo</button></p>';
+  }
+
+  h += '<h4 style="font-size:13px;margin:16px 0 6px">Cómo se ha demostrado cada prestación</h4>'+
+    '<p class="mini" style="margin:0 0 8px">Solo hace falta rellenar las que declares con un valor. '+
+    'Las que dejes como prestación no determinada no hay que justificarlas.</p>'+
+    '<datalist id="dte-metodos">'+DTE_METODOS.map(m => '<option value="'+esc(m)+'">').join('')+'</datalist>'+
+    '<div class="tabla-wrap"><table class="tabla"><thead><tr>'+
+    '<th style="width:26%">Característica</th><th style="width:22%">Declarado</th>'+
+    '<th style="width:26%">Método empleado</th><th>En qué se apoya</th></tr></thead><tbody>';
+  pr.forEach(([k, nombre, , obligatoria]) => {
+    const v = expVal('prest.v.'+k, '');
+    const npd = !v || /^npd$/i.test(v.trim());
+    h += '<tr'+(npd && !obligatoria ? ' style="opacity:.55"' : '')+'>'+
+      '<td>'+esc(nombre)+(obligatoria?' <span class="chip mal sin">Obl.</span>':'')+'</td>'+
+      '<td class="mini">'+esc(v || 'NPD')+'</td>'+
+      '<td><input type="text" list="dte-metodos" style="width:100%" data-exp="prest.dte.'+k+'.metodo" '+
+        'value="'+esc(expVal('prest.dte.'+k+'.metodo',''))+'"></td>'+
+      '<td><input type="text" style="width:100%" placeholder="Informe, ficha o medición concreta" '+
+        'data-exp="prest.dte.'+k+'.just" value="'+esc(expVal('prest.dte.'+k+'.just',''))+'"></td></tr>';
+  });
+  h += '</tbody></table></div>';
+
+  h += '<p class="mini" style="margin:10px 0 0">Documentación de fabricantes adjunta al expediente: <b>'+
+    nDocs+'</b>. '+(nDocs ? 'Se relaciona sola en la DTE como prueba documental.'
+      : 'Súbela en el apartado «Documentación de fabricantes» y se relacionará sola aquí.')+'</p>';
+
+  h += '<div class="campos" style="margin-top:12px"><div class="campo full">'+
+    '<label style="cursor:pointer"><input type="checkbox" data-exp-chk="prest.dte_ok"'+
+    (expVal('prest.dte_ok','')==='si'?' checked':'')+' style="margin-right:8px">'+
+    'Confirmo que cumplimos las condiciones del artículo '+art+' y que esta documentación es cierta</label>'+
+    '</div></div>'+
+    '<div class="fila" style="margin-top:10px"><span class="sp"></span>'+
+    '<button class="btn pri" data-act="exp-dte">Ver la Documentación Técnica Específica</button></div>'+
+    '<p class="mini" style="margin:8px 0 0">Es documentación tuya, no del cliente: no va dentro del libro '+
+    'que le entregas. Se imprime, se firma y se guarda diez años.</p>'+
+    '</div>';
+  return h;
+}
+
+/* La DTE impresa */
+async function documentoDTE(expId){
+  const e = expDe(expId); if (!e) return;
+  await cargarDocsExp(expId);
+  const em = datosEmpresa();
+  const d = e.datos || {};
+  const pu = d.puerta || {};
+  const p = e.puerta_id ? (puertaDe(e.puerta_id) || {}) : {};
+  const pr = EXP_PRESTACIONES[e.familia] || [];
+  const pv = (d.prest||{}).v || {};
+  const via = (d.prest||{}).via;
+  if (!['micro','unidad'].includes(via)){
+    toast('La DTE solo tiene sentido con el procedimiento simplificado de los artículos 37 o 38.');
+    return;
+  }
+  const art = via === 'micro' ? '37' : '38';
+  const norma = ((EXP_NORMAS[e.familia]||[])[0]||[''])[0];
+  const docs = S.expDocs || [];
+  const hoy = new Date().toISOString().slice(0,10);
+
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana.'); return; }
+  const fila = (k, v) => v ? '<tr><th>'+esc(k)+'</th><td>'+esc(v)+'</td></tr>' : '';
+
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
+    '<title>DTE '+esc(codigoDTE(e))+'</title><style>'+
+    '@page{size:A4;margin:16mm 15mm}*{box-sizing:border-box}'+
+    'body{font:11.5px/1.55 -apple-system,Segoe UI,Roboto,sans-serif;color:#1C1817;margin:0}'+
+    '.cab{display:flex;justify-content:space-between;align-items:flex-start;'+
+      'border-bottom:3px solid #FCBA1D;padding-bottom:9px;margin-bottom:14px}'+
+    '.marca{font-weight:800;font-size:19px}.marca span{color:#C98F08;font-weight:600}'+
+    'h1{font-size:20px;margin:0}h2{font-size:12px;margin:16px 0 5px;color:#6B6560;'+
+      'text-transform:uppercase;letter-spacing:.04em}'+
+    'p{margin:0 0 8px}.min{font-size:10px;color:#6B6560}'+
+    'table{border-collapse:collapse;width:100%;margin:4px 0 10px}'+
+    'th,td{text-align:left;padding:4px 7px;border-bottom:1px solid #e8e5e1;vertical-align:top}'+
+    'th{color:#6B6560;font-weight:500}table.datos th{width:34%}'+
+    'table.m th{background:#f6f5f3;color:#1C1817;font-weight:600;width:auto}'+
+    '.firma{margin-top:18mm;page-break-inside:avoid}'+
+    '.firma .linea{border-bottom:1px solid #1C1817;height:16mm;margin:0 0 4px;max-width:70mm}'+
+    '.marco{background:#f6f5f3;padding:9px 11px;border-radius:4px}'+
+    'tr{page-break-inside:avoid}'+
+    '@media screen{body{max-width:200mm;margin:0 auto;padding:16px}}'+
+    '</style></head><body>'+
+
+    '<div class="cab"><div><h1>Documentación Técnica Específica</h1>'+
+      '<div style="color:#6B6560">Nº '+esc(codigoDTE(e))+' · Documento interno del fabricante</div></div>'+
+      '<div style="text-align:right"><div class="marca">ARIZA <span>puertas automáticas</span></div>'+
+      '<div class="min">'+esc([em.telefono, em.web].filter(Boolean).join(' · '))+'</div></div></div>'+
+
+    '<h2>Objeto y base legal</h2>'+
+    '<div class="marco"><p>Este documento constituye la Documentación Técnica Específica prevista en el '+
+    '<b>artículo '+art+' del Reglamento (UE) nº 305/2011</b> del Parlamento Europeo y del Consejo, por el que '+
+    'se establecen condiciones armonizadas para la comercialización de productos de construcción.</p>'+
+    '<p style="margin:0">'+
+    (art === '37'
+      ? 'Al amparo de dicho artículo, el fabricante, que tiene la condición de <b>microempresa</b>, sustituye los '+
+        'ensayos iniciales de tipo por los métodos que se describen más abajo, y trata el producto, sujeto al '+
+        'sistema de evaluación y verificación de la constancia de las prestaciones indicado, conforme a lo '+
+        'dispuesto para el sistema 4.'
+      : 'Al amparo de dicho artículo, tratándose de un <b>producto fabricado por unidad</b> y no en serie, '+
+        'el fabricante sustituye los ensayos iniciales de tipo por los métodos que se describen más abajo.')+
+    '</p></div>'+
+
+    '<h2>Fabricante</h2><table class="datos">'+
+      fila('Razón social', em.razon_social)+
+      fila('NIF', em.nif)+
+      fila('Domicilio', [em.domicilio, em.cp, em.poblacion, em.provincia].filter(Boolean).join(', '))+
+      fila('Responsable técnico', em.responsable_tecnico)+
+    '</table>'+
+
+    '<h2>Producto tipo al que se aplica</h2><table class="datos">'+
+      fila('Código de identificación única', (d.prest||{}).codigo_tipo || pu.denominacion || pu.modelo)+
+      fila('Producto tipo', (d.prest||{}).dte_tipo)+
+      fila('Familia', EXP_FAMILIA[e.familia])+
+      fila('Norma armonizada de referencia', norma)+
+      fila('Uso previsto', pu.uso_puerta)+
+      fila('Expediente asociado', e.referencia + (p.codigo ? ' · puerta ' + p.codigo : ''))+
+      fila('Fecha', fechaCorta((d.prest||{}).dte_fecha || hoy))+
+    '</table>'+
+
+    '<h2>Métodos empleados y prestaciones demostradas</h2>'+
+    '<table class="m"><thead><tr><th style="width:24%">Característica esencial</th>'+
+    '<th style="width:16%">Prestación declarada</th><th style="width:28%">Método empleado</th>'+
+    '<th>En qué se apoya</th></tr></thead><tbody>'+
+    pr.map(([k, nombre, , obligatoria]) => {
+      const v = pv[k] || 'NPD';
+      const m = ((d.prest||{}).dte||{})[k] || {};
+      if (/^npd$/i.test(v) && !obligatoria && !m.metodo) return '';
+      return '<tr><td>'+esc(nombre)+'</td><td>'+esc(v)+'</td>'+
+        '<td>'+esc(m.metodo || 'Pendiente de indicar')+'</td>'+
+        '<td>'+esc(m.just || '—')+'</td></tr>';
+    }).join('')+
+    '</tbody></table>'+
+
+    ((d.prest||{}).dte_motivo
+      ? '<h2>Justificación de la validez del método</h2><p>'+
+        esc((d.prest||{}).dte_motivo).replace(/\n/g,'<br>')+'</p>' : '')+
+    ((d.prest||{}).dte_base
+      ? '<h2>Documentación en que se apoya</h2><p>'+
+        esc((d.prest||{}).dte_base).replace(/\n/g,'<br>')+'</p>' : '')+
+
+    (docs.length
+      ? '<h2>Pruebas documentales archivadas</h2><table class="m"><thead><tr>'+
+        '<th style="width:26px">Nº</th><th>Documento</th><th style="width:26%">Elemento</th>'+
+        '<th style="width:22%">Fabricante</th><th style="width:70px">Fecha</th></tr></thead><tbody>'+
+        docs.map((x, i) => '<tr><td>'+(i+1)+'</td><td>'+esc(x.tipo_doc||'Documento')+
+          (x.referencia?('<br><span class="min">Ref. '+esc(x.referencia)+'</span>'):'')+'</td>'+
+          '<td>'+esc(x.elemento||'—')+'</td><td>'+esc(x.fabricante||'—')+'</td>'+
+          '<td>'+esc(x.fecha_doc ? fechaCorta(x.fecha_doc) : '—')+'</td></tr>').join('')+
+        '</tbody></table>' : '')+
+
+    '<h2>Declaración</h2>'+
+    '<p>El fabricante declara que las prestaciones del producto tipo identificado en este documento se han '+
+    'determinado por los métodos descritos, que estos sustituyen a los ensayos iniciales de tipo al amparo del '+
+    'artículo '+art+' del Reglamento (UE) nº 305/2011, y que la presente documentación se conserva a disposición '+
+    'de las autoridades de vigilancia del mercado durante diez años desde la última unidad fabricada.</p>'+
+    '<p class="min">Esta documentación da soporte a la declaración de prestaciones '+esc(e.referencia||'')+
+    ', apartado 8.</p>'+
+
+    '<div class="firma"><p>'+esc([em.poblacion, fechaCorta((d.prest||{}).dte_fecha || hoy)]
+      .filter(Boolean).join(', '))+'</p><div class="linea"></div>'+
+      '<p><b>'+esc(((d.entrega||{}).firmante) || em.responsable_tecnico || '')+'</b></p>'+
+      '<p class="min">'+esc(((d.entrega||{}).cargo) || em.cargo_firmante || '')+' · '+esc(em.razon_social)+'</p>'+
+    '</div></body></html>');
+  w.document.close();
+}
+
+/* ================= Control de producción en fábrica =================
+   El procedimiento simplificado del artículo 37 permite tratar el producto
+   conforme al sistema 4, pero el sistema 4 sigue incluyendo control de
+   producción en fábrica a cargo del fabricante. Es un documento de empresa,
+   no por puerta: se redacta una vez, se firma y se revisa. */
+
+const CPF_FABRICA = {
+  responsable: '', suplente: '', revision: 'Anual',
+  equipos: 'Medidor de fuerzas de impacto, calibrado anualmente.\nPolímetro.\nFlexómetro y nivel.',
+  recepcion: 'Comprobación de que cada componente recibido lleva su marcado, su declaración y su manual.\n'+
+    'Rechazo de componentes sin documentación o con daños de transporte.',
+  proceso: 'Montaje según las instrucciones del fabricante de cada componente.\n'+
+    'Comprobación de equilibrado, guías, fijaciones y pares de apriete antes de motorizar.',
+  final: 'Comprobación funcional completa de la puerta y de cada dispositivo de seguridad.\n'+
+    'Ensayo de fuerzas en los puntos que marca la norma.\n'+
+    'Colocación del marcado y entrega de la documentación.',
+  noconforme: 'La puerta no se pone en servicio hasta resolver la no conformidad.\n'+
+    'Se anota en el expediente qué se encontró y cómo se resolvió.',
+};
+const datosCPF = () => Object.assign({}, CPF_FABRICA, S.ajustes.cpf || {});
+
+function panelCPF(){
+  const c = datosCPF(), em = datosEmpresa();
+  const campo = (k, et, pista) =>
+    '<div class="campo"><label>'+esc(et)+'</label>'+
+    '<input type="text" data-cpf="'+k+'" value="'+esc(c[k]||'')+'">'+
+    (pista?'<span class="pista">'+esc(pista)+'</span>':'')+'</div>';
+  const area = (k, et, pista) =>
+    '<div class="campo full"><label>'+esc(et)+'</label>'+
+    '<textarea rows="3" data-cpf="'+k+'">'+esc(c[k]||'')+'</textarea>'+
+    (pista?'<span class="pista">'+esc(pista)+'</span>':'')+'</div>';
+  return '<div class="panel"><div class="panel-h"><h3>Control de producción en fábrica</h3></div>'+
+    '<p class="mini" style="margin:0 0 6px">Documento de empresa, no de cada puerta. Se redacta una vez, '+
+    'se firma y se revisa. Hace falta porque el procedimiento simplificado del artículo 37 permite tratar '+
+    'el producto como sistema 4, y el sistema 4 sigue exigiendo control de producción a cargo del fabricante.</p>'+
+    '<p class="nota-oficina" style="margin:0 0 14px">Lo que viene escrito es un borrador de partida redactado '+
+    'con lo que hace cualquier instalador serio. <b>Adáptalo a cómo trabajáis de verdad</b>: un procedimiento '+
+    'que no se cumple es peor que no tenerlo.</p>'+
+    '<div class="campos" style="max-width:900px">'+
+      campo('responsable', 'Responsable del control', 'Quien responde de que esto se cumpla')+
+      campo('suplente', 'Suplente')+
+      campo('revision', 'Periodicidad de revisión del procedimiento')+
+      area('equipos', 'Equipos de medida y su calibración')+
+      area('recepcion', 'Control de los componentes que llegan')+
+      area('proceso', 'Control durante el montaje')+
+      area('final', 'Comprobación final de cada puerta')+
+      area('noconforme', 'Qué se hace cuando algo no cumple')+
+    '</div>'+
+    '<div class="fila" style="margin-top:12px"><span class="sp"></span>'+
+    '<button class="btn" data-act="cpf-imprimir">Ver el procedimiento</button>'+
+    '<button class="btn pri" data-act="guardar-cpf">Guardar</button></div>'+
+    (!em.nif ? '<p class="mini" style="margin:10px 0 0">Rellena antes el NIF y el domicilio de la empresa, '+
+      'que salen en la cabecera del procedimiento.</p>' : '')+
+    '</div>';
+}
+
+function documentoCPF(){
+  const c = datosCPF(), em = datosEmpresa();
+  const hoy = new Date().toISOString().slice(0,10);
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana.'); return; }
+  const lista = t => '<ul>'+String(t||'').split('\n').filter(x => x.trim())
+    .map(x => '<li>'+esc(x.trim())+'</li>').join('')+'</ul>';
+
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
+    '<title>Control de producción en fábrica</title><style>'+
+    '@page{size:A4;margin:16mm 15mm}*{box-sizing:border-box}'+
+    'body{font:11.5px/1.55 -apple-system,Segoe UI,Roboto,sans-serif;color:#1C1817;margin:0}'+
+    '.cab{display:flex;justify-content:space-between;align-items:flex-start;'+
+      'border-bottom:3px solid #FCBA1D;padding-bottom:9px;margin-bottom:14px}'+
+    '.marca{font-weight:800;font-size:19px}.marca span{color:#C98F08;font-weight:600}'+
+    'h1{font-size:20px;margin:0}h2{font-size:13px;margin:16px 0 5px;'+
+      'border-bottom:1px solid #e8e5e1;padding-bottom:3px}'+
+    'p{margin:0 0 8px}ul{margin:4px 0 8px;padding-left:18px}li{margin:2px 0}'+
+    '.min{font-size:10px;color:#6B6560}'+
+    'table{border-collapse:collapse;width:100%;margin:4px 0 10px}'+
+    'th,td{text-align:left;padding:4px 7px;border-bottom:1px solid #e8e5e1;vertical-align:top}'+
+    'th{width:34%;color:#6B6560;font-weight:500}'+
+    '.firma{margin-top:16mm;page-break-inside:avoid}'+
+    '.firma .linea{border-bottom:1px solid #1C1817;height:16mm;margin:0 0 4px;max-width:70mm}'+
+    '@media screen{body{max-width:200mm;margin:0 auto;padding:16px}}'+
+    '</style></head><body>'+
+    '<div class="cab"><div><h1>Control de producción en fábrica</h1>'+
+      '<div style="color:#6B6560">Procedimiento interno · '+esc(em.razon_social)+'</div></div>'+
+      '<div style="text-align:right"><div class="marca">ARIZA <span>puertas automáticas</span></div>'+
+      '<div class="min">'+esc([em.telefono, em.web].filter(Boolean).join(' · '))+'</div></div></div>'+
+
+    '<h2>1. Objeto</h2>'+
+    '<p>Este procedimiento describe el control de producción en fábrica que '+esc(em.razon_social)+
+    ' aplica a las puertas que ensambla e instala, conforme al Reglamento (UE) nº 305/2011. '+
+    'Su finalidad es asegurar que cada puerta puesta en el mercado mantiene las prestaciones declaradas.</p>'+
+
+    '<h2>2. Responsabilidades</h2><table>'+
+    (c.responsable ? '<tr><th>Responsable del control</th><td>'+esc(c.responsable)+'</td></tr>' : '')+
+    (c.suplente ? '<tr><th>Suplente</th><td>'+esc(c.suplente)+'</td></tr>' : '')+
+    '<tr><th>Revisión del procedimiento</th><td>'+esc(c.revision||'Anual')+'</td></tr>'+
+    '</table>'+
+
+    '<h2>3. Equipos de medida</h2>'+lista(c.equipos)+
+    '<h2>4. Control de los componentes recibidos</h2>'+lista(c.recepcion)+
+    '<h2>5. Control durante el montaje</h2>'+lista(c.proceso)+
+    '<h2>6. Comprobación final de cada puerta</h2>'+lista(c.final)+
+    '<h2>7. Tratamiento de lo que no cumple</h2>'+lista(c.noconforme)+
+
+    '<h2>8. Registros</h2>'+
+    '<p>El registro de cada puerta es su expediente de documentación, generado por la aplicación ARIZA SAT, '+
+    'que recoge la identificación del producto, los elementos instalados con su fotografía, las comprobaciones '+
+    'de cumplimiento, el ensayo de fuerzas y la documentación de los fabricantes de los componentes.</p>'+
+    '<p>Los expedientes y la documentación técnica se conservan <b>diez años</b> desde la fabricación de la '+
+    'última unidad, a disposición de las autoridades de vigilancia del mercado.</p>'+
+
+    '<div class="firma"><p>'+esc([em.poblacion, fechaCorta(hoy)].filter(Boolean).join(', '))+'</p>'+
+      '<div class="linea"></div>'+
+      '<p><b>'+esc(c.responsable || em.responsable_tecnico || '')+'</b></p>'+
+      '<p class="min">'+esc(em.cargo_firmante || '')+' · '+esc(em.razon_social)+
+      (em.nif ? ' · NIF '+esc(em.nif) : '')+'</p></div>'+
+    '</body></html>');
+  w.document.close();
+}
+
+/* ---- Documentación de los fabricantes de los elementos instalados ---- */
+const TIPOS_DOC_FAB = ['Declaración de conformidad', 'Declaración de prestaciones',
+  'Manual de instrucciones', 'Certificado de ensayo', 'Ficha técnica',
+  'Certificado de organismo notificado', 'Otro'];
+
+async function cargarDocsExp(id){
+  const { data, error } = await sb.from('expediente_docs').select('*')
+    .eq('expediente_id', id).order('orden');
+  S.expDocs = error ? [] : (data || []);
+}
+
+async function subirDocsExp(ficheros){
+  const e = expDe(S.exp); if (!e) return;
+  toast('Subiendo ' + ficheros.length + ' documento' + (ficheros.length===1?'':'s') + '…');
+  let n = S.expDocs.length;
+  for (const f of ficheros){
+    try {
+      const limpio = (f.name || 'documento').replace(/[^a-zA-Z0-9._-]/g, '_').slice(-60);
+      const ruta = e.id + '/docs/' + Date.now() + '-' + (n++) + '-' + limpio;
+      const { error } = await sb.storage.from('expedientes')
+        .upload(ruta, f, { contentType: f.type || 'application/octet-stream', upsert:true });
+      if (error) throw error;
+      const { error: e2 } = await sb.from('expediente_docs').insert({
+        expediente_id: e.id, ruta, nombre: f.name || limpio, mime: f.type || '',
+        tipo_doc: 'Declaración de conformidad', orden: n, autor: yo() });
+      if (e2) throw e2;
+    } catch(err){ fallo(err); }
+  }
+  await cargarDocsExp(e.id);
+  pintar();
+  toast('Documentos añadidos.');
+}
+
+function expSecDocs(e){
+  const comps = EXP_COMPONENTES[e.familia] || [];
+  const extras = Object.entries(((e.datos||{}).compx) || {});
+  const nombres = comps.map(c => c[1]).concat(extras.map(([, x]) => x.nombre || '').filter(Boolean));
+  const docs = S.expDocs || [];
+  let h = '<div class="panel-h"><h3>Documentación de los fabricantes</h3>'+
+    '<span class="mini">'+docs.length+'</span>'+
+    '<span class="sp"></span><label class="btn sm pri" style="cursor:pointer">Subir documentos'+
+    '<input type="file" multiple hidden accept=".pdf,image/*" data-act="exp-subir-doc"></label></div>'+
+    '<p class="mini" style="margin:0 0 6px">Las declaraciones de conformidad, declaraciones de prestaciones '+
+    'y manuales de los fabricantes de cada elemento que has instalado. El libro del cliente lleva un anexo '+
+    'que los relaciona uno a uno.</p>'+
+    '<p class="nota-oficina" style="margin:0 0 14px">Un PDF no se puede meter dentro del libro que genera la '+
+    'aplicación. Lo que hace el libro es listarlos en el anexo con su fabricante, elemento y referencia; '+
+    'los PDF se imprimen aparte con el botón de abajo y se encuadernan detrás.</p>';
+
+  if (!docs.length){
+    h += '<p class="muted" style="margin:0">Todavía no has subido ninguno. Sube los PDF tal cual te los '+
+         'manda el fabricante: luego les pones a qué elemento corresponden.</p>';
+    return h;
+  }
+
+  h += '<div class="lista-docs">';
+  docs.forEach(d => {
+    const esPdf = /pdf/i.test(d.mime || '') || /\.pdf$/i.test(d.nombre || '');
+    h += '<div class="exp-item"><div class="fila" style="gap:8px;flex-wrap:wrap;align-items:baseline">'+
+      '<span class="chip '+(esPdf?'gris':'ok')+' sin">'+(esPdf?'PDF':'Imagen')+'</span>'+
+      '<b style="flex:1 1 200px;word-break:break-all">'+esc(d.nombre||'documento')+'</b>'+
+      '<button class="btn sm plana" data-act="exp-ver-doc" data-id="'+d.id+'">Abrir</button>'+
+      '<button class="btn sm plana" data-act="exp-quitar-doc" data-id="'+d.id+'">Quitar</button>'+
+      '</div><div class="campos" style="margin-top:8px">'+
+      '<div class="campo"><label>Elemento al que corresponde</label>'+
+        '<input type="text" list="lista-elementos" data-doc="elemento" data-id="'+d.id+'" value="'+esc(d.elemento||'')+'"></div>'+
+      '<div class="campo"><label>Fabricante</label>'+
+        '<input type="text" data-doc="fabricante" data-id="'+d.id+'" value="'+esc(d.fabricante||'')+'"></div>'+
+      '<div class="campo"><label>Tipo de documento</label>'+
+        '<select data-doc="tipo_doc" data-id="'+d.id+'">'+
+        TIPOS_DOC_FAB.map(t => '<option value="'+esc(t)+'"'+(d.tipo_doc===t?' selected':'')+'>'+esc(t)+'</option>').join('')+
+        '</select></div>'+
+      '<div class="campo"><label>Referencia o número</label>'+
+        '<input type="text" data-doc="referencia" data-id="'+d.id+'" value="'+esc(d.referencia||'')+'"></div>'+
+      '<div class="campo"><label>Fecha del documento</label>'+
+        '<input type="date" data-doc="fecha_doc" data-id="'+d.id+'" value="'+esc(d.fecha_doc||'')+'"></div>'+
+      '</div></div>';
+  });
+  h += '</div>'+
+    '<datalist id="lista-elementos">'+nombres.map(n => '<option value="'+esc(n)+'">').join('')+'</datalist>'+
+    '<div class="fila" style="margin-top:12px"><span class="sp"></span>'+
+    '<button class="btn" data-act="exp-abrir-docs">Abrir todos para imprimir</button></div>'+
+    '<p class="mini" style="margin:8px 0 0">Se abren en pestañas aparte. Imprímelos y colócalos detrás del '+
+    'anexo del libro, en el mismo orden en que aparecen en la lista.</p>';
+  return h;
+}
+
+async function abrirDocsExp(){
+  const docs = S.expDocs || [];
+  if (!docs.length) return;
+  try {
+    const { data } = await sb.storage.from('expedientes')
+      .createSignedUrls(docs.map(d => d.ruta), 7200);
+    let n = 0;
+    (data||[]).forEach(x => { if (x && x.signedUrl){ window.open(x.signedUrl, '_blank'); n++; } });
+    toast(n + ' documento' + (n===1?'':'s') + ' abierto' + (n===1?'':'s') + '.');
+  } catch(err){ fallo(err); }
+}
+
+async function verDocExp(id){
+  const d = (S.expDocs||[]).find(x => x.id === id);
+  if (!d) return;
+  try {
+    const { data } = await sb.storage.from('expedientes').createSignedUrl(d.ruta, 3600);
+    if (data && data.signedUrl) window.open(data.signedUrl, '_blank');
+  } catch(err){ fallo(err); }
+}
+
+/* ---- Etiqueta de marcado CE ----
+   El marcado sigue siendo CE con el Reglamento (UE) 2023/1230: lo que cambia
+   de nombre es el documento, que pasa de «Declaración CE» a «Declaración UE».
+   Las inscripciones de abajo son las que exige el Reglamento (UE) 305/2011
+   para el producto y la legislación de máquinas para el accionamiento. */
+function etiquetaCE(expId){
+  const e = expDe(expId); if (!e) return;
+  const p = e.puerta_id ? (puertaDe(e.puerta_id) || {}) : {};
+  const et = S.etiquetas.find(x => x.codigo === p.codigo);
+  if (!et){ dlgAsignarQR(expId); return; }
+
+  const em = datosEmpresa();
+  const d = e.datos || {};
+  const pu = d.puerta || {};
+  const marco = marcoDeFecha(e.fecha_puesta_servicio);
+  const M = EXP_MARCO[marco];
+  const motor = pu.motorizada !== 'no';
+  const norma = ((EXP_NORMAS[e.familia]||[])[0]||[''])[0];
+  const anio = (e.fecha_puesta_servicio || new Date().toISOString().slice(0,10)).slice(0,4);
+  const reg = regimenDe(e);
+  const pr = reg.ddp ? (EXP_PRESTACIONES[e.familia] || []).filter(x => x[3]) : [];
+  const pv = (d.prest||{}).v || {};
+  const url = enlaceQR(p.codigo);
+
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana de impresión.'); return; }
+  const fila = (k, v) => v ? '<tr><th>'+esc(k)+'</th><td>'+esc(v)+'</td></tr>' : '';
+
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
+    '<title>Marcado CE '+esc(p.codigo||'')+'</title><style>'+
+    '@page{size:62mm 100mm;margin:0}'+
+    'html,body{margin:0;padding:0;background:#fff;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
+    'body{font-family:Arial,Helvetica,sans-serif}'+
+    '.eti{width:62mm;height:100mm;box-sizing:border-box;padding:2.6mm 2.6mm;display:flex;'+
+      'flex-direction:column;page-break-after:always}'+
+    '.cab{display:flex;align-items:center;gap:2mm;border-bottom:.5mm solid #000;padding-bottom:1.4mm}'+
+    '.ce{font:700 8mm/1 Arial,sans-serif;letter-spacing:.4mm}'+
+    '.anio{font:700 5mm/1 Arial,sans-serif;margin-left:auto}'+
+    '.emp{font:700 2.9mm/1.2 Arial,sans-serif;margin-top:1mm}'+
+    '.emp small{display:block;font:400 2.3mm/1.3 Arial,sans-serif}'+
+    'table{border-collapse:collapse;width:100%;margin-top:1.4mm}'+
+    'th,td{font:2.3mm/1.25 Arial,sans-serif;text-align:left;padding:.3mm 0;vertical-align:top}'+
+    'th{width:17mm;font-weight:400;color:#333;padding-right:1mm}'+
+    'td{font-weight:700}'+
+    '.sep{border-top:.3mm solid #000;margin:1.2mm 0 0}'+
+    '.pie{margin-top:auto;display:flex;gap:2mm;align-items:flex-end}'+
+    '.qr{width:21mm;height:21mm;flex:0 0 auto;overflow:hidden}'+
+    '.qr svg{width:21mm;height:21mm;display:block}'+
+    '.cod{font:700 4.4mm/1 ui-monospace,"Courier New",monospace;letter-spacing:.2mm}'+
+    '.leg{font:2mm/1.25 Arial,sans-serif;margin-top:.8mm}'+
+    '.barra{position:fixed;top:0;left:0;right:0;background:#1C1817;color:#fff;padding:10px 14px;'+
+      'font:14px -apple-system,Segoe UI,Roboto,sans-serif;display:flex;gap:10px;align-items:center;z-index:9}'+
+    '.barra button{font:inherit;font-weight:600;padding:7px 14px;border:0;border-radius:6px;'+
+      'background:#FCBA1D;color:#1C1817;cursor:pointer}'+
+    '.barra span{font-size:12px;color:#CFCAC6}'+
+    'body{padding-top:52px}@media print{.barra{display:none}body{padding-top:0}}</style></head><body>'+
+    '<div class="barra"><button onclick="window.print()">Imprimir marcado CE</button>'+
+    '<span>Brother QL-500, papel 62 mm x 100 mm, escala 100 %. La forma gráfica exacta del marcado CE '+
+    'está definida en la legislación: esto es una reproducción legible.</span></div>'+
+    '<div class="eti">'+
+      '<div class="cab"><span class="ce">CE</span><span class="anio">'+esc(anio.slice(2))+'</span></div>'+
+      '<div class="emp">'+esc(em.razon_social)+
+        '<small>'+esc([em.nif && ('NIF '+em.nif), em.domicilio, em.cp, em.poblacion].filter(Boolean).join(' · '))+'</small></div>'+
+      '<table>'+
+        fila('Producto', EXP_FAMILIA[e.familia])+
+        fila('Tipo', (d.prest||{}).codigo_tipo || pu.denominacion || pu.modelo)+
+        fila('Modelo', pu.modelo)+
+        fila('Nº serie', pu.serie || p.codigo)+
+        fila('Año fabric.', anio)+
+        fila('Uso previsto', pu.uso_puerta)+
+      '</table><div class="sep"></div><table>'+
+        fila('Norma', norma)+
+        /* El número de declaración de prestaciones solo se imprime si existe tal
+           declaración. En una peatonal o en una barrera de solo vehículos no la hay:
+           poner un número ahí sería afirmar algo que no es cierto. */
+        (reg.ddp ? fila('DdP nº', e.referencia) : '')+
+        // Las prestaciones obligatorias van en una sola línea: en 62 mm no caben en tabla
+        fila('Prestaciones', pr.map(([k, nombre]) =>
+          nombre.replace(/ \(.*\)/,'').replace('Resistencia mecánica y estabilidad','Resist. mecánica')
+                .replace('Geometría segura de componentes de vidrio','Vidrio')
+                .replace('Fuerzas de maniobra','Fuerzas').replace('Apertura segura','Apertura seg.')
+                .replace('Capacidad de cierre automático','Autocierre')
+                .replace('Resistencia al fuego','Fuego')
+          + ' ' + (pv[k] || 'NPD')).join(' · '))+
+        (reg.ddp ? fila('Org. notif.', (d.prest||{}).laboratorio) : '')+
+      '</table>'+
+      '<div class="pie"><div class="qr">'+svgQR(url, '21mm')+'</div>'+
+        '<div><div class="cod">'+esc(p.codigo||'')+'</div>'+
+        '<div class="leg">Reglamento (UE) 305/2011'+
+        (motor && M ? '<br>'+esc(M.nombre.split(',')[0]) : '')+
+        (motor ? '<br>Directiva 2014/30/UE' : '')+
+        '<br>'+esc(em.web || 'arizapa.es')+'</div></div></div>'+
+    '</div></body></html>');
+  w.document.close();
+}
+
+/* Si la puerta no tiene QR asignado, se le pone uno de los que estén libres */
+function dlgAsignarQR(expId){
+  const e = expDe(expId); if (!e) return;
+  const p = e.puerta_id ? (puertaDe(e.puerta_id) || {}) : {};
+  const usadas = new Set(S.puertas.map(x => x.codigo).filter(Boolean));
+  const libres = S.etiquetas.filter(x => !usadas.has(x.codigo));
+  if (!libres.length){
+    toast('No quedan etiquetas libres. Genera más en la pestaña Etiquetas.');
+    return;
+  }
+  const h = '<h3>Esta puerta todavía no tiene QR</h3>'+
+    '<p class="mini" style="margin:0 0 12px">El marcado CE lleva el QR de la puerta, que es lo que permite '+
+    'al cliente dar un aviso y consultar su ficha. Asígnale uno de los que tienes libres y seguimos.</p>'+
+    '<div class="campos"><div class="campo full"><label for="qr-cod">Etiqueta libre</label>'+
+    '<select id="qr-cod">'+libres.slice(0,200).map(x => '<option value="'+esc(x.codigo)+'">'+esc(x.codigo)+'</option>').join('')+
+    '</select><span class="pista">Quedan '+libres.length+' sin asignar</span></div></div>'+
+    '<p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Asignar e imprimir</button></div>';
+  abrirDlg(h, async () => {
+    const cod = val('qr-cod');
+    try {
+      const { error } = await sb.from('puertas').update({ codigo: cod }).eq('id', p.id);
+      if (error) throw error;
+      cerrarDlg(); await cargar();
+      toast('Etiqueta ' + cod + ' asignada.');
+      setTimeout(() => etiquetaCE(expId), 150);
+    } catch(err){ setErr(err.message); }
+  });
+}
+
+/* ---- Libro de mantenimiento suelto, para dejarlo junto a la puerta ---- */
+function dlgLibroMantenimiento(expId){
+  const e = expDe(expId); if (!e) return;
+  const hechas = asistenciasDeLibro(e).length;
+  const h = '<h3>Libro de mantenimiento</h3>'+
+    '<p class="mini" style="margin:0 0 12px">Documento aparte, para dejarlo junto a la puerta. '+
+    'Lleva 30 líneas de asistencia.</p>'+
+    '<div class="campos"><div class="campo full">'+
+    '<label style="cursor:pointer"><input type="checkbox" id="lm-hist" checked style="margin-right:8px">'+
+    'Incluir las '+hechas+' visita'+(hechas===1?'':'s')+' ya hechas de esta puerta</label>'+
+    '<span class="pista">Si lo desmarcas salen las 30 líneas en blanco</span></div></div>'+
+    '<div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Generar</button></div>';
+  abrirDlg(h, async () => {
+    const con = document.getElementById('lm-hist').checked;
+    cerrarDlg();
+    libroMantenimiento(expId, con);
+  });
+}
+
+/* Las visitas cerradas de esa puerta, de la más antigua a la más reciente */
+function asistenciasDeLibro(e){
+  if (!e.puerta_id) return [];
+  return S.avisos.filter(a => a.puerta_id === e.puerta_id && a.cerrado && !a.anulada)
+    .sort((x, y) => (x.cerrado||'') < (y.cerrado||'') ? -1 : 1)
+    .slice(-30);
+}
+
+const LIBRO_MAX = 30;
+
+/* Hoja de campo: lo que el técnico se lleva impreso a la obra. No es un documento
+   de entrega ni una declaración: es el guion de lo que hay que mirar en esta puerta
+   concreta, con casillas para anotar a mano y pasarlo luego a la aplicación. */
+function hojaDeCampo(expId){
+  const e = expDe(expId); if (!e) return;
+  const d = e.datos || {};
+  const pu = d.puerta || {};
+  const p = e.puerta_id ? (puertaDe(e.puerta_id) || {}) : {};
+  const em = datosEmpresa();
+  const ex = exigenciaProteccion(e);
+  const pel = peligrosDe(e);
+  const chk = EXP_COMPROBACIONES[e.familia] || [];
+  const comps = EXP_COMPONENTES[e.familia] || [];
+  const m = MODOS_ACCIONAMIENTO[ex.modo] || {};
+
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana.'); return; }
+  const linea = t => '<tr><td>'+esc(t)+'</td><td class="cas"></td><td class="cas"></td>'+
+                     '<td class="cas"></td><td class="obs"></td></tr>';
+
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
+    '<title>Hoja de campo '+esc(e.referencia||'')+'</title><style>'+
+    '@page{size:A4;margin:14mm 12mm}*{box-sizing:border-box}'+
+    'body{font:10.5px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;color:#1C1817;margin:0}'+
+    'h1{font-size:16px;margin:0 0 2px}h2{font-size:12px;margin:12px 0 4px;'+
+      'border-bottom:2px solid #FCBA1D;padding-bottom:3px}'+
+    '.cab{display:flex;justify-content:space-between;align-items:flex-start;'+
+      'border-bottom:2px solid #1C1817;padding-bottom:6px;margin-bottom:8px}'+
+    '.marca{font-weight:800;font-size:13px}.marca span{color:#C98F08}'+
+    'table{width:100%;border-collapse:collapse;margin:0 0 6px}'+
+    'th,td{border:1px solid #d8d4d0;padding:3px 5px;text-align:left;vertical-align:top}'+
+    'th{background:#F3F2F0;font-size:9.5px;text-transform:uppercase;letter-spacing:.03em}'+
+    '.cas{width:34px;text-align:center}.obs{width:32%}'+
+    '.datos td{border:none;padding:2px 4px}.datos th{background:none;border:none;'+
+      'text-transform:none;letter-spacing:0;font-size:10.5px;width:130px;color:#6B6560}'+
+    '.aviso{background:#FCEFD3;border-left:3px solid #9A6206;padding:5px 7px;margin:0 0 8px;font-size:10px}'+
+    '.mal{background:#F8E1DF;border-left:3px solid #B3271E;padding:5px 7px;margin:0 0 8px;font-size:10px}'+
+    '.firma{margin-top:14px;display:flex;gap:18px}'+
+    '.firma div{flex:1;border-top:1px solid #1C1817;padding-top:3px;font-size:9.5px;color:#6B6560}'+
+    '.barra{position:fixed;top:0;left:0;right:0;background:#1C1817;color:#fff;padding:8px 12px;'+
+      'display:flex;gap:10px;align-items:center;z-index:9}'+
+    '.barra button{font:inherit;padding:5px 10px;border:0;border-radius:5px;background:#FCBA1D;cursor:pointer}'+
+    'body{padding-top:46px}@media print{.barra{display:none}body{padding-top:0}}'+
+    '</style></head><body>'+
+    '<div class="barra"><button onclick="window.print()">Imprimir hoja de campo</button>'+
+    '<span style="font-size:11px;color:#CFCAC6">Para anotar a mano en obra. No es un documento de entrega.</span></div>'+
+
+    '<div class="cab"><div><div class="marca">ARIZA <span>puertas automáticas</span></div>'+
+      '<h1>Hoja de campo</h1></div>'+
+      '<div style="text-align:right;font-size:10px;color:#6B6560">'+esc(e.referencia||'')+'<br>'+
+      esc(EXP_FAMILIA[e.familia]||'')+'</div></div>'+
+
+    '<table class="datos"><tr><th>Puerta</th><td>'+
+      esc([p.codigo, pu.denominacion, pu.tipo].filter(Boolean).join(' · ') || '—')+'</td></tr>'+
+      '<tr><th>Emplazamiento</th><td>'+esc((d.obra||{}).emplazamiento || p.direccion || '—')+'</td></tr>'+
+      '<tr><th>Accionamiento</th><td>'+esc(m.nombre || 'sin indicar')+' · '+
+        esc(TIPOS_USUARIO[ex.usuarios] || 'usuario sin indicar')+'</td></tr>'+
+      '<tr><th>Técnico</th><td>________________________  <b>Fecha</b> ____ / ____ / ______</td></tr>'+
+    '</table>'+
+
+    (ex.fuera
+      ? '<div class="aviso">Puerta exclusivamente peatonal: su seguridad de uso se evalúa con la '+
+        'UNE-EN 16005+A1:2024, no con la matriz de la UNE-EN 12453.</div>'
+      : !ex.admisible
+      ? '<div class="mal"><b>Combinación no admisible.</b> '+esc(ex.ficha||'')+'</div>'
+      : (ex.niveles
+         ? '<div class="aviso"><b>Protección mínima aplicable: '+esc(ex.niveles)+'.</b> '+esc(ex.ficha||'')+'</div>'
+         : ''))+
+
+    (pel
+      ? '<h2>Peligros propios de una '+esc(pel.clave.toLowerCase())+'</h2>'+
+        '<table><thead><tr><th>Peligro y protección habitual</th><th class="cas">Sí</th>'+
+        '<th class="cas">No</th><th class="cas">N/A</th><th class="obs">Cómo se ha resuelto</th></tr></thead><tbody>'+
+        pel.lista.map(([, peligro, elementos]) =>
+          linea(peligro + ' — ' + elementos)).join('')+
+        '</tbody></table>'
+      : '')+
+
+    '<h2>Elementos de la instalación</h2>'+
+    '<table><thead><tr><th>Elemento</th><th class="cas">Sí</th><th class="cas">No</th>'+
+    '<th class="cas">N/A</th><th class="obs">Observaciones</th></tr></thead><tbody>'+
+    comps.map(c => linea(c[1])).join('')+'</tbody></table>'+
+
+    '<h2>Comprobaciones de normativa</h2>'+
+    '<table><thead><tr><th>Comprobación</th><th class="cas">Sí</th><th class="cas">No</th>'+
+    '<th class="cas">N/A</th><th class="obs">Observaciones</th></tr></thead><tbody>'+
+    chk.filter(c => { const ap = procede(APLICA_COMPROBACION, c[0], e); return !(ap && ap.no); })
+       .map(c => linea(c[1])).join('')+'</tbody></table>'+
+
+    '<h2>Ensayo de fuerzas</h2>'+
+    '<table class="datos"><tr><th>Instrumento</th><td>______________________________  '+
+      '<b>Nº serie</b> ____________  <b>Calibración</b> ____________</td></tr></table>'+
+    '<table><thead><tr><th>Punto de medida</th><th class="cas">Fd (N)</th><th class="cas">Fs (N)</th>'+
+    '<th class="cas">Fe (N)</th><th class="obs">td (s) y observaciones</th></tr></thead><tbody>'+
+    (EXP_PUNTOS_FUERZA[e.familia] || EXP_PUNTOS_FUERZA.industrial)
+      .map(pt => '<tr><td>'+esc(pt)+'</td><td class="cas"></td><td class="cas"></td>'+
+                 '<td class="cas"></td><td class="obs"></td></tr>').join('')+
+    '</tbody></table>'+
+    '<div class="aviso">Anotar también la configuración de la puerta durante el ensayo, la dirección '+
+    'de medida y las repeticiones que pida el método. Los valores se pasan a la aplicación al volver.</div>'+
+
+    '<h2>Notas</h2><div style="border:1px solid #d8d4d0;height:60px"></div>'+
+    '<div class="firma"><div>Técnico que ha ejecutado la intervención</div>'+
+    '<div>Persona que atiende en obra</div></div>'+
+    '<p style="margin-top:10px;font-size:9px;color:#6B6560">'+esc(em.razon_social)+
+    ' · Hoja de trabajo interna. No sustituye a la documentación que se entrega al titular.</p>'+
+    '</body></html>');
+  w.document.close();
+}
+
+function libroMantenimiento(expId, conHistorial){
+  const e = expDe(expId); if (!e) return;
+  const em = datosEmpresa();
+  const p = e.puerta_id ? (puertaDe(e.puerta_id) || {}) : {};
+  const c = e.cliente_id ? (clienteDe(e.cliente_id) || {}) : {};
+  const d = e.datos || {};
+  const pu = d.puerta || {};
+  const dir = [(d.obra||{}).emplazamiento, (d.obra||{}).ubicacion].filter(Boolean).join(' · ')
+            || [p.direccion, p.ubicacion].filter(Boolean).join(' · ');
+  const titular = (d.obra||{}).titular || c.nombre || p.cliente || '';
+  const visitas = conHistorial ? asistenciasDeLibro(e) : [];
+  const fab = EXP_ES_FABRICANTE(e.situacion);
+
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana.'); return; }
+  const fila = (k, v) => v ? '<tr><th>'+esc(k)+'</th><td>'+esc(v)+'</td></tr>' : '';
+
+  let filas = '';
+  for (let i = 0; i < LIBRO_MAX; i++){
+    const a = visitas[i];
+    if (a){
+      const t = [a.trabajo, a.diagnostico].filter(Boolean).join('. ') || a.descripcion || '';
+      filas += '<tr><td class="n">'+(i+1)+'</td><td>'+esc(fechaCorta(a.cerrado))+'</td>'+
+        '<td>'+esc(tipoAsis(a.tipo))+'</td><td>'+esc(t)+'</td>'+
+        '<td>'+esc((a.tecnico_id ? nombreTec(a.tecnico_id) : a.tecnico) || '')+'</td><td></td></tr>';
+    } else {
+      filas += '<tr><td class="n">'+(i+1)+'</td><td></td><td></td><td></td><td></td><td></td></tr>';
+    }
+  }
+
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
+    '<title>Libro de mantenimiento '+esc(p.codigo||'')+'</title><style>'+
+    '@page{size:A4;margin:14mm 12mm}'+
+    '*{box-sizing:border-box}'+
+    'body{font:11px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#1C1817;margin:0}'+
+    '.cab{display:flex;align-items:flex-start;justify-content:space-between;'+
+      'border-bottom:3px solid #FCBA1D;padding-bottom:8px;margin-bottom:12px}'+
+    '.marca{font-weight:800;font-size:19px}.marca span{color:#C98F08;font-weight:600}'+
+    'h1{font-size:19px;margin:0}'+
+    'h2{font-size:12px;margin:14px 0 5px;color:#6B6560;text-transform:uppercase;letter-spacing:.04em}'+
+    'table.datos{border-collapse:collapse;width:100%}'+
+    'table.datos th,table.datos td{text-align:left;padding:3px 6px;border-bottom:1px solid #e8e5e1;vertical-align:top}'+
+    'table.datos th{width:32%;color:#6B6560;font-weight:500}'+
+    '.dos{display:flex;gap:16px}.dos>div{flex:1}'+
+    'ul{margin:3px 0;padding-left:16px}li{margin:1px 0}'+
+    'table.reg{border-collapse:collapse;width:100%;margin-top:4px}'+
+    'table.reg th{background:#f6f5f3;font-size:10px;text-align:left;padding:4px 5px;border:1px solid #ddd}'+
+    'table.reg td{border:1px solid #ddd;height:16px;padding:2px 5px;font-size:10px}'+
+    'table.reg td.n{width:8mm;text-align:center;color:#8A837D}'+
+    'tr{page-break-inside:avoid}'+
+    '.pie{margin-top:12px;padding-top:7px;border-top:1px solid #e8e5e1;font-size:9.5px;color:#6B6560}'+
+    '.aviso{background:#f6f5f3;padding:7px 9px;border-radius:4px;font-size:10px}'+
+    '@media screen{body{max-width:200mm;margin:0 auto;padding:16px}}'+
+    '</style></head><body>'+
+    '<div class="cab"><div><h1>Libro de mantenimiento</h1>'+
+      '<div style="color:#6B6560">Conservar junto a la puerta · '+esc(e.referencia||'')+'</div></div>'+
+      '<div style="text-align:right"><div class="marca">ARIZA <span>puertas automáticas</span></div>'+
+      '<div style="color:#6B6560;font-size:10px">'+esc([em.telefono, em.web].filter(Boolean).join(' · '))+'</div></div></div>'+
+
+    '<div class="dos"><div>'+
+      '<h2>La puerta</h2><table class="datos">'+
+        fila('Identificación', p.codigo)+
+        fila('Tipo', pu.tipo || p.tipo)+
+        fila('Marca y modelo', [pu.marca || p.marca, pu.modelo || p.modelo].filter(Boolean).join(' '))+
+        fila('Nº único del marcado CE', pu.serie)+
+        fila('Ubicación', dir)+
+        fila('Fecha de instalación', e.fecha_puesta_servicio ? fechaCorta(e.fecha_puesta_servicio) : '')+
+      '</table></div><div>'+
+      '<h2>Intervinientes</h2><table class="datos">'+
+        fila('Titular', titular)+
+        fila('Fabricante de la puerta', fab ? em.razon_social : (pu.marca || ''))+
+        fila('Instalador', em.razon_social)+
+        fila('Mantenedor', em.razon_social)+
+        fila('Avisos', em.telefono)+
+        fila('Periodicidad', (d.entrega||{}).periodicidad || periodicidadSugerida(e, d))+
+      '</table></div></div>'+
+
+    '<h2>Antes de usar la puerta</h2>'+
+    '<div class="aviso"><ul>'+
+      '<li>No cruzar el hueco mientras la puerta está en movimiento.</li>'+
+      '<li>No anular, tapar ni desconectar ningún dispositivo de seguridad.</li>'+
+      '<li>Mantener limpias las ópticas de las fotocélulas y libre la zona de barrido.</li>'+
+      '<li>Ante cualquier ruido, golpe o funcionamiento anómalo, dejar de usar la puerta y avisar.</li>'+
+      '<li>El desbloqueo manual solo se acciona con la puerta parada y sin tensión.</li>'+
+    '</ul></div>'+
+
+    '<h2>Registro de asistencias y revisiones</h2>'+
+    '<p style="margin:0 0 2px;font-size:10px;color:#6B6560">Cada intervención sobre la puerta se anota aquí. '+
+    'Contenido conforme a la UNE-EN 12453:2018+A1:2022, que desde el 20 de octubre de 2022 recoge lo que antes estaba en la UNE-EN 12635, hoy anulada. Conservación mínima recomendada: diez años.</p>'+
+    '<table class="reg"><thead><tr>'+
+      '<th class="n">Nº</th><th style="width:20mm">Fecha</th><th style="width:28mm">Tipo</th>'+
+      '<th>Trabajo realizado</th><th style="width:26mm">Técnico</th><th style="width:24mm">Firma</th>'+
+    '</tr></thead><tbody>'+filas+'</tbody></table>'+
+
+    '<div class="pie">'+esc(em.razon_social)+
+      (em.nif?(' · NIF '+esc(em.nif)):'')+
+      (em.domicilio?(' · '+esc([em.domicilio, em.cp, em.poblacion, em.provincia].filter(Boolean).join(', '))):'')+
+      '<br>Cuando se complete la última línea, solicitar un libro nuevo a la empresa mantenedora '+
+      'y conservar el anterior junto a la documentación de la puerta.</div>'+
+    '</body></html>');
+  w.document.close();
+}
+
+/* ---- El libro: documento imprimible en A4, a doble cara ---- */
+async function libroExpediente(id){
+  const e = expDe(id);
+  if (!e) return;
+  await cargarFotosExp(id);
+  const em = datosEmpresa();
+  const p = e.puerta_id ? (puertaDe(e.puerta_id) || {}) : {};
+  const c = e.cliente_id ? (clienteDe(e.cliente_id) || {}) : {};
+  const d = e.datos || {};
+  const marco = marcoDeFecha(e.fecha_puesta_servicio);
+  const M = EXP_MARCO[marco] || null;
+  const fab = EXP_ES_FABRICANTE(e.situacion);
+  const motor = (d.puerta||{}).motorizada !== 'no';
+  const lim = limitesFuerza();
+
+  // Enlaces firmados de las fotos y de los documentos de fabricante, de una vez
+  await cargarDocsExp(id);
+  const rutas = (S.expFotos || []).map(f => f.ruta)
+    .concat((S.expDocs || []).filter(x => /^image\//i.test(x.mime||'')).map(x => x.ruta));
+  const url = {};
+  if (rutas.length){
+    try {
+      const { data } = await sb.storage.from('expedientes').createSignedUrls(rutas, 7200);
+      (data||[]).forEach((x,i) => { if (x && x.signedUrl) url[rutas[i]] = x.signedUrl; });
+    } catch(_){}
+  }
+  const fotosDe = ap => (S.expFotos||[]).filter(f => f.apartado === ap && url[f.ruta]);
+  const galeria = (ap, cols) => {
+    const fs = fotosDe(ap);
+    if (!fs.length) return '';
+    return '<div class="gal c'+(cols||2)+'">'+fs.map(f =>
+      '<figure><img src="'+url[f.ruta]+'">'+(f.pie?'<figcaption>'+esc(f.pie)+'</figcaption>':'')+'</figure>').join('')+'</div>';
+  };
+
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana.'); return; }
+
+  const campo = (k, v) => v ? '<tr><th>'+esc(k)+'</th><td>'+esc(v)+'</td></tr>' : '';
+  const dir = [ (d.obra||{}).emplazamiento, (d.obra||{}).ubicacion ].filter(Boolean).join(' · ')
+            || [p.direccion, p.ubicacion].filter(Boolean).join(' · ');
+  const titular = (d.obra||{}).titular || c.nombre || p.cliente || '';
+  const hoy = new Date().toISOString().slice(0,10);
+  const sello = em.razon_social + (em.nif ? ' · ' + em.nif : '');
+
+  const reg = regimenDe(e);
+  /* Un expediente que no está emitido es un borrador, y tiene que decirlo en todas
+     las páginas: si no, un PDF a medias acaba en manos del cliente como si fuera
+     la documentación definitiva. La marca de datos ficticios sirve para los casos
+     de prueba, que no deben confundirse nunca con una instalación real. */
+  const esBorrador = e.estado !== 'emitido';
+  const esFicticio = (e.datos||{}).ficticio === 'si';
+  let H = '';
+
+  /* ---------- PORTADA ---------- */
+  H += '<section class="portada">'+
+    '<div class="marca">ARIZA <span>puertas automáticas</span></div>'+
+    '<div class="tit">'+
+      '<h1>Documentación técnica</h1>'+
+      '<h2>'+esc(EXP_FAMILIA[e.familia]||'')+'</h2>'+
+      '<p class="sit">'+esc(EXP_SITUACION[e.situacion]||'')+'</p>'+
+    '</div>'+
+    (fotosDe('puerta:general')[0]
+      ? '<div class="portada-foto"><img src="'+fotosDe('puerta:general')[0].ruta.replace(/.*/, url[fotosDe('puerta:general')[0].ruta])+'"></div>'
+      : '<div class="portada-foto vacia"><span>Sin fotografía de portada</span></div>')+
+    '<table class="port-datos">'+
+      campo('Expediente', e.referencia)+
+      campo('Titular', titular)+
+      campo('Emplazamiento', dir)+
+      campo('Identificación de la puerta', [p.codigo, (d.puerta||{}).denominacion].filter(Boolean).join(' · '))+
+      campo('Fecha de puesta en servicio', e.fecha_puesta_servicio ? fechaCorta(e.fecha_puesta_servicio) : '')+
+    '</table>'+
+    (esBorrador
+      ? '<p class="aviso-borrador">BORRADOR. NO VÁLIDO PARA DECLARAR CONFORMIDAD. '+
+        'Documento de trabajo para revisión interna.</p>' : '')+
+    (esFicticio
+      ? '<p class="aviso-borrador">DATOS Y MEDICIONES FICTICIOS. Caso de prueba: '+
+        'no corresponde a ninguna instalación real.</p>' : '')+
+    '<div class="pie-portada">'+esc(sello)+(em.telefono?(' · '+esc(em.telefono)):'')+
+      (em.web?(' · '+esc(em.web)):'')+'</div>'+
+    '</section>';
+
+  /* ---------- ÍNDICE Y DATOS ----------
+     El índice no se escribe a mano: cada sección que de verdad se emite se apunta
+     en «secciones» al abrirla, y al final se sustituye el marcador de abajo por la
+     lista. Así el índice, la numeración del cuerpo y lo que se exporta salen todos
+     del mismo sitio y no pueden discrepar. */
+  const secciones = [];
+  const abreSec = (titulo, clase) => {
+    secciones.push(titulo);
+    return '<section'+(clase ? ' class="'+clase+'"' : '')+'>'+
+           '<h3 class="sec">'+secciones.length+'. '+esc(titulo)+'</h3>';
+  };
+
+  H += '<section><h3 class="sec">Índice</h3><!--MARCADOR-INDICE-->'+
+    '<h3 class="sec">Intervinientes</h3>'+
+    '<div class="dos">'+
+      '<div><h4>Empresa</h4><table class="datos">'+
+        campo('Razón social', em.razon_social)+ campo('NIF', em.nif)+
+        campo('Domicilio', [em.domicilio, em.cp, em.poblacion, em.provincia].filter(Boolean).join(', '))+
+        campo('Teléfono', em.telefono)+ campo('Correo', em.email)+ campo('Web', em.web)+
+        campo('Registro', em.registro)+
+      '</table></div>'+
+      '<div><h4>Titular de la instalación</h4><table class="datos">'+
+        campo('Titular', titular)+ campo('NIF o CIF', (d.obra||{}).nif_titular || c.nif)+
+        campo('Emplazamiento', dir)+ campo('Uso del edificio', (d.obra||{}).uso_edificio)+
+        campo('Contacto', (d.obra||{}).contacto)+
+        campo('Centro de trabajo', (d.obra||{}).centro_trabajo === 'si' ? 'Sí'
+              : ((d.obra||{}).centro_trabajo === 'no' ? 'No' : ''))+
+        campo('Referencia de obra', (d.obra||{}).referencia_obra)+
+      '</table></div>'+
+    '</div></section>';
+
+  /* ---------- 1. OBJETO ---------- */
+  /* El texto de la situación habla en general de «emitimos declaración de prestaciones».
+     Si esta familia no la lleva, se corrige aquí para no afirmar algo que no es cierto. */
+  const objeto = (EXP_ES_FABRICANTE(e.situacion) && !reg.ddp)
+    ? (EXP_SIT_AYUDA[e.situacion]||'').replace(
+        'emitimos declaración de prestaciones, declaración de conformidad y marcado CE propios',
+        'emitimos declaración de conformidad y marcado CE propios')
+    : (EXP_SIT_AYUDA[e.situacion]||'');
+  H += abreSec('Objeto y alcance')+
+    '<p>'+esc(objeto)+'</p>'+
+    (!reg.ddp ? '<p>'+esc(reg.nota)+'</p>' : '')+
+    '<p>Este documento recoge la identificación de la puerta, los elementos que componen la instalación, '+
+    'las comprobaciones de cumplimiento realizadas y la documentación que se entrega al titular. '+
+    'Las fotografías forman parte del documento y reflejan el estado en que quedó la instalación '+
+    (e.fecha_puesta_servicio ? 'el '+fechaCorta(e.fecha_puesta_servicio) : 'en la fecha de la intervención')+'.</p>'+
+    (M ? '<p><b>Marco legal aplicado.</b> '+esc(M.nombre)+'. '+esc(M.hasta)+' '+
+         'El documento de conformidad que corresponde es la <b>'+esc(M.documento)+'</b>, '+
+         'con el contenido del '+esc(M.anexo)+'.</p>'
+       : '<p class="aviso">No se ha indicado la fecha de puesta en servicio, de la que depende el marco legal aplicable. '+
+         'El expediente no puede cerrarse sin ese dato.</p>')+
+    ((d.obra||{}).centro_trabajo === 'si'
+      ? '<p>La puerta se encuentra en un centro de trabajo, por lo que le son exigibles además el '+
+        'Real Decreto 486/1997 sobre lugares de trabajo, anexo I parte A punto 6, y el Real Decreto 1215/1997 '+
+        'sobre equipos de trabajo.</p>' : '')+
+    '</section>';
+
+  /* ---------- NATURALEZA DE LA INTERVENCIÓN ----------
+     Va justo después del objeto porque condiciona todo lo que viene detrás:
+     si hay o no declaración propia, y si el expediente puede cerrarse. */
+  {
+    const iv = evaluarIntervencion(e);
+    if (iv.tipo){
+      const res = iv.resultado ? RESULTADOS_INTERVENCION[iv.resultado] : null;
+      const crit = CRITERIOS_MODIFICACION[iv.criterio] || {};
+      H += abreSec('Naturaleza de la intervención')+
+        '<table class="datos">'+
+          campo('Tipo de intervención',
+                (TIPOS_INTERVENCION[iv.tipo]||{}).n + '. ' + iv.tipoNombre)+
+          campo('Resultado', res ? iv.resultado+'. '+res.nombre : 'No puede determinarse')+
+          campo('Criterio aplicado', crit.nombre || '')+
+        '</table>';
+      if (iv.requiere_cuestionario){
+        H += '<p>Evaluación de modificación, doce preguntas:</p>'+
+          '<table class="datos">'+
+          PREGUNTAS_MODIFICACION.map((p, i) => {
+            const x = (((e.datos||{}).interv)||{})[p.id] || {};
+            const v = RESPUESTAS_MODIF[x.v] || 'Sin contestar';
+            return campo((i+1)+'. '+p.texto, v + (x.nota ? ' — '+x.nota : ''));
+          }).join('')+
+          '</table>';
+      }
+      if (iv.estado) H += '<p class="aviso"><b>'+esc(iv.estado)+'</b></p>';
+      if (iv.motivos.length)
+        H += '<p>Fundamento de la clasificación:</p><ul>'+
+             iv.motivos.map(m => '<li>'+esc(m)+'</li>').join('')+'</ul>';
+      if (iv.regla) H += '<p><b>'+esc(iv.regla)+'</b></p>';
+      if (res) H += '<p><b>Documentación que procede.</b> '+esc(res.documentacion.join('; '))+'.</p>';
+      if (iv.bloqueos.length)
+        H += '<p class="aviso">'+iv.bloqueos.map(esc).join(' ')+'</p>';
+      H += '</section>';
+    }
+  }
+
+  /* ---------- 2. IDENTIFICACIÓN ---------- */
+  const pu = d.puerta || {};
+  H += abreSec('Identificación de la puerta')+
+    '<table class="datos">'+
+      campo('Código interno', p.codigo)+
+      campo('Tipo', pu.tipo || p.tipo)+
+      campo('Denominación comercial', pu.denominacion)+
+      campo('Marca', pu.marca || p.marca)+
+      campo('Modelo', pu.modelo || p.modelo)+
+      campo('Número de serie', pu.serie)+
+      campo('Dimensiones del hueco', [pu.ancho && (pu.ancho+' mm de ancho'), pu.alto && (pu.alto+' mm de alto')].filter(Boolean).join(' × '))+
+      campo('Peso de la hoja', pu.peso ? pu.peso+' kg' : '')+
+      campo('Número de hojas', pu.hojas)+
+      campo('Accionamiento', pu.motorizada === 'no' ? 'Manual' : 'Motorizada')+
+      campo('Tipo de uso', pu.uso_puerta)+
+      campo('Cómo se da la orden de maniobra',
+        ((MODOS_ACCIONAMIENTO[pu.modo]||{}).nombre || '')+
+        (pu.modo === 'hombre_presente'
+          ? (pu.hp_comprobado === 'si'
+              ? ' (comprobado que se detiene al soltar)'
+              : ' (sin comprobar que se detiene al soltar)')
+          : ''))+
+      campo('Quién usa la puerta', TIPOS_USUARIO[pu.usuarios] || '')+
+      campo('Dispositivos de accionamiento', pu.activacion)+
+      campo('Ciclos previstos al día', pu.ciclos_dia)+
+      campo('Alimentación eléctrica', pu.alimentacion)+
+      /* La identificación del fabricante original y la nuestra van separadas: una
+         etiqueta de mantenimiento no es un marcado CE. */
+      campo('Fabricante original', (d.orig||{}).fabricante)+
+      campo('Modelo original', (d.orig||{}).modelo)+
+      campo('Nº de serie original', (d.orig||{}).serie)+
+      campo('Marcado CE original', ({
+        comprobado:'Comprobado y legible',
+        ilegible:'Presente pero ilegible o incompleto',
+        ausente:'No existe',
+        desconocido:'No se ha podido comprobar',
+      })[(d.orig||{}).marcado] || '')+
+      campo('Declaración de prestaciones original', ({
+        disponible:'Disponible', no:'No disponible', desconocido:'Se desconoce si existió',
+      })[(d.orig||{}).ddp] || '')+
+      campo('Declaración de conformidad original', ({
+        disponible:'Disponible', no:'No disponible', desconocido:'Se desconoce si existió',
+      })[(d.orig||{}).declaracion] || '')+
+      campo('Identificación interna colocada', pu.placa_despues)+
+    '</table>'+
+    galeria('puerta:general', 2)+
+    '</section>';
+
+  /* ---------- 3. NORMAS ---------- */
+  H += abreSec('Marco normativo aplicado')+
+    '<h4>Legislación</h4><ul class="norm">'+
+    /* Quién emite qué depende de dos cosas: si de esta familia sale declaración de
+       prestaciones, y de qué papel tenemos en esta intervención. En una adecuación no
+       ponemos en el mercado ningún producto nuevo, así que no emitimos declaración
+       ninguna: el documento es el informe de riesgos y deficiencias. */
+    (e.situacion === 'adecuacion'
+      ? '<li><b>Reglamento (UE) 305/2011</b> de productos de construcción: <b>no se emite declaración de prestaciones</b>. Esta intervención no pone en el mercado un producto nuevo: adecuamos a normativa una puerta que ya estaba instalada, sin alterar sus prestaciones como producto de construcción. El documento que corresponde es el informe de riesgos y deficiencias detectadas de este expediente.</li>'
+      : e.situacion === 'nueva_instalador' && reg.ddp
+      ? '<li><b>Reglamento (UE) 305/2011</b> de productos de construcción, sistema '+esc(reg.sistema)+' de evaluación y verificación de la constancia de las prestaciones. <b>La declaración de prestaciones la emite el fabricante de la puerta</b>; nosotros la comprobamos, la recopilamos y la transmitimos al titular. Copia en el anexo de documentación.</li>'
+      : reg.ddp
+      ? (() => { const rc = regimenCPR(e) || {};
+          return '<li><b>'+esc(rc.nombre || 'Reglamento (UE) nº 305/2011 de productos de construcción')+
+            '</b>. Declaración de prestaciones conforme al '+esc(rc.modelo || 'modelo aplicable')+
+            '. Sistema '+esc(reg.sistema)+' de evaluación y verificación de la constancia de las '+
+            'prestaciones.'+(rc.nota ? '<br><span class="min">'+esc(rc.nota)+'</span>' : '')+'</li>'; })()
+      : reg.sistema === '1'
+      /* Aquí sí hay declaración de prestaciones: la que emite el fabricante del
+         conjunto certificado. Lo que no hay es una declaración nuestra. */
+      ? '<li><b>Reglamento (UE) 305/2011</b> de productos de construcción, sistema 1 de evaluación y verificación de la constancia de las prestaciones. <b>La declaración de prestaciones de esta puerta la emite su fabricante</b>, con certificado de constancia de las prestaciones expedido por un organismo notificado. Nosotros intervenimos como instalador: comprobamos el marcado CE, montamos según las instrucciones del fabricante sin sustituir ningún componente del conjunto ensayado, y recopilamos y transmitimos su documentación. Copia de la declaración del fabricante, en el anexo de documentación.</li>'
+      : '<li><b>Reglamento (UE) 305/2011</b> de productos de construcción: <b>'+
+        esc(reg.etiqueta || 'no procede declaración de prestaciones')+'</b>. '+esc(reg.nota)+'</li>')+
+    (motor && M ? '<li><b>'+esc(M.nombre)+'</b>. '+esc(M.documento)+', '+esc(M.anexo)+'.</li>' : '')+
+    (motor ? '<li><b>Directiva 2014/30/UE</b> de compatibilidad electromagnética, transpuesta por el Real Decreto 186/2016.</li>' : '')+
+    ((d.obra||{}).centro_trabajo === 'si'
+      ? '<li><b>Real Decreto 486/1997</b> sobre lugares de trabajo, anexo I parte A punto 6, puertas y portones.</li>'+
+        '<li><b>Real Decreto 1215/1997</b> sobre equipos de trabajo.</li>' : '')+
+    '<li><b>Reglamento Electrotécnico de Baja Tensión</b>, en lo relativo a la instalación eléctrica de la puerta.</li>'+
+    '</ul>'+
+    '<h4>Normas técnicas</h4><table class="datos norm-t">'+
+    (EXP_NORMAS[e.familia]||[]).map(([n, q]) => '<tr><th>'+esc(n)+'</th><td>'+esc(q)+'</td></tr>').join('')+
+    '</table></section>';
+
+  /* ---------- 4. COMPONENTES ---------- */
+  const comps = EXP_COMPONENTES[e.familia] || [];
+  const cd = d.comp || {};
+  H += abreSec('Elementos de la instalación')+
+    '<p>Relación de los elementos que componen la puerta y de los dispositivos de seguridad instalados, '+
+    'con la fotografía de cada uno.</p>';
+  comps.forEach(([k, nombre, , pideDatos]) => {
+    const x = cd[k] || {};
+    if (!x.estado) return;
+    const et = x.estado === 'si' ? '<span class="ok">Instalado</span>'
+             : x.estado === 'no' ? '<span class="no">No lo lleva</span>'
+             : '<span class="na">No aplica</span>';
+    H += '<div class="comp"><h4>'+esc(nombre)+' '+et+'</h4>';
+    if (x.estado === 'si' && pideDatos && (x.marca || x.modelo || x.serie))
+      H += '<table class="datos">'+campo('Marca', x.marca)+campo('Modelo', x.modelo)+campo('Nº de serie', x.serie)+'</table>';
+    if (x.nota) H += '<p>'+esc(x.nota)+'</p>';
+    H += galeria('comp:'+k, 2) + '</div>';
+  });
+  // Elementos que se añadieron a mano porque no estaban en la lista
+  Object.entries((d.compx)||{}).forEach(([k, x]) => {
+    if (!x.estado || !(x.nombre||'').trim()) return;
+    const et = x.estado === 'si' ? '<span class="ok">Instalado</span>'
+             : x.estado === 'no' ? '<span class="no">No lo lleva</span>'
+             : '<span class="na">No aplica</span>';
+    H += '<div class="comp"><h4>'+esc(x.nombre)+' '+et+'</h4>';
+    if (x.estado === 'si' && (x.marca || x.modelo || x.serie))
+      H += '<table class="datos">'+campo('Marca', x.marca)+campo('Modelo', x.modelo)+campo('Nº de serie', x.serie)+'</table>';
+    if (x.nota) H += '<p>'+esc(x.nota)+'</p>';
+    H += galeria('comp:'+k, 2) + '</div>';
+  });
+  H += '</section>';
+
+  /* ---------- 5. CUMPLIMIENTO ---------- */
+  const chk = EXP_COMPROBACIONES[e.familia] || [];
+  const kd = d.cumple || {};
+  const incum = chk.filter(x => (kd[x[0]]||{}).v === 'no');
+  const exi = exigenciaProteccion(e);
+  H += abreSec('Comprobaciones de cumplimiento')+
+    (exi.modo && exi.usuarios
+      ? '<h4>Nivel de protección aplicable</h4>'+
+        '<p>Esta puerta funciona en modo <b>'+esc((MODOS_ACCIONAMIENTO[exi.modo]||{}).nombre||'')+
+        '</b> y la usan <b>'+esc((TIPOS_USUARIO[exi.usuarios]||'').toLowerCase())+'</b>.</p>'+
+        (exi.fuera
+          ? '<p>Al tratarse de una puerta exclusivamente peatonal, su seguridad de uso se evalúa '+
+            'conforme a la <b>UNE-EN 16005+A1:2024</b>, que es su norma específica, y no mediante '+
+            'la matriz de protección de la UNE-EN 12453.</p>'
+          : !exi.admisible
+          ? '<p class="pendiente">Esta combinación de accionamiento y tipo de usuario no se considera '+
+            'admisible: '+esc(exi.ficha||'')+'</p>'
+          : '<p>Protección mínima aplicable: <b>'+esc(exi.niveles||'')+'</b>. '+esc(exi.ficha||'')+'</p>'+
+            '<p class="min">'+
+            (exi.propia
+              ? 'Criterio propio de la empresa, registrado en sus ajustes.'
+              : 'Criterio tomado de la interpretación de la UNE-EN 12453:2018+A1:2022 que la empresa '+
+                'tiene cargada. Los niveles A a E se corresponden con los definidos en esa norma.')+
+            ' La configuración definitiva depende de distancias, velocidades, fuerzas, geometría, '+
+            'accesibilidad y del análisis de riesgos de la instalación concreta.</p>')
+      : '<p class="pendiente">No consta cómo se acciona la puerta ni quién la usa, que es de lo que '+
+        'depende el nivel de protección exigible.</p>')+
+    '<table class="datos chk"><thead><tr><th style="width:auto">Comprobación</th><th style="width:70px">Resultado</th><th style="width:150px">Exigencia</th></tr></thead><tbody>'+
+    chk.map(([k, texto, norma]) => {
+      const ap = procede(APLICA_COMPROBACION, k, e);
+      const x = kd[k] || {};
+      const v = ap && ap.no ? 'na' : x.v;
+      const motivo = ap && ap.no ? ap.no : x.motivo;
+      const r = v === 'si' ? '<span class="ok">Conforme</span>'
+              : v === 'no' ? '<span class="no">No conforme</span>'
+              : v === 'na' ? '<span class="na">No aplicable</span>'
+              : v === 'nc' ? '<span class="no">No comprobado</span>'
+              : '<span class="pendiente">Pendiente</span>';
+      return '<tr><td>'+esc(texto)+
+        (motivo && (v === 'na' || v === 'nc')
+          ? '<span class="sub min" style="display:block">'+esc(motivo)+'</span>' : '')+
+        '</td><td>'+r+'</td><td class="min">'+esc(norma)+'</td></tr>';
+    }).join('')+'</tbody></table>'+
+    /* Lo que queda sin resultado se cuenta aparte: un documento con comprobaciones
+       pendientes no puede leerse como si todo estuviera revisado. */
+    (() => {
+      const sin = chk.filter(([k]) => {
+        const ap = procede(APLICA_COMPROBACION, k, e);
+        if (ap && ap.no) return false;
+        const v = (kd[k]||{}).v;
+        return !v || v === 'nc';
+      });
+      return sin.length
+        ? '<p class="aviso-borrador">'+sin.length+' comprobación(es) sin resultado. '+
+          'El alcance de este documento no incluye lo que no se ha comprobado.</p>' : '';
+    })();
+  /* Los peligros propios del tipo de puerta, con lo que se hizo en cada uno. */
+  {
+    const pel = peligrosDe(e);
+    if (pel){
+      const pd = d.peligro || {};
+      H += '<h4>Peligros propios de una '+esc(pel.clave.toLowerCase())+'</h4>'+
+        '<table class="datos chk"><thead><tr><th>Peligro</th><th style="width:80px">Estado</th>'+
+        '<th style="width:40%">Cómo se ha resuelto</th></tr></thead><tbody>'+
+        pel.lista.map(([pk, peligro, elementos]) => {
+          const x = pd[pk] || {};
+          const r = x.v === 'si' ? '<span class="ok">Resuelto</span>'
+                  : x.v === 'no' ? '<span class="no">No resuelto</span>'
+                  : x.v === 'na' ? '<span class="na">No aplicable</span>'
+                  : x.v === 'nc' ? '<span class="no">No comprobado</span>'
+                  : '<span class="pendiente">Pendiente</span>';
+          return '<tr><td>'+esc(peligro)+
+            '<span class="sub min" style="display:block">'+esc(elementos)+'</span></td>'+
+            '<td>'+r+'</td><td>'+esc(x.como || x.motivo || '—')+'</td></tr>';
+        }).join('')+'</tbody></table>';
+    }
+  }
+  chk.forEach(([k, texto]) => { const g = galeria('cumple:'+k, 2);
+    if (g) H += '<div class="comp"><h4>'+esc(texto)+'</h4>'+g+'</div>'; });
+  H += '</section>';
+
+  /* ---------- 6. FUERZAS ---------- */
+  const conFuerzas = motor && ((d.fuerzas||{}).incluir !== 'no');
+  if (conFuerzas){
+    const f = d.fuerzas || {};
+    const tope = f.hueco === 'impacto' ? lim.fd_impacto_n : lim.fd_aplastamiento_n;
+    const puntos = EXP_PUNTOS_FUERZA[e.familia] || EXP_PUNTOS_FUERZA.industrial;
+    const perfil = perfilFuerza(e);
+    H += abreSec('Ensayo de fuerzas')+
+      '<table class="datos">'+
+        campo('Perfil de ensayo aplicado', perfil.nombre)+
+        campo('Norma de referencia', perfil.norma)+
+        campo('Apartado', perfil.apartado)+
+        campo('Magnitudes', perfil.magnitudes)+
+        campo('Técnico que ejecuta el ensayo', (d.entrega||{}).tecnico)+
+        campo('Instrumento de medida', f.instrumento)+
+        campo('Calibración', f.calibracion)+
+        campo('Fecha del ensayo', f.fecha ? fechaCorta(f.fecha) : '')+
+        campo('Tipo de hueco', f.hueco === 'impacto' ? 'Sin riesgo de aplastamiento' :
+              (f.hueco === 'aplastamiento' ? 'Con riesgo de aplastamiento' : ''))+
+        campo('Límite de fuerza dinámica aplicado', tope + ' N')+
+      '</table>'+
+      (perfil.nota ? '<p class="min">'+esc(perfil.nota)+'</p>' : '')+
+      (!perfil.validado
+        ? '<p class="aviso-borrador">PERFIL DE ENSAYO SIN VALIDAR. Los límites y el método '+
+          'de este perfil no se han contrastado con el texto de la norma. Las medidas quedan '+
+          'registradas, pero la aplicación no dictamina si la puerta pasa el ensayo.</p>' : '')+
+      '<table class="datos chk"><thead><tr><th>Punto de medida</th><th>Fd (N)</th><th>Fs (N)</th><th>Fe (N)</th><th>td (s)</th><th>Resultado</th></tr></thead><tbody>'+
+      puntos.map((pt, i) => {
+        const m = f['m'+i] || {};
+        const fd = +m.fd||0, fs = +m.fs||0, fe = +m.fe||0, td = +m.td||0;
+        const hay = fd||fs||fe||td;
+        const pasa = hay && fd<=tope && fs<=lim.fs_estatica_n && fe<=lim.fe_residual_n && td<=lim.td_dinamico_s;
+        return '<tr><td>'+esc(pt)+'</td><td>'+(m.fd||'—')+'</td><td>'+(m.fs||'—')+'</td>'+
+          '<td>'+(m.fe||'—')+'</td><td>'+(m.td||'—')+'</td><td>'+
+          (!hay ? '<span class="na">Sin medir</span>'
+            /* Sin perfil validado no se dictamina. Un «No pasa» sí se mantiene:
+               si una medida supera el límite de referencia, eso hay que verlo
+               aunque el perfil esté pendiente de contrastar. */
+            : (!pasa ? '<span class="no">No pasa</span>'
+              : (perfil.validado ? '<span class="ok">Pasa</span>'
+                : '<span class="na">Pendiente de evaluación</span>')))+'</td></tr>';
+      }).join('')+'</tbody></table>'+
+      '<p class="min">Límites aplicados: fuerza de aplastamiento '+lim.fd_aplastamiento_n+' N; fuerza de impacto '+
+      lim.fd_impacto_n+' N; fuerza estática '+lim.fs_estatica_n+' N durante un máximo de '+lim.fs_tiempo_s+' s; '+
+      'fuerza residual '+lim.fe_residual_n+' N; tiempo por encima de la fuerza estática '+lim.td_dinamico_s+' s.</p>'+
+      (f.observaciones?'<p>'+esc(f.observaciones)+'</p>':'')+
+      galeria('fuerzas:medida', 3)+
+      '</section>';
+  }
+
+  /* ---------- 7 y 8. PRESTACIONES Y DdP ----------
+     Solo si de esta familia sale declaración de prestaciones. En una peatonal
+     automática o en una barrera de solo vehículos, no sale ninguna. */
+  if (fab && reg.ddp){
+    const pr = EXP_PRESTACIONES[e.familia] || [];
+    const pv = (d.prest||{}).v || {};
+    const vias = { ensayos:'Ensayos iniciales de tipo de laboratorio notificado',
+      cascada:'Ensayos del fabricante de los componentes, en cascada, conforme al artículo 36 del Reglamento (UE) 305/2011',
+      micro:'Documentación Técnica Específica, procedimiento simplificado para microempresas del artículo 37 del Reglamento (UE) 305/2011',
+      unidad:'Documentación Técnica Específica, producto fabricado por unidad, artículo 38 del Reglamento (UE) 305/2011' };
+
+    H += abreSec('Prestaciones declaradas')+
+      '<table class="datos">'+
+        campo('Vía de evaluación', vias[(d.prest||{}).via] || '')+
+        campo('Laboratorio u organismo notificado', (d.prest||{}).laboratorio)+
+        campo('Informe de ensayo', (d.prest||{}).informe)+
+      '</table>'+
+      '<table class="datos chk"><thead><tr><th>Característica esencial</th><th style="width:140px">Prestación</th><th style="width:130px">Norma</th></tr></thead><tbody>'+
+      pr.map(([k, nombre, norma]) => '<tr><td>'+esc(nombre)+'</td><td>'+esc(pv[k] || 'NPD')+'</td><td class="min">'+esc(norma)+'</td></tr>').join('')+
+      '</tbody></table></section>';
+
+    /* Declaración de prestaciones, con los apartados del Reglamento Delegado 574/2014 */
+    H += abreSec('Declaración de prestaciones', 'decl')+
+      '<p class="decl-num">Nº '+esc(e.referencia||'')+'</p>'+
+      '<ol class="decl-l">'+
+      '<li><b>Código de identificación única del producto tipo:</b><br>'+
+        esc((d.prest||{}).codigo_tipo || pu.denominacion || pu.modelo || '—')+'</li>'+
+      '<li><b>Usos previstos:</b><br>'+esc(pu.uso_puerta || '—')+
+        '. Puerta destinada a '+esc((EXP_FAMILIA[e.familia]||'').toLowerCase())+'.</li>'+
+      '<li><b>Fabricante:</b><br>'+esc(em.razon_social)+(em.nif?(', NIF '+esc(em.nif)):'')+
+        '<br>'+esc([em.domicilio, em.cp, em.poblacion, em.provincia].filter(Boolean).join(', ') || '—')+'</li>'+
+      '<li><b>Representante autorizado:</b> no procede.</li>'+
+      '<li><b>Sistema de evaluación y verificación de la constancia de las prestaciones:</b><br>'+
+        'Sistema ' + esc((d.prest||{}).sistema || '3') +
+        (['micro','unidad'].includes((d.prest||{}).via)
+          ? '.<br>Por aplicación del artículo ' + ((d.prest||{}).via === 'micro' ? '37' : '38') +
+            ' del Reglamento (UE) nº 305/2011, el fabricante sustituye los ensayos iniciales de tipo por la ' +
+            'Documentación Técnica Específica nº ' + esc(codigoDTE(e)) + ', y trata el producto conforme a lo ' +
+            'dispuesto para el sistema 4.'
+          : (vias[(d.prest||{}).via] ? '.<br>' + esc(vias[(d.prest||{}).via]) : '.'))+'</li>'+
+      '<li><b>Norma armonizada:</b><br>'+esc(((EXP_NORMAS[e.familia]||[])[0]||[''])[0])+
+        ((d.prest||{}).laboratorio ? '<br>Organismo notificado: '+esc((d.prest||{}).laboratorio) : '')+'</li>'+
+      '<li><b>Prestaciones declaradas:</b><table class="datos chk" style="margin-top:4px">'+
+        pr.map(([k, nombre, norma]) => '<tr><td>'+esc(nombre)+'</td><td style="width:130px">'+esc(pv[k]||'NPD')+
+          '</td><td class="min" style="width:130px">'+esc(norma)+'</td></tr>').join('')+'</table></li>'+
+      '<li><b>Documentación técnica específica:</b><br>'+
+        (['micro','unidad'].includes((d.prest||{}).via)
+          ? 'Documentación Técnica Específica nº ' + esc(codigoDTE(e)) +
+            ((d.prest||{}).dte_fecha ? ', de ' + esc(fechaCorta((d.prest||{}).dte_fecha)) : '') +
+            ', elaborada al amparo del artículo ' + ((d.prest||{}).via === 'micro' ? '37' : '38') +
+            ' del Reglamento (UE) nº 305/2011 y conservada por el fabricante.'
+          : 'No procede.')+'</li>'+
+      '<li><b>Declaración:</b><br>Las prestaciones del producto identificado en los apartados 1 y 2 son '+
+        'conformes con las prestaciones declaradas en el apartado 7. La presente declaración de prestaciones '+
+        'se emite bajo la sola responsabilidad del fabricante identificado en el apartado 3.</li>'+
+      '</ol>'+ bloqueFirma(em, d, e) +'</section>';
+
+    /* cierre del bloque de prestaciones */
+  }
+
+  /* ---------- DECLARACIÓN DE CONFORMIDAD DE MÁQUINA ----------
+     Depende de que la puerta sea una máquina motorizada y de que seamos nosotros
+     su fabricante. NO depende de que haya declaración de prestaciones: una peatonal
+     automática o una puerta motorizada sin declaración de prestaciones sigue siendo
+     una máquina y necesita su declaración de conformidad. */
+  if (fab && motor && M){
+      const esRegl = marco === 'reglamento';
+      H += abreSec(M.documento, 'decl')+
+        '<p class="decl-num">Nº '+esc(e.referencia||'')+'-M</p><ol class="decl-l">';
+      if (esRegl){
+        H += '<li><b>Máquina:</b><br>'+esc([pu.denominacion, pu.modelo, pu.serie].filter(Boolean).join(' · ') || '—')+
+            (e.situacion === 'modificacion' ? '<br><i>Máquina sustancialmente modificada.</i>' : '')+'</li>'+
+          '<li><b>Fabricante:</b><br>'+esc(em.razon_social)+(em.nif?(', NIF '+esc(em.nif)):'')+'<br>'+
+            esc([em.domicilio, em.cp, em.poblacion, em.provincia].filter(Boolean).join(', ') || '—')+'</li>'+
+          '<li><b>Lugar de instalación:</b><br>'+esc(dir || '—')+'</li>'+
+          '<li>La presente declaración de conformidad se expide bajo la exclusiva responsabilidad del fabricante.</li>'+
+          '<li><b>Objeto de la declaración:</b><br>'+esc(EXP_FAMILIA[e.familia]||'')+
+            (p.codigo ? ', identificación '+esc(p.codigo) : '')+
+            (dir ? ', instalada en '+esc(dir) : '')+'</li>'+
+          '<li><b>El objeto descrito es conforme con la legislación de armonización de la Unión aplicable:</b><br>'+
+            'Reglamento (UE) 2023/1230, relativo a las máquinas y los productos relacionados.<br>'+
+            'Directiva 2014/30/UE de compatibilidad electromagnética.</li>'+
+          '<li><b>Normas y especificaciones técnicas aplicadas:</b><ul class="norm">'+
+            normasDe(e).europeas.map(([n]) => '<li>'+esc(n)+'</li>').join('')+'</ul>'+
+            (normasDe(e).nacionales.length
+              ? '<p class="min">Otras normas nacionales aplicadas: '+
+                normasDe(e).nacionales.map(([n]) => esc(n)).join('; ')+'.</p>' : '')+
+            '<p class="min">La condición de norma armonizada citada en el Diario Oficial '+
+            'bajo este acto está pendiente de verificar para cada una de las normas listadas.</p></li>'+
+          '<li><b>Organismo notificado:</b> '+esc((d.prest||{}).laboratorio || 'no interviene.')+'</li>'+
+          '<li><b>Procedimiento de evaluación de la conformidad:</b> control interno de la producción.</li>'+
+          '<li><b>Información adicional:</b><br>'+esc((d.entrega||{}).observaciones || '—')+'</li>';
+      } else {
+        H += '<li><b>Razón social y dirección completa del fabricante:</b><br>'+esc(em.razon_social)+
+            (em.nif?(', NIF '+esc(em.nif)):'')+'<br>'+
+            esc([em.domicilio, em.cp, em.poblacion, em.provincia].filter(Boolean).join(', ') || '—')+'</li>'+
+          '<li><b>Persona facultada para elaborar el expediente técnico, establecida en la Unión:</b><br>'+
+            (em.responsable_tecnico
+              ? esc(em.responsable_tecnico)+', '+esc(em.razon_social)+
+                (em.domicilio ? '<br>'+esc([em.domicilio, em.cp, em.poblacion, em.provincia].filter(Boolean).join(', ')) : '')
+              : '<span class="pendiente">PENDIENTE DE DESIGNAR</span>')+'</li>'+
+          '<li><b>Descripción e identificación de la máquina:</b><br>'+
+            'Denominación genérica: '+esc(EXP_FAMILIA[e.familia]||'')+'. '+
+            'Función: cierre y apertura motorizada de un hueco de paso.<br>'+
+            'Modelo: '+esc(pu.modelo || '—')+'. Tipo: '+esc(pu.tipo || '—')+'. '+
+            'Número de serie: '+esc(pu.serie || '—')+'. '+
+            'Denominación comercial: '+esc(pu.denominacion || '—')+'.'+
+            (dir ? '<br>Instalada en '+esc(dir)+'.' : '')+'</li>'+
+          '<li>La máquina descrita <b>cumple todas las disposiciones aplicables</b> del Real Decreto 1644/2008, '+
+            'por el que se transpone la Directiva 2006/42/CE relativa a las máquinas, y del Real Decreto 186/2016, '+
+            'por el que se transpone la Directiva 2014/30/UE de compatibilidad electromagnética.</li>'+
+          '<li><b>Organismo notificado del examen CE de tipo:</b> '+esc((d.prest||{}).laboratorio || 'no procede.')+'</li>'+
+          '<li><b>Organismo notificado del aseguramiento de calidad total:</b> no procede.</li>'+
+          '<li><b>Normas y especificaciones técnicas aplicadas:</b><ul class="norm">'+
+            normasDe(e).europeas.map(([n]) => '<li>'+esc(n)+'</li>').join('')+'</ul>'+
+            '<p class="min">La condición de norma armonizada citada en el Diario Oficial '+
+            'bajo esta Directiva está pendiente de verificar para cada una de ellas.</p></li>'+
+          '<li><b>Otras normas y especificaciones técnicas utilizadas:</b> '+
+            (normasDe(e).nacionales.length
+              ? normasDe(e).nacionales.map(([n]) => esc(n)).join('; ')+'. ' : '')+
+            esc((d.entrega||{}).observaciones || '')+'</li>';
+      }
+    H += '</ol>'+ bloqueFirma(em, d, e) +'</section>';
+  }
+
+  /* ---------- RIESGOS ---------- */
+  const r = d.riesgos || {};
+  H += abreSec(e.situacion === 'adecuacion'
+    ? 'Informe de riesgos y deficiencias detectadas' : 'Riesgos residuales');
+  if (incum.length){
+    H += '<h4>Deficiencias detectadas</h4><table class="datos chk"><thead><tr>'+
+      '<th>Deficiencia</th><th style="width:80px">Gravedad</th><th style="width:40%">Actuación propuesta</th></tr></thead><tbody>'+
+      incum.map(([k, texto]) => { const x = kd[k]||{};
+        return '<tr><td>'+esc(x.def || texto)+'</td><td>'+
+          esc({leve:'Leve',grave:'Grave',muy_grave:'Muy grave'}[x.grav] || 'Sin valorar')+
+          '</td><td>'+esc(x.sol || '—')+'</td></tr>'; }).join('')+
+      '</tbody></table>';
+  } else {
+    H += '<p>No se han detectado deficiencias en las comprobaciones realizadas.</p>';
+  }
+  if (r.residuales) H += '<h4>Riesgos residuales</h4><p>'+esc(r.residuales).replace(/\n/g,'<br>')+'</p>';
+  if (r.recomendaciones) H += '<h4>Recomendaciones</h4><p>'+esc(r.recomendaciones).replace(/\n/g,'<br>')+'</p>';
+  if (r.apta)
+    H += '<p class="veredicto '+(r.apta==='no'?'mal':(r.apta==='condicionada'?'med':'bien'))+'">'+
+      esc({si:'La puerta queda conforme para el uso previsto.',
+           condicionada:'La puerta queda conforme con las limitaciones indicadas en este informe.',
+           no:'La puerta NO debería utilizarse hasta resolver las deficiencias señaladas.'}[r.apta])+'</p>';
+  H += '<h4>Limitaciones de este informe</h4><p>'+
+    esc(r.limitaciones || 'El presente informe se refiere exclusivamente a lo que pudo comprobarse '+
+    'visual y funcionalmente en la fecha de la intervención, sin desmontaje de elementos ni ensayos destructivos.')
+    .replace(/\n/g,'<br>')+'</p></section>';
+
+  /* ---------- ANEXO: DOCUMENTACIÓN DE LOS FABRICANTES ---------- */
+  const anexo = S.expDocs || [];
+  if (anexo.length){
+    /* Cada documento dice en qué estado está respecto de ESTA exportación: una imagen
+       se incrusta y va adjunta de verdad; un PDF no se puede meter dentro de este
+       documento, así que consta como disponible, no como adjunto. Afirmar que algo
+       va adjunto cuando no está es justo lo que no puede hacer este anexo. */
+    const estadoDoc = x => (/^image\//i.test(x.mime||'') && url[x.ruta])
+      ? '<span class="ok">Adjunto aquí</span>'
+      : '<span class="na">Disponible, se entrega aparte</span>';
+    const adjuntos = anexo.filter(x => /^image\//i.test(x.mime||'') && url[x.ruta]).length;
+    H += abreSec('Anexo: documentación de los fabricantes')+
+      '<p>Relación de la documentación aportada por los fabricantes de los elementos instalados. '+
+      'La columna «En esta exportación» dice si el documento va incluido en estas páginas o si '+
+      'se entrega como archivo aparte.</p>'+
+      '<table class="datos chk"><thead><tr><th style="width:26px">Nº</th><th>Documento</th>'+
+      '<th style="width:22%">Elemento</th><th style="width:18%">Fabricante</th>'+
+      '<th style="width:70px">Fecha</th><th style="width:110px">En esta exportación</th></tr></thead><tbody>'+
+      anexo.map((x, i) => '<tr><td>'+(i+1)+'</td>'+
+        '<td>'+esc(x.tipo_doc || 'Documento')+
+          (x.referencia ? '<br><span class="min">Ref. '+esc(x.referencia)+'</span>' : '')+
+          '<br><span class="min">'+esc(x.nombre||'')+'</span></td>'+
+        '<td>'+esc(x.elemento || '—')+'</td>'+
+        '<td>'+esc(x.fabricante || '—')+'</td>'+
+        '<td>'+esc(x.fecha_doc ? fechaCorta(x.fecha_doc) : '—')+'</td>'+
+        '<td>'+estadoDoc(x)+'</td></tr>').join('')+
+      '</tbody></table>'+
+      '<p class="min">Total: '+anexo.length+' documento'+(anexo.length===1?'':'s')+', '+
+      'de los que '+adjuntos+' se incluyen en estas páginas'+
+      (anexo.length - adjuntos > 0
+        ? ' y '+(anexo.length-adjuntos)+' se entregan como archivo aparte.' : '.')+'</p>'+
+      // Las imágenes sí se pueden incrustar; los PDF van detrás, impresos aparte
+      anexo.filter(x => /^image\//i.test(x.mime||'') && url[x.ruta]).map(x =>
+        '<div class="comp"><h4>'+esc([x.tipo_doc, x.fabricante].filter(Boolean).join(' · '))+'</h4>'+
+        '<div class="gal c1"><figure><img src="'+url[x.ruta]+'">'+
+        '<figcaption>'+esc(x.nombre||'')+'</figcaption></figure></div></div>').join('')+
+      '</section>';
+  }
+
+  /* ---------- INSTRUCCIONES ----------
+     Las instrucciones no son las mismas para una puerta de garaje, una peatonal
+     automática por detector y una cortafuegos. Lo común va primero y lo propio de
+     cada producto después.
+
+     Se ha quitado «vigilar la puerta durante toda la maniobra cuando se accione sin
+     verla», porque pedía algo imposible de cumplir: si no se ve la puerta no se puede
+     vigilar. Una protección insuficiente no se arregla con una advertencia. */
+  const comunes = [
+    'No cruzar el hueco mientras la puerta está en movimiento.',
+    'No permitir que los niños jueguen con los mandos ni en las proximidades de la puerta.',
+    'No forzar la puerta ni anular, tapar o desconectar ningún dispositivo de seguridad.',
+    'Ante cualquier ruido, golpe o funcionamiento anómalo, dejar de usar la puerta y avisar al mantenedor.',
+  ];
+  const sinVista = /sin ver|sin visibilidad/i.test(pu.activacion || '');
+  const propias = {
+    industrial: [].concat(
+      'Mantener limpias las ópticas de las fotocélulas y libre de obstáculos la zona de barrido.',
+      sinVista
+        ? ['Esta puerta se acciona sin tener el hueco a la vista. Antes de dar la orden, '+
+           'asegurarse de que nadie va a cruzar, y no accionarla si no se puede comprobar.']
+        : ['No accionar la puerta si hay personas o vehículos en el hueco de paso.'],
+      'No permanecer bajo la hoja ni en su recorrido durante la maniobra.'),
+    barrera: [
+      'No pasar bajo el mástil mientras se mueve, ni forzarlo a mano.',
+      'Respetar la señalización y esperar a que el mástil quede completamente arriba.',
+      'Mantener limpia la fotocélula y despejada la zona del bucle de detección.',
+    ],
+    peatonal: [
+      'Pasar de frente y por el centro del hueco, sin detenerse en la línea de cierre.',
+      'No empujar las hojas a mano ni sujetarlas durante la maniobra.',
+      'Mantener limpios los sensores y el acristalamiento, y libre la zona que vigilan.',
+      'Respetar la señalización del vidrio: no apoyarse ni cargar objetos contra las hojas.',
+    ],
+    cortafuegos: [
+      'No calzar, bloquear ni dejar obstáculos que impidan el cierre de la puerta.',
+      'No colgar ni apoyar nada en la hoja ni en sus herrajes.',
+      'La puerta forma parte de la compartimentación contra incendios: cualquier elemento '+
+        'que impida su cierre anula esa función.',
+      'No desconectar los retenedores ni el sistema de detección sin consultarlo con el mantenedor.',
+    ],
+  };
+  const desbloqueoTexto = e.familia === 'cortafuegos'
+    ? 'El desbloqueo y la maniobra manual de esta puerta son los que indique el manual de su '+
+      'fabricante. No se dan aquí instrucciones genéricas: una maniobra equivocada puede dejar '+
+      'la puerta sin su función de cierre en caso de incendio.'
+    : (((d.comp||{}).desbloqueo||{}).nota ||
+       'El desbloqueo manual permite mover la puerta a mano cuando falta la corriente. Antes de '+
+       'accionarlo hay que cortar la alimentación y asegurarse de que la hoja no puede caer ni '+
+       'desplazarse de forma incontrolada. Seguir el procedimiento del manual del equipo instalado.');
+  const falloTexto = e.familia === 'cortafuegos'
+    ? 'Avisar a la empresa mantenedora. No dejar la puerta calzada ni abierta de forma permanente: '+
+      'mientras no cierre, el sector de incendio queda sin compartimentar. Si hay que dejarla fuera '+
+      'de servicio, acordar con la propiedad una medida compensatoria.'
+    : 'Cortar la alimentación, dejar la puerta fuera de servicio, señalizarla y avisar a la empresa '+
+      'mantenedora. No intentar repararla ni anular las seguridades para seguir usándola.';
+
+  H += abreSec('Instrucciones de uso y seguridad')+
+    '<h4>Uso previsto</h4><p>La puerta está prevista para '+esc(pu.uso_puerta || 'el uso indicado en este expediente')+
+    '. Cualquier uso distinto del previsto queda fuera de las condiciones en que se ha evaluado su seguridad.</p>'+
+    '<h4>Normas de uso</h4><ul class="norm">'+
+    comunes.concat(propias[e.familia] || propias.industrial)
+      .map(x => '<li>'+esc(x)+'</li>').join('')+
+    '</ul>'+
+    '<h4>Maniobra manual</h4><p>'+esc(desbloqueoTexto)+'</p>'+
+    '<h4>Qué hacer ante un fallo</h4><p>'+esc(falloTexto)+'</p>'+
+    '<p class="min">Estas instrucciones no sustituyen al manual del fabricante del equipo '+
+    'instalado, que se entrega con esta documentación y prevalece en lo relativo a su manejo.</p>'+
+    '<h4>Contacto del mantenedor</h4><p>'+esc(em.razon_social)+
+    (em.telefono?(' · Teléfono '+esc(em.telefono)):'')+(em.email?(' · '+esc(em.email)):'')+'</p>'+
+    '</section>';
+
+  /* ---------- LIBRO DE MANTENIMIENTO ---------- */
+  H += abreSec('Libro de mantenimiento')+
+    '<p class="min">Contenido conforme a la '+
+    (e.familia === 'peatonal'
+      ? 'UNE-EN 16005+A1:2024 y la UNE 85121:2018'
+      : 'UNE-EN 12453:2018+A1:2022 y la UNE 85635:2012')+
+    '. Este libro debe conservarse junto a la instalación y permanecer a disposición de quien realice '+
+    'el mantenimiento. Conservación mínima recomendada: diez años.</p>'+
+    '<table class="datos">'+
+      campo('Fabricante de la puerta', fab ? em.razon_social : (pu.marca || ''))+
+      campo('Instalador', em.razon_social + (em.telefono ? ' · '+em.telefono : ''))+
+      campo('Identificación de la puerta', [p.codigo, pu.tipo, pu.modelo].filter(Boolean).join(' · '))+
+      campo('Número único del marcado CE', pu.serie)+
+      campo('Ubicación', dir)+
+      campo('Fecha de instalación', e.fecha_puesta_servicio ? fechaCorta(e.fecha_puesta_servicio) : '')+
+      campo('Periodicidad de mantenimiento acordada', (d.entrega||{}).periodicidad || periodicidadSugerida(e, d))+
+    '</table>'+
+    '<h4>Registro de revisiones</h4>'+
+    '<table class="datos chk reg"><thead><tr><th style="width:80px">Fecha</th><th>Trabajo realizado</th>'+
+    '<th style="width:110px">Técnico</th><th style="width:90px">Firma</th></tr></thead><tbody>'+
+    Array.from({length:14}).map(() => '<tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>').join('')+
+    '</tbody></table></section>';
+
+  /* ---------- ENTREGA ---------- */
+  const en = d.entrega || {};
+  H += abreSec('Entrega y firmas')+
+    '<p>Se hace entrega al titular de la instalación de la documentación que se relaciona, '+
+    'que deberá conservarse junto a la puerta.</p>'+
+    '<table class="datos chk"><tbody>'+
+    Object.entries(en.docs || {}).filter(([,v]) => v === 'si')
+      .map(([k]) => '<tr><td>'+esc(nombreDocEntrega(k, e, marco))+'</td><td style="width:60px"><span class="ok">Entregado</span></td></tr>').join('')+
+    '</tbody></table>'+
+    (en.observaciones ? '<p>'+esc(en.observaciones).replace(/\n/g,'<br>')+'</p>' : '')+
+    '<div class="firmas">'+
+      '<div><p class="min">Por la empresa</p><div class="linea"></div>'+
+        '<p>'+esc(en.firmante || em.responsable_tecnico || '')+'</p>'+
+        '<p class="min">'+esc(en.cargo || em.cargo_firmante || '')+' · '+esc(em.razon_social)+'</p></div>'+
+      '<div><p class="min">Recibí, el titular</p><div class="linea"></div>'+
+        '<p>'+esc(en.recibido_por || '')+'</p>'+
+        '<p class="min">'+esc(titular)+'</p></div>'+
+    '</div>'+
+    '<p class="min" style="margin-top:14px">'+esc([em.poblacion, en.fecha ? fechaCorta(en.fecha) : fechaCorta(hoy)].filter(Boolean).join(', '))+'</p>'+
+    '</section>';
+
+  /* ---------- CONTRAPORTADA ---------- */
+  H += '<section class="contra">'+
+    '<div class="marca">ARIZA <span>puertas automáticas</span></div>'+
+    '<p class="lema">Instalación, mantenimiento, reparación y adecuación a normativa de puertas automáticas</p>'+
+    '<table class="port-datos">'+
+      campo('Expediente', e.referencia)+
+      campo('Emitido', e.emitido_el ? fechaHora(e.emitido_el) : 'Borrador sin emitir')+
+      campo('Elaborado por', e.autor)+
+    '</table>'+
+    '<div class="contacto">'+esc(em.razon_social)+'<br>'+
+      esc([em.domicilio, em.cp, em.poblacion, em.provincia].filter(Boolean).join(', '))+'<br>'+
+      (em.nif?('NIF '+esc(em.nif)+'<br>'):'')+
+      (em.telefono?(esc(em.telefono)+'<br>'):'')+
+      (em.email?(esc(em.email)+'<br>'):'')+
+      (em.web?esc(em.web):'')+'</div>'+
+    '<p class="min pie-legal">Documento generado por ARIZA SAT. '+
+    'La conservación de este expediente corresponde al titular de la instalación. '+
+    'La empresa conserva su expediente técnico durante diez años.</p>'+
+    '</section>';
+
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
+    '<title>'+esc(e.referencia||'Expediente')+' · '+esc(titular)+'</title>'+
+    '<style>'+ cssLibro() +
+      marcaDeAgua([].concat(
+        esBorrador ? ['BORRADOR', 'NO VÁLIDO PARA DECLARAR CONFORMIDAD'] : [],
+        esFicticio ? ['DATOS Y MEDICIONES FICTICIOS'] : []))+
+    '</style></head><body>'+
+    /* Ahora que el cuerpo está montado, ya se sabe qué secciones se han emitido
+       de verdad: el índice se escribe con esa lista, no con una previsión. */
+    H.replace('<!--MARCADOR-INDICE-->',
+      '<ol class="indice">'+ secciones.map(x => '<li>'+esc(x)+'</li>').join('') +'</ol>')+
+    '</body></html>');
+  w.document.close();
+}
+
+/* Quien firma una declaración es el representante de la empresa, nunca la persona
+   del cliente que recibe la documentación ni el técnico que hizo el trabajo. Si no
+   consta, el documento lo dice: no se rellena con otro nombre que haya a mano. */
+function bloqueFirma(em, d, e){
+  const en = d.entrega || {};
+  const quien = en.firmante || em.representante || '';
+  return '<div class="firma-decl">'+
+    '<p>'+esc([em.poblacion, en.fecha ? fechaCorta(en.fecha) : fechaCorta(hoy())]
+      .filter(Boolean).join(', '))+'</p>'+
+    '<div class="linea"></div>'+
+    (quien
+      ? '<p><b>'+esc(quien)+'</b></p>'+
+        '<p class="min">'+esc(en.cargo || em.cargo_firmante || '')+' · '+esc(em.razon_social)+'</p>'
+      : '<p class="pendiente"><b>PENDIENTE DE FIRMA</b></p>'+
+        '<p class="min">No consta el representante que firma esta declaración.</p>')+
+    '</div>';
+}
+function nombreDocEntrega(k, e, marco){
+  const M = EXP_MARCO[marco];
+  return ({ ddp:'Declaración de prestaciones', dc: M ? M.documento : 'Declaración de conformidad',
+    marcado:'Marcado CE colocado en la puerta', manual:'Manual de uso y mantenimiento',
+    libro:'Libro de mantenimiento', expediente:'Expediente técnico archivado',
+    ddp_fab:'Declaración de prestaciones del fabricante', dc_fab:'Declaración de conformidad del fabricante',
+    cert_inst:'Certificado de instalación', informe:'Informe de riesgos y deficiencias detectadas' })[k] || k;
+}
+/* Periodicidad orientativa. No es obligación legal: procede de la circular del
+   Colegio de Administradores de Fincas de Madrid elaborada con el Ministerio. */
+function periodicidadSugerida(e, d){
+  const u = (d.obra||{}).uso_edificio || '';
+  if (e.familia === 'peatonal') return 'Semestral, orientativa';
+  if (/Industria/i.test(u)) return 'Semestral, orientativa';
+  if (/Comercio|Hotel|Pública/i.test(u)) return 'Semestral, orientativa';
+  return 'Anual, orientativa';
+}
+
+/* Marca de agua de página. Se devuelve como regla CSS lista para pegar: un SVG
+   del tamaño exacto de un A4 puesto como fondo del body y repetido en vertical,
+   que es lo que Chrome sí imprime en todas las páginas. */
+function marcaDeAgua(lineas){
+  if (!lineas.length) return '';
+  const alto = 1123, ancho = 794;            // A4 a 96 ppp
+  const filas = lineas.map((t, i) =>
+    '<text x="50%" y="' + (alto/2 - (lineas.length-1)*26 + i*52) + '" ' +
+    'text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="42" ' +
+    'font-weight="bold" fill="#B3271E" fill-opacity="0.13" ' +
+    'transform="rotate(-32 ' + (ancho/2) + ' ' + (alto/2) + ')">' + t + '</text>').join('');
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + ancho + '" height="' + alto + '">' +
+              filas + '</svg>';
+  return 'body{background-image:url("data:image/svg+xml;utf8,' +
+         encodeURIComponent(svg) + '");background-repeat:repeat-y;' +
+         'background-size:' + ancho + 'px ' + alto + 'px;background-position:top center}';
+}
+
+function cssLibro(){
+  return '@page{size:A4;margin:18mm 16mm 16mm}'+
+  /* Lo que falta se ve a simple vista: en rojo y en mayúsculas, para que nadie
+     firme un documento creyendo que está completo. */
+  '.pendiente{color:#B3271E;letter-spacing:.04em}'+
+  '.marca-agua{position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:9999;'+
+    'display:flex;align-items:center;justify-content:center}'+
+  '.marca-agua span{transform:rotate(-32deg);font-size:46px;font-weight:800;letter-spacing:.06em;'+
+    'color:rgba(179,39,30,.13);text-align:center;line-height:1.3;white-space:pre-line}'+
+  '.cinta{position:running(cinta)}'+
+  '.aviso-borrador{background:#F8E1DF;border:1.5px solid #B3271E;color:#7a1a14;'+
+    'border-radius:4px;padding:8px 10px;margin:0 0 14px;font-weight:700;font-size:12px}'+
+  '*{box-sizing:border-box}'+
+  'body{font:11.5px/1.55 -apple-system,Segoe UI,Roboto,sans-serif;color:#1C1817;margin:0;counter-reset:pag}'+
+  'section{page-break-before:always;page-break-inside:auto}'+
+  'section:first-child{page-break-before:avoid}'+
+  'h3.sec{font-size:15px;margin:0 0 12px;padding-bottom:6px;border-bottom:2px solid #FCBA1D}'+
+  'h4{font-size:12px;margin:16px 0 5px;color:#6B6560;text-transform:uppercase;letter-spacing:.04em}'+
+  'p{margin:0 0 8px}'+
+  '.min{font-size:10px;color:#6B6560}'+
+  'table.datos{border-collapse:collapse;width:100%;margin:4px 0 10px}'+
+  'table.datos th,table.datos td{text-align:left;padding:4px 7px;border-bottom:1px solid #e8e5e1;vertical-align:top}'+
+  'table.datos th{width:34%;color:#6B6560;font-weight:500}'+
+  'table.chk th{width:auto;background:#f6f5f3;color:#1C1817;font-weight:600}'+
+  'table.chk td{border-bottom:1px solid #eee}'+
+  'table.reg td{height:20px}'+
+  '.ok{color:#2E7D46;font-weight:600}.no{color:#B3261E;font-weight:600}.na{color:#8A837D}'+
+  'ul.norm{margin:4px 0 8px;padding-left:18px}ul.norm li{margin:2px 0}'+
+  'ol.indice{margin:4px 0 0;padding-left:20px}ol.indice li{margin:3px 0}'+
+  '.dos{display:flex;gap:18px}.dos>div{flex:1}'+
+  '.comp{page-break-inside:avoid;margin:0 0 14px}'+
+  '.comp h4{margin-top:10px;color:#1C1817;text-transform:none;font-size:12.5px;letter-spacing:0}'+
+  '.gal{display:grid;gap:7px;margin:6px 0 4px}'+
+  '.gal.c1{grid-template-columns:1fr}'+
+  '.gal.c2{grid-template-columns:1fr 1fr}.gal.c3{grid-template-columns:1fr 1fr 1fr}'+
+  '.gal.c1 img{max-height:200mm;object-fit:contain;background:#fff}'+
+  '.gal figure{margin:0;page-break-inside:avoid}'+
+  '.gal img{width:100%;height:auto;max-height:78mm;object-fit:cover;border:1px solid #ddd;border-radius:3px;display:block}'+
+  '.gal figcaption{font-size:9.5px;color:#6B6560;margin-top:3px}'+
+  /* portada y contraportada */
+  '.portada,.contra{page-break-before:always;height:245mm;display:flex;flex-direction:column}'+
+  '.portada{page-break-before:avoid}'+
+  '.marca{font-weight:800;font-size:22px;letter-spacing:.02em}'+
+  '.marca span{color:#C98F08;font-weight:600}'+
+  '.portada .tit{margin-top:26mm}'+
+  '.portada h1{font-size:30px;margin:0;line-height:1.15}'+
+  '.portada h2{font-size:17px;margin:6px 0 0;font-weight:500;color:#6B6560}'+
+  '.portada .sit{margin:10px 0 0;font-size:13px}'+
+  '.portada-foto{margin:14mm 0 auto;border:1px solid #ddd;border-radius:4px;overflow:hidden;height:95mm}'+
+  '.portada-foto img{width:100%;height:100%;object-fit:cover;display:block}'+
+  '.portada-foto.vacia{display:flex;align-items:center;justify-content:center;color:#b5aea8;background:#f6f5f3}'+
+  'table.port-datos{border-collapse:collapse;width:100%;margin-top:10mm}'+
+  'table.port-datos th{text-align:left;padding:5px 8px;color:#6B6560;font-weight:500;width:42%;border-top:1px solid #e8e5e1}'+
+  'table.port-datos td{padding:5px 8px;border-top:1px solid #e8e5e1}'+
+  '.pie-portada{margin-top:auto;padding-top:8mm;border-top:3px solid #FCBA1D;font-size:10.5px;color:#6B6560}'+
+  '.contra{justify-content:space-between}'+
+  '.contra .lema{margin-top:8mm;font-size:13px;color:#6B6560;max-width:120mm}'+
+  '.contra .contacto{margin-top:auto;font-size:12px;line-height:1.7}'+
+  '.contra .pie-legal{margin-top:8mm;padding-top:6mm;border-top:3px solid #FCBA1D}'+
+  /* declaraciones */
+  '.decl .decl-num{font-size:12px;color:#6B6560;margin:-6px 0 10px}'+
+  'ol.decl-l{padding-left:18px;margin:0}'+
+  'ol.decl-l>li{margin:0 0 9px;page-break-inside:avoid}'+
+  '.firma-decl{margin-top:16mm;page-break-inside:avoid}'+
+  '.firma-decl .linea,.firmas .linea{border-bottom:1px solid #1C1817;height:16mm;margin:0 0 4px;max-width:70mm}'+
+  '.firmas{display:flex;gap:20mm;margin-top:14mm;page-break-inside:avoid}'+
+  '.firmas>div{flex:1}'+
+  '.veredicto{padding:8px 10px;border-radius:4px;font-weight:600;margin:10px 0}'+
+  '.veredicto.bien{background:#e8f3ec;color:#2E7D46}'+
+  '.veredicto.med{background:#fdf3e0;color:#8a5a06}'+
+  '.veredicto.mal{background:#fbeae9;color:#B3261E}'+
+  '.aviso{padding:8px 10px;background:#fbeae9;color:#B3261E;border-radius:4px}'+
+  '@media screen{body{max-width:195mm;margin:0 auto;padding:16px;background:#fff}'+
+  'section{border-top:2px dashed #ddd;padding-top:20px;margin-top:20px}'+
+  'section:first-child{border-top:0;margin-top:0;padding-top:0}'+
+  '.portada,.contra{height:auto;min-height:auto}}';
+}
+
+
+/* ================= Diálogos ================= */
+const dlg = $('#dlg'), dlgForm = $('#dlg-form');
+let alGuardar = null;
+function abrirDlg(html, guardar){ dlgForm.innerHTML = html; alGuardar = guardar; dlg.showModal(); const f = dlgForm.querySelector('input,select,textarea'); if (f) f.focus(); }
+function cerrarDlg(){ dlg.close(); alGuardar = null; }
+dlgForm.addEventListener('submit', e => { e.preventDefault(); if (alGuardar) alGuardar(); });
+/* Contrato: el total se recalcula solo y la duración fija el vencimiento */
+dlgForm.addEventListener('input', e => {
+  if (e.target.classList && e.target.classList.contains('k-c')) sumarCuotas();
+});
+dlgForm.addEventListener('change', e => {
+  const t = e.target;
+  if (t.classList && t.classList.contains('k-p')) sumarCuotas();
+  if (t.id === 'k-cli'){ pintarPuertasContrato(t.value || null, {}); return; }
+  if (t.id === 'k-dur' || t.id === 'k-alta'){
+    const dur = +val('k-dur'), alta = val('k-alta') || hoy();
+    const venc = document.getElementById('k-venc');
+    if (venc){
+      if (!dur) venc.value = '';
+      else { const f = deIso(alta); f.setMonth(f.getMonth() + dur); venc.value = iso(f); }
+    }
   }
 });
+dlgForm.addEventListener('click', e => { const b = e.target.closest('[data-cerrar]'); if (b) cerrarDlg(); });
+const val = id => { const e = document.getElementById(id); return e ? e.value.trim() : ''; };
+const setErr = m => { const e = dlgForm.querySelector('.err'); if (e) e.textContent = m; };
+const opts = (arr, sel) => ['<option value=""></option>'].concat(arr.map(o => '<option'+(o===sel?' selected':'')+'>'+esc(o)+'</option>')).join('');
+const casillaSeg = (s, marcado) => '<label><input type="checkbox" class="f-seg" value="'+esc(s)+'"'+(marcado?' checked':'')+'>'+esc(s)+'</label>';
+async function guardarLista(clave, arr){
+  const { error } = await sb.from('ajustes').upsert({ clave, valor: arr, actualizado: new Date().toISOString() }, { onConflict:'clave' });
+  if (error) throw error;
+  S.ajustes[clave] = arr;
+}
+
+/* Campos del alta de puerta, para poder recuperarlos si se sale a crear un cliente */
+const CAMPOS_PUERTA = ['f-cod','f-cliente','f-clid','f-dir','f-ubi','f-tcliente','f-tipo','f-uso',
+  'f-marca','f-modelo','f-cuadro','f-motor','f-anio','f-instalador','f-ancho','f-alto','f-peso',
+  'f-ult','f-prox','f-notas'];
+function guardarBorradorPuerta(){
+  const b = {};
+  CAMPOS_PUERTA.forEach(id => { const e = document.getElementById(id); if (e) b[id] = e.value; });
+  b.seguridad = Array.from(document.querySelectorAll('#f-segs .f-seg:checked')).map(x => x.value);
+  b.extras = Array.from(document.querySelectorAll('#f-segs .f-seg')).map(x => x.value);
+  S.borradorPuerta = b;
+}
+function aplicarBorradorPuerta(){
+  const b = S.borradorPuerta;
+  if (!b) return;
+  S.borradorPuerta = null;
+  // los elementos de seguridad que el técnico había añadido a mano
+  const cont = document.getElementById('f-segs');
+  if (cont){
+    const ya = Array.from(cont.querySelectorAll('.f-seg')).map(x => x.value.toLowerCase());
+    (b.extras || []).forEach(v => {
+      if (ya.includes(v.toLowerCase())) return;
+      cont.insertAdjacentHTML('beforeend',
+        '<label class="mini" style="display:flex;align-items:center;gap:8px">'+
+        '<input type="checkbox" class="f-seg" value="'+esc(v)+'" style="accent-color:var(--amarillo);width:18px;height:18px">'+esc(v)+'</label>');
+    });
+    cont.querySelectorAll('.f-seg').forEach(x => { x.checked = (b.seguridad || []).includes(x.value); });
+  }
+  CAMPOS_PUERTA.forEach(id => {
+    const e = document.getElementById(id);
+    if (!e || b[id] === undefined) return;
+    if (e.tagName === 'SELECT' && !Array.from(e.options).some(o => o.value === b[id])) return;
+    e.value = b[id];
+  });
+}
+
+function dlgPuerta(id, avisoId){
+  const p = id ? puertaDe(id) : null;
+  const usadas = new Set(S.puertas.filter(x => !p || x.id !== p.id).map(x => x.codigo));
+  const libres = S.etiquetas.filter(e => !usadas.has(e.codigo)).map(e => e.codigo);
+  const d = p || { estado:'operativa', seguridad:[] };
+  let h = '<h3>'+(p ? 'Editar puerta '+esc(p.codigo||'') : 'Nueva puerta')+'</h3>';
+  h += '<div class="grupo"><h3>Identificación</h3><div class="campos">'+
+    '<div class="campo"><label for="f-cod">Etiqueta / código</label><select id="f-cod">'+opts(libres, d.codigo)+'</select><span class="pista">'+(libres.length?'Elige la etiqueta que acabas de pegar':'No quedan etiquetas libres: genera una serie')+'</span></div>'+
+    '<div class="campo"><label for="f-cliente">Cliente (nombre)</label><input id="f-cliente" type="text" value="'+esc(d.cliente||'')+'"></div>'+
+    '<div class="campo"><label for="f-clid">Ficha de cliente</label><select id="f-clid"><option value="">Sin ficha</option>'+
+      S.clientes.map(c => '<option value="'+c.id+'"'+(d.cliente_id===c.id?' selected':'')+'>'+esc(c.nombre)+'</option>').join('')+
+      '</select><span class="pista">Si lo dejas sin ficha, se crea una con el nombre de al lado. '+
+      '<button type="button" class="enlace" data-act="cliente-desde-puerta"'+
+      (p?' data-puerta="'+p.id+'"':'')+(avisoId?' data-aviso="'+avisoId+'"':'')+'>Crear cliente nuevo</button></span></div>'+
+    '<div class="campo full"><label for="f-dir">Dirección</label><input id="f-dir" type="text" value="'+esc(d.direccion||'')+'"></div>'+
+    '<div class="campo full"><label for="f-ubi">Ubicación dentro del edificio</label><input id="f-ubi" type="text" value="'+esc(d.ubicacion||'')+'" placeholder="Ej.: garaje sótano -1, muelle 2"></div>'+
+    '<div class="campo"><label for="f-tcliente">Tipo de cliente</label><select id="f-tcliente">'+opts(lista('clientes', CLIENTES), d.tipo_cliente)+'</select></div>'+
+    '</div></div>';
+  h += '<div class="grupo"><h3>La puerta</h3><div class="campos">'+
+    '<div class="campo"><label for="f-tipo">Tipo</label><select id="f-tipo">'+opts(lista('tipos', TIPOS), d.tipo)+'</select></div>'+
+    '<div class="campo"><label for="f-uso">Uso</label><select id="f-uso">'+opts(lista('usos', USOS), d.uso)+'</select></div>'+
+    '<div class="campo"><label for="f-marca">Marca</label><input id="f-marca" type="text" value="'+esc(d.marca||'')+'"></div>'+
+    '<div class="campo"><label for="f-modelo">Modelo</label><input id="f-modelo" type="text" value="'+esc(d.modelo||'')+'"></div>'+
+    '<div class="campo"><label for="f-cuadro">Cuadro de maniobra</label><input id="f-cuadro" type="text" value="'+esc(d.cuadro||'')+'"></div>'+
+    '<div class="campo"><label for="f-motor">Motor</label><input id="f-motor" type="text" value="'+esc(d.motor||'')+'"></div>'+
+    '<div class="campo"><label for="f-anio">Año</label><input id="f-anio" type="number" min="1950" max="2100" value="'+esc(d.anio||'')+'"></div>'+
+    '<div class="campo"><label for="f-instalador">Instalada por</label><input id="f-instalador" type="text" value="'+esc(d.instalador||'')+'"></div>'+
+    '<div class="campo"><label for="f-ancho">Ancho (mm)</label><input id="f-ancho" type="number" value="'+esc(d.ancho_mm||'')+'"></div>'+
+    '<div class="campo"><label for="f-alto">Alto (mm)</label><input id="f-alto" type="number" value="'+esc(d.alto_mm||'')+'"></div>'+
+    '<div class="campo"><label for="f-peso">Peso hoja (kg)</label><input id="f-peso" type="number" step="0.1" value="'+esc(d.peso_kg||'')+'"></div>'+
+    '</div></div>';
+  const puestos = d.seguridad || [];
+  const maestra = lista('seguridad', SEGURIDAD);
+  const elementos = maestra.concat(puestos.filter(s => !maestra.includes(s)));
+  h += '<div class="grupo"><h3>Seguridad instalada</h3><div class="checks" id="f-segs">'+
+    elementos.map(s => casillaSeg(s, puestos.includes(s))).join('')+
+    '</div><div class="campos" style="margin-top:10px"><div class="campo full"><label for="f-seg-nuevo">Añadir un elemento que no esté en la lista</label>'+
+    '<span class="fila"><input id="f-seg-nuevo" type="text" placeholder="Ej.: bucle magnético, radar de apertura" style="flex:1">'+
+    '<button type="button" class="btn sm" data-act="seg-extra">Añadir</button></span>'+
+    (esAdmin() ? '<label class="mini" style="display:inline-flex;align-items:center;gap:6px;margin-top:8px"><input type="checkbox" id="f-seg-maestra" checked style="accent-color:var(--amarillo);width:16px;height:16px">Guardarlo también en la lista general, para todas las puertas</label>' : '')+
+    '</div></div></div>';
+  h += '<div class="grupo"><h3>Revisiones y notas</h3><div class="campos">'+
+    '<div class="campo"><label for="f-ult">Última revisión</label><input id="f-ult" type="date" value="'+esc(d.ultima_revision||'')+'"></div>'+
+    '<div class="campo"><label for="f-prox">Próxima revisión</label><input id="f-prox" type="date" value="'+esc(d.proxima_revision||'')+'"></div>'+
+    '<div class="campo full"><label for="f-notas">Observaciones</label><textarea id="f-notas" rows="3">'+esc(d.notas||'')+'</textarea></div>'+
+    '</div></div>';
+  h += '<p class="err" role="alert"></p><div class="pie">'+
+    (p ? '<button type="button" class="btn" data-act="puerta-borrar" data-id="'+p.id+'">Borrar puerta</button>' : '')+
+    '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button><button type="submit" class="btn pri">Guardar</button></div>';
+  setTimeout(aplicarBorradorPuerta, 0);
+  abrirDlg(h, async () => {
+    const seg = Array.from(dlgForm.querySelectorAll('.f-seg')).filter(x => x.checked).map(x => x.value);
+    const o = {
+      codigo: val('f-cod') || null, cliente: val('f-cliente'), direccion: val('f-dir'), ubicacion: val('f-ubi'),
+      tipo_cliente: val('f-tcliente'), tipo: val('f-tipo'), uso: val('f-uso'), marca: val('f-marca'), modelo: val('f-modelo'),
+      cuadro: val('f-cuadro'), motor: val('f-motor'), anio: val('f-anio')?+val('f-anio'):null, instalador: val('f-instalador'),
+      ancho_mm: val('f-ancho')?+val('f-ancho'):null, alto_mm: val('f-alto')?+val('f-alto'):null, peso_kg: val('f-peso')?+val('f-peso'):null,
+      seguridad: seg, ultima_revision: val('f-ult')||null, proxima_revision: val('f-prox')||null, notas: val('f-notas')
+    };
+    if (!o.cliente && !o.direccion) return setErr('Pon al menos el cliente o la dirección.');
+    o.cliente_id = val('f-clid') || null;
+    try {
+      // si no se eligió ficha de cliente pero hay nombre, se crea o se reutiliza
+      if (!o.cliente_id && o.cliente){
+        const ya = S.clientes.find(c => (c.nombre||'').toLowerCase() === o.cliente.toLowerCase());
+        if (ya) o.cliente_id = ya.id;
+        else {
+          const { data: nc } = await sb.from('clientes')
+            .insert({ nombre: o.cliente, direccion: o.direccion || null, tipo: o.tipo_cliente || null, creado_por: yo() })
+            .select().maybeSingle();
+          if (nc) o.cliente_id = nc.id;
+        }
+      }
+      let puertaId = p ? p.id : null;
+      if (p){ const { error } = await sb.from('puertas').update(o).eq('id', p.id); if (error) throw error; }
+      else {
+        o.creado_por = yo();
+        const { data, error } = await sb.from('puertas').insert(o).select().maybeSingle();
+        if (error) throw error;
+        if (data){ puertaId = data.id; S.ficha = data.id; }
+      }
+      // si venimos de una asistencia sin puerta, queda enganchada
+      if (avisoId && puertaId){
+        await sb.from('avisos').update({ puerta_id: puertaId, cliente_id: o.cliente_id || null }).eq('id', avisoId);
+        S.ficha = null;
+      }
+      cerrarDlg(); await cargar();
+      toast(p ? 'Ficha actualizada.' : (avisoId ? 'Puerta dada de alta y enganchada a la asistencia.' : 'Puerta dada de alta.'));
+      if (avisoId) dlgCierre(avisoId);
+    } catch(e){ setErr(e.message || 'No se pudo guardar.'); }
+  });
+}
+
+function dlgEstado(id){
+  const p = puertaDe(id);
+  let h = '<h3>Estado de la puerta '+esc(p.codigo||'')+'</h3><div class="campos">'+
+    '<div class="campo full"><label for="e-estado">Estado</label><select id="e-estado">'+
+    Object.keys(ESTADOS).map(k => '<option value="'+k+'"'+(p.estado===k?' selected':'')+'>'+ESTADOS[k].t+'</option>').join('')+'</select></div></div>'+
+    '<p class="mini" style="margin:0">Lo que elijas aquí es lo que ve cualquiera que escanee el QR de esta puerta.</p>'+
+    '<p class="err"></p><div class="pie"><button type="button" class="btn plana" data-cerrar>Cancelar</button><button type="submit" class="btn pri">Guardar</button></div>';
+  abrirDlg(h, async () => {
+    try {
+      const { error } = await sb.from('puertas').update({ estado: val('e-estado'), estado_desde: new Date().toISOString() }).eq('id', id);
+      if (error) throw error;
+      cerrarDlg(); await cargar(); toast('Estado actualizado.');
+    } catch(e){ setErr(e.message); }
+  });
+}
+
+function dlgAviso(puertaId, avisoId, clienteId, fecha){
+  const a = avisoId ? S.avisos.find(x => x.id === avisoId) : null;
+  // Una avería nueva nace asignada al administrador, para que no se quede sin
+  // dueño. Se puede cambiar aquí mismo antes de guardar.
+  const admin = (S.equipo.find(t => t.rol === 'admin' && t.activo) || {}).id || null;
+  const d = a || { tipo:'averia', estado: admin ? 'asignado' : 'recibido', prioridad:'normal', origen:'Teléfono',
+                   puerta_id: puertaId || null, cliente_id: clienteId || null,
+                   tecnico_id: admin, fecha_prevista: fecha || null };
+  const tipos = lista('tipos_asistencia', Object.keys(ASISTENCIAS));
+  const puertasOrd = S.puertas.slice().sort((x,y)=> (x.codigo||'') < (y.codigo||'') ? -1 : 1);
+  let h = '<h3>'+(a ? 'Asistencia '+esc(tipoAsis(d.tipo)) : 'Nueva asistencia')+'</h3>';
+
+  h += '<div class="grupo"><h3>Qué es y a quién</h3><div class="campos">'+
+    '<div class="campo"><label for="a-tipo">Tipo de asistencia</label><select id="a-tipo">'+
+      tipos.map(t => '<option value="'+esc(t)+'"'+(d.tipo===t?' selected':'')+'>'+esc(ASISTENCIAS[t]||t)+'</option>').join('')+
+      '</select></div>'+
+    '<div class="campo"><label for="a-origen">Cómo ha entrado</label><select id="a-origen">'+
+      opts(lista('origenes', ORIGENES), d.origen==='cliente' ? 'QR' : (d.origen||''))+'</select></div>'+
+    '<div class="campo full"><label for="a-puerta">Puerta</label><select id="a-puerta"><option value="">Sin puerta concreta</option>'+
+      puertasOrd.map(p => '<option value="'+p.id+'"'+(d.puerta_id===p.id?' selected':'')+'>'+
+        esc((p.codigo||'')+' · '+(p.cliente||'')+' · '+[p.direccion,p.ubicacion].filter(Boolean).join(' '))+'</option>').join('')+
+      '</select><span class="pista">Si aún no se sabe, déjalo vacío: el técnico puede darla de alta en obra</span></div>'+
+    '<div class="campo full"><label for="a-cliente">Cliente</label><select id="a-cliente"><option value="">Sin cliente en la ficha</option>'+
+      S.clientes.map(c => '<option value="'+c.id+'"'+(d.cliente_id===c.id?' selected':'')+'>'+esc(c.nombre+(c.poblacion?(' · '+c.poblacion):''))+'</option>').join('')+
+      '</select><span class="pista">Se rellena solo si eliges puerta. <a href="#" data-act="cliente-rapido">Crear cliente nuevo</a></span></div>'+
+    '<div class="campo full"><label for="a-dir">Dirección, si no hay puerta ni cliente</label><input id="a-dir" type="text" maxlength="200" value="'+esc(d.direccion_libre||'')+'" placeholder="Ej.: C/ Larga 4, El Puerto"></div>'+
+    '</div></div>';
+
+  h += '<div class="grupo"><h3>Lo que cuenta quien avisa</h3><div class="campos">'+
+    '<div class="campo full"><label for="a-desc">Qué dice que pasa</label><textarea id="a-desc" rows="3">'+esc(d.descripcion||'')+'</textarea></div>'+
+    '<div class="campo"><label for="a-cnom">Contacto: nombre</label><input id="a-cnom" type="text" maxlength="80" value="'+esc(d.contacto_nombre||'')+'"></div>'+
+    '<div class="campo"><label for="a-ctel">Contacto: teléfono</label><input id="a-ctel" type="tel" maxlength="20" value="'+esc(d.contacto_telefono||'')+'"></div>'+
+    '<div class="campo"><label for="a-cmail">Contacto: correo</label><input id="a-cmail" type="email" maxlength="120" value="'+esc(d.contacto_email||'')+'"></div>'+
+    '</div></div>';
+
+  h += '<div class="grupo"><h3>Instrucciones de oficina para el técnico</h3><div class="campos">'+
+    '<div class="campo full"><label for="a-notas">Lo que el técnico debe saber antes de ir</label>'+
+    '<textarea id="a-notas" rows="3" placeholder="Ej.: cliente con contrato, no cobrar. Preguntar por Manuel en portería. Llevar banda de seguridad de 2 m.">'+esc(d.notas_oficina||'')+'</textarea>'+
+    '<span class="pista">Esto lo ve el técnico en la asistencia, destacado</span></div>'+
+    '</div></div>';
+
+  h += '<div class="grupo"><h3>Planificación</h3><div class="campos">'+
+    '<div class="campo"><label for="a-estado">Situación</label><select id="a-estado">'+Object.keys(EST_AVISO).map(k => '<option value="'+k+'"'+(d.estado===k?' selected':'')+'>'+EST_AVISO[k]+'</option>').join('')+'</select></div>'+
+    '<div class="campo"><label for="a-prio">Prioridad</label><select id="a-prio">'+
+      PRIORIDADES.map(x => '<option value="'+x+'"'+(d.prioridad===x?' selected':'')+'>'+(x==='normal'?'Normal':(x==='urgente'?'Urgente':'Programada'))+'</option>').join('')+'</select></div>'+
+    '<div class="campo"><label for="a-tec">Técnico asignado</label><select id="a-tec"><option value="">Sin asignar</option>'+
+      activos().map(t => '<option value="'+t.id+'"'+(d.tecnico_id===t.id?' selected':'')+'>'+esc(t.nombre||'—')+(t.rol==='admin'?' (admin)':'')+'</option>').join('')+
+      '</select><span class="pista">Le llega un correo y lo ve en «Mis asistencias»</span></div>'+
+    '<div class="campo"><label for="a-fecha">Visita prevista</label><input id="a-fecha" type="date" value="'+esc(d.fecha_prevista||'')+'"></div>'+
+    '</div></div>';
+
+  if (a && a.anulada)
+    h += '<p class="nota-oficina" style="margin:0 0 10px"><b>Anulada</b> el '+fechaHora(a.anulada_en)+
+         (a.anulada_por?(' por '+esc(a.anulada_por)):'')+'. Motivo: '+esc(a.anulada_motivo||'')+'</p>';
+
+  h += '<p class="err"></p><div class="pie">'+
+    (a && !a.cerrado ? '<button type="button" class="btn" data-act="cerrar-asistencia" data-id="'+a.id+'">Cerrar visita</button>' : '')+
+    (a && !a.cerrado && esGestion() ? '<button type="button" class="btn plana" data-act="aviso-anular" data-id="'+a.id+'">Anular sin parte</button>' : '')+
+    '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button><button type="submit" class="btn pri">Guardar</button></div>';
+
+  abrirDlg(h, async () => {
+    const tid = val('a-tec') || null;
+    const nom = val('a-cnom'), tel = val('a-ctel'), mail = val('a-cmail');
+    const pid = val('a-puerta') || null;
+    let cid = val('a-cliente') || null;
+    if (pid && !cid){ const pp = puertaDe(pid); if (pp && pp.cliente_id) cid = pp.cliente_id; }
+    const o = { tipo: val('a-tipo'), estado: val('a-estado'), prioridad: val('a-prio'),
+                origen: a ? (a.origen || val('a-origen')) : val('a-origen'),
+                puerta_id: pid, cliente_id: cid, direccion_libre: val('a-dir') || null,
+                tecnico_id: tid, tecnico: tid ? nombreTec(tid) : '',
+                fecha_prevista: val('a-fecha')||null, descripcion: val('a-desc'),
+                notas_oficina: val('a-notas') || null,
+                contacto_nombre: nom || null, contacto_telefono: tel || null, contacto_email: mail || null,
+                contacto: [nom, tel, mail].filter(Boolean).join(' · '),
+                actualizado: new Date().toISOString() };
+    if (!o.puerta_id && !o.cliente_id && !o.direccion_libre && !o.contacto_nombre)
+      return setErr('Pon al menos la puerta, el cliente, una dirección o el nombre de quien avisa.');
+    if (tid && o.estado === 'recibido') o.estado = 'asignado';
+    const mapa = { recibido:'aviso_recibido', asignado:'tecnico_asignado', en_curso:'en_reparacion', repuesto:'esperando_repuesto' };
+    try {
+      if (a){ const { error } = await sb.from('avisos').update(o).eq('id', a.id); if (error) throw error; }
+      else { const { error } = await sb.from('avisos').insert(o); if (error) throw error; }
+      if (o.puerta_id && !SIN_COBRO.includes(o.tipo) && mapa[o.estado])
+        await sb.from('puertas').update({ estado: mapa[o.estado], estado_desde: new Date().toISOString() }).eq('id', o.puerta_id);
+      cerrarDlg(); await cargar(); toast('Asistencia guardada.');
+    } catch(e){ setErr(e.message); }
+  });
+}
+
+/* Alta rápida de cliente */
+function dlgCliente(id, alGuardarExtra){
+  const c = id ? clienteDe(id) : null;
+  const d = c || {};
+  let h = '<h3>'+(c ? 'Editar cliente' : 'Nuevo cliente')+'</h3><div class="campos">'+
+    '<div class="campo full"><label for="c-nombre">Nombre o razón social</label><input id="c-nombre" type="text" maxlength="120" value="'+esc(d.nombre||'')+'"></div>'+
+    '<div class="campo"><label for="c-nif">NIF / CIF</label><input id="c-nif" type="text" maxlength="20" value="'+esc(d.nif||'')+'"></div>'+
+    '<div class="campo"><label for="c-tipo">Tipo</label><select id="c-tipo">'+opts(lista('clientes', CLIENTES), d.tipo)+'</select></div>'+
+    '<div class="campo"><label for="c-tel">Teléfono</label><input id="c-tel" type="tel" maxlength="20" value="'+esc(d.telefono||'')+'"></div>'+
+    '<div class="campo"><label for="c-mail">Correo</label><input id="c-mail" type="email" maxlength="120" value="'+esc(d.email||'')+'"></div>'+
+    '<div class="campo full"><label for="c-dir">Dirección</label><input id="c-dir" type="text" maxlength="200" value="'+esc(d.direccion||'')+'"></div>'+
+    '<div class="campo"><label for="c-pob">Población</label><input id="c-pob" type="text" maxlength="80" value="'+esc(d.poblacion||'')+'"></div>'+
+    '<div class="campo" style="align-content:end"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+      '<input type="checkbox" id="c-contrato"'+(d.contrato?' checked':'')+' style="accent-color:var(--amarillo);width:18px;height:18px">Tiene contrato de mantenimiento</label></div>'+
+    '<div class="campo full"><label for="c-notas">Notas internas</label><textarea id="c-notas" rows="2" placeholder="Ej.: facturar a nombre de la comunidad, llaves en portería">'+esc(d.notas||'')+'</textarea></div>'+
+    '</div><p class="err"></p><div class="pie">'+
+    '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button><button type="submit" class="btn pri">Guardar</button></div>';
+  abrirDlg(h, async () => {
+    const o = { nombre: val('c-nombre'), nif: val('c-nif')||null, tipo: val('c-tipo')||null,
+                telefono: val('c-tel')||null, email: val('c-mail')||null, direccion: val('c-dir')||null,
+                poblacion: val('c-pob')||null, notas: val('c-notas')||null,
+                contrato: !!(document.getElementById('c-contrato')||{}).checked };
+    if (!o.nombre) return setErr('El cliente necesita un nombre.');
+    try {
+      let nuevoId = id;
+      if (c){ const { error } = await sb.from('clientes').update(o).eq('id', c.id); if (error) throw error; }
+      else {
+        o.creado_por = yo();
+        const { data, error } = await sb.from('clientes').insert(o).select().maybeSingle();
+        if (error) throw error;
+        nuevoId = data ? data.id : null;
+      }
+      cerrarDlg(); await cargar();
+      toast(c ? 'Cliente actualizado.' : 'Cliente creado.');
+      if (alGuardarExtra) alGuardarExtra(nuevoId);
+    } catch(e){ setErr(e.message); }
+  });
+}
+
+/* Contrato de mantenimiento de un cliente: puertas cubiertas, condiciones y cláusulas */
+function dlgContrato(id, clienteId){
+  const k = id ? S.contratos.find(x => x.id === id) : null;
+  const d = k || {};
+  const cid = clienteId || d.cliente_id || null;
+  const cli = clienteDe(cid);
+  const enUnAnio = () => { const f = new Date(); f.setFullYear(f.getFullYear()+1); return f.toISOString().slice(0,10); };
+  const clisOrd = S.clientes.slice().sort((a,b) => (a.nombre||'').localeCompare(b.nombre||'', 'es'));
+
+  // puertas que ya cubre el contrato, con su cuota
+  const yaCubre = {};
+  if (k) puertasDeContrato(k.id).forEach(x => { yaCubre[x.puerta_id] = x; });
+  S.contratoBorrador = { clausulas: Array.isArray(d.clausulas) ? d.clausulas.slice() : null };
+
+  let h = '<h3>'+(k ? 'Contrato '+esc(d.referencia||'') : 'Nuevo contrato de mantenimiento')+'</h3>'+
+    (cid ? '<p class="mini" style="margin:0 0 12px">'+esc(cli ? cli.nombre : 'Cliente')+'</p>' : '');
+
+  h += '<div class="grupo"><h3>Datos del contrato</h3><div class="campos">'+
+    (cid ? '' :
+      '<div class="campo full"><label for="k-cli">Cliente</label><select id="k-cli"><option value="">Elige el cliente</option>'+
+      clisOrd.map(c => '<option value="'+c.id+'">'+esc(c.nombre+(c.poblacion?(' · '+c.poblacion):''))+'</option>').join('')+
+      '</select><span class="pista">El contrato va a nombre del cliente y cubre las puertas que marques abajo. '+
+      '<a href="#" data-act="cliente-desde-contrato">Crear cliente nuevo</a></span></div>')+
+    '<div class="campo"><label for="k-ref">Referencia</label><input id="k-ref" type="text" maxlength="60" value="'+esc(d.referencia||'')+'" placeholder="Se pone sola">'+
+      (k ? '' : '<span class="pista">Se asigna sola y correlativa. Puedes cambiarla.</span>')+'</div>'+
+    '<div class="campo"><label for="k-estado">Estado</label><select id="k-estado">'+
+      Object.entries(EST_CONTRATO).map(([v,t])=>'<option value="'+v+'"'+((d.estado||'activo')===v?' selected':'')+'>'+t+'</option>').join('')+'</select></div>'+
+    '<div class="campo"><label for="k-alta">Fecha de alta</label><input id="k-alta" type="date" value="'+esc(d.fecha_alta||hoy())+'"></div>'+
+    '<div class="campo"><label for="k-dur">Duración</label><select id="k-dur" data-act="k-dur">'+
+      DURACIONES.map(([m,t])=>'<option value="'+m+'"'+((d.duracion_meses||12)===m && !d.a_peticion?' selected':'')+'>'+t+'</option>').join('')+
+      '<option value="0"'+(d.a_peticion?' selected':'')+'>Sin plazo: revisiones a petición</option>'+
+      '</select><span class="pista">Al elegirla se calcula el vencimiento</span></div>'+
+    '<div class="campo"><label for="k-venc">Vencimiento</label><input id="k-venc" type="date" value="'+esc(d.fecha_vencimiento||enUnAnio())+'"></div>'+
+    '<div class="campo"><label for="k-per">Revisiones</label><select id="k-per">'+
+      PERIODOS.map(([m,t])=>'<option value="'+m+'"'+((d.periodicidad_meses||12)===m?' selected':'')+'>'+t+'</option>').join('')+'</select>'+
+      '<span class="pista">Cada puerta puede llevar otra distinta</span></div>'+
+    '<div class="campo"><label for="k-pago">Forma de pago</label><select id="k-pago"><option value=""></option>'+
+      lista('formas_pago', FORMAS_PAGO).map(f=>'<option'+(d.forma_pago===f?' selected':'')+'>'+esc(f)+'</option>').join('')+'</select></div>'+
+    '<div class="campo"><label for="k-aviso">Avisar de la renovación con</label><input id="k-aviso" type="number" min="0" max="180" value="'+esc(d.aviso_dias!=null?d.aviso_dias:30)+'"><span class="pista">días de antelación</span></div>'+
+    '<div class="campo" style="align-content:end"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+      '<input type="checkbox" id="k-auto"'+(d.renovacion_auto===false?'':' checked')+' style="accent-color:var(--amarillo);width:18px;height:18px">Se renueva solo</label></div>'+
+    '</div></div>';
+
+  // ---- puertas cubiertas ----
+  h += '<div class="grupo"><h3>Puertas que cubre</h3><div id="k-puertas" class="k-puertas"></div>'+
+       '<p class="mini" style="margin:8px 0 0">Total del contrato: <b id="k-total">'+eur(0)+'</b> al año, sin IVA.</p></div>';
+
+  // ---- qué cubre ----
+  h += '<div class="grupo"><h3>Qué cubre la cuota</h3><div class="campos">'+
+    '<div class="campo full"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+      '<input type="checkbox" id="k-mo" data-act="k-cond"'+(d.mano_obra_incluida===false?'':' checked')+' style="accent-color:var(--amarillo);width:18px;height:18px">'+
+      'Mano de obra de las revisiones preventivas incluida</label></div>'+
+    '<div class="campo full"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+      '<input type="checkbox" id="k-dp" data-act="k-cond"'+(d.desplazamiento_incluido===false?'':' checked')+' style="accent-color:var(--amarillo);width:18px;height:18px">'+
+      'Desplazamiento de las revisiones preventivas incluido</label></div>'+
+    '<div class="campo"><label for="k-dtomo">Descuento en mano de obra (%)</label>'+
+      '<input id="k-dtomo" data-act="k-cond" type="number" step="1" min="0" max="100" value="'+esc(d.descuento_mano_obra||0)+'"><span class="pista">Se aplica solo a las averías</span></div>'+
+    '<div class="campo"><label for="k-dtomat">Descuento en materiales (%)</label>'+
+      '<input id="k-dtomat" data-act="k-cond" type="number" step="1" min="0" max="100" value="'+esc(d.descuento_material||0)+'"></div>'+
+    '<div class="campo"><label for="k-prio">Atención prioritaria (horas)</label>'+
+      '<input id="k-prio" data-act="k-cond" type="number" step="1" min="0" max="240" value="'+esc(d.prioridad_horas!=null?d.prioridad_horas:24)+'">'+
+      '<span class="pista">0 = sin compromiso de plazo</span></div>'+
+    '<div class="campo full"><label for="k-incluye">Resumen de lo que incluye</label><textarea id="k-incluye" rows="2" placeholder="Sale impreso en la cabecera del contrato">'+esc(d.incluye||'')+'</textarea></div>'+
+    '<div class="campo full"><label for="k-excluye">Resumen de lo que no incluye</label><textarea id="k-excluye" rows="2">'+esc(d.excluye||'')+'</textarea></div>'+
+    '</div></div>';
+
+  // ---- cláusulas ----
+  h += '<div class="grupo"><h3>Cláusulas del contrato</h3>'+
+    '<div id="k-clausulas"></div>'+
+    '<div class="fila" style="margin-top:8px"><button type="button" class="btn sm" data-act="cl-anadir">Añadir cláusula</button>'+
+    '<button type="button" class="btn sm plana" data-act="cl-plantilla">Rehacer con la plantilla</button><span class="sp"></span></div>'+
+    '<p class="mini" style="margin:8px 0 0">Son la plantilla de la casa: cámbialas a tu gusto. '+
+    'Conviene que las revise tu asesoría antes de usarlas con clientes.</p></div>';
+
+  h += '<div class="grupo"><h3>Notas internas</h3><div class="campos">'+
+    '<div class="campo full"><textarea id="k-notas" rows="2" placeholder="No salen en el contrato impreso">'+esc(d.notas||'')+'</textarea></div>'+
+    '</div></div>';
+
+  h += '<p class="err"></p><div class="pie">'+
+    (k ? '<button type="button" class="btn plana" data-act="contrato-borrar" data-id="'+k.id+'">Borrar</button>'+
+         '<button type="button" class="btn" data-act="contrato-hoja" data-id="'+k.id+'">Ver contrato</button>' : '')+
+    '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button><button type="submit" class="btn pri">Guardar</button></div>';
+
+  abrirDlg(h, async () => {
+    const o = { cliente_id: cid || val('k-cli') || null, referencia: val('k-ref')||null, estado: val('k-estado')||'activo',
+                fecha_alta: val('k-alta')||hoy(), fecha_vencimiento: val('k-venc')||null,
+                duracion_meses: +val('k-dur') || null,
+                a_peticion: val('k-dur') === '0',
+                periodicidad_meses: +val('k-per') || 12,
+                forma_pago: val('k-pago')||null,
+                aviso_dias: val('k-aviso') ? +val('k-aviso') : 30,
+                renovacion_auto: !!(document.getElementById('k-auto')||{}).checked,
+                mano_obra_incluida: !!(document.getElementById('k-mo')||{}).checked,
+                desplazamiento_incluido: !!(document.getElementById('k-dp')||{}).checked,
+                descuento_mano_obra: +val('k-dtomo') || 0,
+                descuento_material: +val('k-dtomat') || 0,
+                prioridad_horas: +val('k-prio') || null,
+                clausulas: clausulasDelForm(),
+                incluye: val('k-incluye')||null, excluye: val('k-excluye')||null, notas: val('k-notas')||null };
+    if (o.a_peticion){ o.fecha_vencimiento = null; o.duracion_meses = null; }
+    if (!o.cliente_id) return setErr('El contrato tiene que ir a nombre de un cliente.');
+    if (o.fecha_vencimiento && o.fecha_vencimiento < o.fecha_alta) return setErr('El vencimiento no puede ser anterior al alta.');
+    const marcadas = Array.from(document.querySelectorAll('#k-puertas .k-p:checked')).map(x => x.dataset.id);
+    try {
+      let kid = k ? k.id : null;
+      if (k){ const { error } = await sb.from('contratos').update(o).eq('id', k.id); if (error) throw error; }
+      else {
+        o.creado_por = yo();
+        if (!o.referencia){
+          const { data: sig } = await sb.rpc('siguiente_contrato');
+          const s = Array.isArray(sig) ? sig[0] : sig;
+          if (s){ o.referencia = s.referencia; o.numero = s.numero; }
+        }
+        const { data: ins, error } = await sb.from('contratos').insert(o).select().maybeSingle();
+        if (error) throw error;
+        kid = ins ? ins.id : null;
+        await sb.from('clientes').update({ contrato: true }).eq('id', o.cliente_id);
+      }
+      if (kid) await guardarPuertasContrato(kid, marcadas);
+      await planificarCliente(o.cliente_id, o.periodicidad_meses);
+      cerrarDlg(); await cargar();
+      toast(k ? 'Contrato actualizado.' : 'Contrato dado de alta.');
+    } catch(e){ setErr(e.message); }
+  });
+
+  pintarClausulas(S.contratoBorrador.clausulas || clausulasFabrica(condicionesDelForm()));
+  pintarPuertasContrato(cid, yaCubre);
+  if (!k && !val('k-ref')) ponerReferencia();
+}
+
+/* Las condiciones tal y como están ahora en el formulario, para rehacer las cláusulas */
+function condicionesDelForm(){
+  return { periodicidad_meses: +val('k-per') || 12,
+           mano_obra_incluida: !!(document.getElementById('k-mo')||{}).checked,
+           desplazamiento_incluido: !!(document.getElementById('k-dp')||{}).checked,
+           descuento_mano_obra: +val('k-dtomo') || 0,
+           descuento_material: +val('k-dtomat') || 0,
+           prioridad_horas: +val('k-prio') || 0,
+           renovacion_auto: !!(document.getElementById('k-auto')||{}).checked };
+}
+function pintarClausulas(arr){
+  const caja = document.getElementById('k-clausulas');
+  if (!caja) return;
+  caja.innerHTML = (arr || []).map((t, i) =>
+    '<div class="k-cl"><span class="k-num">'+(i+1)+'</span>'+
+    '<textarea class="k-cl-t" rows="2">'+esc(t)+'</textarea>'+
+    '<button type="button" class="btn sm plana" data-act="cl-quitar" data-i="'+i+'" title="Quitar">✕</button></div>').join('');
+}
+function clausulasDelForm(){
+  return Array.from(document.querySelectorAll('#k-clausulas .k-cl-t'))
+              .map(t => t.value.trim()).filter(Boolean);
+}
+/* Las puertas del cliente, con su casilla, su cuota y su periodicidad */
+function pintarPuertasContrato(cid, yaCubre){
+  const caja = document.getElementById('k-puertas');
+  if (!caja) return;
+  yaCubre = yaCubre || {};
+  const puertasCli = cid ? S.puertas.filter(p => p.cliente_id === cid) : [];
+  if (!cid){
+    caja.innerHTML = '<p class="mini" style="margin:0">Elige primero el cliente y saldrán aquí sus puertas.</p>';
+  } else if (!puertasCli.length){
+    caja.innerHTML = '<p class="mini" style="margin:0">Este cliente todavía no tiene puertas dadas de alta. '+
+      'Puedes guardar el contrato y marcarlas cuando las des de alta.</p>';
+  } else {
+    caja.innerHTML = puertasCli.map(p => {
+      const y = yaCubre[p.id];
+      return '<div class="k-puerta">'+
+        '<label class="k-marca"><input type="checkbox" class="k-p" data-id="'+p.id+'"'+(y?' checked':'')+' style="accent-color:var(--amarillo);width:18px;height:18px">'+
+        '<span><b>'+esc(p.codigo||'—')+'</b> '+esc(p.tipo||'')+'<span class="mini" style="display:block">'+
+        esc([p.direccion,p.ubicacion].filter(Boolean).join(' · ')||'Sin dirección')+'</span></span></label>'+
+        '<label class="k-cuota">Cuota €/año<input type="number" step="0.01" min="0" class="k-c" data-id="'+p.id+'" value="'+(y && y.cuota_anual!=null ? y.cuota_anual : '')+'"></label>'+
+        '<label class="k-cuota">Revisiones<select class="k-per-p" data-id="'+p.id+'"><option value="">La del contrato</option>'+
+          PERIODOS.map(([m,t])=>'<option value="'+m+'"'+((y && y.periodicidad_meses)===m?' selected':'')+'>'+t+'</option>').join('')+
+          '</select></label>'+
+        '</div>';
+    }).join('');
+  }
+  sumarCuotas();
+}
+function sumarCuotas(){
+  const t = document.getElementById('k-total');
+  if (!t) return;
+  let total = 0;
+  document.querySelectorAll('#k-puertas .k-p').forEach(c => {
+    if (!c.checked) return;
+    const campo = document.querySelector('#k-puertas .k-c[data-id="'+c.dataset.id+'"]');
+    total += campo && campo.value ? +campo.value : 0;
+  });
+  t.textContent = eur(total);
+}
+async function ponerReferencia(){
+  try {
+    const { data } = await sb.rpc('siguiente_contrato');
+    const s = Array.isArray(data) ? data[0] : data;
+    const campo = document.getElementById('k-ref');
+    if (s && campo && !campo.value) campo.value = s.referencia;
+  } catch(_){}
+}
+/* Deja en contrato_puertas exactamente las puertas marcadas, con su cuota */
+async function guardarPuertasContrato(kid, ids){
+  const antes = puertasDeContrato(kid).map(x => x.puerta_id);
+  const filas = ids.map(pid => {
+    const c = document.querySelector('#k-puertas .k-c[data-id="'+pid+'"]');
+    const p = document.querySelector('#k-puertas .k-per-p[data-id="'+pid+'"]');
+    return { contrato_id: kid, puerta_id: pid,
+             cuota_anual: c && c.value ? +c.value : 0,
+             periodicidad_meses: p && p.value ? +p.value : null };
+  });
+  for (const pid of antes) if (!ids.includes(pid))
+    await sb.from('contrato_puertas').delete().eq('contrato_id', kid).eq('puerta_id', pid);
+  if (filas.length){
+    const { error } = await sb.from('contrato_puertas').upsert(filas, { onConflict:'contrato_id,puerta_id' });
+    if (error) throw error;
+  }
+}
+
+/* A las puertas del cliente sin fecha de revisión se les pone una a partir de hoy */
+async function planificarCliente(clienteId, meses){
+  const sinFecha = S.puertas.filter(p => p.cliente_id === clienteId && !p.proxima_revision && !p.sin_mantenimiento);
+  if (!sinFecha.length) return;
+  const f = new Date(); f.setMonth(f.getMonth() + (meses || 12));
+  const prox = f.toISOString().slice(0,10);
+  for (const p of sinFecha) await sb.from('puertas').update({ proxima_revision: prox }).eq('id', p.id);
+}
+
+/* Cambiar a mano la fecha de la próxima revisión de una puerta */
+function dlgPlanificar(puertaId){
+  const p = puertaDe(puertaId);
+  if (!p) return;
+  const meses = periodicidadDe(p);
+  let h = '<h3>Próxima revisión</h3><p class="mini" style="margin:0 0 12px">'+esc(p.codigo||'')+' · '+esc([p.tipo,p.direccion].filter(Boolean).join(' · '))+'</p>'+
+    '<div class="campos">'+
+    '<div class="campo"><label for="pl-fecha">Fecha</label><input id="pl-fecha" type="date" value="'+esc(p.proxima_revision||'')+'"></div>'+
+    '<div class="campo"><label for="pl-per">Cada cuánto</label><select id="pl-per">'+
+      '<option value="">Lo que diga el contrato ('+esc(nombrePeriodo(meses))+')</option>'+
+      PERIODOS.map(([m,t])=>'<option value="'+m+'"'+(p.periodicidad_meses===m?' selected':'')+'>'+t+'</option>').join('')+'</select></div>'+
+    '<div class="campo full" style="align-content:end"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+      '<input type="checkbox" id="pl-sin"'+(p.sin_mantenimiento?' checked':'')+' style="accent-color:var(--amarillo);width:18px;height:18px">Esta puerta no lleva mantenimiento</label></div>'+
+    '</div><p class="err"></p><div class="pie">'+
+    '<button type="button" class="btn plana" data-act="pl-siguiente" data-meses="'+meses+'">Calcular desde hoy</button>'+
+    '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button><button type="submit" class="btn pri">Guardar</button></div>';
+  abrirDlg(h, async () => {
+    const o = { proxima_revision: val('pl-fecha') || null,
+                periodicidad_meses: val('pl-per') ? +val('pl-per') : null,
+                sin_mantenimiento: !!(document.getElementById('pl-sin')||{}).checked };
+    try {
+      const { error } = await sb.from('puertas').update(o).eq('id', puertaId); if (error) throw error;
+      cerrarDlg(); await cargar(); toast('Planificación guardada.');
+    } catch(e){ setErr(e.message); }
+  });
+}
+
+/* Abre a mano la asistencia preventiva de una puerta */
+async function abrirPreventiva(puertaId){
+  const p = puertaDe(puertaId);
+  if (!p) return;
+  const ya = S.avisos.find(a => a.puerta_id === puertaId && a.tipo === 'mantenimiento' && !a.cerrado);
+  if (ya){ dlgCierre(ya.id); return; }
+  try {
+    const { error } = await sb.from('avisos').insert({
+      puerta_id: puertaId, cliente_id: p.cliente_id || null, tipo: 'mantenimiento', estado: 'recibido',
+      origen: 'interno', prioridad: 'programada', fecha_prevista: p.proxima_revision || hoy(),
+      descripcion: 'Revisión periódica programada', creado_por: yo() });
+    if (error) throw error;
+    await cargar(); toast('Revisión abierta. Asígnala a un técnico desde Asistencias.');
+  } catch(e){ fallo(e); }
+}
+
+/* Tarifas: lo que cobras y lo que te cuesta */
+function dlgTarifas(){
+  const t = S.tarifas || {};
+  const campo = (id, eti, v, paso, pista) =>
+    '<div class="campo"><label for="'+id+'">'+eti+'</label>'+
+    '<input id="'+id+'" type="number" step="'+paso+'" min="0" value="'+esc(v != null ? v : '')+'">'+
+    (pista ? '<span class="pista">'+pista+'</span>' : '')+'</div>';
+  let h = '<h3>Tarifas y costes</h3>'+
+    '<p class="mini" style="margin:0 0 12px">Esto no lo ve nadie más que tú. Con estos números la aplicación valora '+
+    'cada visita y calcula el margen.</p>';
+
+  h += '<div class="grupo"><h3>Mano de obra</h3><div class="campos">'+
+    campo('t-ph', 'Precio hora de técnico (€)', t.precio_hora, '0.01', 'Lo que cobras al cliente') +
+    campo('t-ch', 'Coste hora de técnico (€)', t.coste_hora, '0.01', 'Sueldo, seguridad social y estructura') +
+    campo('t-min', 'Mínimo facturable (horas)', t.minimo_horas, '0.25', 'Aunque la visita dure menos') +
+    campo('t-urg', 'Recargo de urgencia (%)', t.recargo_urgencia, '1', 'Se aplica al tipo «Urgencia fuera de horario»') +
+    '</div></div>';
+
+  h += '<div class="grupo"><h3>Desplazamiento</h3><div class="campos">'+
+    campo('t-df', 'Importe fijo por salida (€)', t.desplazamiento_fijo, '0.01') +
+    campo('t-pkm', 'Precio por km (€)', t.precio_km, '0.01', 'Lo que cobras') +
+    campo('t-ckm', 'Coste por km (€)', t.coste_km, '0.01', 'Combustible, seguro y vehículo') +
+    '</div></div>';
+
+  h += '<div class="grupo"><h3>Materiales</h3><div class="campos">'+
+    campo('t-rm', 'Recargo sobre el coste (%)', t.recargo_material, '1',
+          'Si compras a 100 y pones 40, se vende a 140') +
+    campo('t-iva', 'IVA (%)', t.iva, '1') +
+    '</div>'+
+    '<p class="mini" style="margin:8px 0 0">Ojo con la diferencia: un recargo del 40% sobre el coste deja un margen del '+
+    '28,6% sobre la venta. No son lo mismo.</p></div>';
+
+  h += '<p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Guardar</button></div>';
+
+  abrirDlg(h, async () => {
+    const n = id => { const v = val(id); return v === '' ? null : +v; };
+    const o = { id:1, precio_hora:n('t-ph'), coste_hora:n('t-ch'), minimo_horas:n('t-min'),
+                recargo_urgencia:n('t-urg'), desplazamiento_fijo:n('t-df'), precio_km:n('t-pkm'),
+                coste_km:n('t-ckm'), recargo_material:n('t-rm'), iva:n('t-iva'),
+                actualizado:new Date().toISOString(), actualizado_por: yo() };
+    for (const [k, v] of Object.entries(o))
+      if (v === null && !['actualizado_por'].includes(k)) return setErr('Faltan campos por rellenar.');
+    if (o.coste_hora >= o.precio_hora)
+      return setErr('El coste por hora es mayor o igual que el precio: así se pierde dinero en cada visita. Revísalo.');
+    try {
+      const { error } = await sb.from('tarifas').upsert(o, { onConflict:'id' });
+      if (error) throw error;
+      cerrarDlg(); await cargar(); toast('Tarifas guardadas. Recalcula las visitas para aplicarlas.');
+    } catch(e){ setErr(e.message); }
+  });
+}
+
+/* Alta y edición de un material del catálogo */
+function dlgArticulo(id){
+  const a = id ? S.catalogo.find(x => x.id === id) : null;
+  let h = '<h3>'+(a ? 'Material del catálogo' : 'Nuevo material')+'</h3>'+
+    '<div class="campos">'+
+    '<div class="campo full"><label for="x-desc">Descripción</label><input id="x-desc" type="text" maxlength="120" value="'+esc(a?a.descripcion:'')+'" placeholder="Ej.: Banda de seguridad 2 m"></div>'+
+    '<div class="campo"><label for="x-uni">Unidad</label><select id="x-uni">'+
+      ['ud','m','kg','l','h'].map(u=>'<option'+(a&&a.unidad===u?' selected':'')+'>'+u+'</option>').join('')+'</select></div>'+
+    '<div class="campo"><label for="x-coste">Precio de compra (€)</label><input id="x-coste" type="number" step="0.01" min="0" placeholder="Sin IVA"></div>'+
+    '<div class="campo"><label for="x-rec">Recargo propio (%)</label><input id="x-rec" type="number" step="1" min="0" placeholder="Si lo dejas vacío, el general"></div>'+
+    '<div class="campo"><label for="x-ref">Referencia</label><input id="x-ref" type="text" maxlength="60" value="'+esc(a&&a.referencia?a.referencia:'')+'"></div>'+
+    '<div class="campo"><label for="x-prov">Proveedor</label><input id="x-prov" type="text" maxlength="80"></div>'+
+    '</div>'+
+    (a ? '<p class="mini" style="margin:10px 0 0">El precio de compra y el proveedor no se muestran aquí por seguridad. '+
+         'Si escribes uno nuevo, sustituye al anterior.</p>' : '')+
+    '<p class="err"></p><div class="pie">'+
+    (a ? '<button type="button" class="btn plana" data-act="articulo-baja" data-id="'+a.id+'">Dar de baja</button>' : '')+
+    '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Guardar</button></div>';
+  abrirDlg(h, async () => {
+    const o = { descripcion: val('x-desc'), unidad: val('x-uni') || 'ud',
+                referencia: val('x-ref') || null, proveedor: val('x-prov') || null };
+    if (val('x-coste') !== '') o.coste = +val('x-coste');
+    if (val('x-rec') !== '') o.recargo = +val('x-rec');
+    if (!o.descripcion) return setErr('Pon la descripción del material.');
+    if (!a && o.coste == null) return setErr('Pon el precio de compra: sin él no se puede calcular el margen.');
+    try {
+      if (a){ const { error } = await sb.from('articulos').update(o).eq('id', a.id); if (error) throw error; }
+      else { const { error } = await sb.from('articulos').insert(o); if (error) throw error; }
+      cerrarDlg(); await cargar(); toast('Material guardado.');
+    } catch(e){ setErr(e.message.includes('duplicate') ? 'Ya existe un material con esa descripción.' : e.message); }
+  });
+}
+
+/* Marcar una visita como facturada */
+function dlgFacturar(avisoId){
+  const a = S.avisos.find(x => x.id === avisoId);
+  const v = valoracionDe(avisoId);
+  if (!a || !v) return;
+  let h = '<h3>Marcar como facturada</h3>'+
+    '<p class="mini" style="margin:0 0 12px">'+esc(nombreCliente(a))+' · '+esc(fechaCorta(a.cerrado))+' · '+eur(v.imp_total)+'</p>'+
+    '<div class="campos">'+
+    '<div class="campo"><label for="fa-ref">Número de factura</label><input id="fa-ref" type="text" maxlength="60" value="'+esc(v.factura_ref||'')+'" placeholder="Ej.: F-2026-0184"></div>'+
+    '<div class="campo"><label for="fa-fecha">Fecha</label><input id="fa-fecha" type="date" value="'+esc(v.facturado_el||hoy())+'"></div>'+
+    '</div><p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Marcar facturada</button></div>';
+  abrirDlg(h, async () => {
+    try {
+      const { error } = await sb.from('valoraciones')
+        .update({ facturado:true, factura_ref: val('fa-ref') || null, facturado_el: val('fa-fecha') || hoy() })
+        .eq('aviso_id', avisoId);
+      if (error) throw error;
+      cerrarDlg(); await cargar(); toast('Marcada como facturada.');
+    } catch(e){ setErr(e.message); }
+  });
+}
+
+/* Detalle de lo que se factura en una visita */
+function dlgValoracion(avisoId){
+  const a = S.avisos.find(x => x.id === avisoId);
+  const v = valoracionDe(avisoId);
+  if (!a || !v) return;
+  const p = a.puerta_id ? puertaDe(a.puerta_id) : null;
+  const fila = (k, x, fuerte) => '<div><dt>'+k+'</dt><dd'+(fuerte?' style="font-weight:600"':'')+'>'+x+'</dd></div>';
+  let h = '<h3>'+esc(nombreCliente(a))+'</h3>'+
+    '<p class="mini" style="margin:0 0 12px">'+esc(tipoAsis(a.tipo))+' · '+esc(fechaCorta(a.cerrado))+
+    (p ? ' · '+esc(p.codigo||'') : '')+'</p>';
+  h += '<div class="grupo"><h3>Lo que se factura</h3><dl class="datos">'+
+    fila('Mano de obra', eur(v.imp_mano_obra) + (a.horas != null ? ' <span class="mini">('+a.horas+' h × '+(a.num_tecnicos||1)+')</span>' : '')) +
+    fila('Desplazamiento', eur(v.imp_desplazamiento) + (a.desplazamiento != null ? ' <span class="mini">('+a.desplazamiento+' km)</span>' : '')) +
+    fila('Materiales', eur(v.imp_materiales)) +
+    fila('Total sin IVA', eur(v.imp_total), true) +
+    (S.tarifas ? fila('Con IVA', eur(+v.imp_total * (1 + (+S.tarifas.iva || 21) / 100))) : '') +
+    '</dl></div>';
+  h += '<div class="grupo"><h3>Lo que cuesta</h3><dl class="datos">'+
+    fila('Coste total', eur(v.coste_total)) +
+    fila('Margen', '<span style="color:'+(+v.margen < 0 ? 'var(--mal)' : 'var(--ok)')+'">'+eur(v.margen)+'</span>', true) +
+    fila('Margen sobre venta', pct(+v.margen, +v.imp_total)) +
+    '</dl></div>';
+  if (a.cobrado) h += '<p class="mini" style="margin:0">Cobrada en obra: '+eur(a.cobro_importe)+' · '+esc(a.cobro_forma||'')+'</p>';
+  if (v.facturado) h += '<p class="mini" style="margin:0">Facturada el '+esc(fechaCorta(v.facturado_el))+(v.factura_ref?(' · '+esc(v.factura_ref)):'')+'</p>';
+  h += '<p class="err"></p><div class="pie">'+
+    '<button type="button" class="btn plana" data-act="revalorar" data-id="'+a.id+'">Volver a calcular</button>'+
+    '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cerrar</button>'+
+    (v.facturado ? '' : '<button type="button" class="btn pri" data-act="marcar-facturado" data-id="'+a.id+'">Marcar facturada</button>')+
+    '</div>';
+  abrirDlg(h, () => cerrarDlg());
+}
+
+/* ================= Cierre de la visita ================= */
+const FIRMA = { canvas:null, ctx:null, pintado:false };
+
+function filaMaterial(m){
+  m = m || { descripcion:'', cantidad:1, unidad:'ud' };
+  return '<div class="mat-fila">'+
+    '<input type="text" class="mat-desc" list="sugeridos" maxlength="120" placeholder="Material" value="'+esc(m.descripcion||'')+'">'+
+    '<input type="number" class="mat-cant" step="0.01" min="0" value="'+esc(m.cantidad!=null?m.cantidad:1)+'">'+
+    '<select class="mat-uni">'+['ud','m','kg','l','h'].map(u=>'<option'+(m.unidad===u?' selected':'')+'>'+u+'</option>').join('')+'</select>'+
+    '<button type="button" class="btn sm plana" data-act="mat-quitar">✕</button></div>';
+}
+
+/* Anular: cerrar una visita que no se va a hacer, sin rellenar el parte.
+   Queda el motivo escrito y no entra ni en facturación ni en el margen. */
+const MOTIVOS_ANULAR = [
+  'El cliente lo ha resuelto por su cuenta',
+  'El cliente no quiere repararla',
+  'Aviso duplicado',
+  'Creada por error',
+  'No hemos conseguido localizar al cliente',
+  'La puerta ya no es de este cliente',
+  'Se ha sustituido por otra asistencia',
+];
+function dlgAnular(id){
+  const a = S.avisos.find(x => x.id === id);
+  if (!a) return;
+  if (a.firma_ruta){ toast('Esta visita ya está firmada por el cliente: no se puede anular.'); return; }
+  const h = '<h3>Anular la asistencia</h3>'+
+    '<p class="mini" style="margin:0 0 12px">'+esc(tipoAsis(a.tipo))+' · '+esc(nombreCliente(a))+
+      (dondeAsistencia(a) ? ' · '+esc(dondeAsistencia(a)) : '')+'</p>'+
+    '<div class="campos">'+
+    '<div class="campo full"><label for="an-motivo">Por qué no se hace</label>'+
+      '<select id="an-motivo"><option value="">Elige el motivo</option>'+
+      MOTIVOS_ANULAR.map(m => '<option value="'+esc(m)+'">'+esc(m)+'</option>').join('')+
+      '<option value="otro">Otro motivo, lo escribo</option></select></div>'+
+    '<div class="campo full"><label for="an-texto">Detalle, si hace falta</label>'+
+      '<textarea id="an-texto" rows="2" maxlength="300" placeholder="Lo que quieras dejar anotado"></textarea>'+
+      '<span class="pista">Queda guardado con tu nombre y la fecha. La visita se cierra sin parte.</span></div>'+
+    '</div><p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Dejarla abierta</button>'+
+    '<button type="submit" class="btn pri">Anular la asistencia</button></div>';
+  abrirDlg(h, async () => {
+    const sel = val('an-motivo'), txt = val('an-texto').trim();
+    const motivo = sel === 'otro' ? txt : [sel, txt].filter(Boolean).join('. ');
+    if (!sel) return setErr('Elige el motivo por el que no se hace.');
+    if (motivo.trim().length < 3) return setErr('Escribe el motivo.');
+    try {
+      const { data, error } = await sb.rpc('anular_asistencia', { p_aviso: a.id, p_motivo: motivo });
+      if (error) throw error;
+      if (!data || !data.ok) return setErr(textoFallo(data));
+      cerrarDlg(); await cargar(); toast('Asistencia anulada.');
+    } catch(e){ setErr(e.message); }
+  });
+}
+
+/* Traduce a palabras lo que devuelven las funciones de la base de datos */
+function textoFallo(d){
+  const m = d && d.motivo;
+  if (m === 'permiso')         return 'Esto solo lo puede hacer el administrador.';
+  if (m === 'no_existe')       return 'Ya no existe: puede que lo haya borrado otra persona. Recarga la pantalla.';
+  if (m === 'firmada')         return 'Está firmada por el cliente, así que no se borra. Archívala.';
+  if (m === 'ya_firmada')      return 'Está firmada por el cliente: no se puede anular.';
+  if (m === 'sin_motivo')      return 'Falta el motivo.';
+  if (m === 'no_anulada')      return 'Esta asistencia no está anulada.';
+  if (m === 'tiene_historial') return 'Tiene '+(d.puertas||0)+' puerta(s), '+(d.avisos||0)+' asistencia(s) y '+
+                                      (d.contratos||0)+' contrato(s). No se borra: archívalo.';
+  return 'No se ha podido completar.';
+}
+
+function dlgCierre(avisoId){
+  const a = S.avisos.find(x => x.id === avisoId);
+  if (!a) return;
+  const p = a.puerta_id ? puertaDe(a.puerta_id) : null;
+  const cli = a.cliente_id ? clienteDe(a.cliente_id) : (p && p.cliente_id ? clienteDe(p.cliente_id) : null);
+  const conCobro = !SIN_COBRO.includes(a.tipo);
+  const mailCli = (a.contacto_email || (cli && cli.email) || '').trim();
+  const ahora = new Date();
+  const hhmm = d => d ? new Date(d).toTimeString().slice(0,5) : '';
+
+  let h = '<h3>Cerrar visita · '+esc(tipoAsis(a.tipo))+'</h3>';
+
+  // Lo que ya se sabía
+  h += '<div class="grupo"><h3>'+esc(nombreCliente(a))+(p?(' · '+esc(p.codigo||'')):'')+'</h3>';
+  if (a.descripcion) h += '<p class="mini" style="margin:0 0 8px"><b>Dijo el cliente:</b> '+esc(a.descripcion)+'</p>';
+  if (a.notas_oficina) h += '<p class="nota-oficina">Oficina: '+esc(a.notas_oficina)+'</p>';
+  if (!p) h += '<p class="mini" style="margin:8px 0 0">Esta asistencia no tiene puerta asignada. '+
+    '<button type="button" class="btn sm" data-act="alta-puerta-asis" data-id="'+a.id+'">Dar de alta la puerta</button></p>';
+  h += '</div>';
+
+  h += '<div class="grupo"><h3>Qué has encontrado y qué has hecho</h3><div class="campos">'+
+    '<div class="campo full"><label for="z-diag">Diagnóstico</label><textarea id="z-diag" rows="2" placeholder="Ej.: banda de seguridad cortada por roce con el marco">'+esc(a.diagnostico||'')+'</textarea></div>'+
+    '<div class="campo full"><label for="z-trab">Trabajo realizado</label><textarea id="z-trab" rows="3" placeholder="Ej.: sustituida banda, ajustado final de carrera y engrase general">'+esc(a.trabajo||'')+'</textarea></div>'+
+    '</div></div>';
+
+  h += '<div class="grupo"><h3>Materiales</h3>'+
+    '<datalist id="sugeridos">'+
+      [...new Map([...S.catalogo.map(x=>[x.descripcion.toLowerCase(), x.descripcion]),
+                   ...S.sugerencias.map(x=>[(x.descripcion||'').toLowerCase(), x.descripcion])]).values()]
+        .filter(Boolean).map(d=>'<option value="'+esc(d)+'">').join('')+'</datalist>'+
+    '<div id="mats"></div>'+
+    '<button type="button" class="btn sm" data-act="mat-anadir">Añadir material</button>'+
+    '<p class="mini" style="margin:8px 0 0">Escribe y te irá sugiriendo los que ya se han usado otras veces.</p></div>';
+
+  h += '<div class="grupo"><h3>Tiempo y desplazamiento</h3><div class="campos">'+
+    '<div class="campo"><label for="z-ini">Hora de entrada</label><input id="z-ini" type="time" value="'+esc(hhmm(a.hora_inicio) || hhmm(ahora))+'"></div>'+
+    '<div class="campo"><label for="z-fin">Hora de salida</label><input id="z-fin" type="time" value="'+esc(hhmm(a.hora_fin))+'"></div>'+
+    '<div class="campo"><label for="z-horas">Horas a facturar</label><input id="z-horas" type="number" step="0.25" min="0" value="'+esc(a.horas!=null?a.horas:'')+'"><span class="pista">Se calcula solo con las horas de arriba; puedes corregirlo</span></div>'+
+    '<div class="campo"><label for="z-ntec">Técnicos</label><input id="z-ntec" type="number" min="1" max="6" value="'+esc(a.num_tecnicos||1)+'"></div>'+
+    '<div class="campo"><label for="z-km">Desplazamiento (km)</label><input id="z-km" type="number" step="1" min="0" value="'+esc(a.desplazamiento!=null?a.desplazamiento:'')+'"></div>'+
+    '</div></div>';
+
+  if (a.tipo === 'mantenimiento') h += bloqueGuion(a, p);
+
+  h += '<div class="grupo"><h3>Cómo queda</h3><div class="campos">'+
+    '<div class="campo"><label for="z-estado">Estado de la puerta</label><select id="z-estado">'+
+      opts(lista('estados_final', EST_FINAL), a.estado_final || 'Operativa')+'</select></div>'+
+    '<div class="campo" style="align-content:end"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+      '<input type="checkbox" id="z-pend"'+(a.pendiente?' checked':'')+' style="accent-color:var(--amarillo);width:18px;height:18px">Queda algo pendiente</label></div>'+
+    '<div class="campo full"><label for="z-pendt">Qué queda pendiente</label><input id="z-pendt" type="text" maxlength="200" value="'+esc(a.pendiente_texto||'')+'" placeholder="Ej.: pedir cuadro de maniobra, volver a montarlo"></div>'+
+    '<div class="campo full" style="align-content:end"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+      '<input type="checkbox" id="z-sincargo"'+(a.sin_cargo?' checked':'')+' style="accent-color:var(--amarillo);width:18px;height:18px">Esta visita no se cobra</label>'+
+      '<span class="pista">Cortesía, error nuestro o entra en contrato</span></div>'+
+    '<div class="campo full"><label for="z-sincargom">Por qué no se cobra</label><input id="z-sincargom" type="text" maxlength="160" value="'+esc(a.sin_cargo_motivo||'')+'"></div>'+
+    '</div></div>';
+
+  if (conCobro){
+    h += '<div class="grupo"><h3>Cobro en obra</h3><div class="campos">'+
+      '<div class="campo" style="align-content:end"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+        '<input type="checkbox" id="z-cobrado"'+(a.cobrado?' checked':'')+' style="accent-color:var(--amarillo);width:18px;height:18px">He cobrado en el momento</label></div>'+
+      '<div class="campo"><label for="z-imp">Importe cobrado (€)</label><input id="z-imp" type="number" step="0.01" min="0" value="'+esc(a.cobro_importe!=null?a.cobro_importe:'')+'"></div>'+
+      '<div class="campo"><label for="z-forma">Forma de cobro</label><select id="z-forma"><option value=""></option>'+
+        lista('formas_cobro', COBROS).map(f=>'<option'+(a.cobro_forma===f?' selected':'')+'>'+esc(f)+'</option>').join('')+'</select></div>'+
+      '<div class="campo full"><label for="z-ref">Referencia o quién paga</label><input id="z-ref" type="text" maxlength="120" value="'+esc(a.cobro_ref||'')+'" placeholder="Ej.: nº de operación del datáfono, o paga el presidente"></div>'+
+      '</div><p class="mini" style="margin:8px 0 0">Si no cobras, déjalo sin marcar: queda pendiente de facturar en oficina.</p></div>';
+  }
+
+  h += '<div class="grupo"><h3>Firma del cliente</h3>'+
+    '<canvas id="z-firma" class="firma-caja"></canvas>'+
+    '<div class="fila" style="margin-top:8px"><button type="button" class="btn sm plana" data-act="firma-borrar">Borrar firma</button><span class="sp"></span></div>'+
+    '<div class="campos" style="margin-top:8px">'+
+    '<div class="campo full"><label for="z-fnom">Nombre de quien firma</label><input id="z-fnom" type="text" maxlength="100" value="'+esc(a.firma_nombre||'')+'"></div>'+
+    '<div class="campo full"><label for="z-sin">Si no puede firmar, indica el motivo</label><input id="z-sin" type="text" maxlength="120" value="'+esc(a.firma_sin||'')+'" placeholder="Ej.: no había nadie en la comunidad"></div>'+
+    (mailCli ? '<div class="campo full"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+      '<input type="checkbox" id="z-enviar"'+(a.enviado_cliente?' checked':'')+' style="accent-color:var(--amarillo);width:18px;height:18px">Enviar copia del parte a '+esc(mailCli)+'</label></div>' : '')+
+    '</div></div>';
+
+  h += '<p class="err"></p><div class="pie">'+
+    '<button type="button" class="btn" data-act="guardar-avance" data-id="'+a.id+'">Guardar sin cerrar</button>'+
+    '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Cerrar visita</button></div>';
+
+  abrirDlg(h, () => guardarCierre(a, true));
+  setTimeout(() => prepararCierre(a), 0);
+}
+
+/* Guión de revisión: los puntos del tipo de puerta, en bloques que se abren y cierran */
+function bloqueGuion(a, p){
+  const tipo = (p && p.tipo) || 'Otro';
+  const g = guionDe(tipo);
+  if (!g.length) return '<div class="grupo"><h3>Guión de revisión</h3>'+
+    '<p class="mini" style="margin:0">No hay guión cargado para este tipo de puerta. '+
+    (esAdmin() ? 'Lo puedes crear en Equipo → Guiones de revisión.' : 'Díselo a la oficina.')+'</p></div>';
+
+  const puntos = g.filter(x => x.t).length;
+  let h = '<div class="grupo"><h3>Guión de revisión · '+esc(tipo)+'</h3>'+
+    '<p class="mini" style="margin:0 0 10px">'+puntos+' puntos. Marca <b>Bien</b>, <b>Mal</b> o <b>N/A</b> en cada uno. '+
+    'Con «Todo bien» marcas el bloque entero de una vez.</p>'+
+    '<div class="guion" id="guion" data-tipo="'+esc(tipo)+'">';
+
+  // se recorre el guión partiéndolo por cabeceras
+  let abierto = false, nb = -1, cuerpo = '', titulo = '', ini = 0;
+  const cerrarBloque = () => {
+    if (!abierto) return '';
+    return '<details class="g-bloque"'+(nb <= 1 ? ' open' : '')+'>'+
+      '<summary>'+esc(titulo)+'<span class="g-cuenta" data-b="'+nb+'"></span></summary>'+
+      '<div class="fila" style="padding:8px 12px 0"><button type="button" class="btn sm plana" data-act="g-todo" data-ini="'+ini+'">Todo bien en este bloque</button></div>'+
+      cuerpo + '</details>';
+  };
+  g.forEach((x, i) => {
+    if (x.h){ h += cerrarBloque(); abierto = true; nb++; titulo = x.h; cuerpo = ''; ini = i; return; }
+    if (!abierto){ abierto = true; nb++; titulo = 'Comprobaciones'; cuerpo = ''; ini = i; }
+    cuerpo += '<div class="g-punto" data-i="'+i+'" data-b="'+nb+'" data-t="'+esc(x.t)+'">'+
+      '<span class="g-txt">'+esc(x.t)+'</span>'+
+      (x.n ? '<span class="g-norma">'+esc(x.n)+'</span>' : '')+
+      '<div class="g-resp">'+
+        ['ok','mal','na'].map(r => '<button type="button" data-act="g-r" data-i="'+i+'" data-r="'+r+'" aria-pressed="false">'+RESP[r]+'</button>').join('')+
+        (x.m === 'num' ? '<input class="g-val" data-i="'+i+'" type="number" step="any" inputmode="decimal" placeholder="valor"><span class="g-uni">'+esc(x.u||'')+'</span>' : '')+
+      '</div>'+
+      '<input class="g-nota" data-i="'+i+'" type="text" maxlength="180" placeholder="Nota (opcional)">'+
+      '</div>';
+  });
+  h += cerrarBloque();
+  h += '</div>';
+  h += '<p class="g-aviso" id="g-mal" hidden></p>';
+  h += '<div class="campos" style="margin-top:12px">'+
+    '<div class="campo"><label for="g-apta">Resultado de la revisión</label><select id="g-apta">'+
+      '<option value="si">Apta para el servicio</option>'+
+      '<option value="reservas">Apta con reservas</option>'+
+      '<option value="no">No apta</option></select></div>'+
+    '<div class="campo" style="align-content:end"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+      '<input type="checkbox" id="g-riesgo" style="accent-color:var(--amarillo);width:18px;height:18px">Riesgo para las personas</label>'+
+      '<span class="pista">Márcalo si hay que dejarla fuera de servicio</span></div>'+
+    '<div class="campo full"><label for="g-defic">Deficiencias detectadas</label>'+
+      '<textarea id="g-defic" rows="3" placeholder="Si lo dejas vacío se rellena solo con los puntos marcados Mal"></textarea></div>'+
+    '<div class="campo full"><label for="g-reco">Recomendaciones y presupuesto a ofertar</label>'+
+      '<textarea id="g-reco" rows="2" placeholder="Ej.: sustituir banda de seguridad y añadir fotocélulas exteriores"></textarea></div>'+
+    '</div>';
+  return h + '</div>';
+}
+
+/* Lee el guión tal y como está relleno en pantalla */
+function guionDelForm(){
+  const cont = document.getElementById('guion');
+  if (!cont) return null;
+  const puntos = Array.from(cont.querySelectorAll('.g-punto')).map(d => {
+    const i = d.dataset.i;
+    const marcado = d.querySelector('.g-resp button[aria-pressed="true"]');
+    const val = d.querySelector('.g-val'), nota = d.querySelector('.g-nota');
+    return { i:+i, t:d.dataset.t, r: marcado ? marcado.dataset.r : '',
+             v: val && val.value !== '' ? val.value : null,
+             nota: nota && nota.value.trim() ? nota.value.trim() : null };
+  });
+  return { tipo: cont.dataset.tipo, puntos };
+}
+function repintarCuentas(){
+  const cont = document.getElementById('guion');
+  if (!cont) return;
+  const cuentas = {};
+  cont.querySelectorAll('.g-punto').forEach(d => {
+    const b = d.dataset.b;
+    cuentas[b] = cuentas[b] || { hechos:0, total:0 };
+    cuentas[b].total++;
+    if (d.querySelector('.g-resp button[aria-pressed="true"]')) cuentas[b].hechos++;
+  });
+  cont.querySelectorAll('.g-cuenta').forEach(s => {
+    const c = cuentas[s.dataset.b]; if (!c) return;
+    s.textContent = c.hechos + '/' + c.total;
+    s.style.color = c.hechos === c.total ? 'var(--ok)' : '';
+  });
+  const malos = Array.from(cont.querySelectorAll('.g-resp button[data-r="mal"][aria-pressed="true"]')).length;
+  const av = document.getElementById('g-mal');
+  if (av){ av.hidden = !malos; av.textContent = malos + (malos===1?' punto marcado Mal':' puntos marcados Mal')+'. Se pasarán a las deficiencias del parte.'; }
+}
+
+async function prepararCierre(a){
+  // materiales ya guardados
+  const cont = document.getElementById('mats');
+  if (cont){
+    const { data } = await sb.from('materiales').select('*').eq('aviso_id', a.id).order('creado');
+    cont.innerHTML = (data && data.length ? data : [null]).map(filaMaterial).join('');
+  }
+  // guión de revisión ya empezado
+  if (document.getElementById('guion')){
+    const { data: rev } = await sb.from('revisiones').select('*').eq('aviso_id', a.id).limit(1).maybeSingle();
+    if (rev){
+      (rev.puntos || []).forEach(pt => {
+        const d = document.querySelector('.g-punto[data-i="'+pt.i+'"]');
+        if (!d || d.dataset.t !== pt.t) return;    // el guión ha cambiado desde entonces
+        if (pt.r){ const btn = d.querySelector('.g-resp button[data-r="'+pt.r+'"]'); if (btn) btn.setAttribute('aria-pressed','true'); }
+        if (pt.v != null){ const v = d.querySelector('.g-val'); if (v) v.value = pt.v; }
+        if (pt.nota){ const n = d.querySelector('.g-nota'); if (n) n.value = pt.nota; }
+      });
+      const sel = document.getElementById('g-apta');
+      if (sel) sel.value = ({ apta:'si', reservas:'reservas', no_apta:'no' })[rev.resultado] || (rev.apta === false ? 'no' : 'si');
+      const ri = document.getElementById('g-riesgo'); if (ri) ri.checked = !!rev.riesgo;
+      const de = document.getElementById('g-defic'); if (de) de.value = rev.deficiencias || '';
+      const re = document.getElementById('g-reco'); if (re) re.value = rev.recomendaciones || '';
+    }
+    repintarCuentas();
+  }
+  // firma: lienzo para dibujar con el dedo
+  lienzoFirma('z-firma');
+  // calcular horas al poner la hora de salida
+  const ini = document.getElementById('z-ini'), fin = document.getElementById('z-fin'), hs = document.getElementById('z-horas');
+  const calcular = () => {
+    if (!ini || !fin || !hs || !ini.value || !fin.value) return;
+    const [h1,m1] = ini.value.split(':').map(Number), [h2,m2] = fin.value.split(':').map(Number);
+    let mins = (h2*60+m2) - (h1*60+m1);
+    if (mins < 0) mins += 24*60;
+    if (!hs.value || hs.dataset.auto === '1'){ hs.value = (Math.round(mins/15)*15/60).toFixed(2); hs.dataset.auto = '1'; }
+  };
+  if (fin) fin.addEventListener('change', calcular);
+  if (hs) hs.addEventListener('input', () => { hs.dataset.auto = '0'; });
+}
+
+function materialesDelForm(){
+  return Array.from(dlgForm.querySelectorAll('.mat-fila')).map(f => ({
+    descripcion: (f.querySelector('.mat-desc')||{}).value?.trim() || '',
+    cantidad: parseFloat((f.querySelector('.mat-cant')||{}).value) || 0,
+    unidad: (f.querySelector('.mat-uni')||{}).value || 'ud',
+  })).filter(m => m.descripcion);
+}
+
+async function guardarCierre(a, cerrando){
+  const dia = new Date().toISOString().slice(0,10);
+  const hora = id => { const v = val(id); return v ? new Date(dia+'T'+v+':00').toISOString() : null; };
+  const chk = id => !!(document.getElementById(id)||{}).checked;
+  const conCobro = !SIN_COBRO.includes(a.tipo);
+  const o = {
+    diagnostico: val('z-diag') || null,
+    trabajo: val('z-trab') || null,
+    hora_inicio: hora('z-ini'), hora_fin: hora('z-fin'),
+    horas: val('z-horas') ? +val('z-horas') : null,
+    num_tecnicos: val('z-ntec') ? +val('z-ntec') : 1,
+    desplazamiento: val('z-km') ? +val('z-km') : null,
+    estado_final: val('z-estado') || null,
+    pendiente: chk('z-pend'), pendiente_texto: val('z-pendt') || null,
+    sin_cargo: chk('z-sincargo'), sin_cargo_motivo: val('z-sincargom') || null,
+    firma_nombre: val('z-fnom') || null, firma_sin: val('z-sin') || null,
+    enviado_cliente: chk('z-enviar'),
+    actualizado: new Date().toISOString(),
+  };
+  if (conCobro){
+    o.cobrado = chk('z-cobrado');
+    o.cobro_importe = val('z-imp') ? +val('z-imp') : null;
+    o.cobro_forma = val('z-forma') || null;
+    o.cobro_ref = val('z-ref') || null;
+    if (o.cobrado && !o.cobro_forma) return setErr('Di cómo has cobrado: efectivo, datáfono…');
+    if (o.cobrado && !o.cobro_importe) return setErr('Pon el importe que has cobrado.');
+  }
+  // Guión de revisión (solo en preventivas)
+  const g = guionDelForm();
+  let revision = null;
+  if (g){
+    const sinMarcar = g.puntos.filter(x => !x.r);
+    if (cerrando && sinMarcar.length){
+      // se abre el bloque del primer punto que falta y se lleva al técnico hasta él
+      const d = document.querySelector('.g-punto[data-i="'+sinMarcar[0].i+'"]');
+      if (d){ const det = d.closest('.g-bloque'); if (det) det.open = true; d.scrollIntoView({block:'center'}); }
+      return setErr('Te quedan '+sinMarcar.length+' punto'+(sinMarcar.length===1?'':'s')+' del guión sin marcar. El primero: «'+sinMarcar[0].t+'».');
+    }
+    const malos = g.puntos.filter(x => x.r === 'mal');
+    const res = val('g-apta') || 'si';
+    let defic = val('g-defic');
+    if (!defic && malos.length)
+      defic = malos.map(x => '· ' + x.t + (x.nota ? ' (' + x.nota + ')' : '') + (x.v != null ? ' [' + x.v + ']' : '')).join('\n');
+    revision = {
+      aviso_id: a.id, puerta_id: a.puerta_id || null, tipo_puerta: g.tipo,
+      fecha: dia, tecnico: yo(), puntos: g.puntos,
+      resultado: ({ si:'apta', reservas:'reservas', no:'no_apta' })[res],
+      apta: res !== 'no',
+      riesgo: !!(document.getElementById('g-riesgo')||{}).checked,
+      deficiencias: defic || null,
+      recomendaciones: val('g-reco') || null,
+    };
+    if (cerrando && revision.riesgo && o.estado_final !== 'Fuera de servicio')
+      return setErr('Has marcado riesgo para las personas: pon «Fuera de servicio» en cómo queda la puerta, o quita la marca.');
+    if (!o.diagnostico && malos.length) o.diagnostico = 'Revisión con ' + malos.length + ' punto' + (malos.length===1?'':'s') + ' no conforme' + (malos.length===1?'':'s') + '.';
+    if (!o.trabajo && cerrando) o.trabajo = 'Revisión periódica según guión de ' + g.tipo + '.';
+  }
+  if (cerrando){
+    if (!o.trabajo) return setErr('Escribe al menos qué has hecho.');
+    if (!FIRMA.pintado && !a.firma_ruta && !o.firma_sin)
+      return setErr('Falta la firma del cliente. Si no hay nadie, escribe el motivo abajo.');
+    if (FIRMA.pintado && !o.firma_nombre) return setErr('Pon el nombre de quien firma.');
+    o.estado = 'cerrado';
+    o.cerrado = new Date().toISOString();
+    o.cerrado_por = yo();
+  }
+  try {
+    // firma
+    if (FIRMA.pintado && FIRMA.canvas){
+      const blob = await new Promise(r => FIRMA.canvas.toBlob(r, 'image/png'));
+      const ruta = a.id + '/' + Date.now() + '.png';
+      const { error } = await sb.storage.from('firmas').upload(ruta, blob, { contentType:'image/png' });
+      if (error) throw error;
+      o.firma_ruta = ruta;
+    }
+    // materiales: se rehacen
+    const mats = materialesDelForm();
+    await sb.from('materiales').delete().eq('aviso_id', a.id);
+    if (mats.length){
+      const { error } = await sb.from('materiales').insert(mats.map(m => ({ ...m, aviso_id: a.id })));
+      if (error) throw error;
+    }
+    // guión de revisión: se rehace entero
+    if (revision){
+      await sb.from('revisiones').delete().eq('aviso_id', a.id);
+      const { error } = await sb.from('revisiones').insert(revision);
+      if (error) throw error;
+    }
+    const { error } = await sb.from('avisos').update(o).eq('id', a.id);
+    if (error) throw error;
+    // estado de la puerta según cómo queda
+    if (a.puerta_id && cerrando){
+      const mapa = { 'Operativa':'operativa', 'Operativa con reservas':'operativa', 'Fuera de servicio':'fuera_servicio', 'Esperando repuesto':'esperando_repuesto' };
+      const est = mapa[o.estado_final] || 'operativa';
+      await sb.from('puertas').update({ estado: est, estado_desde: new Date().toISOString(),
+        ultima_revision: (a.tipo==='mantenimiento' ? new Date().toISOString().slice(0,10) : undefined) }).eq('id', a.puerta_id);
+    }
+    // la base de datos valora la visita: el técnico no ve tarifas ni costes
+    if (cerrando) { try { await sb.rpc('valorar_aviso', { p_aviso: a.id }); } catch(_){} }
+    cerrarDlg(); await cargar();
+    toast(cerrando ? 'Visita cerrada. La oficina ya tiene el parte.' : 'Guardado.');
+  } catch(e){ setErr(e.message || 'No se pudo guardar.'); }
+}
+
+function dlgQR(codigo){
+  const url = enlaceQR(codigo);
+  abrirDlg('<h3>Etiqueta '+esc(codigo)+'</h3><div style="display:grid;gap:12px;justify-items:center;background:#fff;padding:16px;border-radius:8px">'+
+    svgQR(url, '200px')+'<span class="codigo" style="color:#000">'+esc(codigo)+'</span><span class="mini" style="color:#444">'+esc(url.replace('https://',''))+'</span></div>'+
+    '<p class="mini" style="margin:0">Este es el enlace que lleva la etiqueta impresa.</p>'+
+    '<div class="pie"><button type="button" class="btn" data-cerrar>Cerrar</button></div>', null);
+}
+
+function dlgGenerar(){
+  const ultimo = S.etiquetas.map(e => parseInt((e.codigo.split('-')[1]||'0'), 10)).filter(n => !isNaN(n)).sort((a,b) => b-a)[0] || 0;
+  abrirDlg('<h3>Generar serie de etiquetas</h3><div class="campos">'+
+    '<div class="campo"><label for="g-desde">Desde el número</label><input id="g-desde" type="number" min="1" value="'+(ultimo+1)+'"></div>'+
+    '<div class="campo"><label for="g-cuantas">Cuántas</label><input id="g-cuantas" type="number" min="1" max="500" value="50"></div>'+
+    '</div><p class="mini" style="margin:0">Se crean con el formato AR-0001 y un código de seguridad de 4 caracteres que va dentro del QR, no a la vista.</p>'+
+    '<p class="err"></p><div class="pie"><button type="button" class="btn plana" data-cerrar>Cancelar</button><button type="submit" class="btn pri">Generar</button></div>', async () => {
+    const desde = parseInt(val('g-desde'), 10), cuantas = parseInt(val('g-cuantas'), 10);
+    if (!(desde >= 1) || !(cuantas >= 1)) return setErr('Revisa los números.');
+    const filas = [];
+    for (let i = 0; i < cuantas; i++) filas.push({ codigo: 'AR-' + String(desde + i).padStart(4, '0'), token: token() });
+    try {
+      const { error } = await sb.from('etiquetas').upsert(filas, { onConflict:'codigo', ignoreDuplicates:true });
+      if (error) throw error;
+      cerrarDlg(); await cargar(); toast(cuantas + ' etiquetas generadas.');
+    } catch(e){ setErr(e.message); }
+  });
+}
+
+/* Parte de la asistencia, para imprimir o guardar en PDF */
+/* El guión de revisión, para el parte impreso */
+function bloqueRevisionHTML(rev, fila){
+  const nombreRes = { apta:'APTA para el servicio', reservas:'APTA CON RESERVAS', no_apta:'NO APTA' };
+  const marca = { ok:'Conforme', mal:'NO CONFORME', na:'No aplica' };
+  const res = rev.resultado || (rev.apta === false ? 'no_apta' : 'apta');
+  const malos = (rev.puntos||[]).filter(x => x.r === 'mal');
+  let h = '<h2>Revisión periódica</h2><table>'+
+    fila('Tipo de puerta', rev.tipo_puerta)+
+    fila('Fecha', fechaCorta(rev.fecha))+
+    fila('Resultado', nombreRes[res])+
+    (rev.riesgo ? fila('Aviso', 'Riesgo para las personas: se recomienda dejar la puerta fuera de servicio') : '')+
+    fila('Puntos no conformes', String(malos.length))+
+    '</table>';
+  if (rev.deficiencias) h += '<h2>Deficiencias detectadas</h2><p style="white-space:pre-wrap;margin:4px 0">'+esc(rev.deficiencias)+'</p>';
+  if (rev.recomendaciones) h += '<h2>Trabajos recomendados</h2><p style="white-space:pre-wrap;margin:4px 0">'+esc(rev.recomendaciones)+'</p>';
+  h += '<h2>Puntos comprobados</h2><table class="mats"><tr><th>Comprobación</th><th style="width:120px">Resultado</th><th style="width:90px">Valor</th></tr>'+
+    (rev.puntos||[]).map(x => '<tr><td>'+esc(x.t)+(x.nota?('<br><span style="color:#6B6560">'+esc(x.nota)+'</span>'):'')+'</td>'+
+      '<td'+(x.r==='mal'?' style="color:#B3271E;font-weight:600"':'')+'>'+esc(marca[x.r]||'—')+'</td>'+
+      '<td>'+esc(x.v != null ? x.v : '')+'</td></tr>').join('')+'</table>'+
+    '<p style="color:#6B6560;font-size:11px;margin:6px 0 0">Revisión realizada conforme a UNE-EN 13241, UNE-EN 12453 y normativa concordante. '+
+    'Este parte recoge el estado observado el día de la visita.</p>';
+  return h;
+}
+
+async function hojaParte(avisoId){
+  const a = S.avisos.find(x => x.id === avisoId);
+  if (!a) return;
+  const pu = a.puerta_id ? puertaDe(a.puerta_id) : null;
+  const cli = a.cliente_id ? clienteDe(a.cliente_id) : (pu && pu.cliente_id ? clienteDe(pu.cliente_id) : null);
+  const { data: mats } = await sb.from('materiales').select('*').eq('aviso_id', a.id).order('creado');
+  const { data: rev } = await sb.from('revisiones').select('*').eq('aviso_id', a.id).limit(1).maybeSingle();
+  let firma = '';
+  if (a.firma_ruta){
+    const { data } = await sb.storage.from('firmas').createSignedUrl(a.firma_ruta, 3600);
+    if (data) firma = data.signedUrl;
+  }
+  // La cara del técnico que ha hecho la visita, para que el cliente sepa quién
+  // ha estado en su casa. Si no tiene foto puesta, el parte sale igual.
+  const tec = a.tecnico_id ? (S.equipo.find(t => t.id === a.tecnico_id) || null) : null;
+  const nomTec = (tec && tec.nombre) || a.tecnico || '';
+  let caraUrl = '';
+  if (tec && tec.foto_ruta){
+    try {
+      const { data } = await sb.storage.from('equipo').createSignedUrl(tec.foto_ruta, 3600);
+      if (data) caraUrl = data.signedUrl;
+    } catch(_){}
+  }
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana.'); return; }
+  const fila = (k, v) => v ? '<tr><th>'+esc(k)+'</th><td>'+esc(v)+'</td></tr>' : '';
+  const dir = dondeAsistencia(a);
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Parte '+esc(pu?pu.codigo:'')+'</title><style>'+
+    'body{font:13px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#1C1817;max-width:800px;margin:0 auto;padding:24px}'+
+    'h1{font-size:20px;margin:0 0 2px}h2{font-size:14px;margin:22px 0 6px;border-bottom:1px solid #ddd;padding-bottom:4px}'+
+    '.cab{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #FCBA1D;padding-bottom:10px}'+
+    'table{border-collapse:collapse;width:100%;margin:4px 0}th,td{text-align:left;padding:4px 8px;vertical-align:top;border-bottom:1px solid #eee}'+
+    'th{width:170px;color:#6B6560;font-weight:500}'+
+    '.mats th{width:auto;background:#f6f5f3}.firma{border:1px solid #ddd;border-radius:6px;max-width:320px;margin-top:6px}'+
+    '.quien{display:flex;align-items:center;gap:10px;margin:4px 0 0}'+
+    '.quien img{width:54px;height:54px;border-radius:50%;object-fit:cover;border:1px solid #ddd}'+
+    '.quien .ini{width:54px;height:54px;border-radius:50%;background:#f0eeec;color:#6B6560;'+
+      'display:flex;align-items:center;justify-content:center;font:700 18px sans-serif;border:1px solid #ddd}'+
+    '@media print{body{padding:0}}</style></head><body>'+
+    '<div class="cab"><div><h1>Parte de asistencia</h1><div>'+esc(tipoAsis(a.tipo))+' · '+fechaHora(a.creado)+'</div></div>'+
+    '<div style="text-align:right"><b>ARIZA</b> puertas automáticas<br><span style="color:#6B6560">arizapa.es</span></div></div>'+
+    (nomTec ? ('<div class="quien">'+
+      (caraUrl ? '<img src="'+caraUrl+'" alt="'+esc(nomTec)+'">'
+               : '<div class="ini">'+esc(inicialesTec(nomTec))+'</div>')+
+      '<div><div style="color:#6B6560;font-size:11px;text-transform:uppercase;letter-spacing:.04em">Técnico que ha realizado la visita</div>'+
+      '<div style="font-weight:600;font-size:15px">'+esc(nomTec)+'</div></div></div>') : '')+
+    '<h2>Cliente y puerta</h2><table>'+
+      fila('Cliente', cli ? cli.nombre : nombreCliente(a))+
+      fila('NIF', cli && cli.nif)+
+      fila('Dirección', dir)+
+      fila('Puerta', pu ? [pu.codigo, pu.tipo, pu.marca, pu.modelo].filter(Boolean).join(' · ') : 'Sin puerta en ficha')+
+      fila('Contacto', [a.contacto_nombre, a.contacto_telefono].filter(Boolean).join(' · '))+
+    '</table>'+
+    '<h2>Asistencia</h2><table>'+
+      fila('Aviso', a.descripcion)+
+      fila('Diagnóstico', a.diagnostico)+
+      fila('Trabajo realizado', a.trabajo)+
+      fila('Estado en que queda', a.estado_final)+
+      (a.pendiente ? fila('Pendiente', a.pendiente_texto || 'Sí') : '')+
+    '</table>'+
+    ((mats && mats.length) ? ('<h2>Materiales</h2><table class="mats"><tr><th>Descripción</th><th style="width:90px">Cantidad</th></tr>'+
+      mats.map(m => '<tr><td>'+esc(m.descripcion)+'</td><td>'+esc(m.cantidad)+' '+esc(m.unidad||'')+'</td></tr>').join('')+'</table>') : '')+
+    '<h2>Tiempo</h2><table>'+
+      fila('Fecha', fechaCorta(a.cerrado || a.creado))+
+      fila('Horas', a.horas != null ? (a.horas + ' h') : '')+
+      fila('Técnicos', a.num_tecnicos)+
+      fila('Desplazamiento', a.desplazamiento != null ? (a.desplazamiento + ' km') : '')+
+      fila('Técnico', a.tecnico_id ? nombreTec(a.tecnico_id) : a.tecnico)+
+    '</table>'+
+    (a.cobrado ? ('<h2>Cobro</h2><table>'+fila('Importe cobrado', (a.cobro_importe||0) + ' €')+fila('Forma', a.cobro_forma)+fila('Referencia', a.cobro_ref)+'</table>') : '')+
+    (rev ? bloqueRevisionHTML(rev, fila) : '')+
+    '<h2>Conformidad del cliente</h2>'+
+    (firma ? ('<div>'+esc(a.firma_nombre||'')+'</div><img class="firma" src="'+firma+'">')
+           : ('<div>Sin firma. '+esc(a.firma_sin||'')+'</div>'))+
+    '<p style="margin-top:26px;color:#8A837D;font-size:11px">Ariza Puertas y Automatismos · Instalación, mantenimiento y reparación de puertas automáticas</p>'+
+    '</body></html>');
+  w.document.close();
+  setTimeout(() => w.print(), 400);
+}
+
+
+/* ---- Contrato de mantenimiento: hoja imprimible, firma y envío ---- */
+function textoDuracion(k){
+  if (k.a_peticion) return 'Sin plazo: revisiones a petición del titular';
+  if (!k.fecha_vencimiento) return 'Sin fecha de vencimiento';
+  return 'Del ' + fechaCorta(k.fecha_alta) + ' al ' + fechaCorta(k.fecha_vencimiento) +
+         (k.duracion_meses ? ' (' + k.duracion_meses + ' meses)' : '') +
+         (k.renovacion_auto ? ', con renovación automática' : ', sin renovación automática');
+}
+async function hojaContrato(id){
+  const k = S.contratos.find(x => x.id === id);
+  if (!k) return;
+  const cli = clienteDe(k.cliente_id) || {};
+  const filas = puertasDeContrato(k.id);
+  let firma = '';
+  if (k.firma_ruta){
+    const { data } = await sb.storage.from('firmas').createSignedUrl(k.firma_ruta, 3600);
+    if (data) firma = data.signedUrl;
+  }
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana.'); return; }
+  const url = enlaceContrato(k.token);
+  const clausulas = Array.isArray(k.clausulas) ? k.clausulas : [];
+  const total = filas.reduce((s, x) => s + (+x.cuota_anual || 0), 0);
+
+  const cuerpo =
+    '<div class="cab"><div><h1>Contrato de mantenimiento</h1>'+
+      '<div class="ref">'+esc(k.referencia||'')+'</div></div>'+
+      '<div class="marca"><b>ARIZA</b> puertas automáticas<br><span>arizapa.es'+
+        (S.ajustes.telefono_avisos ? ' · '+esc(S.ajustes.telefono_avisos) : '')+'</span></div></div>'+
+
+    '<h2>Las partes</h2><table>'+
+      '<tr><th>Prestador del servicio</th><td>Ariza Puertas y Automatismos S.L.U.</td></tr>'+
+      '<tr><th>Titular</th><td><b>'+esc(cli.nombre||'')+'</b>'+
+        (cli.nif ? '<br>NIF/CIF: '+esc(cli.nif) : '')+
+        ([cli.direccion, cli.poblacion].filter(Boolean).length ? '<br>'+esc([cli.direccion, cli.poblacion].filter(Boolean).join(', ')) : '')+
+        ([cli.telefono, cli.email].filter(Boolean).length ? '<br>'+esc([cli.telefono, cli.email].filter(Boolean).join(' · ')) : '')+
+        '</td></tr>'+
+      '<tr><th>Vigencia</th><td>'+esc(textoDuracion(k))+'</td></tr>'+
+      '<tr><th>Revisiones</th><td>'+esc(nombrePeriodo(k.periodicidad_meses||12))+' por puerta</td></tr>'+
+      (k.forma_pago ? '<tr><th>Forma de pago</th><td>'+esc(k.forma_pago)+'</td></tr>' : '')+
+    '</table>'+
+
+    (filas.length ? ('<h2>Puertas cubiertas</h2><table class="pts">'+
+      '<tr><th>Código</th><th>Puerta</th><th>Ubicación</th><th>Revisiones</th><th class="num">Cuota anual</th></tr>'+
+      filas.map(x => {
+        const p = puertaDe(x.puerta_id) || {};
+        return '<tr><td>'+esc(p.codigo||'—')+'</td>'+
+          '<td>'+esc([p.tipo, p.marca, p.modelo].filter(Boolean).join(' · ')||'—')+'</td>'+
+          '<td>'+esc([p.direccion, p.ubicacion].filter(Boolean).join(' · ')||'—')+'</td>'+
+          '<td>'+esc(nombrePeriodo(x.periodicidad_meses || k.periodicidad_meses || 12))+'</td>'+
+          '<td class="num">'+esc(eur(x.cuota_anual))+'</td></tr>';
+      }).join('')+
+      '<tr class="tot"><td colspan="4">Total anual, IVA no incluido</td><td class="num">'+esc(eur(total))+'</td></tr>'+
+      '</table>') : '<h2>Puertas cubiertas</h2><p>Pendiente de relacionar.</p>')+
+
+    ((k.incluye || k.excluye) ? ('<h2>Resumen</h2><table>'+
+      (k.incluye ? '<tr><th>Incluye</th><td>'+esc(k.incluye)+'</td></tr>' : '')+
+      (k.excluye ? '<tr><th>No incluye</th><td>'+esc(k.excluye)+'</td></tr>' : '')+
+      '</table>') : '')+
+
+    (clausulas.length ? ('<h2>Condiciones</h2><ol class="cl">'+
+      clausulas.map(t => '<li>'+esc(t)+'</li>').join('')+'</ol>') : '')+
+
+    '<div class="pie-doc">'+
+      '<div class="qr">'+svgQR(url, '28mm')+'<div class="qr-t">Consulta tu contrato y tus puertas</div>'+
+        '<div class="qr-u">'+esc(url.replace('https://',''))+'</div></div>'+
+      '<div class="firmas">'+
+        '<div class="fb"><div class="fl">Por Ariza Puertas y Automatismos S.L.U.</div><div class="hueco"></div></div>'+
+        '<div class="fb"><div class="fl">El titular'+(k.firmante_nombre ? ': '+esc(k.firmante_nombre) : '')+'</div>'+
+          (firma ? '<img class="firma" src="'+firma+'">' : '<div class="hueco"></div>')+
+          (k.firmado_el ? '<div class="fecha">Firmado el '+fechaCorta(k.firmado_el)+'</div>' : '')+
+          (k.firmante_dni ? '<div class="fecha">DNI '+esc(k.firmante_dni)+'</div>' : '')+
+        '</div>'+
+      '</div></div>'+
+    '<p class="nota">El Puerto de Santa María, '+esc(fechaCorta(k.expedido_el || k.fecha_alta))+'.</p>';
+
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Contrato '+esc(k.referencia||'')+'</title><style>'+
+    'body{font:13px/1.55 -apple-system,Segoe UI,Roboto,sans-serif;color:#1C1817;max-width:820px;margin:0 auto;padding:24px;background:#fff}'+
+    'h1{font-size:21px;margin:0 0 2px}h2{font-size:14px;margin:20px 0 6px;border-bottom:1px solid #ddd;padding-bottom:4px}'+
+    '.cab{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #FCBA1D;padding-bottom:10px}'+
+    '.ref{font-family:ui-monospace,monospace;font-weight:700;letter-spacing:.5px}'+
+    '.marca{text-align:right}.marca span{color:#6B6560}'+
+    'table{border-collapse:collapse;width:100%;margin:4px 0}th,td{text-align:left;padding:5px 8px;vertical-align:top;border-bottom:1px solid #eee}'+
+    'th{width:170px;color:#6B6560;font-weight:500}'+
+    '.pts th{width:auto;background:#f6f5f3;color:#1C1817;font-weight:600}'+
+    '.num{text-align:right;white-space:nowrap}.tot td{font-weight:700;background:#faf9f7}'+
+    '.cl{padding-left:20px;margin:6px 0}.cl li{margin-bottom:7px;text-align:justify}'+
+    '.pie-doc{display:flex;gap:22px;align-items:flex-start;margin-top:26px;page-break-inside:avoid}'+
+    '.qr{text-align:center;width:34mm;flex:none}.qr svg{width:28mm;height:28mm}'+
+    '.qr-t{font-size:10px;color:#6B6560;margin-top:4px;line-height:1.3}'+
+    '.qr-u{font:9px ui-monospace,monospace;color:#8A837D;margin-top:2px;word-break:break-all}'+
+    '.firmas{display:flex;gap:20px;flex:1}.fb{flex:1}'+
+    '.fl{font-size:11px;color:#6B6560;margin-bottom:4px}'+
+    '.hueco{height:74px;border-bottom:1px solid #999}'+
+    '.firma{max-height:74px;max-width:100%;display:block}'+
+    '.fecha{font-size:11px;color:#6B6560;margin-top:3px}'+
+    '.nota{margin-top:18px;font-size:12px;color:#6B6560}'+
+    '.barra{position:sticky;top:0;background:#1C1817;color:#fff;padding:10px 14px;margin:-24px -24px 18px;display:flex;gap:8px;align-items:center}'+
+    '.barra button{font:inherit;font-size:13px;font-weight:600;padding:7px 14px;border-radius:6px;border:0;background:#FCBA1D;color:#1C1817;cursor:pointer}'+
+    '.barra span{font-size:12px;color:#CFCAC6}'+
+    '@media print{body{padding:0}.barra{display:none}}</style></head><body>'+
+    '<div class="barra"><button onclick="window.print()">Imprimir o guardar en PDF</button>'+
+    '<span>Para guardarlo en el ordenador, elige «Guardar como PDF» en el destino de impresión.</span></div>'+
+    cuerpo+'</body></html>');
+  w.document.close();
+}
+
+/* Firma del titular en la pantalla */
+function dlgFirmaContrato(id){
+  const k = S.contratos.find(x => x.id === id);
+  if (!k) return;
+  const cli = clienteDe(k.cliente_id) || {};
+  let h = '<h3>Firma del contrato '+esc(k.referencia||'')+'</h3>'+
+    '<p class="mini" style="margin:0 0 10px">'+esc(cli.nombre||'')+'. Antes de firmar, enséñale el contrato al cliente.</p>'+
+    '<div class="campos">'+
+    '<div class="campo"><label for="kf-nom">Nombre de quien firma</label><input id="kf-nom" type="text" maxlength="100" value="'+esc(k.firmante_nombre||cli.nombre||'')+'"></div>'+
+    '<div class="campo"><label for="kf-dni">DNI o NIF</label><input id="kf-dni" type="text" maxlength="20" value="'+esc(k.firmante_dni||'')+'"></div>'+
+    '<div class="campo full"><label>Firma</label><canvas id="kf-firma" class="firma-caja"></canvas>'+
+    '<div class="fila" style="margin-top:8px"><button type="button" class="btn sm plana" data-act="kfirma-borrar">Borrar firma</button><span class="sp"></span></div></div>'+
+    '</div><p class="err"></p><div class="pie">'+
+    '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Guardar la firma</button></div>';
+
+  abrirDlg(h, async () => {
+    if (!FIRMA.pintado) return setErr('Falta la firma.');
+    if (!val('kf-nom')) return setErr('Pon el nombre de quien firma.');
+    try {
+      const blob = await new Promise(r => FIRMA.canvas.toBlob(r, 'image/png'));
+      const ruta = 'contratos/' + k.id + '-' + Date.now() + '.png';
+      const { error: e1 } = await sb.storage.from('firmas').upload(ruta, blob, { contentType:'image/png' });
+      if (e1) throw e1;
+      const { error } = await sb.from('contratos').update({
+        firma_ruta: ruta, firmante_nombre: val('kf-nom'), firmante_dni: val('kf-dni') || null,
+        firmado_el: new Date().toISOString(), expedido_el: k.expedido_el || hoy()
+      }).eq('id', k.id);
+      if (error) throw error;
+      cerrarDlg(); await cargar();
+      toast('Contrato firmado.');
+    } catch(e){ setErr(e.message); }
+  });
+  lienzoFirma('kf-firma');
+}
+
+/* Prepara un lienzo para firmar con el dedo */
+function lienzoFirma(idCanvas){
+  const c = document.getElementById(idCanvas);
+  if (!c) return;
+  const r = c.getBoundingClientRect();
+  c.width = Math.round(r.width * 2); c.height = Math.round(r.height * 2);
+  const ctx = c.getContext('2d');
+  ctx.scale(2,2); ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#111';
+  FIRMA.canvas = c; FIRMA.ctx = ctx; FIRMA.pintado = false;
+  let dibujando = false;
+  const punto = e => { const b = c.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; };
+  c.addEventListener('pointerdown', e => { dibujando = true; c.setPointerCapture(e.pointerId); const q = punto(e); ctx.beginPath(); ctx.moveTo(q.x, q.y); });
+  c.addEventListener('pointermove', e => { if (!dibujando) return; const q = punto(e); ctx.lineTo(q.x, q.y); ctx.stroke(); FIRMA.pintado = true; });
+  c.addEventListener('pointerup', () => { dibujando = false; });
+  c.addEventListener('pointerleave', () => { dibujando = false; });
+}
+
+/* Envía el contrato al correo del cliente */
+async function enviarContrato(id, boton){
+  const k = S.contratos.find(x => x.id === id);
+  const cli = k ? clienteDe(k.cliente_id) : null;
+  if (!k || !cli) return;
+  if (!cli.email) return toast('Este cliente no tiene correo en su ficha.');
+  if (boton) { boton.disabled = true; boton.textContent = 'Enviando…'; }
+  try {
+    const { data, error } = await sb.rpc('enviar_contrato', { p_contrato: k.id });
+    if (error) throw error;
+    if (data === false) throw new Error('No se ha podido enviar. Comprueba que el cliente tiene correo.');
+    await cargar();
+    toast('Contrato enviado a ' + cli.email);
+  } catch(e){ fallo(e); }
+  if (boton) { boton.disabled = false; boton.textContent = 'Enviar al cliente'; }
+}
+/* ---- Etiqueta suelta para la Brother QL-500 (DK-11202, 62 x 100 mm) ----
+   Térmica directa: solo negro sobre blanco, sin grises ni colores. */
+function etiquetaTermica(codigo){
+  const e = S.etiquetas.find(x => x.codigo === codigo);
+  if (!e) return toast('No encuentro esa etiqueta.');
+  const url = enlaceQR(codigo);
+  const tel = (S.ajustes.telefono_avisos || '').toString().trim();
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana de impresión.'); return; }
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Etiqueta '+esc(codigo)+'</title><style>'+
+    '@page{size:62mm 100mm;margin:0}'+
+    'html,body{margin:0;padding:0;background:#fff;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
+    'body{font-family:"Barlow Condensed","Arial Narrow",Arial,sans-serif}'+
+    '.eti{width:62mm;height:100mm;box-sizing:border-box;padding:3.5mm 3mm;display:flex;flex-direction:column;'+
+      'align-items:center;justify-content:space-between;text-align:center;page-break-after:always}'+
+    '.cab{width:100%;background:#000;color:#fff;padding:1.6mm 0;border-radius:1mm}'+
+    '.cab b{font:700 6.4mm/1 "Barlow Condensed",Arial,sans-serif;letter-spacing:.3mm}'+
+    '.cab span{display:block;font:500 2.7mm/1.2 Arial,sans-serif;letter-spacing:.35mm;text-transform:uppercase;margin-top:.8mm}'+
+    '.qr{width:44mm;height:44mm;display:block}'+
+    '.qr svg{width:44mm;height:44mm;display:block}'+
+    '.cod{font:700 11mm/1 ui-monospace,"Courier New",monospace;letter-spacing:.6mm}'+
+    '.pie{width:100%;border-top:.4mm solid #000;padding-top:1.4mm}'+
+    '.tel{font:700 5.4mm/1.1 Arial,sans-serif;letter-spacing:.2mm}'+
+    '.tel small{display:block;font:500 2.6mm/1.2 Arial,sans-serif;letter-spacing:.3mm;text-transform:uppercase}'+
+    '.web{font:600 3.4mm/1.2 Arial,sans-serif;margin-top:.8mm}'+
+    '.barra{position:fixed;top:0;left:0;right:0;background:#1C1817;color:#fff;padding:10px 14px;'+
+      'font:14px -apple-system,Segoe UI,Roboto,sans-serif;display:flex;gap:10px;align-items:center;z-index:9}'+
+    '.barra button{font:inherit;font-weight:600;padding:7px 14px;border:0;border-radius:6px;background:#FCBA1D;color:#1C1817;cursor:pointer}'+
+    '.barra span{font-size:12px;color:#CFCAC6}'+
+    'body{padding-top:52px}'+
+    '@media print{.barra{display:none}body{padding-top:0}}</style></head><body>'+
+    '<div class="barra"><button onclick="window.print()">Imprimir etiqueta</button>'+
+    '<span>Elige la Brother QL-500, papel 62 mm x 100 mm y escala 100 %. No uses «ajustar al papel».</span></div>'+
+    '<div class="eti">'+
+      '<div class="cab"><b>ARIZA</b><span>puertas automáticas</span></div>'+
+      '<div class="qr">'+svgQR(url, '44mm')+'</div>'+
+      '<div class="cod">'+esc(codigo)+'</div>'+
+      '<div class="pie">'+
+        (tel ? '<div class="tel"><small>Avisos y urgencias</small>'+esc(tel)+'</div>' : '')+
+        '<div class="web">arizapa.es</div>'+
+      '</div>'+
+    '</div></body></html>');
+  w.document.close();
+}
+
+function hojaImprimible(){
+  const usadas = new Set(S.puertas.map(p => p.codigo));
+  const libres = S.etiquetas.filter(e => !usadas.has(e.codigo));
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana de impresión.'); return; }
+  const etiquetas = libres.map(e => {
+    const url = BASE_QR + e.codigo.replace('-','') + e.token;
+    return '<div class="etq"><div class="logo">ARIZA <span style="color:#C98F08">puertas automáticas</span></div>'+
+           svgQR(url, '30mm')+'<div class="cod">'+e.codigo+'</div><div class="url">arizapa.es</div></div>';
+  }).join('');
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Etiquetas ARIZA SAT</title>'+
+    '<style>@page{size:1000mm 500mm;margin:5mm}body{margin:0;font-family:system-ui,sans-serif;background:#fff;color:#000}'+
+    '.hoja-grid{display:grid;grid-template-columns:repeat(auto-fill,50mm);gap:5mm;padding:5mm}'+
+    '.etq{width:50mm;height:65mm;border:.2mm dashed #bbb;padding:3mm;display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-align:center;page-break-inside:avoid}'+
+    '.etq .logo{font-weight:700;font-size:3.4mm}.etq .cod{font-family:ui-monospace,monospace;font-weight:700;font-size:6mm;letter-spacing:.5mm}'+
+    '.etq .url{font-size:2.6mm;color:#333}.etq svg{width:30mm;height:30mm}'+
+    '@media print{.aviso-print{display:none}}</style></head><body>'+
+    '<p class="aviso-print" style="padding:8mm;font-size:4mm">Hoja de '+libres.length+' etiquetas. Imprime o guarda como PDF y mándala a tu imprenta. Tamaño de plancha: 1000 x 500 mm.</p>'+
+    '<div class="hoja-grid">'+etiquetas+'</div></body></html>');
+  w.document.close();
+}
+
+/* ================= Eventos ================= */
+$('#tabs').addEventListener('click', e => {
+  const b = e.target.closest('button[data-tab]'); if (!b) return;
+  S.tab = b.dataset.tab; S.tabElegida = true; S.ficha = null; S.fichaCliente = null; pintar(); window.scrollTo({top:0});
+});
+raiz.addEventListener('click', async e => {
+  const b = e.target.closest('[data-act]'); if (!b || b.tagName === 'INPUT') return;
+  const a = b.dataset.act;
+  if (a === 'abrir'){ S.ficha = b.dataset.id; S.fichaCliente = null; S.tab = 'puertas'; pintar(); window.scrollTo({top:0}); }
+  else if (a === 'volver'){ S.ficha = null; pintar(); }
+  else if (a === 'abrir-cliente'){ S.fichaCliente = b.dataset.id; S.ficha = null; pintar(); window.scrollTo({top:0}); }
+  else if (a === 'volver-cliente'){ S.fichaCliente = null; pintar(); }
+  else if (a === 'cliente-nuevo') dlgCliente(null);
+  else if (a === 'cliente-editar') dlgCliente(b.dataset.id);
+  else if (a === 'asistencia-nueva') dlgAviso(null, null, null);
+  else if (a === 'asistencia-nueva-cliente') dlgAviso(null, null, b.dataset.id);
+  else if (a === 'cerrar-asistencia') dlgCierre(b.dataset.id);
+  else if (a === 'parte') hojaParte(b.dataset.id);
+  else if (a === 'asignar') dlgAsignar(b.dataset.id);
+  else if (a === 'aviso-anular') dlgAnular(b.dataset.id);
+  else if (a === 'exp-nuevo') dlgExpedienteNuevo(b.dataset.id);
+  else if (a === 'exp-abrir'){
+    S.exp = b.dataset.id; S.expPaso = 'intervencion'; S.ficha = null;
+    await cargarFotosExp(S.exp); await cargarDocsExp(S.exp); pintar(); window.scrollTo({top:0});
+  }
+  else if (a === 'exp-volver'){ const e = expDe(S.exp); S.exp = null;
+    if (e && e.puerta_id) S.ficha = e.puerta_id; pintar(); window.scrollTo({top:0}); }
+  else if (a === 'exp-paso'){ S.expPaso = b.dataset.v; pintar(); window.scrollTo({top:0}); }
+  else if (a === 'exp-libro') libroExpediente(b.dataset.id);
+  else if (a === 'exp-emitir') dlgEmitirExpediente(b.dataset.id);
+  else if (a === 'exp-marcado') etiquetaCE(b.dataset.id);
+  else if (a === 'exp-dte') documentoDTE(S.exp);
+  else if (a === 'exp-dte-codigo'){
+    const e = expDe(S.exp); if (!e) return;
+    expPon('prest.dte_codigo', (e.referencia||'') + '-DTE');
+    pintar();
+  }
+  else if (a === 'cpf-imprimir') documentoCPF();
+  else if (a === 'guardar-cpf'){
+    const o = Object.assign({}, datosCPF());
+    document.querySelectorAll('[data-cpf]').forEach(x => { o[x.dataset.cpf] = x.value; });
+    try {
+      const { error } = await sb.from('ajustes').upsert({ clave:'cpf', valor:o }, { onConflict:'clave' });
+      if (error) throw error;
+      S.ajustes.cpf = o; pintar(); toast('Procedimiento guardado.');
+    } catch(err){ fallo(err); }
+  }
+  else if (a === 'exp-hoja-campo') hojaDeCampo(b.dataset.id);
+  else if (a === 'exp-libro-mant') dlgLibroMantenimiento(b.dataset.id);
+  else if (a === 'exp-abrir-docs') abrirDocsExp();
+  else if (a === 'exp-ver-doc') verDocExp(b.dataset.id);
+  else if (a === 'exp-comp-anadir'){
+    const e = expDe(S.exp); if (!e) return;
+    const ya = Object.keys(((e.datos||{}).compx) || {});
+    const n = ya.reduce((m, k) => Math.max(m, +String(k).replace(/\D/g,'') || 0), 0) + 1;
+    expPon('compx.x'+n+'.nombre', '');
+    pintar();
+  }
+  else if (a === 'exp-comp-quitar'){
+    if (!armar(b, 'Confirmar')) return;
+    const e = expDe(S.exp); if (!e) return;
+    if (e.datos && e.datos.compx) delete e.datos.compx[b.dataset.k];
+    guardarExpediente(); pintar(); toast('Elemento quitado.');
+  }
+  else if (a === 'exp-quitar-doc'){
+    if (!armar(b, 'Confirmar')) return;
+    const x = (S.expDocs||[]).find(y => y.id === b.dataset.id);
+    try {
+      const { error } = await sb.from('expediente_docs').delete().eq('id', b.dataset.id);
+      if (error) throw error;
+      if (x) { try { await sb.storage.from('expedientes').remove([x.ruta]); } catch(_){} }
+      await cargarDocsExp(S.exp); pintar(); toast('Documento quitado.');
+    } catch(err){ fallo(err); }
+  }
+  else if (a === 'exp-copiar-cliente'){
+    const e = expDe(S.exp); const c = e && e.cliente_id ? clienteDe(e.cliente_id) : null;
+    const p = e && e.puerta_id ? puertaDe(e.puerta_id) : null;
+    if (!c && !p) return;
+    expPon('obra.titular', (c && c.nombre) || (p && p.cliente) || '');
+    expPon('obra.nif_titular', (c && c.nif) || '');
+    expPon('obra.emplazamiento', [(p&&p.direccion) || (c&&c.direccion), (c&&c.poblacion)].filter(Boolean).join(', '));
+    expPon('obra.ubicacion', (p && p.ubicacion) || '');
+    expPon('obra.contacto', (c && c.telefono) ? ((c.nombre||'')+' · '+c.telefono) : '');
+    pintar(); toast('Datos del cliente copiados.');
+  }
+  else if (a === 'exp-quitar-foto'){
+    if (!armar(b, 'Confirmar')) return;
+    const f = (S.expFotos||[]).find(x => x.id === b.dataset.id);
+    try {
+      const { error } = await sb.from('expediente_fotos').delete().eq('id', b.dataset.id);
+      if (error) throw error;
+      if (f) { try { await sb.storage.from('expedientes').remove([f.ruta]); } catch(_){} }
+      await cargarFotosExp(S.exp); pintarFotosExp(); toast('Foto quitada.');
+    } catch(err){ fallo(err); }
+  }
+  else if (a === 'filtra-tec'){ S.filtroTec = b.dataset.v || ''; pintar(); }
+  else if (a === 'cli-archivados'){ S.cliArchivados = !S.cliArchivados; S.buscaCli = ''; pintar(); }
+  else if (a === 'hist-archivadas'){ S.histArchivadas = !S.histArchivadas; pintar(); }
+  else if (a === 'hist-limpiar'){
+    S.histBusca=''; S.histTec=''; S.histTipo=''; S.histDesde=''; S.histHasta=''; pintar();
+  }
+  else if (a === 'hist-rango'){
+    S.histDesde = iso(sumaDias(new Date(), -(+b.dataset.n))); S.histHasta = ''; pintar();
+  }
+  else if (a === 'aviso-duplicar'){
+    try {
+      const { data, error } = await sb.rpc('duplicar_asistencia', { p_aviso: b.dataset.id });
+      if (error) throw error;
+      await cargar();
+      toast('Copia creada. Repasa la fecha y lo que hay que hacer.');
+      if (data) dlgAviso(null, data);
+    } catch(err){ fallo(err); }
+  }
+  else if (a === 'aviso-reabrir'){
+    if (!armar(b, 'Confirmar')) return;
+    try {
+      const { data, error } = await sb.rpc('reabrir_asistencia', { p_aviso: b.dataset.id });
+      if (error) throw error;
+      if (!data || !data.ok) { toast(textoFallo(data)); return; }
+      await cargar(); toast('Vuelve a estar abierta.');
+    } catch(err){ fallo(err); }
+  }
+  else if (a === 'aviso-archivar'){
+    try {
+      const { data, error } = await sb.rpc('archivar_asistencia',
+        { p_aviso: b.dataset.id, p_archivar: b.dataset.v === '1' });
+      if (error) throw error;
+      if (!data || !data.ok) { toast(textoFallo(data)); return; }
+      await cargar(); toast(b.dataset.v === '1' ? 'Archivada.' : 'Fuera del archivo.');
+    } catch(err){ fallo(err); }
+  }
+  else if (a === 'aviso-borrar'){
+    if (!armar(b, 'Borrar de verdad')) return;
+    try {
+      const { data, error } = await sb.rpc('borrar_asistencia', { p_aviso: b.dataset.id });
+      if (error) throw error;
+      if (!data || !data.ok) { toast(textoFallo(data)); return; }
+      await cargar(); toast('Asistencia borrada.');
+    } catch(err){ fallo(err); }
+  }
+  else if (a === 'cliente-archivar'){
+    try {
+      const { data, error } = await sb.rpc('archivar_cliente',
+        { p_cliente: b.dataset.id, p_archivar: b.dataset.v === '1' });
+      if (error) throw error;
+      if (!data || !data.ok) { toast(textoFallo(data)); return; }
+      await cargar();
+      toast(b.dataset.v === '1'
+        ? 'Cliente archivado. Su historial se conserva.'
+        : 'Cliente otra vez activo.');
+    } catch(err){ fallo(err); }
+  }
+  else if (a === 'cliente-borrar'){
+    if (!armar(b, 'Borrar de verdad')) return;
+    try {
+      const { data, error } = await sb.rpc('borrar_cliente', { p_cliente: b.dataset.id });
+      if (error) throw error;
+      if (!data || !data.ok) { toast(textoFallo(data)); return; }
+      S.fichaCliente = null;
+      await cargar(); toast('Cliente borrado.');
+    } catch(err){ fallo(err); }
+  }
+  else if (a === 'quitar-cara'){
+    if (!armar(b, 'Confirmar')) return;
+    await quitarCara(b.dataset.id);
+  }
+  else if (a === 'ir-avisos'){ S.tab = 'avisos'; S.tabElegida = true; pintar(); window.scrollTo({top:0}); }
+  else if (a === 'con-filtro'){ S.conFiltro = b.dataset.f; pintar(); }
+  else if (a === 'contrato-hoja') await hojaContrato(b.dataset.id);
+  else if (a === 'contrato-firmar') dlgFirmaContrato(b.dataset.id);
+  else if (a === 'contrato-enviar'){
+    if (!armar(b, 'Confirmar envío')) return;
+    await enviarContrato(b.dataset.id, b);
+  }
+  else if (a === 'contrato-nuevo') dlgContrato(null, b.dataset.id || null);
+  else if (a === 'contrato-editar') dlgContrato(b.dataset.id);
+  else if (a === 'planificar') dlgPlanificar(b.dataset.id);
+  else if (a === 'ver-revision') dlgRevision(b.dataset.id);
+  else if (a === 'tarifas') dlgTarifas();
+  else if (a === 'articulo-nuevo') dlgArticulo(null);
+  else if (a === 'articulo-editar') dlgArticulo(b.dataset.id);
+  else if (a === 'ver-valoracion') dlgValoracion(b.dataset.id);
+  else if (a === 'revalorar'){
+    try { await sb.rpc('valorar_aviso', { p_aviso: b.dataset.id }); await cargar(); toast('Visita recalculada.'); }
+    catch(err){ fallo(err); }
+  }
+  else if (a === 'revalorar-todo'){
+    if (!armar(b, 'Confirmar')) return;
+    b.disabled = true; b.textContent = 'Calculando…';
+    try {
+      const sinValorar = S.avisos.filter(x => x.cerrado && !x.anulada && !valoracionDe(x.id));
+      for (const x of sinValorar) await sb.rpc('valorar_aviso', { p_aviso: x.id });
+      await cargar(); toast(sinValorar.length + ' visitas valoradas.');
+    } catch(err){ fallo(err); b.disabled = false; b.textContent = 'Recalcular'; }
+  }
+  else if (a === 'marcar-facturado') dlgFacturar(b.dataset.id);
+  else if (a === 'cal-mover'){
+    const n = parseInt(b.dataset.n, 10) || 0;
+    const base = S.calAncla ? deIso(S.calAncla) : new Date();
+    S.calAncla = iso(S.calVista === 'mes' ? sumaMeses(base, n) : sumaDias(base, n * 7));
+    pintar();
+  }
+  else if (a === 'cal-hoy'){ S.calAncla = null; pintar(); }
+  else if (a === 'cal-vista'){ S.calVista = b.dataset.v; pintar(); }
+  else if (a === 'dia-nuevo') dlgAviso(null, null, null, b.dataset.fecha);
+  else if (a === 'abrir-preventiva') await abrirPreventiva(b.dataset.id);
+  else if (a === 'abrir-vencidas'){
+    if (!armar(b, 'Confirmar')) return;
+    b.disabled = true; b.textContent = 'Abriendo…';
+    try {
+      const { data, error } = await sb.rpc('generar_preventivas', { p_dias: 21 });
+      if (error) throw error;
+      await cargar();
+      toast((data || 0) + ' revisión' + ((data||0)===1?'':'es') + ' abierta' + ((data||0)===1?'':'s') + '. Asígnalas desde Asistencias.');
+    } catch(err){ fallo(err); b.disabled = false; b.textContent = 'Abrir las revisiones que tocan'; }
+  }
+  else if (a === 'puerta-nueva') dlgPuerta(null);
+  else if (a === 'puerta-editar') dlgPuerta(b.dataset.id);
+  else if (a === 'estado') dlgEstado(b.dataset.id);
+  else if (a === 'aviso-nuevo') dlgAviso(b.dataset.id, null);
+  else if (a === 'aviso-editar') dlgAviso(null, b.dataset.id);
+  else if (a === 'foto-ver') dlgFoto(b.dataset.id);
+  else if (a === 'ver-qr') dlgQR(b.dataset.cod);
+  else if (a === 'etiqueta-imprimir') etiquetaTermica(b.dataset.cod);
+  else if (a === 'guardar-tel'){
+    const campo = document.getElementById('eti-tel');
+    if (!campo) return;
+    b.disabled = true;
+    try {
+      const v = campo.value.trim();
+      const { error } = await sb.from('ajustes').upsert({ clave:'telefono_avisos', valor: v,
+        actualizado: new Date().toISOString() }, { onConflict:'clave' });
+      if (error) throw error;
+      S.ajustes.telefono_avisos = v;
+      toast(v ? 'Teléfono guardado.' : 'Las etiquetas saldrán sin teléfono.');
+      pintar();
+    } catch(err){ fallo(err); b.disabled = false; }
+  }
+  else if (a === 'generar') dlgGenerar();
+  else if (a === 'hoja') hojaImprimible();
+  else if (a === 'foto-borrar'){
+    if (!armar(b, 'Confirmar')) return;
+    try { await sb.storage.from('fotos').remove([b.dataset.ruta]); await sb.from('fotos').delete().eq('id', b.dataset.id); pintarFotos(b.dataset.puerta); }
+    catch(err){ fallo(err); }
+  }
+  else if (a === 'doc-borrar'){
+    if (!armar(b, 'Confirmar')) return;
+    try { await sb.storage.from(b.dataset.bucket || 'documentos').remove([b.dataset.ruta]); await sb.from('documentos').delete().eq('id', b.dataset.id); pintarDocs(b.dataset.puerta); }
+    catch(err){ fallo(err); }
+  }
+  else if (a === 'doc-visible') cambiarVisibilidad(b.dataset.id, b.dataset.puerta);
+  else if (a === 'equipo-alta'){
+    const err = document.getElementById('t-err');
+    const nombre = (document.getElementById('t-nombre')||{}).value || '';
+    const email = ((document.getElementById('t-mail')||{}).value || '').trim().toLowerCase();
+    const pass = (document.getElementById('t-pass')||{}).value || '';
+    err.textContent = '';
+    if (!nombre.trim()) { err.textContent = 'Escribe el nombre.'; return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { err.textContent = 'El correo no es válido.'; return; }
+    if (pass.length < 6) { err.textContent = 'La contraseña debe tener al menos 6 caracteres.'; return; }
+    b.disabled = true; b.textContent = 'Dando de alta…';
+    try {
+      const { data, error } = await sb.functions.invoke('crear-tecnico', { body: { nombre: nombre.trim(), email, password: pass } });
+      if (error) throw new Error((data && data.error) || error.message);
+      if (data && data.error) throw new Error(data.error);
+      const rol = (document.getElementById('t-rol')||{}).value || 'tecnico';
+      if (rol === 'oficina'){
+        // la función lo crea siempre como técnico; el rol lo cambia el administrador
+        const id = (data && (data.id || data.user_id)) || null;
+        if (id) await sb.from('perfiles').update({ rol:'oficina' }).eq('id', id);
+        else {
+          await cargar();
+          const nuevo = S.equipo.find(x => (x.nombre||'').trim() === nombre.trim());
+          if (nuevo) await sb.from('perfiles').update({ rol:'oficina' }).eq('id', nuevo.id);
+        }
+      }
+      await cargar();
+      toast(nombre.trim()+' dado de alta como '+(rol==='oficina'?'oficina':'técnico')+'. Pásale el correo y la contraseña.');
+    } catch(e){ err.textContent = e.message || 'No se pudo dar de alta.'; }
+    b.disabled = false; b.textContent = 'Dar de alta';
+  }
+  else if (a === 'guion-anadir' || a === 'guion-quitar' || a === 'guion-subir' || a === 'guion-bajar'){
+    const tipos = lista('tipos', TIPOS);
+    const tipo = S.guionTipo || tipos[0] || 'Otro';
+    const arr = guionDe(tipo).slice();
+    if (a === 'guion-anadir'){
+      const t = (document.getElementById('gn-texto')||{}).value || '';
+      const modo = (document.getElementById('gn-modo')||{}).value || 'ok';
+      const uni = ((document.getElementById('gn-uni')||{}).value || '').trim();
+      const norma = ((document.getElementById('gn-norma')||{}).value || '').trim();
+      if (!t.trim()) { toast('Escribe el texto del punto.'); return; }
+      if (modo === 'h') arr.push({ h: t.trim() });
+      else {
+        const p = { t: t.trim() };
+        if (modo === 'num'){ p.m = 'num'; if (uni) p.u = uni; }
+        if (norma) p.n = norma;
+        arr.push(p);
+      }
+    } else {
+      const i = +b.dataset.i;
+      if (a === 'guion-quitar'){ if (!armar(b, 'Confirmar')) return; arr.splice(i, 1); }
+      else if (a === 'guion-subir' && i > 0){ const t = arr[i-1]; arr[i-1] = arr[i]; arr[i] = t; }
+      else if (a === 'guion-bajar' && i < arr.length-1){ const t = arr[i+1]; arr[i+1] = arr[i]; arr[i] = t; }
+    }
+    try {
+      const clave = claveGuion(tipo);
+      const { error } = await sb.from('ajustes').upsert({ clave, valor: arr }, { onConflict:'clave' });
+      if (error) throw error;
+      S.ajustes[clave] = arr;
+      pintar(); toast('Guión guardado.');
+    } catch(err){ fallo(err); }
+  }
+  else if (a === 'lista-anadir' || a === 'lista-quitar' || a === 'lista-subir' || a === 'lista-bajar'){
+    const clave = b.dataset.clave;
+    const base = { seguridad:SEGURIDAD, tipos_doc:TIPOS_DOC, tipos:TIPOS, usos:USOS, clientes:CLIENTES }[clave] || [];
+    const arr = lista(clave, base).slice();
+    if (a === 'lista-anadir'){
+      const campo = document.getElementById('nuevo-'+clave);
+      const v = (campo ? campo.value : '').trim();
+      if (!v) return;
+      if (arr.some(x => x.toLowerCase() === v.toLowerCase())) { toast('Ese elemento ya está en la lista.'); return; }
+      arr.push(v);
+    } else {
+      const i = +b.dataset.i;
+      if (a === 'lista-quitar'){ if (!armar(b, 'Confirmar')) return; arr.splice(i, 1); }
+      else if (a === 'lista-subir' && i > 0){ const t = arr[i-1]; arr[i-1] = arr[i]; arr[i] = t; }
+      else if (a === 'lista-bajar' && i < arr.length-1){ const t = arr[i+1]; arr[i+1] = arr[i]; arr[i] = t; }
+    }
+    try { await guardarLista(clave, arr); pintar(); toast('Lista guardada.'); }
+    catch(err){ fallo(err); }
+  }
+  else if (a === 'guardar-proteccion'){
+    const o = {};
+    document.querySelectorAll('[data-prot]').forEach(x => {
+      const v = x.value.trim();
+      if (v) o[x.dataset.prot] = v;          // las vacías no se guardan: siguen sin definir
+    });
+    try {
+      const { error } = await sb.from('ajustes').upsert({ clave:'proteccion', valor:o }, { onConflict:'clave' });
+      if (error) throw error;
+      S.ajustes.proteccion = o;
+      toast(Object.keys(o).length + ' combinaciones guardadas.');
+      pintar();
+    } catch(err){ fallo(err); }
+  }
+  else if (a === 'guardar-empresa' || a === 'guardar-limites'){
+    const esEmp = a === 'guardar-empresa';
+    const clave = esEmp ? 'empresa' : 'limites_fuerza';
+    const base = esEmp ? datosEmpresa() : limitesFuerza();
+    const o = Object.assign({}, base);
+    document.querySelectorAll('[data-'+(esEmp?'emp':'lim')+']').forEach(x => {
+      const k = esEmp ? x.dataset.emp : x.dataset.lim;
+      o[k] = esEmp ? x.value.trim() : (x.value === '' ? base[k] : +x.value);
+    });
+    try {
+      const { error } = await sb.from('ajustes').upsert({ clave, valor: o }, { onConflict:'clave' });
+      if (error) throw error;
+      S.ajustes[clave] = o; pintar();
+      toast(esEmp ? 'Datos de la empresa guardados.' : 'Límites guardados.');
+    } catch(err){ fallo(err); }
+  }
+  else if (a === 'equipo-activo'){
+    try { const { error } = await sb.from('perfiles').update({ activo: b.dataset.v === '1' }).eq('id', b.dataset.id); if (error) throw error; await cargar(); }
+    catch(err){ fallo(err); }
+  }
+});
+raiz.addEventListener('input', e => {
+  if (e.target.dataset.act === 'busca'){ S.busca = e.target.value; pintar(); }
+  if (e.target.dataset.act === 'busca-cli'){ S.buscaCli = e.target.value; pintar(); }
+  if (e.target.dataset.act === 'busca-con'){ S.buscaCon = e.target.value; pintar(); }
+  if (e.target.dataset.act === 'busca-hist'){ S.histBusca = e.target.value; pintar(); }
+  // Campos del expediente: se guardan solos y sin repintar, para no interrumpir al que escribe
+  if (e.target.dataset.exp && e.target.tagName !== 'SELECT') expPon(e.target.dataset.exp, e.target.value);
+});
+raiz.addEventListener('change', e => {
+  if (e.target.dataset.act === 'equipo-rol'){
+    const sel = e.target, id = sel.dataset.id, rol = sel.value;
+    sel.disabled = true;
+    sb.from('perfiles').update({ rol }).eq('id', id).then(async ({ error }) => {
+      if (error) { fallo(error); sel.disabled = false; return; }
+      await cargar();
+      toast(rol === 'oficina' ? 'Ahora es oficina: verá precios y podrá expedir contratos.'
+                              : 'Ahora es técnico: deja de ver precios y contratos.');
+    });
+    return;
+  }
+  if (e.target.dataset.act === 'filtro-tec'){ S.filtroTec = e.target.value; pintar(); return; }
+  if (e.target.dataset.act === 'hist-tec'){ S.histTec = e.target.value; pintar(); return; }
+  if (e.target.dataset.act === 'hist-tipo'){ S.histTipo = e.target.value; pintar(); return; }
+  if (e.target.dataset.act === 'hist-desde'){ S.histDesde = e.target.value; pintar(); return; }
+  if (e.target.dataset.act === 'hist-hasta'){ S.histHasta = e.target.value; pintar(); return; }
+  if (e.target.dataset.act === 'subir-cara' && e.target.files.length){
+    subirCara(e.target.dataset.id, e.target.files[0]); e.target.value = '';
+  }
+  /* ---- Expediente ---- */
+  if (e.target.dataset.exp && e.target.tagName === 'SELECT'){
+    const ruta = e.target.dataset.exp;
+    expPon(ruta, e.target.value);
+    // Solo repintamos cuando la respuesta cambia lo que hay que enseñar.
+    // acceso_personas entra aquí porque decide si la barrera lleva declaración
+    // de prestaciones, y con ella todo un paso del cuestionario.
+    // interv.tipo entra aquí porque decide si se abre el cuestionario de
+    // modificación y, con él, el resultado del motor de intervención.
+    if (/\.(estado|v|incluir)$|motorizada|hueco$|\.via$|acceso_personas$|emitir_ddp$|\.modo$|usuarios$|puerta\.tipo$|interv\.tipo$/.test(ruta)) pintar();
+    return;
+  }
+  if (e.target.dataset.expChk !== undefined){
+    expPon(e.target.dataset.expChk, e.target.checked ? 'si' : '');
+    return;
+  }
+  if (e.target.dataset.act === 'exp-fps'){
+    const f = e.target.value || null, ex = expDe(S.exp);
+    if (ex){ ex.fecha_puesta_servicio = f;
+      sb.from('expedientes').update({ fecha_puesta_servicio: f, actualizado: new Date().toISOString() })
+        .eq('id', ex.id).then(({error}) => { if (error) fallo(error); else pintar(); });
+    }
+    return;
+  }
+  if (e.target.dataset.act === 'exp-pie'){
+    const f = (S.expFotos||[]).find(x => x.id === e.target.dataset.id);
+    if (f){ f.pie = e.target.value;
+      sb.from('expediente_fotos').update({ pie: f.pie }).eq('id', f.id)
+        .then(({error}) => { if (error) fallo(error); });
+    }
+    return;
+  }
+  if (e.target.dataset.act === 'exp-subir-foto' && e.target.files.length){
+    subirFotosExp(e.target.dataset.ap, Array.from(e.target.files)); e.target.value = '';
+    return;
+  }
+  if (e.target.dataset.act === 'exp-subir-doc' && e.target.files.length){
+    subirDocsExp(Array.from(e.target.files)); e.target.value = '';
+    return;
+  }
+  // Fichas del anexo de fabricantes: se guardan al salir del campo
+  if (e.target.dataset.doc){
+    const campo = e.target.dataset.doc, id = e.target.dataset.id;
+    const x = (S.expDocs||[]).find(y => y.id === id);
+    if (x){ x[campo] = e.target.value || null;
+      sb.from('expediente_docs').update({ [campo]: x[campo] }).eq('id', id)
+        .then(({error}) => { if (error) fallo(error); });
+    }
+    return;
+  }
+  if (e.target.dataset.act === 'cal-tec'){ S.calTec = e.target.value; pintar(); return; }
+  if (e.target.dataset.act === 'guion-tipo'){ S.guionTipo = e.target.value; pintar(); return; }
+  if (e.target.dataset.act === 'gestion-mes'){ S.mesGestion = e.target.value; pintar(); return; }
+  if (e.target.dataset.act === 'subir-foto' && e.target.files.length){ subirFotos(e.target.dataset.id, Array.from(e.target.files)); e.target.value=''; }
+  if (e.target.dataset.act === 'subir-doc' && e.target.files.length){
+    const sel = document.getElementById('doc-tipo-'+e.target.dataset.id);
+    const pub = document.getElementById('doc-pub-'+e.target.dataset.id);
+    subirDocs(e.target.dataset.id, Array.from(e.target.files), sel ? sel.value : 'Manual de instrucciones', pub && pub.checked); e.target.value='';
+  }
+});
+dlgForm.addEventListener('click', async e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const a = b.dataset.act;
+  if (a === 'mat-anadir'){
+    const cont = document.getElementById('mats');
+    if (cont) cont.insertAdjacentHTML('beforeend', filaMaterial());
+    return;
+  }
+  if (a === 'as-dia'){
+    const campo = document.getElementById('as-fecha');
+    if (campo) campo.value = b.dataset.n === '' ? '' : iso(sumaDias(new Date(), +b.dataset.n));
+    return;
+  }
+  if (a === 'cl-anadir'){
+    const arr = clausulasDelForm(); arr.push('');
+    pintarClausulas(arr);
+    const cajas = document.querySelectorAll('#k-clausulas .k-cl-t');
+    if (cajas.length) cajas[cajas.length-1].focus();
+    return;
+  }
+  if (a === 'cl-quitar'){
+    const arr = clausulasDelForm(); arr.splice(+b.dataset.i, 1);
+    pintarClausulas(arr);
+    return;
+  }
+  if (a === 'cl-plantilla'){
+    if (!armar(b, 'Rehacer')) return;
+    pintarClausulas(clausulasFabrica(condicionesDelForm()));
+    b.textContent = 'Rehacer con la plantilla';
+    toast('Cláusulas rehechas con los valores de arriba.');
+    return;
+  }
+  if (a === 'contrato-hoja'){ cerrarDlg(); hojaContrato(b.dataset.id); return; }
+  if (a === 'contrato-firmar'){ cerrarDlg(); dlgFirmaContrato(b.dataset.id); return; }
+  if (a === 'mat-quitar'){
+    const fila = b.closest('.mat-fila');
+    if (fila) fila.remove();
+    return;
+  }
+  if (a === 'firma-borrar' || a === 'kfirma-borrar'){
+    if (FIRMA.ctx && FIRMA.canvas){ FIRMA.ctx.clearRect(0,0,FIRMA.canvas.width,FIRMA.canvas.height); FIRMA.pintado = false; }
+    return;
+  }
+  if (a === 'g-r'){
+    const grupo = b.closest('.g-resp');
+    const ya = b.getAttribute('aria-pressed') === 'true';
+    grupo.querySelectorAll('button[data-act="g-r"]').forEach(x => x.setAttribute('aria-pressed','false'));
+    b.setAttribute('aria-pressed', ya ? 'false' : 'true');
+    repintarCuentas();
+    return;
+  }
+  if (a === 'g-todo'){
+    const det = b.closest('.g-bloque');
+    if (det) det.querySelectorAll('.g-punto').forEach(d => {
+      if (d.querySelector('.g-resp button[aria-pressed="true"]')) return;   // no pisa lo ya marcado
+      const ok = d.querySelector('.g-resp button[data-r="ok"]');
+      if (ok) ok.setAttribute('aria-pressed','true');
+    });
+    repintarCuentas();
+    return;
+  }
+  if (a === 'guardar-avance'){
+    const av = S.avisos.find(x => x.id === b.dataset.id);
+    if (av) await guardarCierre(av, false);
+    return;
+  }
+  if (a === 'cliente-desde-puerta'){
+    guardarBorradorPuerta();
+    const args = S.borradorPuerta.args = { id: b.dataset.puerta || null, aviso: b.dataset.aviso || null };
+    dlgCliente(null, async (nuevoId) => {
+      if (S.borradorPuerta && nuevoId) S.borradorPuerta['f-clid'] = nuevoId;
+      dlgPuerta(args.id, args.aviso);
+    });
+    return;
+  }
+  if (a === 'cliente-desde-contrato'){
+    dlgCliente(null, async (id) => { if (id) dlgContrato(null, id); });
+    return;
+  }
+  if (a === 'cliente-rapido'){
+    dlgCliente(null, async (id) => { if (id) toast('Cliente creado. Vuelve a abrir la asistencia para elegirlo.'); });
+    return;
+  }
+  if (a === 'alta-puerta-asis'){
+    const id = b.dataset.id;
+    cerrarDlg();
+    dlgPuerta(null, id);
+    return;
+  }
+  if (a === 'cerrar-asistencia'){ cerrarDlg(); dlgCierre(b.dataset.id); return; }
+  if (a === 'aviso-anular'){ cerrarDlg(); dlgAnular(b.dataset.id); return; }
+  if (a === 'pl-siguiente'){
+    const f = new Date(); f.setMonth(f.getMonth() + (+b.dataset.meses || 12));
+    const campo = document.getElementById('pl-fecha');
+    if (campo) campo.value = f.toISOString().slice(0,10);
+    return;
+  }
+  if (a === 'articulo-baja'){
+    if (!armar(b, 'Confirmar')) return;
+    try { await sb.from('articulos').update({ activo:false }).eq('id', b.dataset.id);
+          cerrarDlg(); await cargar(); toast('Material dado de baja.'); }
+    catch(err){ fallo(err); }
+    return;
+  }
+  if (a === 'revalorar'){
+    try { await sb.rpc('valorar_aviso', { p_aviso: b.dataset.id }); cerrarDlg(); await cargar(); toast('Visita recalculada.'); }
+    catch(err){ fallo(err); }
+    return;
+  }
+  if (a === 'marcar-facturado'){ cerrarDlg(); dlgFacturar(b.dataset.id); return; }
+  if (a === 'contrato-borrar'){
+    if (!armar(b, 'Confirmar')) return;
+    try { await sb.from('contratos').delete().eq('id', b.dataset.id); cerrarDlg(); await cargar(); toast('Contrato borrado.'); }
+    catch(err){ fallo(err); }
+    return;
+  }
+  if (a === 'seg-extra'){
+    const campo = document.getElementById('f-seg-nuevo');
+    const cont = document.getElementById('f-segs');
+    const v = (campo ? campo.value : '').trim();
+    if (!v || !cont) return;
+    const ya = Array.from(cont.querySelectorAll('.f-seg')).find(x => x.value.toLowerCase() === v.toLowerCase());
+    if (ya){ ya.checked = true; campo.value = ''; return; }
+    cont.insertAdjacentHTML('beforeend', casillaSeg(v, true));
+    campo.value = '';
+    const maestra = document.getElementById('f-seg-maestra');
+    if (maestra && maestra.checked){
+      try { await guardarLista('seguridad', lista('seguridad', SEGURIDAD).concat([v])); }
+      catch(err){ setErr('El elemento se ha añadido a esta puerta, pero no a la lista general: '+err.message); }
+    }
+    return;
+  }
+  if (a === 'puerta-borrar'){
+    if (!armar(b, 'Confirmar borrado')) return;
+    try { const { error } = await sb.from('puertas').delete().eq('id', b.dataset.id); if (error) throw error; cerrarDlg(); S.ficha = null; await cargar(); toast('Puerta borrada.'); }
+    catch(err){ setErr(err.message); }
+  } else if (a === 'aviso-cerrar'){
+    if (!armar(b, 'Confirmar cierre')) return;
+    const av = S.avisos.find(x => x.id === b.dataset.id);
+    try {
+      const { error } = await sb.from('avisos').update({ estado:'cerrado', cerrado: new Date().toISOString(), actualizado: new Date().toISOString() }).eq('id', b.dataset.id);
+      if (error) throw error;
+      // cerrar una petición de presupuesto no cambia el estado de la puerta
+      if (av && av.tipo !== 'comercial') await sb.from('puertas').update({ estado:'operativa', estado_desde: new Date().toISOString() }).eq('id', av.puerta_id);
+      cerrarDlg(); await cargar(); toast('Aviso cerrado.');
+    } catch(err){ setErr(err.message); }
+  }
+});
+
+/* ---- Sesión ---- */
+const login = $('#login'), lErr = $('#l-err');
+login.addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn = $('#l-go'); btn.disabled = true; btn.textContent = 'Entrando…'; lErr.textContent = '';
+  const { error } = await sb.auth.signInWithPassword({ email: $('#l-mail').value.trim(), password: $('#l-pass').value });
+  if (error) lErr.textContent = /Invalid/i.test(error.message) ? 'Correo o contraseña incorrectos.' : error.message;
+  btn.disabled = false; btn.textContent = 'Entrar';
+});
+$('#l-olvido').addEventListener('click', async () => {
+  const m = $('#l-mail').value.trim();
+  if (!m){ lErr.textContent = 'Escribe tu correo arriba y vuelve a pulsar.'; return; }
+  const { error } = await sb.auth.resetPasswordForEmail(m, { redirectTo: location.origin });
+  lErr.textContent = error ? error.message : 'Te hemos enviado un correo para cambiar la contraseña.';
+});
+$('#btn-salir').addEventListener('click', () => sb.auth.signOut());
+window.addEventListener('hashchange', () => { const r = codigoDeURL(); if (r) location.reload(); });
+
+if ('serviceWorker' in navigator && location.protocol === 'https:')
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(()=>{}));
+
+arranque();
+</script>
+</body>
+</html>
