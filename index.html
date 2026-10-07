@@ -2804,6 +2804,406 @@ function regimenCPR(e){
   return Object.assign({ clave: f.acto }, REGIMEN_CPR.actos[f.acto] || {});
 }
 
+/* ===================================================================
+   MOTOR DE DECISIÓN DEL TIPO DE INTERVENCIÓN
+   ===================================================================
+   Decisión previa y obligatoria: hasta que no está resuelta, no se genera
+   ningún documento. La regla de fondo es que intervenir sobre una puerta
+   existente NO convierte automáticamente la intervención en una máquina
+   nueva. Eso hay que demostrarlo, no suponerlo.
+
+   Lo que hay verificado en fuente oficial, a 7 de octubre de 2026:
+
+   · NO existe ninguna guía de la Comisión Europea sobre modificación
+     sustancial de máquinas. El criterio oficial de la Comisión hoy es el
+     apartado 2.1 de la «Guía azul» 2022 (2022/C 247/01, DOUE 29-6-2022):
+     tres condiciones CUMULATIVAS para que el producto modificado sea
+     producto nuevo. Se modifican prestaciones, propósito o tipo originales
+     sin estar previsto en la evaluación inicial del riesgo; la naturaleza
+     del peligro cambia o el nivel de riesgo aumenta; y se comercializa o
+     pone en servicio.
+   · El INSST (Guía Técnica del RD 1215/1997, 3ª ed. 2021) sigue el mismo
+     criterio y lo resume en que el marcado CE original pierde su validez y
+     el modificador pasa a ser fabricante.
+   · El artículo 3.16 del Reglamento (UE) 2023/1230 SÍ define «modificación
+     sustancial», pero NO es derecho aplicable hasta el 20 de enero de 2027
+     (art. 54). Su criterio es MÁS AMPLIO que el de la Guía azul: no exige
+     cambio de función ni de prestaciones, basta un nuevo peligro o un
+     riesgo aumentado que exija (a) resguardos o dispositivos cuyo
+     procesamiento necesite modificar el sistema de control de seguridad, o
+     (b) nuevas medidas de estabilidad o resistencia mecánica.
+
+   Consecuencia de diseño: el motor va VERSIONADO POR FECHA. Una misma
+   intervención puede no ser sustancial hoy y sí serlo a partir del
+   20-1-2027. Por eso cada regla declara con qué criterio se juzga.
+
+   PENDIENTE DE DAVID: los resultados B, C, D y E. Están declarados pero sin
+   definir, y mientras lo estén BLOQUEAN la emisión en vez de inventarse un
+   desenlace. */
+
+const TIPOS_INTERVENCION = {
+  nueva_propia:      { n:1,  nombre:'Puerta nueva / fabricación propia' },
+  nueva_kit:         { n:2,  nombre:'Puerta nueva / kit completo de fabricante' },
+  producto_tercero:  { n:3,  nombre:'Instalación de producto acabado de tercero' },
+  mantenimiento:     { n:4,  nombre:'Mantenimiento' },
+  reparacion:        { n:5,  nombre:'Reparación' },
+  sustitucion_equiv: { n:6,  nombre:'Sustitución equivalente de componente' },
+  mejora_seguridad:  { n:7,  nombre:'Mejora o adición de dispositivos de seguridad' },
+  adecuacion:        { n:8,  nombre:'Adecuación de puerta existente' },
+  modif_sustancial:  { n:9,  nombre:'Modificación sustancial' },
+  motorizacion:      { n:10, nombre:'Motorización de puerta manual existente' },
+  cambio_cuadro:     { n:11, nombre:'Cambio sustancial de cuadro o lógica de control' },
+  modif_cortafuegos: { n:12, nombre:'Modificación de una puerta resistente al fuego' },
+  no_clasificable:   { n:13, nombre:'Otros / caso no clasificable automáticamente' },
+};
+
+/* Tipos que, por sí solos, no abren el cuestionario de modificación porque la
+   puerta se pone en el mercado nueva y somos nosotros quienes la documentamos
+   desde cero. El resto SÍ pasa por las doce preguntas. */
+const TIPOS_SIN_CUESTIONARIO = ['nueva_propia', 'nueva_kit', 'producto_tercero'];
+
+const RESPUESTAS_MODIF = {
+  si:          'Sí',
+  no:          'No',
+  desconocido: 'Desconocido',
+  revision:    'Requiere revisión técnica',
+};
+/* «Desconocido» y «Requiere revisión técnica» NUNCA se tratan como «No».
+   Cualquiera de las dos deja el expediente en no puede determinarse. */
+const RESPUESTAS_ABIERTAS = ['desconocido', 'revision'];
+
+/* Las doce preguntas, con la severidad que le toca a cada una y el criterio
+   oficial bajo el que pesa. No es un recuento de síes: cada pregunta entra en
+   el motor por su vía.
+
+     via 'funcion'    → condición i) de la Guía azul: prestaciones, propósito o
+                        tipo originales
+     via 'riesgo'     → condición ii) de la Guía azul y núcleo del art. 3.16:
+                        nuevo peligro o riesgo aumentado
+     via 'control'    → art. 3.16.a: exige modificar el sistema de control de
+                        seguridad
+     via 'estructura' → art. 3.16.b: exige medidas de estabilidad o resistencia
+                        mecánica
+
+   severidad 'decisiva' → una sola respuesta afirmativa basta para descartar
+                        que la intervención sea ordinaria, sin ponderar nada más. */
+const PREGUNTAS_MODIFICACION = [
+  { id:'q1',  texto:'¿Se modifica la función prevista de la puerta?',
+    via:'funcion',    severidad:'decisiva' },
+  { id:'q2',  texto:'¿Se modifica el modo de accionamiento o funcionamiento?',
+    via:'funcion',    severidad:'alta' },
+  { id:'q3',  texto:'¿Se modifica la lógica de seguridad o el sistema de mando?',
+    via:'control',    severidad:'alta' },
+  { id:'q4',  texto:'¿Se modifica la velocidad de movimiento?',
+    via:'riesgo',     severidad:'media' },
+  { id:'q5',  texto:'¿Se modifican los valores de fuerza, par o potencia relevantes para la seguridad?',
+    via:'riesgo',     severidad:'alta' },
+  { id:'q6',  texto:'¿Se modifica el recorrido de la hoja o de los elementos móviles?',
+    via:'riesgo',     severidad:'media' },
+  { id:'q7',  texto:'¿Se introducen nuevos riesgos o aumentan riesgos existentes?',
+    via:'riesgo',     severidad:'decisiva' },
+  { id:'q8',  texto:'¿Se modifica de forma sustancial el sistema de control o el cuadro de maniobra?',
+    via:'control',    severidad:'alta' },
+  { id:'q9',  texto:'¿Se motoriza una puerta que anteriormente era manual?',
+    via:'funcion',    severidad:'decisiva' },
+  { id:'q10', texto:'¿Se modifica la estructura portante, hoja, guías, herrajes o elementos '+
+                    'resistentes de forma que pueda afectar a la seguridad?',
+    via:'estructura', severidad:'alta' },
+  { id:'q11', texto:'¿Se modifica alguna prestación esencial declarada del producto de construcción?',
+    via:'funcion',    severidad:'decisiva' },
+  { id:'q12', texto:'¿Se modifica el uso previsto o, en una puerta resistente al fuego, se altera '+
+                    'una configuración no contemplada por la documentación o certificación del fabricante?',
+    via:'funcion',    severidad:'decisiva' },
+];
+
+/* Los cinco resultados */
+const RESULTADOS_INTERVENCION = {
+  A: {
+    nombre: 'Mantenimiento / reparación ordinaria',
+    /* Las siete condiciones, todas en negativo: basta que falle una para que A
+       no aplique. */
+    condiciones: [
+      { clave:'funcion',      texto:'conserva la función' },
+      { clave:'uso',          texto:'conserva el uso previsto' },
+      { clave:'logica',       texto:'no altera sustancialmente la lógica de seguridad' },
+      { clave:'riesgos',      texto:'no introduce nuevos riesgos' },
+      { clave:'prestaciones', texto:'no modifica prestaciones esenciales' },
+      { clave:'motoriza',     texto:'no convierte una puerta manual en motorizada' },
+      { clave:'certificada',  texto:'no altera una configuración certificada relevante' },
+    ],
+    documentacion: ['Parte de mantenimiento', 'Registro de intervención',
+                    'Comprobaciones', 'Piezas'],
+    emite_declaracion: false,
+    cerrable: true,
+  },
+  B: {
+    nombre: 'Adecuación o mejora de seguridad sin modificación sustancial',
+    documentacion: ['Informe de adecuación', 'Evaluación de riesgos y deficiencias',
+      'Relación de medidas correctoras', 'Comprobaciones realizadas',
+      'Registro de mantenimiento o intervención', 'Documentación de los dispositivos instalados',
+      'Actualización del libro de mantenimiento'],
+    regla: 'No se genera automáticamente una Declaración CE propia nueva.',
+    emite_declaracion: false,
+    cerrable: true,
+  },
+  C: {
+    nombre: 'Modificación que requiere evaluación técnica adicional',
+    documentacion: ['Evaluación técnica específica', 'Análisis de riesgos',
+      'Comprobación de compatibilidad', 'Ensayos adicionales',
+      'Documentación del fabricante', 'Revisión de prestaciones', 'Decisión técnica firmada'],
+    regla: 'No se emite declaración de conformidad ni declaración de prestaciones nuevas hasta '+
+           'que la evaluación adicional determine el resultado definitivo.',
+    estado: 'EXPEDIENTE EN REVISIÓN / NO CERRABLE',
+    emite_declaracion: false,
+    cerrable: false,
+  },
+  D: {
+    nombre: 'Modificación sustancial / nueva máquina o conjunto a evaluar',
+    documentacion: ['Nueva evaluación de riesgos', 'Expediente técnico interno', 'Esquemas',
+      'Documentación de componentes', 'Cálculos', 'Ensayos', 'Comprobación de seguridad',
+      'Declaración de conformidad que corresponda', 'Marcado', 'Instrucciones de uso',
+      'Libro de mantenimiento',
+      'Declaración de prestaciones si además procede por el producto de construcción'],
+    regla: 'Se trata como nueva máquina o conjunto modificado sujeto a evaluación completa. '+
+           'La empresa que realiza la modificación puede asumir las obligaciones del '+
+           'fabricante o integrador del conjunto resultante, según el caso.',
+    estado: 'TRATAR COMO NUEVA MÁQUINA / CONJUNTO MODIFICADO SUJETO A EVALUACIÓN COMPLETA',
+    emite_declaracion: true,
+    cerrable: false,   // no se cierra hasta completar todas las obligaciones documentales
+  },
+  E: {
+    nombre: 'Caso no resoluble automáticamente / revisión técnica obligatoria',
+    documentacion: ['Informe de incidencias', 'Relación de la información que falta',
+      'Preguntas que impiden la clasificación', 'Registro de quién revisa el caso'],
+    regla: 'Revisión humana obligatoria. Queda bloqueada la emisión de la declaración '+
+           'definitiva. Un técnico autorizado puede seleccionar después A, B, C o D con '+
+           'justificación escrita.',
+    estado: 'NO ES POSIBLE DETERMINAR AUTOMÁTICAMENTE LA NATURALEZA DE LA INTERVENCIÓN. '+
+            'SE REQUIERE REVISIÓN TÉCNICA.',
+    emite_declaracion: false,
+    cerrable: false,
+  },
+};
+
+/* Qué condición de A tumba cada pregunta cuando se contesta que sí */
+const PREGUNTA_TUMBA = {
+  q1:'funcion', q2:'funcion', q3:'logica', q4:'riesgos', q5:'riesgos', q6:'riesgos',
+  q7:'riesgos', q8:'logica', q9:'motoriza', q10:'riesgos', q11:'prestaciones',
+  q12:'certificada',
+};
+
+/* ---- Encaminamiento de cada pregunta afirmativa ----
+   DECISIÓN DE DISEÑO, pendiente de validación: el encargo describe los cinco
+   resultados en prosa y da una regla de prioridad, pero no dice pregunta por
+   pregunta a cuál va cada una. Esto es el reparto que se ha codificado, y está
+   aquí a la vista para poder corregirlo sin tocar la lógica.
+
+   A D van las que el encargo cita literalmente como casos típicos de D y que no
+   admiten matiz: motorizar una puerta manual, cambiar la función prevista,
+   introducir nuevos riesgos, tocar una prestación esencial declarada.
+
+   A C van las que el encargo cita a la vez en C y en D, donde la diferencia está
+   en si el cambio es «relevante» o «significativo»: velocidad, fuerzas, recorrido,
+   lógica de control, cuadro de maniobra, estructura, modo de accionamiento. La
+   aplicación NO puede decidir sola si un cambio de velocidad es relevante, así
+   que manda a evaluación técnica en vez de concluir. */
+const PREGUNTA_DESTINO = {
+  q1:'D', q7:'D', q9:'D', q11:'D',
+  q2:'C', q3:'C', q4:'C', q5:'C', q6:'C', q8:'C', q10:'C',
+  q12:'D',   // salvo en cortafuegos, donde va a E. Ver evaluarIntervencion.
+};
+
+/* Preguntas críticas: un «desconocido» en cualquiera de ellas impide clasificar
+   y manda el expediente a revisión humana. Son las de severidad decisiva.
+   DECISIÓN DE DISEÑO: el encargo habla de «pregunta crítica» sin enumerarlas. */
+const PREGUNTAS_CRITICAS = ['q1', 'q7', 'q9', 'q11', 'q12'];
+
+/* Tipos que por sí mismos ya declaran el desenlace */
+const TIPO_FUERZA_RESULTADO = {
+  modif_sustancial: 'D',
+  motorizacion:     'D',
+  no_clasificable:  'E',
+};
+/* Tipos cuyo objeto es mejorar la seguridad: con todo contestado que no, el
+   resultado es B y no A. Es lo que separa «mantenimiento ordinario» de
+   «adecuación o mejora de seguridad». */
+const TIPOS_MEJORA_SEGURIDAD = ['mejora_seguridad', 'adecuacion'];
+
+const CRITERIOS_MODIFICACION = {
+  guia_azul: {
+    nombre: 'apartado 2.1 de la «Guía azul» 2022 de la Comisión Europea',
+    referencia: 'Comunicación 2022/C 247/01, DOUE de 29 de junio de 2022',
+    nota: 'Exige tres condiciones cumulativas: que se modifiquen las prestaciones, el '+
+          'propósito o el tipo originales sin estar previsto en la evaluación inicial del '+
+          'riesgo; que la naturaleza del peligro haya cambiado o el nivel de riesgo haya '+
+          'aumentado; y que el producto se comercialice o se ponga en servicio.',
+    verificado: '2026-10-07',
+  },
+  reglamento_2023: {
+    nombre: 'artículo 3, punto 16, del Reglamento (UE) 2023/1230 de máquinas',
+    referencia: 'aplicable desde el 20 de enero de 2027 (artículo 54)',
+    nota: 'No exige cambio de función ni de prestaciones. Basta un nuevo peligro o un '+
+          'riesgo aumentado que exija la incorporación de resguardos o dispositivos de '+
+          'protección cuyo procesamiento necesite modificar el sistema de control de '+
+          'seguridad, o nuevas medidas de estabilidad o resistencia mecánica.',
+    verificado: '2026-10-07',
+  },
+};
+/* El criterio lo decide la fecha de puesta en servicio, igual que el marco de
+   máquinas. Son dos criterios distintos y el segundo es más amplio: una misma
+   intervención puede no ser sustancial hoy y sí serlo desde el 20-1-2027. */
+const criterioModificacion = f =>
+  marcoDeFecha(f) === 'reglamento' ? 'reglamento_2023' : 'guia_azul';
+
+function respuestasIntervencion(e){
+  const d = (((e||{}).datos||{}).interv) || {};
+  const r = {};
+  PREGUNTAS_MODIFICACION.forEach(p => { r[p.id] = (d[p.id] || {}).v || ''; });
+  return r;
+}
+
+/* Devuelve el estado del motor. NUNCA devuelve una letra que no esté definida,
+   y NUNCA convierte un «desconocido» en un «no». */
+function evaluarIntervencion(e){
+  const d  = (((e||{}).datos||{}).interv) || {};
+  const out = {
+    tipo: d.tipo || '',
+    tipoNombre: (TIPOS_INTERVENCION[d.tipo] || {}).nombre || '',
+    criterio: criterioModificacion((e||{}).fecha_puesta_servicio),
+    resultado: null,          // la letra, solo si se puede determinar de verdad
+    clase: 'indeterminada',   // ordinaria | no_ordinaria | indeterminada
+    motivos: [],
+    abiertas: [],             // preguntas sin contestar o que piden revisión
+    decisivas: [],            // preguntas decisivas contestadas que sí
+    condiciones_falladas: [],
+    bloqueos: [],
+    requiere_cuestionario: false,
+  };
+  if (!out.tipo){
+    out.bloqueos.push('No se ha decidido el tipo de intervención. Es la decisión previa: '+
+      'hasta que no esté tomada no puede generarse ningún documento.');
+    return out;
+  }
+  if (TIPOS_SIN_CUESTIONARIO.indexOf(out.tipo) >= 0){
+    out.clase = 'puerta_nueva';
+    out.motivos.push('La puerta se pone en el mercado nueva, de modo que no procede '+
+      'evaluar si hay modificación sustancial de una máquina ya existente.');
+    return out;
+  }
+
+  out.requiere_cuestionario = true;
+  const r = respuestasIntervencion(e);
+  const crit = out.criterio;
+  const cierra = (letra, porque) => {
+    out.resultado = letra;
+    const res = RESULTADOS_INTERVENCION[letra];
+    out.clase = letra === 'A' ? 'ordinaria' : (letra === 'B' ? 'mejora_seguridad' :
+                letra === 'D' ? 'sustancial' : 'revision');
+    out.emite_declaracion = !!res.emite_declaracion;
+    out.cerrable = !!res.cerrable;
+    if (porque) out.motivos.unshift(porque);
+    out.motivos.push('Criterio aplicado: '+CRITERIOS_MODIFICACION[crit].nombre+'. '+
+      CRITERIOS_MODIFICACION[crit].nota);
+    if (res.regla) out.regla = res.regla;
+    if (res.estado) out.estado = res.estado;
+    if (!res.cerrable)
+      out.bloqueos.push(res.estado+' '+(res.regla||''));
+    return out;
+  };
+
+  const dichoSi = [];
+  PREGUNTAS_MODIFICACION.forEach(p => {
+    const v = r[p.id];
+    if (!v || RESPUESTAS_ABIERTAS.indexOf(v) >= 0){
+      out.abiertas.push({ id:p.id, texto:p.texto, valor:v || '',
+                          critica: PREGUNTAS_CRITICAS.indexOf(p.id) >= 0 });
+      return;
+    }
+    if (v !== 'si') return;
+    dichoSi.push(p);
+    const cond = PREGUNTA_TUMBA[p.id];
+    if (cond && out.condiciones_falladas.indexOf(cond) < 0) out.condiciones_falladas.push(cond);
+    if (p.severidad === 'decisiva') out.decisivas.push({ id:p.id, texto:p.texto, via:p.via });
+  });
+
+  /* El tipo elegido puede declarar el desenlace por sí solo */
+  const forzado = TIPO_FUERZA_RESULTADO[out.tipo];
+
+  /* Sin contestar NO es lo mismo que desconocido. Una pregunta en blanco deja el
+     cuestionario incompleto y no se clasifica nada, salvo que el tipo elegido ya
+     declare el desenlace. */
+  const enBlanco = out.abiertas.filter(x => !x.valor);
+  if (enBlanco.length && !forzado){
+    out.bloqueos.push('Cuestionario incompleto: faltan '+enBlanco.length+' de las doce '+
+      'preguntas de modificación por contestar.');
+    return out;
+  }
+
+  /* ---- REGLA DE PRIORIDAD POR SEVERIDAD, no por recuento de síes ---- */
+
+  /* 1. D: condición claramente encuadrable en modificación sustancial */
+  if (forzado === 'D')
+    return cierra('D', 'El tipo de intervención elegido, «'+out.tipoNombre+'», es por sí mismo '+
+      'una modificación sustancial.');
+  const aD = dichoSi.filter(p => {
+    if (p.id === 'q12') return (e||{}).familia !== 'cortafuegos';  // en cortafuegos va a E
+    return PREGUNTA_DESTINO[p.id] === 'D';
+  });
+  if (aD.length){
+    aD.forEach(p => out.motivos.push('Respuesta decisiva: '+p.texto));
+    return cierra('D', 'La intervención produce un cambio que obliga a evaluar de nuevo el '+
+      'conjunto resultante como máquina completa.');
+  }
+
+  /* 2. E: condición crítica que impide decidir, o cortafuegos fuera de certificación */
+  if (forzado === 'E')
+    return cierra('E', 'El tipo de intervención elegido es «'+out.tipoNombre+'».');
+  const cortafuegosFuera = dichoSi.some(p => p.id === 'q12') && (e||{}).familia === 'cortafuegos';
+  if (cortafuegosFuera){
+    out.motivos.push('Se altera una configuración no contemplada por la documentación o la '+
+      'certificación del fabricante en una puerta resistente al fuego. El encargo deja este '+
+      'caso entre D y E según evaluación técnica, y la aplicación no lo decide sola.');
+    return cierra('E', 'Puerta resistente al fuego con una configuración fuera de lo certificado.');
+  }
+  const criticasDesconocidas = out.abiertas.filter(x => x.critica && x.valor === 'desconocido');
+  if (criticasDesconocidas.length){
+    criticasDesconocidas.forEach(x =>
+      out.motivos.push('Sin determinar, y es crítica: '+x.texto));
+    return cierra('E', 'Hay '+criticasDesconocidas.length+' pregunta(s) crítica(s) marcadas como '+
+      'desconocidas, y sin ellas no puede decidirse entre B, C y D.');
+  }
+  if (enBlanco.length){
+    enBlanco.forEach(x => out.motivos.push('Sin contestar: '+x.texto));
+    return cierra('E', 'Quedan preguntas sin contestar y el tipo elegido no permite clasificar '+
+      'el caso sin ellas.');
+  }
+
+  /* 3. C: modificación relevante que necesita estudio adicional */
+  const paraRevisar  = out.abiertas.filter(x => x.valor === 'revision');
+  const desconocidas = out.abiertas.filter(x => x.valor === 'desconocido');
+  const aC = dichoSi.filter(p => PREGUNTA_DESTINO[p.id] === 'C');
+  if (aC.length || paraRevisar.length || desconocidas.length){
+    aC.forEach(p => out.motivos.push('Cambio que hay que valorar: '+p.texto));
+    paraRevisar.forEach(x => out.motivos.push('Marcada para revisión técnica: '+x.texto));
+    desconocidas.forEach(x => out.motivos.push('Sin determinar: '+x.texto));
+    out.motivos.push('La aplicación no decide por su cuenta si estos cambios son relevantes '+
+      'para la seguridad. Eso es precisamente lo que tiene que resolver la evaluación técnica.');
+    return cierra('C', 'Hay cambios que no son mantenimiento ordinario pero tampoco permiten '+
+      'concluir directamente que haya modificación sustancial.');
+  }
+
+  /* 4. B: solo mejora de seguridad, sin modificación sustancial */
+  if (TIPOS_MEJORA_SEGURIDAD.indexOf(out.tipo) >= 0)
+    return cierra('B', 'La intervención tiene por objeto mejorar la seguridad de la puerta y '+
+      'ninguna de las doce preguntas señala modificación sustancial.');
+
+  /* 5. A: mantenimiento o reparación ordinaria */
+  return cierra('A', 'Ninguna de las doce preguntas señala cambio: la intervención conserva la '+
+    'función y el uso previsto, no altera la lógica de seguridad, no introduce riesgos nuevos, '+
+    'no toca prestaciones esenciales, no motoriza una puerta manual y no altera una '+
+    'configuración certificada.');
+}
+
 /* ---- Componentes de la instalación, con foto de cada uno ----
    clave, nombre, ayuda para el técnico, si lleva marca/modelo/serie. */
 /* ===== Modo de accionamiento y tipo de usuario =====
@@ -3436,6 +3836,8 @@ function guardarExpediente(){
 /* Qué secciones tiene este expediente, según la situación y la familia */
 function expSecciones(e){
   const s = [
+    /* Decisión previa y obligatoria: va la primera a propósito. */
+    ['intervencion','Tipo de intervención'],
     ['obra',        'Dónde y para quién'],
     ['puerta',      'La puerta'],
     ['componentes', 'Elementos de la instalación'],
@@ -3466,6 +3868,23 @@ function validarExpediente(e){
 
   const B = (area, texto) => bloqueos.push({ area, texto });
   const A = (area, texto) => avisos.push({ area, texto });
+
+  /* --- Intervención: la decisión previa manda sobre todo lo demás ---
+     Si el motor no puede determinar la naturaleza de la intervención, o la
+     determina en un resultado que el encargo declara no cerrable, no se emite
+     nada. Es la regla de fondo: antes «no puede determinarse» que un documento
+     jurídicamente dudoso. */
+  const iv = evaluarIntervencion(e);
+  iv.bloqueos.forEach(t => B('Intervención', t));
+  if (iv.resultado && !iv.cerrable && !iv.bloqueos.length)
+    B('Intervención', 'El resultado '+iv.resultado+' no permite cerrar el expediente: '+
+      (iv.estado || RESULTADOS_INTERVENCION[iv.resultado].nombre));
+  if (iv.resultado === 'B' || iv.resultado === 'A'){
+    if (fab) B('Intervención', 'El motor clasifica esta intervención como «'+
+      RESULTADOS_INTERVENCION[iv.resultado].nombre+'», que no genera una declaración propia '+
+      'nueva, pero el expediente está planteado como fabricante. No pueden ser las dos cosas: '+
+      'revisa el tipo de intervención o la situación del expediente.');
+  }
 
   /* --- Legal --- */
   if (!e.fecha_puesta_servicio) B('Legal', 'Falta la fecha de puesta en servicio, que decide el marco legal aplicable.');
@@ -3856,7 +4275,8 @@ function vistaExpediente(id){
     '</div>';
 
   h += '<div class="panel">';
-  if (actual === 'obra')          h += expSecObra(e, p, c);
+  if (actual === 'intervencion')  h += expSecIntervencion(e);
+  else if (actual === 'obra')     h += expSecObra(e, p, c);
   else if (actual === 'puerta')   h += expSecPuerta(e, p);
   else if (actual === 'componentes') h += expSecComponentes(e);
   else if (actual === 'cumplimiento') h += expSecCumplimiento(e);
@@ -3896,6 +4316,78 @@ const expSel = (ruta, etiqueta, opciones, pista) =>
   opciones.map(o => { const [v,t] = Array.isArray(o)?o:[o,o];
     return '<option value="'+esc(v)+'"'+(String(expVal(ruta,''))===String(v)?' selected':'')+'>'+esc(t)+'</option>'; }).join('')+
   '</select>'+(pista?'<span class="pista">'+esc(pista)+'</span>':'')+'</div>';
+
+/* ---- Decisión previa: qué estamos haciendo exactamente ---- */
+function expSecIntervencion(e){
+  const v = evaluarIntervencion(e);
+  const crit = CRITERIOS_MODIFICACION[v.criterio] || {};
+  let h = '<div class="panel-h"><h3>Tipo de intervención</h3></div>'+
+    '<p class="mini" style="margin:0 0 12px">Primera decisión y obligatoria. Intervenir sobre una '+
+    'puerta que ya existe <b>no</b> la convierte por sí solo en una máquina nueva: eso hay que '+
+    'demostrarlo con las doce preguntas, no suponerlo.</p>'+
+    '<div class="campos">'+
+    expSel('interv.tipo', 'Qué estamos haciendo',
+      [['', 'Sin decidir']].concat(Object.entries(TIPOS_INTERVENCION)
+        .sort((a,b) => a[1].n - b[1].n)
+        .map(([k, t]) => [k, t.n + '. ' + t.nombre])),
+      'De aquí sale qué documentación procede y si pasamos a ser fabricante')+
+    '</div>';
+
+  if (!v.tipo)
+    return h + '<p class="nota-oficina" style="margin:14px 0 0">Elige el tipo de intervención '+
+      'para continuar. Mientras no esté decidido no se emite ningún documento.</p>';
+
+  if (!v.requiere_cuestionario)
+    return h + '<p class="nota-oficina" style="margin:14px 0 0">'+esc(v.motivos[0] || '')+'</p>';
+
+  const r = (((e.datos||{}).interv) || {});
+  h += '<div class="panel-h" style="margin-top:18px"><h3>Evaluación de modificación</h3>'+
+       '<span class="mini">'+(12 - v.abiertas.length)+' de 12</span></div>'+
+    '<p class="mini" style="margin:0 0 4px">Criterio que se aplica por la fecha de puesta en '+
+    'servicio: <b>'+esc(crit.nombre || '')+'</b>.</p>'+
+    '<p class="mini" style="margin:0 0 12px">'+esc(crit.nota || '')+'</p>'+
+    '<p class="mini" style="margin:0 0 12px"><b>Desconocido</b> y <b>Requiere revisión técnica</b> '+
+    'no cuentan como un «no»: dejan el expediente en «no puede determinarse».</p>';
+
+  PREGUNTAS_MODIFICACION.forEach((p, i) => {
+    const val = (r[p.id] || {}).v || '';
+    const abierta = !val || RESPUESTAS_ABIERTAS.indexOf(val) >= 0;
+    h += '<div class="campos'+(abierta ? ' bloque-sin' : '')+'" style="margin-bottom:10px">'+
+      expSel('interv.'+p.id+'.v', (i+1)+'. '+p.texto,
+        [['', 'Sin contestar']].concat(Object.entries(RESPUESTAS_MODIF)),
+        '')+
+      (val === 'si' || val === 'revision'
+        ? expArea('interv.'+p.id+'.nota', 'En qué consiste', 'Concreta el cambio o lo que hay que revisar', 2)
+        : '')+
+      '</div>';
+  });
+
+  h += '<div class="panel-h" style="margin-top:18px"><h3>Resultado del motor</h3></div>';
+  if (v.resultado){
+    const res = RESULTADOS_INTERVENCION[v.resultado];
+    h += '<div'+(v.cerrable ? '' : ' class="bloque-sin" style="padding:12px"')+'>'+
+      '<p class="'+(v.cerrable ? 'nota-oficina' : '')+'" style="margin:0 0 10px"><b>'+
+      esc(v.resultado)+'. '+esc(res.nombre)+'</b></p>'+
+      (v.estado ? '<p style="margin:0 0 10px"><b>'+esc(v.estado)+'</b></p>' : '')+
+      '<ul class="mini" style="margin:0 0 10px;padding-left:18px">'+
+      v.motivos.map(m => '<li>'+esc(m)+'</li>').join('')+'</ul>'+
+      (v.regla ? '<p class="mini" style="margin:0 0 10px"><b>'+esc(v.regla)+'</b></p>' : '')+
+      '<p class="mini" style="margin:0"><b>Documentación que procede:</b> '+
+      esc(res.documentacion.join('; '))+'.</p>'+
+      '</div>';
+  } else {
+    h += '<div class="bloque-sin" style="padding:12px"><p style="margin:0 0 8px"><b>NO PUEDE '+
+      'DETERMINARSE</b></p><ul class="mini" style="margin:0;padding-left:18px">'+
+      v.bloqueos.map(m => '<li>'+esc(m)+'</li>').join('')+'</ul>'+
+      (v.motivos.length
+        ? '<p class="mini" style="margin:10px 0 0"><b>Lo que sí se sabe:</b></p>'+
+          '<ul class="mini" style="margin:0;padding-left:18px">'+
+          v.motivos.map(m => '<li>'+esc(m)+'</li>').join('')+'</ul>'
+        : '')+
+      '</div>';
+  }
+  return h;
+}
 
 function expSecObra(e, p, c){
   return '<div class="panel-h"><h3>Dónde y para quién</h3></div>'+
@@ -4564,7 +5056,7 @@ function dlgExpedienteNuevo(puertaId){
       if (error) throw error;
       if (!data || !data.ok) return setErr(textoFallo(data));
       cerrarDlg(); await cargar();
-      S.exp = data.id; S.expPaso = 'obra'; S.ficha = null;
+      S.exp = data.id; S.expPaso = 'intervencion'; S.ficha = null;
       await cargarFotosExp(data.id); await cargarDocsExp(data.id);
       pintar(); window.scrollTo({top:0});
       toast('Expediente ' + (data.referencia||'') + ' abierto.');
@@ -5632,6 +6124,43 @@ async function libroExpediente(id){
         'Real Decreto 486/1997 sobre lugares de trabajo, anexo I parte A punto 6, y el Real Decreto 1215/1997 '+
         'sobre equipos de trabajo.</p>' : '')+
     '</section>';
+
+  /* ---------- NATURALEZA DE LA INTERVENCIÓN ----------
+     Va justo después del objeto porque condiciona todo lo que viene detrás:
+     si hay o no declaración propia, y si el expediente puede cerrarse. */
+  {
+    const iv = evaluarIntervencion(e);
+    if (iv.tipo){
+      const res = iv.resultado ? RESULTADOS_INTERVENCION[iv.resultado] : null;
+      const crit = CRITERIOS_MODIFICACION[iv.criterio] || {};
+      H += abreSec('Naturaleza de la intervención')+
+        '<table class="datos">'+
+          campo('Tipo de intervención',
+                (TIPOS_INTERVENCION[iv.tipo]||{}).n + '. ' + iv.tipoNombre)+
+          campo('Resultado', res ? iv.resultado+'. '+res.nombre : 'No puede determinarse')+
+          campo('Criterio aplicado', crit.nombre || '')+
+        '</table>';
+      if (iv.requiere_cuestionario){
+        H += '<p>Evaluación de modificación, doce preguntas:</p>'+
+          '<table class="datos">'+
+          PREGUNTAS_MODIFICACION.map((p, i) => {
+            const x = (((e.datos||{}).interv)||{})[p.id] || {};
+            const v = RESPUESTAS_MODIF[x.v] || 'Sin contestar';
+            return campo((i+1)+'. '+p.texto, v + (x.nota ? ' — '+x.nota : ''));
+          }).join('')+
+          '</table>';
+      }
+      if (iv.estado) H += '<p class="aviso"><b>'+esc(iv.estado)+'</b></p>';
+      if (iv.motivos.length)
+        H += '<p>Fundamento de la clasificación:</p><ul>'+
+             iv.motivos.map(m => '<li>'+esc(m)+'</li>').join('')+'</ul>';
+      if (iv.regla) H += '<p><b>'+esc(iv.regla)+'</b></p>';
+      if (res) H += '<p><b>Documentación que procede.</b> '+esc(res.documentacion.join('; '))+'.</p>';
+      if (iv.bloqueos.length)
+        H += '<p class="aviso">'+iv.bloqueos.map(esc).join(' ')+'</p>';
+      H += '</section>';
+    }
+  }
 
   /* ---------- 2. IDENTIFICACIÓN ---------- */
   const pu = d.puerta || {};
@@ -7865,7 +8394,7 @@ raiz.addEventListener('click', async e => {
   else if (a === 'aviso-anular') dlgAnular(b.dataset.id);
   else if (a === 'exp-nuevo') dlgExpedienteNuevo(b.dataset.id);
   else if (a === 'exp-abrir'){
-    S.exp = b.dataset.id; S.expPaso = 'obra'; S.ficha = null;
+    S.exp = b.dataset.id; S.expPaso = 'intervencion'; S.ficha = null;
     await cargarFotosExp(S.exp); await cargarDocsExp(S.exp); pintar(); window.scrollTo({top:0});
   }
   else if (a === 'exp-volver'){ const e = expDe(S.exp); S.exp = null;
@@ -8244,7 +8773,9 @@ raiz.addEventListener('change', e => {
     // Solo repintamos cuando la respuesta cambia lo que hay que enseñar.
     // acceso_personas entra aquí porque decide si la barrera lleva declaración
     // de prestaciones, y con ella todo un paso del cuestionario.
-    if (/\.(estado|v|incluir)$|motorizada|hueco$|\.via$|acceso_personas$|emitir_ddp$|\.modo$|usuarios$|puerta\.tipo$/.test(ruta)) pintar();
+    // interv.tipo entra aquí porque decide si se abre el cuestionario de
+    // modificación y, con él, el resultado del motor de intervención.
+    if (/\.(estado|v|incluir)$|motorizada|hueco$|\.via$|acceso_personas$|emitir_ddp$|\.modo$|usuarios$|puerta\.tipo$|interv\.tipo$/.test(ruta)) pintar();
     return;
   }
   if (e.target.dataset.expChk !== undefined){
