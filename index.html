@@ -2669,6 +2669,141 @@ const EXP_MARCO = {
 };
 const marcoDeFecha = f => !f ? 'pendiente' : (f < '2027-01-20' ? 'directiva' : 'reglamento');
 
+/* ===== Base normativa =====
+   Cada norma con su estado y, lo que más importa, bajo qué acto legal está armonizada.
+   Que una norma esté vigente en UNE no significa que esté citada en el DOUE bajo un
+   acto concreto: son dos cosas distintas y aquí van separadas.
+
+   Todo lleva fuente y fecha de la última comprobación. Lo que no se ha podido verificar
+   va como 'sin verificar' y la aplicación lo dice en los documentos en vez de callarlo. */
+const BASE_NORMAS = {
+  'UNE-EN 13241:2004+A2:2017': {
+    titulo: 'Puertas industriales, comerciales y de garaje y portones. Norma de producto, características de prestación.',
+    edicion: '2017-04-26', estado: 'vigente',
+    familia: ['industrial','barrera','cortafuegos'], funcion: 'producto',
+    armonizada: 'cpr_2011',
+    nota_armonizacion: 'La versión exacta citada en el DOUE está pendiente de contrastar con la lista '+
+      'consolidada de la Comisión: puede ser la EN 13241-1:2003+A1:2011 en lugar de esta.',
+    fuente: 'une.org', verificada: '2026-10-06',
+  },
+  'UNE-EN 12453:2018+A1:2022': {
+    titulo: 'Seguridad de uso de puertas motorizadas. Requisitos y métodos de ensayo.',
+    edicion: '2022-10-19', estado: 'vigente',
+    familia: ['industrial','barrera','cortafuegos'], funcion: 'seguridad de uso',
+    armonizada: 'sin_verificar',
+    fuente: 'une.org', verificada: '2026-10-06',
+  },
+  'UNE-EN 12604:2018+A1:2021': {
+    titulo: 'Aspectos mecánicos. Requisitos y métodos de ensayo.',
+    edicion: '2021-09-29', estado: 'vigente',
+    familia: ['industrial','barrera','cortafuegos'], funcion: 'mecánica',
+    armonizada: 'sin_verificar',
+    fuente: 'une.org', verificada: '2026-10-06',
+  },
+  'UNE-EN 12978:2025': {
+    titulo: 'Dispositivos de protección para puertas y portones motorizados. Requisitos y métodos de ensayo.',
+    edicion: '2025-11-05', estado: 'vigente',
+    familia: ['industrial','barrera','peatonal','cortafuegos'], funcion: 'dispositivos de protección',
+    armonizada: 'sin_verificar',
+    sustituye: 'UNE-EN 12978:2003+A1:2010',
+    fuente: 'une.org', verificada: '2026-10-06',
+  },
+  'UNE-EN 16005+A1:2024': {
+    titulo: 'Puertas automáticas peatonales. Seguridad de uso. Requisitos y métodos de ensayo.',
+    edicion: '2024-12-04', estado: 'vigente',
+    familia: ['peatonal'], funcion: 'seguridad de uso',
+    armonizada: 'sin_verificar',
+    fuente: 'une.org', verificada: '2026-10-06',
+  },
+  'UNE-EN 16361:2014+A1:2017': {
+    titulo: 'Puertas peatonales automáticas. Norma de producto, características de prestación.',
+    edicion: '2017-05-31', estado: 'vigente',
+    familia: ['peatonal'], funcion: 'producto',
+    armonizada: 'no_cpr',
+    nota_armonizacion: 'No consta citada en el DOUE como norma armonizada a efectos del régimen de '+
+      'productos de construcción aplicable a este producto. Una eventual armonización bajo otro acto '+
+      'de la Unión no genera por sí misma una declaración de prestaciones.',
+    fuente: 'une.org', verificada: '2026-10-06',
+  },
+  'UNE-EN 16034:2015': {
+    titulo: 'Prestaciones de resistencia al fuego y control de humos.',
+    edicion: '2015', estado: 'vigente',
+    familia: ['cortafuegos'], funcion: 'producto',
+    armonizada: 'cpr_2011',
+    nota_armonizacion: 'Solo se aplica junto a la norma de producto que corresponda, nunca sola.',
+    fuente: 'documento de trabajo de la empresa', verificada: '2026-10-06',
+  },
+  'UNE 85635:2012': {
+    titulo: 'Puertas industriales, comerciales, de garaje y portones ya instalados o de nueva instalación. '+
+            'Requisitos de instalación, uso, mantenimiento y modificación.',
+    edicion: '2012-09-26', estado: 'vigente',
+    familia: ['industrial','barrera'], funcion: 'instalación y mantenimiento',
+    armonizada: 'nacional',
+    fuente: 'une.org', verificada: '2026-10-06',
+  },
+  'UNE 85121:2018': {
+    titulo: 'Puertas peatonales automáticas. Instalación, uso y mantenimiento.',
+    edicion: '2018-12-05', estado: 'vigente',
+    familia: ['peatonal'], funcion: 'instalación y mantenimiento',
+    armonizada: 'nacional',
+    fuente: 'une.org', verificada: '2026-10-06',
+  },
+};
+const ARMONIZACION = {
+  cpr_2011:     'Armonizada bajo el Reglamento (UE) nº 305/2011',
+  cpr_2024:     'Armonizada bajo el Reglamento (UE) 2024/3110',
+  maquinas:     'Armonizada bajo la legislación de máquinas',
+  no_cpr:       'No armonizada a efectos de productos de construcción',
+  nacional:     'Norma nacional, no armonizada',
+  sin_verificar:'Condición de norma armonizada sin verificar',
+};
+
+/* ===== Régimen de productos de construcción =====
+   Verificado el 6 de octubre de 2026 en fuentes oficiales.
+
+   El Reglamento (UE) 2024/3110 entró en vigor el 7-1-2025 y se aplica desde el 8-1-2026,
+   pero NO de golpe: se aplica familia de producto por familia de producto, y solo cuando
+   existe una norma armonizada de prestaciones citada en el DOUE bajo él (considerando 110).
+
+   Para puertas no existe ninguna: la Comisión señala que las primeras serán las del
+   cemento, previsiblemente en 2027, y el mandato de normalización de puertas se envió a
+   CEN a finales de 2025. Prueba de que el régimen anterior sigue vivo: la Decisión de
+   Ejecución (UE) 2026/284, de 6 de febrero de 2026, sigue añadiendo normas armonizadas
+   en apoyo del Reglamento (UE) nº 305/2011.
+
+   Por eso el régimen de puertas se mantiene en el 305/2011. El día que se cite una norma
+   de puertas bajo el 2024/3110, se cambia aquí y toda la aplicación lo sigue. */
+const REGIMEN_CPR = {
+  familias: {
+    industrial:  { acto:'cpr_2011', desde:null },
+    barrera:     { acto:'cpr_2011', desde:null },
+    cortafuegos: { acto:'cpr_2011', desde:null },
+    peatonal:    { acto:null,       desde:null },   // no lleva declaración de prestaciones
+  },
+  actos: {
+    cpr_2011: {
+      nombre: 'Reglamento (UE) nº 305/2011 de productos de construcción',
+      modelo: 'modelo del Reglamento Delegado (UE) 574/2014',
+      nota: 'El Reglamento (UE) 2024/3110 se aplica desde el 8 de enero de 2026, pero las '+
+            'obligaciones de cada familia de producto solo son exigibles doce meses después de '+
+            'la entrada en vigor de la especificación técnica armonizada que la cubra. A la fecha '+
+            'de este documento no existe ninguna para puertas, de modo que sigue siendo de '+
+            'aplicación el Reglamento (UE) nº 305/2011.',
+    },
+    cpr_2024: {
+      nombre: 'Reglamento (UE) 2024/3110 de productos de construcción',
+      modelo: 'modelo que establezca el propio Reglamento',
+      nota: '',
+    },
+  },
+  revisar: '2027-06-30',   // fecha en la que conviene volver a comprobar si ya hay norma de puertas
+};
+function regimenCPR(e){
+  const f = (REGIMEN_CPR.familias[(e||{}).familia] || {});
+  if (!f.acto) return null;
+  return Object.assign({ clave: f.acto }, REGIMEN_CPR.actos[f.acto] || {});
+}
+
 /* ---- Componentes de la instalación, con foto de cada uno ----
    clave, nombre, ayuda para el técnico, si lleva marca/modelo/serie. */
 /* ===== Modo de accionamiento y tipo de usuario =====
@@ -3318,6 +3453,187 @@ function expSecciones(e){
 }
 
 /* Lo que falta por rellenar, para que nadie emita un expediente a medias */
+/* ===== Validador de emisión =====
+   Separa lo que impide emitir (bloqueo) de lo que solo hay que saber (advertencia).
+   Un borrador se puede exportar siempre; un documento definitivo, solo si no hay
+   ningún bloqueo. La regla de fondo: antes decir «no puede determinarse» que afirmar
+   algo que no se sostiene. */
+function validarExpediente(e){
+  const bloqueos = [], avisos = [], d = e.datos || {};
+  const em = datosEmpresa();
+  const reg = regimenDe(e);
+  const fab = EXP_ES_FABRICANTE(e.situacion);
+
+  const B = (area, texto) => bloqueos.push({ area, texto });
+  const A = (area, texto) => avisos.push({ area, texto });
+
+  /* --- Legal --- */
+  if (!e.fecha_puesta_servicio) B('Legal', 'Falta la fecha de puesta en servicio, que decide el marco legal aplicable.');
+  if (fab){
+    if (!((d.entrega||{}).firmante || em.representante))
+      B('Legal', 'No consta el representante que firma la declaración.');
+    if (!em.responsable_tecnico)
+      B('Legal', 'No puede emitirse la declaración definitiva hasta identificar a la persona '+
+        'facultada para reunir el expediente técnico.');
+    if (!em.nif || !em.domicilio || !em.cp || !em.poblacion)
+      B('Legal', 'Faltan datos de la empresa que son obligatorios en una declaración: '+
+        [!em.nif&&'NIF', !em.domicilio&&'domicilio', !em.cp&&'código postal',
+         !em.poblacion&&'población'].filter(Boolean).join(', ')+'.');
+  }
+
+  /* --- Prestaciones y declaración de prestaciones --- */
+  if (fab && reg.ddp){
+    const pz = d.prest || {};
+    const pv = pz.v || {};
+    const lista = EXP_PRESTACIONES[e.familia] || [];
+    const declaradas = lista.filter(([k]) => {
+      const v = (pv[k]||'').trim();
+      return v && !/^npd$/i.test(v) && !/^pendiente$/i.test(v);
+    });
+    if (lista.length && !declaradas.length)
+      B('Prestaciones', 'No puede emitirse una declaración de prestaciones con todas las '+
+        'características esenciales como NPD: hay que declarar la prestación de al menos una.');
+    if (!pz.via) B('Prestaciones', 'No consta por qué vía se declaran las prestaciones.');
+    /* Artículo 37: no basta con que exista un código de DTE */
+    if (['micro','unidad'].includes(pz.via)){
+      const art = pz.via === 'micro' ? '37' : '38';
+      if (!pz.dte_codigo) B('DTE', 'Falta la referencia de la Documentación Técnica Específica.');
+      if (pz.dte_ok !== 'si')
+        B('DTE', 'No puede emitirse la declaración de prestaciones mediante el procedimiento '+
+          'del artículo '+art+' sin confirmar que se cumplen sus condiciones.');
+      if (!pz.dte_responsable)
+        B('DTE', 'La Documentación Técnica Específica no tiene responsable identificado.');
+      if (!pz.dte_fecha)
+        B('DTE', 'La Documentación Técnica Específica no tiene fecha.');
+      if (!pz.dte_ubicacion)
+        B('DTE', 'No consta dónde está archivada la Documentación Técnica Específica: '+
+          'un número de referencia no demuestra que el documento exista.');
+      if (pz.via === 'micro' && pz.micro_comprobada !== 'si')
+        B('DTE', 'No consta comprobada la condición de microempresa, que es la que habilita '+
+          'el procedimiento del artículo 37.');
+    }
+  }
+
+  /* --- Ensayo de fuerzas --- */
+  const f = d.fuerzas || {};
+  const motor = (d.puerta||{}).motorizada !== 'no';
+  if (motor && f.incluir !== 'no'){
+    const perfil = perfilFuerza(e);
+    const puntos = EXP_PUNTOS_FUERZA[e.familia] || [];
+    const conMedida = puntos.filter((p, i) => { const m = f['m'+i]||{};
+      return (+m.fd||0)||(+m.fs||0)||(+m.fe||0)||(+m.td||0); });
+    if (!conMedida.length)
+      B('Ensayo', 'El ensayo de fuerzas está marcado como procedente pero no tiene ninguna medición.');
+    if (!f.instrumento) B('Ensayo', 'El ensayo de fuerzas no identifica el instrumento de medida.');
+    if (!f.calibracion) B('Ensayo', 'Falta la referencia de calibración del instrumento de medida.');
+    if (!f.fecha) B('Ensayo', 'El ensayo de fuerzas no tiene fecha.');
+    if (!(d.entrega||{}).tecnico) A('Ensayo', 'No consta el técnico que ejecutó el ensayo.');
+    if (!perfil.validado)
+      A('Ensayo', 'El perfil de ensayo aplicado no está contrastado con el texto de la norma: '+
+        'las medidas quedan registradas pero la aplicación no dictamina el resultado.');
+  }
+
+  /* --- Protección: sin datos no se calcula nivel --- */
+  {
+    const pu = d.puerta || {};
+    if (motor && !MATRIZ_NO_APLICA_A.includes(e.familia)){
+      if (!pu.modo || !pu.usuarios)
+        B('Protección', 'No es posible determinar el nivel mínimo de protección: faltan el modo '+
+          'de accionamiento o el tipo de usuario.');
+      else {
+        const base = MATRIZ_PROTECCION_FABRICA[pu.modo+'|'+pu.usuarios];
+        if (base && base.admisible === false)
+          B('Protección', 'La combinación de accionamiento y tipo de usuario declarada no es '+
+            'admisible: hay que cambiar el sistema antes de certificar.');
+      }
+      if (pu.modo === 'hombre_presente' && pu.hp_comprobado !== 'si')
+        B('Protección', 'Se ha declarado hombre presente sin comprobar que la puerta se detiene '+
+          'al soltar el mando.');
+    }
+  }
+
+  /* --- Identificación original --- */
+  {
+    const pu = d.puerta || {};
+    const MOV = ['corredera','seccional','batiente','enrollable','basculante','plegable'];
+    const enTipo = MOV.find(m => new RegExp(m,'i').test(pu.tipo||''));
+    const enDen  = MOV.find(m => new RegExp(m,'i').test(pu.denominacion||''));
+    if (enTipo && enDen && enTipo !== enDen)
+      B('Identificación', 'El tipo dice «'+pu.tipo+'» y la denominación comercial dice «'+
+        pu.denominacion+'»: no pueden ser las dos.');
+    if (e.situacion === 'adecuacion' || e.situacion === 'modificacion'){
+      const o = d.orig || {};
+      if (!o.marcado)
+        B('Identificación', 'No consta en qué estado estaba el marcado CE original de la puerta.');
+      if (['ilegible','ausente','desconocido'].includes(o.marcado)){
+        A('Identificación', 'El marcado CE original no se ha podido comprobar: la comprobación '+
+          'de marcado no puede darse por conforme, y nuestra etiqueta de mantenimiento no lo sustituye.');
+        const kd2 = d.cumple || {};
+        if ((kd2.marcado||{}).v === 'si')
+          B('Identificación', 'La comprobación del marcado CE está marcada como conforme, pero el '+
+            'marcado original consta como no comprobado o inexistente. No pueden ser las dos cosas.');
+      }
+      if (!o.fabricante) A('Identificación', 'No consta el fabricante original de la puerta.');
+    }
+  }
+
+  /* --- Temporal --- */
+  {
+    const hoyStr = hoy(), ps = e.fecha_puesta_servicio, fe = (d.fuerzas||{}).fecha;
+    const firma = (d.entrega||{}).fecha;
+    if (ps && ps > hoyStr)
+      B('Fechas', 'La puesta en servicio está fechada en el futuro ('+fechaCorta(ps)+').');
+    if (fe && fe > hoyStr) B('Fechas', 'El ensayo de fuerzas está fechado en el futuro.');
+    if (firma && ps && firma < ps)
+      A('Fechas', 'El documento se firma el '+fechaCorta(firma)+', antes de la puesta en servicio '+
+        'del '+fechaCorta(ps)+': lo que se describe como estado final es el previsto, no el comprobado.');
+  }
+
+  /* --- Comprobaciones y peligros --- */
+  {
+    const chk = EXP_COMPROBACIONES[e.familia] || [];
+    const kd = d.cumple || {};
+    const sin = chk.filter(c => {
+      const ap = procede(APLICA_COMPROBACION, c[0], e);
+      if (ap && ap.no) return false;
+      return !(kd[c[0]]||{}).v;
+    });
+    if (sin.length) B('Comprobaciones', sin.length+' comprobaciones de normativa sin contestar.');
+    const nc = chk.filter(c => (kd[c[0]]||{}).v === 'nc');
+    if (nc.length) A('Comprobaciones', nc.length+' comprobaciones marcadas como no comprobadas: '+
+      'quedan fuera del alcance de este documento.');
+    const sinMotivo = chk.filter(c => { const x = kd[c[0]]||{};
+      return (x.v === 'na' || x.v === 'nc') && !x.motivo; });
+    if (sinMotivo.length) B('Comprobaciones', 'Falta el motivo de '+sinMotivo.length+
+      ' comprobaciones marcadas como no aplicables o no comprobadas.');
+
+    const pel = peligrosDe(e);
+    if (pel){
+      const pd = d.peligro || {};
+      const sinV = pel.lista.filter(([pk]) => !(pd[pk]||{}).v);
+      if (sinV.length) B('Peligros', sinV.length+' peligros propios del tipo de puerta sin valorar.');
+      const sinComo = pel.lista.filter(([pk]) => (pd[pk]||{}).v === 'si' && !(pd[pk]||{}).como);
+      if (sinComo.length) B('Peligros', 'Falta explicar cómo se han resuelto '+sinComo.length+
+        ' peligros marcados como resueltos: una casilla no es una prueba.');
+    } else if ((d.puerta||{}).tipo) {
+      A('Peligros', 'El tipo de puerta no corresponde a ninguno de los grupos de peligros '+
+        'previstos: hay que valorarlos a mano.');
+    }
+  }
+
+  /* --- Documentación --- */
+  {
+    const marcados = ['ddp_fab','dc_fab','manual'].filter(k => ((d.entrega||{}).docs||{})[k] === 'si');
+    if (marcados.length && !(S.expDocs||[]).length)
+      B('Documentación', 'Se ha marcado como entregada documentación del fabricante que no está '+
+        'subida: el anexo quedaría anunciado y vacío.');
+    if ((d.ficticio) === 'si')
+      B('Documentación', 'El expediente está marcado como caso de prueba con datos ficticios.');
+  }
+
+  return { bloqueos, avisos, puedeEmitir: bloqueos.length === 0 };
+}
+
 function expPendientes(e){
   const falta = [];
   const d = e.datos || {};
@@ -3622,17 +3938,35 @@ function expSecPuerta(e, p){
   /* En una puerta que ya existía hay dos momentos: cómo estaba la identificación
      cuando llegamos y cómo queda al terminar. Sin separarlos, el documento dice a la
      vez «sin placa» y «placa legible», que fue lo que pasó. */
+  /* En una puerta que ya existía hay que separar dos cosas que no son lo mismo:
+     la identificación del FABRICANTE ORIGINAL (placa, marcado CE, número de serie) y
+     nuestra ETIQUETA INTERNA de mantenimiento. Poner una etiqueta AR no convierte en
+     conforme un marcado CE que no se ha podido comprobar. */
   const previa = (e.situacion === 'adecuacion' || e.situacion === 'modificacion')
-    ? expSel('puerta.placa_antes', 'Identificación que tenía al llegar',
+    ? '<div class="campo full"><p class="nota-oficina" style="margin:0">'+
+        '<b>Fabricación original.</b> Lo que había antes de nuestra intervención. '+
+        'Nuestra etiqueta de mantenimiento no sustituye a esta identificación.</p></div>'+
+      expTxt('orig.fabricante', 'Fabricante original', 'Si no se puede determinar, déjalo vacío')+
+      expTxt('orig.modelo', 'Modelo original')+
+      expTxt('orig.serie', 'Número de serie original')+
+      expSel('orig.marcado', 'Marcado CE original',
         [['', 'Sin contestar'],
-         ['completa','Placa y marcado CE legibles'],
-         ['ilegible','Placa presente pero ilegible o incompleta'],
-         ['sin','Sin placa ni número de serie'],
-         ['desconocido','No se ha podido determinar']],
-        'Lo que había antes de nuestra intervención')+
+         ['comprobado','Comprobado y legible'],
+         ['ilegible','Presente pero ilegible o incompleto'],
+         ['ausente','No existe'],
+         ['desconocido','No se ha podido comprobar']],
+        'Si no se puede comprobar, no es «conforme»: es «no comprobado»')+
+      expSel('orig.ddp', 'Declaración de prestaciones original',
+        [['', 'Sin contestar'], ['disponible','Disponible'], ['no','No disponible'],
+         ['desconocido','Se desconoce si existió']])+
+      expSel('orig.declaracion', 'Declaración de conformidad original',
+        [['', 'Sin contestar'], ['disponible','Disponible'], ['no','No disponible'],
+         ['desconocido','Se desconoce si existió']])+
+      '<div class="campo full"><p class="nota-oficina" style="margin:0">'+
+        '<b>Identificación interna.</b> La nuestra, para mantenimiento. No es un marcado CE.</p></div>'+
       expTxt('puerta.placa_despues', 'Qué hemos hecho con la identificación',
-        'Ej.: se ha repuesto la placa del fabricante; se ha añadido etiqueta de identificación '+
-        'de la instalación. Si no se ha tocado, dilo', 1)
+        'Ej.: se ha colocado etiqueta de identificación de la instalación con el código AR. '+
+        'Si no se ha tocado la placa del fabricante, dilo', 1)
     : '';
   const modif = (e.situacion === 'modificacion' && (EXP_REGIMEN[e.familia]||{}).ddp)
     ? expSel('prest.emitir_ddp', '¿Emitimos declaración de prestaciones nueva?',
@@ -4271,27 +4605,48 @@ function dlgExpedienteNuevo(puertaId){
 function dlgEmitirExpediente(id){
   const e = expDe(id); if (!e) return;
   const em = datosEmpresa();
-  const falta = expPendientes(e);
+  const v = validarExpediente(e);
   const incum = expIncumple(e);
-  let h = '<h3>Emitir el expediente</h3>';
-  if (falta.length)
-    h += '<p class="nota-oficina" style="margin:0 0 12px"><b>Ojo, falta por rellenar:</b><br>'+
-         falta.map(esc).join('<br>')+'</p>';
+
+  /* Estado del expediente, de un vistazo: lo que impide emitir arriba y en rojo,
+     lo que solo hay que saber debajo. Un bloqueo no se puede saltar desde aquí. */
+  let h = '<h3>Emitir el expediente</h3>'+
+    '<p class="mini" style="margin:0 0 10px"><b>Estado del expediente</b> · '+
+    (v.bloqueos.length
+      ? '<span style="color:var(--mal)">'+v.bloqueos.length+' bloqueo(s)</span>'
+      : '<span style="color:var(--ok)">sin bloqueos</span>')+
+    ' · '+v.avisos.length+' advertencia(s)</p>';
+
+  if (v.bloqueos.length){
+    h += '<div class="mal-caja" style="margin:0 0 12px"><b>No puede emitirse el documento definitivo.</b>'+
+      '<ul style="margin:6px 0 0;padding-left:18px">'+
+      v.bloqueos.map(x => '<li><b>'+esc(x.area)+':</b> '+esc(x.texto)+'</li>').join('')+
+      '</ul><p class="mini" style="margin:8px 0 0">Puedes seguir trabajando y exportar el borrador, '+
+      'que sale marcado como no válido para declarar conformidad.</p></div>';
+  }
+  if (v.avisos.length)
+    h += '<div class="aviso-caja" style="margin:0 0 12px"><b>Advertencias</b>'+
+      '<ul style="margin:6px 0 0;padding-left:18px">'+
+      v.avisos.map(x => '<li><b>'+esc(x.area)+':</b> '+esc(x.texto)+'</li>').join('')+'</ul></div>';
   if (incum.length)
     h += '<p class="nota-oficina" style="margin:0 0 12px"><b>Hay '+incum.length+
          ' incumplimiento(s) de los imprescindibles.</b> Si emites, el libro los recoge como deficiencias '+
          'y la puerta no queda certificada como conforme. Es correcto hacerlo así en una adecuación, '+
          'pero no en una puerta nueva.</p>';
+
   h += '<p class="mini" style="margin:0 0 12px">Al emitir se fija la fecha y quién firma. '+
        'El expediente deja de poder borrarse, porque es documentación entregada.</p>'+
     '<div class="campos">'+
     '<div class="campo full"><label for="xe-firm">Quién firma</label>'+
-      '<input id="xe-firm" type="text" value="'+esc(e.firmante || (e.datos&&e.datos.entrega&&e.datos.entrega.firmante) || em.responsable_tecnico || '')+'"></div>'+
+      '<input id="xe-firm" type="text" value="'+esc(e.firmante || (e.datos&&e.datos.entrega&&e.datos.entrega.firmante) || em.representante || '')+'"></div>'+
     '<div class="campo full"><label for="xe-cargo">Cargo</label>'+
       '<input id="xe-cargo" type="text" value="'+esc(e.firmante_cargo || em.cargo_firmante || '')+'"></div>'+
     '</div><p class="err"></p><div class="pie"><span class="sp"></span>'+
     '<button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
-    '<button type="submit" class="btn pri">Emitir</button></div>';
+    (v.puedeEmitir
+      ? '<button type="submit" class="btn pri">Emitir</button>'
+      : '<button type="button" class="btn pri" disabled style="opacity:.5;cursor:not-allowed">Emitir</button>')+
+    '</div>';
   abrirDlg(h, async () => {
     try {
       const { data, error } = await sb.rpc('emitir_expediente',
@@ -4355,6 +4710,20 @@ function expBloqueDTE(e, pr){
       'Informes de ensayo de tus proveedores, fichas técnicas, certificados de componentes', 3)+
     expArea('prest.dte_motivo', 'Por qué el método empleado es válido',
       'Por qué lo que has hecho demuestra el cumplimiento igual que el ensayo de la norma', 3)+
+    /* Un número de DTE no demuestra que el documento exista. Estos tres campos son los
+       que convierten la referencia en un documento localizable y con responsable. */
+    expTxt('prest.dte_responsable', 'Quién ha elaborado y firma la DTE', '', 1)+
+    expTxt('prest.dte_ubicacion', 'Dónde está archivada',
+      'Carpeta, expediente o ubicación física donde se guarda el documento', 1)+
+    expTxt('prest.dte_revision', 'Revisión', 'Ej.: 01')+
+    (via === 'micro'
+      ? expSel('prest.micro_comprobada', '¿Está comprobada la condición de microempresa?',
+          [['', 'Sin contestar'],
+           ['si','Sí, comprobada teniendo en cuenta empresas vinculadas y asociadas'],
+           ['no','No se ha comprobado']],
+          'Menos de 10 personas y volumen de negocio o balance no superior a 2 millones. '+
+          'No se deduce solo del número de trabajadores')
+      : '')+
     '</div>';
 
   if (!expVal('prest.dte_codigo','')) {
@@ -5290,13 +5659,24 @@ async function libroExpediente(id){
       campo('Dispositivos de accionamiento', pu.activacion)+
       campo('Ciclos previstos al día', pu.ciclos_dia)+
       campo('Alimentación eléctrica', pu.alimentacion)+
-      campo('Identificación al llegar', ({
-        completa:'Placa y marcado CE legibles',
-        ilegible:'Placa presente pero ilegible o incompleta',
-        sin:'Sin placa ni número de serie',
-        desconocido:'No se ha podido determinar',
-      })[pu.placa_antes] || '')+
-      campo('Actuación sobre la identificación', pu.placa_despues)+
+      /* La identificación del fabricante original y la nuestra van separadas: una
+         etiqueta de mantenimiento no es un marcado CE. */
+      campo('Fabricante original', (d.orig||{}).fabricante)+
+      campo('Modelo original', (d.orig||{}).modelo)+
+      campo('Nº de serie original', (d.orig||{}).serie)+
+      campo('Marcado CE original', ({
+        comprobado:'Comprobado y legible',
+        ilegible:'Presente pero ilegible o incompleto',
+        ausente:'No existe',
+        desconocido:'No se ha podido comprobar',
+      })[(d.orig||{}).marcado] || '')+
+      campo('Declaración de prestaciones original', ({
+        disponible:'Disponible', no:'No disponible', desconocido:'Se desconoce si existió',
+      })[(d.orig||{}).ddp] || '')+
+      campo('Declaración de conformidad original', ({
+        disponible:'Disponible', no:'No disponible', desconocido:'Se desconoce si existió',
+      })[(d.orig||{}).declaracion] || '')+
+      campo('Identificación interna colocada', pu.placa_despues)+
     '</table>'+
     galeria('puerta:general', 2)+
     '</section>';
@@ -5313,7 +5693,11 @@ async function libroExpediente(id){
       : e.situacion === 'nueva_instalador' && reg.ddp
       ? '<li><b>Reglamento (UE) 305/2011</b> de productos de construcción, sistema '+esc(reg.sistema)+' de evaluación y verificación de la constancia de las prestaciones. <b>La declaración de prestaciones la emite el fabricante de la puerta</b>; nosotros la comprobamos, la recopilamos y la transmitimos al titular. Copia en el anexo de documentación.</li>'
       : reg.ddp
-      ? '<li><b>Reglamento (UE) 305/2011</b> de productos de construcción. Declaración de prestaciones conforme al modelo del Reglamento Delegado (UE) 574/2014. Sistema '+esc(reg.sistema)+' de evaluación y verificación de la constancia de las prestaciones.</li>'
+      ? (() => { const rc = regimenCPR(e) || {};
+          return '<li><b>'+esc(rc.nombre || 'Reglamento (UE) nº 305/2011 de productos de construcción')+
+            '</b>. Declaración de prestaciones conforme al '+esc(rc.modelo || 'modelo aplicable')+
+            '. Sistema '+esc(reg.sistema)+' de evaluación y verificación de la constancia de las '+
+            'prestaciones.'+(rc.nota ? '<br><span class="min">'+esc(rc.nota)+'</span>' : '')+'</li>'; })()
       : reg.sistema === '1'
       /* Aquí sí hay declaración de prestaciones: la que emite el fabricante del
          conjunto certificado. Lo que no hay es una declaración nuestra. */
