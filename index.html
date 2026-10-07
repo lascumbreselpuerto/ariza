@@ -518,6 +518,22 @@ const valoracionDe = id => S.valoraciones[id] || null;
 const eur = n => (n == null || isNaN(n)) ? '—' :
   new Intl.NumberFormat('es-ES', { style:'currency', currency:'EUR', maximumFractionDigits:2 }).format(n);
 const pct = (parte, total) => (!total) ? '—' : (Math.round(parte / total * 1000) / 10).toFixed(1).replace('.', ',') + '%';
+
+/* ---- Horas facturables ----
+   Se facturan horas completas, nunca fracciones. Las fracciones se redondean
+   a la hora más cercana y los 30 minutos exactos suben:
+     1 h 29 min → 1 h     1 h 30 min → 2 h     2 h 45 min → 3 h
+   Por debajo se aplica el mínimo facturable que tenga puesto la empresa, y
+   nunca menos de una hora cuando ha habido trabajo: una visita de veinte
+   minutos no se factura como cero. */
+const horasFacturables = mins => {
+  const m = Math.round(+mins || 0);
+  if (m <= 0) return 0;
+  const enteras = Math.floor(m / 60) + ((m % 60) >= 30 ? 1 : 0);
+  const minimo = Math.max(1, Math.ceil(+((S.tarifas || {}).minimo_horas) || 0));
+  return Math.max(enteras, minimo);
+};
+
 /* Mes en formato 2026-09, para los filtros de la pantalla de gestión */
 const mesDe = s => String(s || '').slice(0, 7);
 const mesActual = () => new Date().toISOString().slice(0, 7);
@@ -4521,6 +4537,16 @@ function expSecPuerta(e, p){
 }
 
 /* ---- Elementos de la instalación, con foto de cada uno ---- */
+/* La hoja de la puerta y la puerta son lo mismo. Sus datos salen de «La puerta»,
+   y solo se cae a lo que hubiera guardado el componente en expedientes antiguos. */
+function datosHoja(e){
+  const pu = ((e||{}).datos||{}).puerta || {};
+  const cp = ((((e||{}).datos||{}).comp)||{}).hoja || {};
+  return { marca:  pu.marca  || cp.marca  || '',
+           modelo: pu.modelo || cp.modelo || '',
+           serie:  pu.serie  || cp.serie  || '' };
+}
+
 function expSecComponentes(e){
   const comps = EXP_COMPONENTES[e.familia] || [];
   const d = (e.datos||{}).comp || {};
@@ -4543,7 +4569,20 @@ function expSecComponentes(e){
       '<p class="mini" style="margin:4px 0 0">'+esc(ayuda)+'</p>';
     if (v === 'si'){
       h += '<div class="campos" style="margin-top:8px">';
-      if (pideDatos){
+      if (pideDatos && k === 'hoja'){
+        /* La hoja ES la puerta: su marca, modelo y número de serie son los que ya
+           se pusieron en «La puerta». Volver a pedirlos era escribir dos veces lo
+           mismo. Se muestran, no se preguntan. */
+        const dp = datosHoja(e);
+        h += '<div class="campo full"><label>Marca, modelo y nº de serie</label>'+
+          '<p class="nota-oficina" style="margin:0">'+
+          (dp.marca || dp.modelo || dp.serie
+            ? esc([dp.marca, dp.modelo, dp.serie].filter(Boolean).join(' · '))+
+              '<br><span class="mini">Se toman de «La puerta». Si hay que corregirlos, '+
+              'se corrigen allí y cambian aquí y en todos los documentos.</span>'
+            : 'Sin rellenar todavía. Se ponen en el paso <b>«La puerta»</b> y aparecen aquí solos.')+
+          '</p></div>';
+      } else if (pideDatos){
         h += expTxt('comp.'+k+'.marca', 'Marca')+
              expTxt('comp.'+k+'.modelo', 'Modelo')+
              expTxt('comp.'+k+'.serie', 'Nº de serie o lote');
@@ -4599,7 +4638,29 @@ function expSecComponentes(e){
 }
 
 /* ---- Comprobaciones de normativa ---- */
+/* La pantalla preguntaba dos veces «Por qué no aplica»: una en cumple.<k>.motivo
+   y otra en cumple.<k>.nota. Se ha quitado la segunda. Esto recupera lo que ya
+   estuviera escrito en la nota de expedientes anteriores, para no perderlo: pasa
+   al motivo si el motivo está vacío, y si los dos tienen texto se unen. */
+function migrarNotasCumple(e){
+  const d = (e.datos||{}).cumple;
+  if (!d) return;
+  let tocado = false;
+  Object.keys(d).forEach(k => {
+    const x = d[k]; if (!x || !x.nota) return;
+    const nota = String(x.nota).trim(); if (!nota) { delete x.nota; tocado = true; return; }
+    const motivo = String(x.motivo || '').trim();
+    if (!motivo) x.motivo = nota;
+    else if (motivo !== nota && motivo.indexOf(nota) < 0)
+      x.motivo = motivo + (/[.;:!?]$/.test(motivo) ? ' ' : '. ') + nota;
+    delete x.nota;
+    tocado = true;
+  });
+  if (tocado) guardarExpediente();
+}
+
 function expSecCumplimiento(e){
+  migrarNotasCumple(e);
   const chk = EXP_COMPROBACIONES[e.familia] || [];
   const d = (e.datos||{}).cumple || {};
   const aplicables = chk.filter(c => { const ap = procede(APLICA_COMPROBACION, c[0], e);
@@ -4734,9 +4795,10 @@ function expSecCumplimiento(e){
            expSel('cumple.'+k+'.grav', 'Gravedad',
              [['', 'Sin valorar'], ['leve','Leve'], ['grave','Grave'], ['muy_grave','Muy grave, la puerta no debería usarse']])+
            '</div>';
-    if (v === 'na')
-      h += '<div class="campos" style="margin-top:8px">'+
-           expTxt('cumple.'+k+'.nota', 'Por qué no aplica', '', 1)+'</div>';
+    /* Aquí había un segundo «Por qué no aplica», guardado en cumple.<k>.nota, que
+       preguntaba lo mismo que el campo de arriba y además no salía en ningún
+       documento: el libro imprime el motivo, no la nota. Se ha quitado. Lo que
+       quedara escrito en expedientes antiguos se recupera en migrarNotasCumple. */
     if (pideFoto && (v === 'si' || v === 'no'))
       h += expFotoBloque('cumple:'+k, 'Foto que lo acredita', '');
     h += '</div>';
@@ -6257,8 +6319,10 @@ async function libroExpediente(id){
              : x.estado === 'no' ? '<span class="no">No lo lleva</span>'
              : '<span class="na">No aplica</span>';
     H += '<div class="comp"><h4>'+esc(nombre)+' '+et+'</h4>';
-    if (x.estado === 'si' && pideDatos && (x.marca || x.modelo || x.serie))
-      H += '<table class="datos">'+campo('Marca', x.marca)+campo('Modelo', x.modelo)+campo('Nº de serie', x.serie)+'</table>';
+    // La hoja es la puerta: sus datos son los de «La puerta», no se duplican
+    const dc = k === 'hoja' ? datosHoja(e) : x;
+    if (x.estado === 'si' && pideDatos && (dc.marca || dc.modelo || dc.serie))
+      H += '<table class="datos">'+campo('Marca', dc.marca)+campo('Modelo', dc.modelo)+campo('Nº de serie', dc.serie)+'</table>';
     if (x.nota) H += '<p>'+esc(x.nota)+'</p>';
     H += galeria('comp:'+k, 2) + '</div>';
   });
@@ -7703,9 +7767,12 @@ function dlgCierre(avisoId){
     '<p class="mini" style="margin:8px 0 0">Escribe y te irá sugiriendo los que ya se han usado otras veces.</p></div>';
 
   h += '<div class="grupo"><h3>Tiempo y desplazamiento</h3><div class="campos">'+
-    '<div class="campo"><label for="z-ini">Hora de entrada</label><input id="z-ini" type="time" value="'+esc(hhmm(a.hora_inicio) || hhmm(ahora))+'"></div>'+
-    '<div class="campo"><label for="z-fin">Hora de salida</label><input id="z-fin" type="time" value="'+esc(hhmm(a.hora_fin))+'"></div>'+
-    '<div class="campo"><label for="z-horas">Horas a facturar</label><input id="z-horas" type="number" step="0.25" min="0" value="'+esc(a.horas!=null?a.horas:'')+'"><span class="pista">Se calcula solo con las horas de arriba; puedes corregirlo</span></div>'+
+    /* Si estás cerrando el parte es que ya has terminado, así que la hora que se
+       pone sola es la de SALIDA, la de ahora mismo. La de entrada la escribe el
+       técnico, que es el único que sabe cuándo empezó de verdad. */
+    '<div class="campo"><label for="z-ini">Hora de entrada</label><input id="z-ini" type="time" value="'+esc(hhmm(a.hora_inicio))+'"><span class="pista">A qué hora empezaste la asistencia</span></div>'+
+    '<div class="campo"><label for="z-fin">Hora de salida</label><input id="z-fin" type="time" value="'+esc(hhmm(a.hora_fin) || hhmm(ahora))+'"></div>'+
+    '<div class="campo"><label for="z-horas">Horas a facturar</label><input id="z-horas" type="number" step="1" min="0" value="'+esc(a.horas!=null?a.horas:'')+'"><span class="pista">Horas completas. A partir de 30 minutos sube a la hora siguiente</span></div>'+
     '<div class="campo"><label for="z-ntec">Técnicos</label><input id="z-ntec" type="number" min="1" max="6" value="'+esc(a.num_tecnicos||1)+'"></div>'+
     '<div class="campo"><label for="z-km">Desplazamiento (km)</label><input id="z-km" type="number" step="1" min="0" value="'+esc(a.desplazamiento!=null?a.desplazamiento:'')+'"></div>'+
     '</div></div>';
@@ -7871,17 +7938,27 @@ async function prepararCierre(a){
   }
   // firma: lienzo para dibujar con el dedo
   lienzoFirma('z-firma');
-  // calcular horas al poner la hora de salida
+  // calcular horas al poner cualquiera de las dos horas
   const ini = document.getElementById('z-ini'), fin = document.getElementById('z-fin'), hs = document.getElementById('z-horas');
   const calcular = () => {
     if (!ini || !fin || !hs || !ini.value || !fin.value) return;
     const [h1,m1] = ini.value.split(':').map(Number), [h2,m2] = fin.value.split(':').map(Number);
     let mins = (h2*60+m2) - (h1*60+m1);
     if (mins < 0) mins += 24*60;
-    if (!hs.value || hs.dataset.auto === '1'){ hs.value = (Math.round(mins/15)*15/60).toFixed(2); hs.dataset.auto = '1'; }
+    if (!hs.value || hs.dataset.auto === '1'){ hs.value = horasFacturables(mins); hs.dataset.auto = '1'; }
   };
+  // Las dos horas recalculan, porque ahora el técnico escribe la de entrada
+  if (ini) ini.addEventListener('change', calcular);
   if (fin) fin.addEventListener('change', calcular);
-  if (hs) hs.addEventListener('input', () => { hs.dataset.auto = '0'; });
+  if (hs){
+    hs.addEventListener('input', () => { hs.dataset.auto = '0'; });
+    // Si lo corrige a mano y escribe una fracción, se redondea igual al salir del campo
+    hs.addEventListener('blur', () => {
+      const v = parseFloat(hs.value);
+      if (!isNaN(v) && v > 0) hs.value = horasFacturables(Math.round(v * 60));
+    });
+  }
+  calcular();
 }
 
 function materialesDelForm(){
