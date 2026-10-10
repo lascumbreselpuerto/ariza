@@ -1041,8 +1041,8 @@ function vistaFicha(id){
         '<span class="sub">'+esc(EXP_FAMILIA[x.familia]||'')+' · '+
           (x.fecha_puesta_servicio ? 'puesta en servicio '+esc(fechaCorta(x.fecha_puesta_servicio))
                                    : 'sin fecha de puesta en servicio')+'</span></span>'+
-        '<span><span class="chip '+(x.estado==='emitido'?'ok':(x.estado==='completo'?'aviso':'gris'))+' sin">'+
-          (EXP_ESTADO[x.estado]||x.estado)+'</span>'+
+        '<span><span class="chip '+colorEstado(x)+' sin">'+
+          esc(nombreEstado(x))+'</span>'+
           (falta ? '<span class="mini" style="display:block;text-align:right;margin-top:4px">faltan '+falta+'</span>' : '')+
         '</span></button>';
     });
@@ -2535,7 +2535,97 @@ const EXP_FAMILIA = {
   barrera:     'Barrera de vehículos',
   cortafuegos: 'Resistente al fuego',
 };
-const EXP_ESTADO = { borrador:'Borrador', completo:'Lista para emitir', emitido:'Emitida' };
+/* ===================================================================
+   ESTADOS DEL EXPEDIENTE
+   ===================================================================
+   Principio de fondo: la aplicación NUNCA impide documentar la realidad
+   encontrada. Lo que impide es que un expediente incompleto se presente
+   como una declaración de conformidad. Por eso la falta de datos no
+   bloquea la emisión: decide QUÉ documento sale.
+
+   Los tres primeros son los históricos y se conservan para no romper los
+   expedientes que ya existen. */
+const EXP_ESTADO = {
+  borrador:        'Borrador',
+  completo:        'Lista para emitir',
+  emitido:         'Emitida',
+  /* Estados nuevos */
+  inspeccion:      'Inspección en curso',
+  situacion:       'Informe de situación',
+  pend_datos:      'Pendiente de datos',
+  deficiencias:    'Deficiencias detectadas',
+  pend_subsanar:   'Pendiente de subsanación',
+  subsanando:      'Subsanación en curso',
+  verificacion:    'Verificación final',
+  conforme:        'Conforme',
+  cerrado_defic:   'Cerrado con deficiencias',
+  cerrado_pend:    'Cerrado con actuaciones pendientes',
+  anulado:         'Anulado',
+};
+/* Cómo se pinta cada estado: ok verde, aviso ámbar, mal rojo, gris neutro */
+const EXP_ESTADO_COLOR = {
+  borrador:'gris', inspeccion:'gris', pend_datos:'aviso', situacion:'aviso',
+  deficiencias:'mal', pend_subsanar:'mal', subsanando:'aviso',
+  verificacion:'aviso', completo:'aviso', conforme:'ok', emitido:'ok',
+  cerrado_defic:'aviso', cerrado_pend:'aviso', anulado:'gris',
+};
+/* Estados en los que el expediente se considera cerrado. Todos ellos se
+   pueden reabrir: cerrar no es borrar, y el historial no se toca nunca. */
+const EXP_ESTADOS_CERRADOS = ['emitido', 'conforme', 'cerrado_defic', 'cerrado_pend', 'anulado'];
+const expCerrado = e => EXP_ESTADOS_CERRADOS.indexOf((e||{}).estado) >= 0;
+
+/* ===================================================================
+   ESTADOS DE UNA COMPROBACIÓN
+   ===================================================================
+   El estado del expediente y el resultado de una comprobación son dos
+   cosas distintas y no se mezclan.
+
+   Regla que no se negocia: «no se sabe», «no se ha probado», «no consta»
+   y «no se ha aportado documentación» NUNCA se convierten en conforme. */
+const RESULTADO_COMPROBACION = {
+  si:           { nombre:'Conforme',     color:'ok',    acredita:true,
+                  ayuda:'Comprobado, con evidencia suficiente' },
+  no:           { nombre:'No conforme',  color:'mal',   acredita:false,
+                  ayuda:'Se ha comprobado y no cumple' },
+  deficiencia:  { nombre:'Deficiencia',  color:'mal',   acredita:false,
+                  ayuda:'Hay una situación que requiere actuación' },
+  pendiente:    { nombre:'Pendiente',    color:'aviso', acredita:false,
+                  ayuda:'Todavía no se ha hecho o no se ha terminado' },
+  nc:           { nombre:'No verificado',color:'aviso', acredita:false,
+                  ayuda:'No ha sido posible comprobarlo' },
+  na:           { nombre:'No aplica',    color:'gris',  acredita:null,
+                  ayuda:'No corresponde a esta instalación' },
+  corregido:    { nombre:'Corregido',    color:'ok',    acredita:true,
+                  ayuda:'Se detectó una deficiencia y después se corrigió' },
+  condicionado: { nombre:'Condicionado', color:'aviso', acredita:false,
+                  ayuda:'Depende de documentación, prueba o condición pendiente' },
+};
+/* Los que piden explicación por escrito, cada uno con su pregunta */
+const PREGUNTA_RESULTADO = {
+  no:           'Qué se ha encontrado',
+  deficiencia:  'En qué consiste la deficiencia',
+  pendiente:    'Qué falta por hacer y cuándo se hará',
+  nc:           'Por qué no se ha podido comprobar',
+  na:           'Por qué no aplica a esta puerta',
+  corregido:    'Qué se encontró y cómo se corrigió',
+  condicionado: 'De qué depende y qué falta para resolverlo',
+};
+/* Un resultado acredita conformidad solo si lo dice su ficha. El «sin
+   contestar» no está en la tabla a propósito: no acredita nada. */
+const acredita = v => ((RESULTADO_COMPROBACION[v] || {}).acredita === true);
+const esAbierto = v => !v || ['pendiente','nc','condicionado'].indexOf(v) >= 0;
+
+/* ===================================================================
+   NIVELES DE AVISO
+   =================================================================== */
+const NIVEL_AVISO = {
+  info:     { nombre:'Información', orden:1, clase:'nota-oficina',
+              ayuda:'No afecta a la validez del documento' },
+  aviso:    { nombre:'Advertencia', orden:2, clase:'aviso-caja',
+              ayuda:'Información incompleta o comprobación pendiente' },
+  critico:  { nombre:'AVISO CRÍTICO', orden:3, clase:'mal-caja',
+              ayuda:'No impide documentar, pero impide titular el documento como conforme' },
+};
 
 /* Somos fabricante de la máquina en estas dos situaciones. Motorizar una puerta
    manual es modificación sustancial y convierte al instalador en fabricante:
@@ -4069,6 +4159,105 @@ function validarExpediente(e){
   return { bloqueos, avisos, puedeEmitir: bloqueos.length === 0 };
 }
 
+/* ===================================================================
+   QUÉ DOCUMENTO SE PUEDE EMITIR
+   ===================================================================
+   Esto sustituye al botón deshabilitado. El motor de validación no
+   desaparece: lo que antes impedía emitir, ahora decide qué documento
+   sale. Siempre sale alguno, porque siempre se puede documentar lo que
+   uno se ha encontrado.
+
+   Lo único que no se emite sin evidencia es la declaración de
+   conformidad. Para todo lo demás hay un documento que dice la verdad. */
+const SALIDAS_DOCUMENTALES = {
+  situacion: {
+    nombre: 'Informe técnico de situación y deficiencias',
+    estado: 'situacion',
+    acredita: false,
+    aviso: 'Este documento NO es una declaración de conformidad. Recoge el estado '+
+           'observado de la instalación en la fecha indicada.',
+  },
+  intervencion: {
+    nombre: 'Informe de intervención, pendiente de verificación',
+    estado: 'pend_subsanar',
+    acredita: false,
+    aviso: 'Recoge los trabajos realizados. Quedan comprobaciones pendientes, de modo '+
+           'que todavía no puede acreditarse la conformidad integral.',
+  },
+  conformidad: {
+    nombre: 'Documentación de conformidad',
+    estado: 'emitido',
+    acredita: true,
+    aviso: '',
+  },
+};
+
+/* Clasifica los bloqueos por si impiden acreditar conformidad o solo
+   advierten. Hoy todo lo que validarExpediente devuelve como bloqueo
+   impide acreditar: por eso son críticos, no porque paren el trabajo. */
+function salidaDocumental(e){
+  const v = validarExpediente(e);
+  const d = (e||{}).datos || {};
+  const chk = EXP_COMPROBACIONES[(e||{}).familia] || [];
+  const kd = d.cumple || {};
+
+  /* Recuento de comprobaciones por lo que acreditan de verdad */
+  const cuenta = { conformes:0, no_conformes:0, abiertas:0, no_aplica:0 };
+  chk.forEach(([k]) => {
+    const ap = procede(APLICA_COMPROBACION, k, e);
+    if (ap && ap.no) { cuenta.no_aplica++; return; }
+    const r = (kd[k] || {}).v;
+    if (acredita(r)) cuenta.conformes++;
+    else if (r === 'no' || r === 'deficiencia') cuenta.no_conformes++;
+    else cuenta.abiertas++;
+  });
+
+  const criticos = v.bloqueos.map(x => Object.assign({ nivel:'critico' }, x));
+  const advertencias = v.avisos.map(x => Object.assign({ nivel:'aviso' }, x));
+
+  /* Qué puede salir, de peor a mejor */
+  let clave = 'conformidad';
+  if (criticos.length || cuenta.no_conformes || cuenta.abiertas){
+    /* Si hay trabajo hecho pero queda por verificar, es un informe de
+       intervención. Si no hay trabajo nuestro, es un informe de situación. */
+    const hayIntervencion = ['adecuacion','modificacion'].indexOf((e||{}).situacion) >= 0
+                            && cuenta.conformes > 0;
+    clave = hayIntervencion ? 'intervencion' : 'situacion';
+  }
+
+  const salida = SALIDAS_DOCUMENTALES[clave];
+  return {
+    clave, salida,
+    acredita: salida.acredita,
+    criticos, advertencias,
+    todos: criticos.concat(advertencias)
+             .sort((a,b) => NIVEL_AVISO[b.nivel].orden - NIVEL_AVISO[a.nivel].orden),
+    cuenta,
+    /* Se puede emitir SIEMPRE. Lo que cambia es qué se emite. */
+    puedeEmitir: true,
+  };
+}
+
+/* ---- Historial de versiones del expediente ----
+   Cada emisión añade una línea y no borra ninguna. Un expediente cerrado
+   con deficiencias se reabre y vuelve a emitirse como versión siguiente. */
+function versionesDe(e){
+  return (((e||{}).datos||{}).versiones) || [];
+}
+function nuevaVersion(e, motivo, estadoNuevo, tecnico){
+  const vs = versionesDe(e).slice();
+  vs.push({
+    n: vs.length + 1,
+    fecha: new Date().toISOString(),
+    motivo: motivo || '',
+    tecnico: tecnico || '',
+    estado_anterior: (e||{}).estado || '',
+    estado_nuevo: estadoNuevo || '',
+    salida: (salidaDocumental(e).salida || {}).nombre || '',
+  });
+  return vs;
+}
+
 function expPendientes(e){
   const falta = [];
   const d = e.datos || {};
@@ -4162,7 +4351,8 @@ function expPendientes(e){
   });
   if (sinMotivo.length) falta.push('el motivo de '+sinMotivo.length+
     ' comprobación(es) marcadas como no aplicables o no comprobadas');
-  const incumple = chk.filter(c => c[4] && ((d.cumple||{})[c[0]]||{}).v === 'no');
+  const noConforme = v => v === 'no' || v === 'deficiencia';
+  const incumple = chk.filter(c => c[4] && noConforme(((d.cumple||{})[c[0]]||{}).v));
   if (incumple.length) falta.push('hay ' + incumple.length + ' incumplimiento(s) de los que impiden certificar');
   if (EXP_ES_FABRICANTE(e.situacion) && !(d.entrega && d.entrega.firmante_ok))
     falta.push('confirmar quién firma la declaración');
@@ -4210,7 +4400,8 @@ function expPendientes(e){
 }
 function expIncumple(e){
   const chk = EXP_COMPROBACIONES[e.familia] || [];
-  return chk.filter(c => c[4] && (((e.datos||{}).cumple||{})[c[0]]||{}).v === 'no');
+  return chk.filter(c => { const v = (((e.datos||{}).cumple||{})[c[0]]||{}).v;
+                           return c[4] && (v === 'no' || v === 'deficiencia'); });
 }
 
 /* ---- Pantalla del expediente ---- */
@@ -4236,8 +4427,8 @@ function vistaExpediente(id){
        '</div>';
 
   h += '<div class="panel"><div class="panel-h"><h2>'+esc(e.referencia||'Expediente')+'</h2>'+
-       '<span class="chip '+(e.estado==='emitido'?'ok':(e.estado==='completo'?'aviso':'gris'))+' sin">'+
-       (EXP_ESTADO[e.estado]||e.estado)+'</span></div>'+
+       '<span class="chip '+colorEstado(e)+' sin">'+
+       esc(nombreEstado(e))+'</span></div>'+
        '<p class="mini" style="margin:0">'+esc(EXP_SITUACION[e.situacion]||'')+' · '+
        esc(EXP_FAMILIA[e.familia]||'')+' · '+esc(c.nombre || p.cliente || 'Sin cliente')+
        (p.codigo ? ' · '+esc(p.codigo) : '')+'</p>'+
@@ -4279,6 +4470,24 @@ function vistaExpediente(id){
          'Si la puesta en servicio se retrasa a esa fecha o más allá, el documento deja de ser «Declaración CE» '+
          'y pasa a ser «Declaración UE de conformidad», con apartados distintos. Revisa la fecha antes de firmar.</p>';
   h += '</div>';
+
+  /* Historial de versiones: cada emisión deja su línea y ninguna se borra */
+  {
+    const vs = versionesDe(e);
+    if (vs.length)
+      h += '<div class="panel"><div class="panel-h"><h3>Historial de versiones</h3>'+
+        '<span class="mini">'+vs.length+'</span></div>'+
+        '<div class="tabla-wrap"><table class="tabla"><thead><tr>'+
+        '<th>Versión</th><th>Fecha</th><th>Documento</th><th>Motivo</th><th>Técnico</th>'+
+        '</tr></thead><tbody>'+
+        vs.slice().reverse().map(x => '<tr>'+
+          '<td>'+x.n+'</td>'+
+          '<td>'+esc(fechaCorta(x.fecha))+'</td>'+
+          '<td>'+esc(x.salida || (EXP_ESTADO[x.estado_nuevo]||x.estado_nuevo||''))+'</td>'+
+          '<td>'+esc(x.motivo || '—')+'</td>'+
+          '<td>'+esc(x.tecnico || '')+'</td></tr>').join('')+
+        '</tbody></table></div></div>';
+  }
 
   if (falta.length)
     h += '<div class="panel bloque-sin"><div class="panel-h"><h3>Falta por rellenar</h3>'+
@@ -4773,20 +4982,21 @@ function expSecCumplimiento(e){
     h += '<div class="exp-item'+(v==='no'?' falta':(v==='si'?' bien':''))+'">'+
       '<div class="fila" style="gap:8px;flex-wrap:wrap;align-items:baseline">'+
         '<span style="flex:1 1 260px">'+esc(texto)+(critico?' <span class="chip mal sin">Imprescindible</span>':'')+'</span>'+
+        /* Los ocho estados. Ninguno de los abiertos acredita conformidad. */
         '<select data-exp="cumple.'+k+'.v" class="cal-sel">'+
-          '<option value=""'  +(v===''  ?' selected':'')+'>Pendiente</option>'+
-          '<option value="si"'+(v==='si'?' selected':'')+'>Conforme</option>'+
-          '<option value="no"'+(v==='no'?' selected':'')+'>No conforme</option>'+
-          '<option value="nc"'+(v==='nc'?' selected':'')+'>No comprobado</option>'+
-          '<option value="na"'+(v==='na'?' selected':'')+'>No aplicable</option>'+
+          '<option value=""'+(v===''?' selected':'')+'>Sin contestar</option>'+
+          Object.entries(RESULTADO_COMPROBACION).map(([rv, r]) =>
+            '<option value="'+rv+'"'+(v===rv?' selected':'')+'>'+esc(r.nombre)+'</option>').join('')+
         '</select></div>'+
-      '<p class="mini" style="margin:4px 0 0">'+esc(norma)+'</p>'+
-      /* Un «no aplicable» o un «no comprobado» sin motivo no vale de nada: quien lea
-         el documento tiene que saber por qué esa comprobación no tiene resultado. */
-      (v === 'na' || v === 'nc'
+      '<p class="mini" style="margin:4px 0 0">'+esc(norma)+
+        (v && RESULTADO_COMPROBACION[v] ? ' · '+esc(RESULTADO_COMPROBACION[v].ayuda) : '')+'</p>'+
+      /* Todo resultado que no sea un «conforme» limpio pide explicación por escrito:
+         quien lea el documento tiene que saber por qué. */
+      (PREGUNTA_RESULTADO[v] && v !== 'no'
         ? '<div class="campos" style="margin-top:8px">'+
-          expTxt('cumple.'+k+'.motivo',
-            v === 'na' ? 'Por qué no aplica a esta puerta' : 'Por qué no se ha podido comprobar', '', 1)+
+          expTxt('cumple.'+k+'.motivo', PREGUNTA_RESULTADO[v], '', 1)+
+          (v === 'corregido'
+            ? expTxt('cumple.'+k+'.fecha_correccion', 'Fecha de la corrección', '', 1) : '')+
           '</div>' : '');
     if (v === 'no')
       h += '<div class="campos" style="margin-top:8px">'+
@@ -4809,6 +5019,7 @@ function expSecCumplimiento(e){
 /* ---- Ensayo de fuerzas ---- */
 function expSecFuerzas(e){
   const lim = limitesFuerza();
+  const perfil = perfilFuerza(e);   // decide si un valor dentro de límites puede llamarse «Pasa»
   const puntos = EXP_PUNTOS_FUERZA[e.familia] || EXP_PUNTOS_FUERZA.industrial;
   const incluir = expVal('fuerzas.incluir', 'si') !== 'no';
   let h = '<div class="panel-h"><h3>Ensayo de fuerzas</h3>'+
@@ -4861,8 +5072,15 @@ function expSecFuerzas(e){
       ['fd','fs','fe','td'].map(c =>
         '<td><input type="number" step="any" style="width:72px" data-exp="fuerzas.m'+i+'.'+c+'" value="'+
         esc(expVal('fuerzas.m'+i+'.'+c,''))+'"></td>').join('')+
+      /* La pantalla tiene que decir lo mismo que el documento. Mientras el perfil de
+         ensayo no esté contrastado con el texto de la norma, un valor dentro de
+         límites NO es un «Pasa»: es un «Pendiente de evaluación». Un «No pasa» sí
+         se mantiene, porque salirse de un límite de referencia hay que verlo
+         aunque el perfil esté por validar. */
       '<td>'+(!hay ? '<span class="mini">Sin medir</span>'
-            : (pasa ? '<span class="chip ok sin">Pasa</span>' : '<span class="chip mal sin">No pasa</span>'))+'</td></tr>';
+            : (!pasa ? '<span class="chip mal sin">No pasa</span>'
+              : (perfil.validado ? '<span class="chip ok sin">Pasa</span>'
+                : '<span class="chip gris sin">Pendiente de evaluación</span>')))+'</td></tr>';
   });
   h += '</tbody></table></div>';
   h += '<div class="campos" style="margin-top:12px">'+
@@ -5162,26 +5380,34 @@ function dlgEmitirExpediente(id){
   const v = validarExpediente(e);
   const incum = expIncumple(e);
 
-  /* Estado del expediente, de un vistazo: lo que impide emitir arriba y en rojo,
-     lo que solo hay que saber debajo. Un bloqueo no se puede saltar desde aquí. */
-  let h = '<h3>Emitir el expediente</h3>'+
-    '<p class="mini" style="margin:0 0 10px"><b>Estado del expediente</b> · '+
-    (v.bloqueos.length
-      ? '<span style="color:var(--mal)">'+v.bloqueos.length+' bloqueo(s)</span>'
-      : '<span style="color:var(--ok)">sin bloqueos</span>')+
-    ' · '+v.avisos.length+' advertencia(s)</p>';
+  /* Ya no hay botón deshabilitado: siempre se puede emitir algo. Lo que decide
+     el estado del expediente es QUÉ documento sale. */
+  const sd = salidaDocumental(e);
 
-  if (v.bloqueos.length){
-    h += '<div class="mal-caja" style="margin:0 0 12px"><b>No puede emitirse el documento definitivo.</b>'+
+  let h = '<h3>Emitir el expediente</h3>'+
+    '<div class="'+(sd.acredita ? 'nota-oficina' : 'aviso-caja')+'" style="margin:0 0 12px">'+
+    '<b>Documento que procede: '+esc(sd.salida.nombre)+'</b>'+
+    (sd.salida.aviso ? '<p class="mini" style="margin:6px 0 0">'+esc(sd.salida.aviso)+'</p>' : '')+
+    '</div>'+
+    '<p class="mini" style="margin:0 0 10px">'+
+    sd.cuenta.conformes+' conforme(s) · '+
+    sd.cuenta.no_conformes+' no conforme(s) · '+
+    sd.cuenta.abiertas+' sin resultado'+
+    (sd.cuenta.no_aplica ? ' · '+sd.cuenta.no_aplica+' no aplica' : '')+'</p>';
+
+  if (sd.criticos.length)
+    h += '<div class="mal-caja" style="margin:0 0 12px"><b>'+NIVEL_AVISO.critico.nombre+
+      ' ('+sd.criticos.length+')</b>'+
+      '<p class="mini" style="margin:4px 0 6px">No impiden documentar lo que te has encontrado, '+
+      'pero impiden titular este documento como conforme.</p>'+
+      '<ul style="margin:0;padding-left:18px">'+
+      sd.criticos.map(x => '<li><b>'+esc(x.area)+':</b> '+esc(x.texto)+'</li>').join('')+
+      '</ul></div>';
+  if (sd.advertencias.length)
+    h += '<div class="aviso-caja" style="margin:0 0 12px"><b>'+NIVEL_AVISO.aviso.nombre+
+      ' ('+sd.advertencias.length+')</b>'+
       '<ul style="margin:6px 0 0;padding-left:18px">'+
-      v.bloqueos.map(x => '<li><b>'+esc(x.area)+':</b> '+esc(x.texto)+'</li>').join('')+
-      '</ul><p class="mini" style="margin:8px 0 0">Puedes seguir trabajando y exportar el borrador, '+
-      'que sale marcado como no válido para declarar conformidad.</p></div>';
-  }
-  if (v.avisos.length)
-    h += '<div class="aviso-caja" style="margin:0 0 12px"><b>Advertencias</b>'+
-      '<ul style="margin:6px 0 0;padding-left:18px">'+
-      v.avisos.map(x => '<li><b>'+esc(x.area)+':</b> '+esc(x.texto)+'</li>').join('')+'</ul></div>';
+      sd.advertencias.map(x => '<li><b>'+esc(x.area)+':</b> '+esc(x.texto)+'</li>').join('')+'</ul></div>';
   if (incum.length)
     h += '<p class="nota-oficina" style="margin:0 0 12px"><b>Hay '+incum.length+
          ' incumplimiento(s) de los imprescindibles.</b> Si emites, el libro los recoge como deficiencias '+
@@ -5195,23 +5421,62 @@ function dlgEmitirExpediente(id){
       '<input id="xe-firm" type="text" value="'+esc(e.firmante || (e.datos&&e.datos.entrega&&e.datos.entrega.firmante) || em.representante || '')+'"></div>'+
     '<div class="campo full"><label for="xe-cargo">Cargo</label>'+
       '<input id="xe-cargo" type="text" value="'+esc(e.firmante_cargo || em.cargo_firmante || '')+'"></div>'+
+    '<div class="campo full"><label for="xe-motivo">Motivo de esta emisión</label>'+
+      '<input id="xe-motivo" type="text" placeholder="'+
+      esc(versionesDe(e).length ? 'Ej.: deficiencias subsanadas y verificadas'
+                                : 'Ej.: primera emisión tras la inspección')+'">'+
+      '<span class="pista">Queda en el historial de versiones del expediente</span></div>'+
     '</div><p class="err"></p><div class="pie"><span class="sp"></span>'+
     '<button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
-    (v.puedeEmitir
-      ? '<button type="submit" class="btn pri">Emitir</button>'
-      : '<button type="button" class="btn pri" disabled style="opacity:.5;cursor:not-allowed">Emitir</button>')+
-    '</div>';
+    '<button type="submit" class="btn pri">Emitir '+
+      (sd.acredita ? 'documentación' : esc(sd.clave === 'situacion' ? 'informe de situación'
+                                                                   : 'informe de intervención'))+
+    '</button></div>';
   abrirDlg(h, async () => {
     try {
-      const { data, error } = await sb.rpc('emitir_expediente',
-        { p_exp: id, p_firmante: val('xe-firm'), p_cargo: val('xe-cargo') });
-      if (error) throw error;
-      if (!data || !data.ok) return setErr(data && data.motivo === 'sin_firmante'
-        ? 'Pon quién firma el documento.' : textoFallo(data));
-      cerrarDlg(); await cargar(); toast('Expediente emitido.');
+      if (!val('xe-firm')) return setErr('Pon quién firma el documento.');
+      /* El historial de versiones se guarda siempre, acredite o no. Nunca se
+         borra una versión anterior: cada emisión añade una línea. */
+      e.datos = e.datos || {};
+      e.datos.versiones = nuevaVersion(e, val('xe-motivo'), sd.salida.estado, val('xe-firm'));
+      e.datos.estado_doc = sd.salida.estado;
+      e.datos.salida_doc = sd.clave;
+
+      if (sd.acredita){
+        /* Documentación de conformidad: se fija la fecha y el expediente queda
+           cerrado y sin poder borrarse, porque es documentación entregada. */
+        const { error: e1 } = await sb.from('expedientes')
+          .update({ datos: e.datos, actualizado: new Date().toISOString() }).eq('id', id);
+        if (e1) throw e1;
+        const { data, error } = await sb.rpc('emitir_expediente',
+          { p_exp: id, p_firmante: val('xe-firm'), p_cargo: val('xe-cargo') });
+        if (error) throw error;
+        if (!data || !data.ok) return setErr(data && data.motivo === 'sin_firmante'
+          ? 'Pon quién firma el documento.' : textoFallo(data));
+        cerrarDlg(); await cargar();
+        toast('Documentación de conformidad emitida. Versión '+e.datos.versiones.length+'.');
+      } else {
+        /* Informe de situación o de intervención: el expediente NO se cierra.
+           Se puede seguir trabajando, subsanar y volver a emitir. */
+        const { error } = await sb.from('expedientes').update({
+          datos: e.datos,
+          firmante: val('xe-firm'), firmante_cargo: val('xe-cargo'),
+          actualizado: new Date().toISOString(),
+        }).eq('id', id);
+        if (error) throw error;
+        cerrarDlg(); await cargar();
+        toast(sd.salida.nombre+' emitido. Versión '+e.datos.versiones.length+
+              '. El expediente sigue abierto.');
+      }
     } catch(err){ setErr(err.message); }
   });
 }
+
+/* El estado que se enseña: el documental si lo hay, y si no el de la base de
+   datos. Los expedientes anteriores siguen funcionando sin tocar nada. */
+const estadoExp = e => (((e||{}).datos||{}).estado_doc) || (e||{}).estado || 'borrador';
+const nombreEstado = e => EXP_ESTADO[estadoExp(e)] || estadoExp(e);
+const colorEstado = e => EXP_ESTADO_COLOR[estadoExp(e)] || 'gris';
 
 /* ================= Documentación Técnica Específica =================
    El artículo 37 del Reglamento (UE) 305/2011 permite a una microempresa
@@ -6343,7 +6608,8 @@ async function libroExpediente(id){
   /* ---------- 5. CUMPLIMIENTO ---------- */
   const chk = EXP_COMPROBACIONES[e.familia] || [];
   const kd = d.cumple || {};
-  const incum = chk.filter(x => (kd[x[0]]||{}).v === 'no');
+  const incum = chk.filter(x => { const v = (kd[x[0]]||{}).v;
+                                  return v === 'no' || v === 'deficiencia'; });
   const exi = exigenciaProteccion(e);
   H += abreSec('Comprobaciones de cumplimiento')+
     (exi.modo && exi.usuarios
@@ -6373,13 +6639,15 @@ async function libroExpediente(id){
       const x = kd[k] || {};
       const v = ap && ap.no ? 'na' : x.v;
       const motivo = ap && ap.no ? ap.no : x.motivo;
-      const r = v === 'si' ? '<span class="ok">Conforme</span>'
-              : v === 'no' ? '<span class="no">No conforme</span>'
-              : v === 'na' ? '<span class="na">No aplicable</span>'
-              : v === 'nc' ? '<span class="no">No comprobado</span>'
-              : '<span class="pendiente">Pendiente</span>';
+      /* Los ocho estados, cada uno con su nombre exacto. Un «condicionado» o un
+         «no verificado» no se pueden leer como conformes. */
+      const ficha = RESULTADO_COMPROBACION[v];
+      const clase = { ok:'ok', mal:'no', aviso:'pendiente', gris:'na' };
+      const r = ficha
+        ? '<span class="'+(clase[ficha.color]||'pendiente')+'">'+esc(ficha.nombre)+'</span>'
+        : '<span class="pendiente">Pendiente</span>';
       return '<tr><td>'+esc(texto)+
-        (motivo && (v === 'na' || v === 'nc')
+        (motivo && v !== 'si'
           ? '<span class="sub min" style="display:block">'+esc(motivo)+'</span>' : '')+
         '</td><td>'+r+'</td><td class="min">'+esc(norma)+'</td></tr>';
     }).join('')+'</tbody></table>'+
@@ -6390,7 +6658,7 @@ async function libroExpediente(id){
         const ap = procede(APLICA_COMPROBACION, k, e);
         if (ap && ap.no) return false;
         const v = (kd[k]||{}).v;
-        return !v || v === 'nc';
+        return esAbierto(v);   // sin contestar, pendiente, no verificado o condicionado
       });
       return sin.length
         ? '<p class="aviso-borrador">'+sin.length+' comprobación(es) sin resultado. '+
@@ -8823,6 +9091,13 @@ raiz.addEventListener('input', e => {
   // Campos del expediente: se guardan solos y sin repintar, para no interrumpir al que escribe
   if (e.target.dataset.exp && e.target.tagName !== 'SELECT') expPon(e.target.dataset.exp, e.target.value);
 });
+/* Las mediciones del ensayo sí repintan, pero al salir del campo, no mientras se
+   teclea: si no, el técnico mete los valores y la columna de resultado se queda
+   con lo de antes. Repintar en cada tecla le quitaría el foco. */
+raiz.addEventListener('focusout', e => {
+  const r = e.target.dataset && e.target.dataset.exp;
+  if (r && /^fuerzas\.m\d+\./.test(r)) pintar();
+}, true);
 raiz.addEventListener('change', e => {
   if (e.target.dataset.act === 'equipo-rol'){
     const sel = e.target, id = sel.dataset.id, rol = sel.value;
