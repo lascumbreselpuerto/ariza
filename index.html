@@ -4137,9 +4137,21 @@ function validarExpediente(e){
       const pd = d.peligro || {};
       const sinV = pel.lista.filter(([pk]) => !(pd[pk]||{}).v);
       if (sinV.length) B('Peligros', sinV.length+' peligros propios del tipo de puerta sin valorar.');
-      const sinComo = pel.lista.filter(([pk]) => (pd[pk]||{}).v === 'si' && !(pd[pk]||{}).como);
-      if (sinComo.length) B('Peligros', 'Falta explicar cómo se han resuelto '+sinComo.length+
-        ' peligros marcados como resueltos: una casilla no es una prueba.');
+      /* Un peligro «resuelto» tiene que decir con qué medida concreta. El campo
+         antiguo era «como»; ahora es «medida», y se siguen aceptando los dos para
+         no invalidar lo ya escrito en expedientes anteriores. */
+      const sinMedida = pel.lista.filter(([pk]) => {
+        const x = pd[pk] || {};
+        return x.v === 'si' && !(x.medida || x.como);
+      });
+      if (sinMedida.length) B('Peligros', 'Falta decir con qué medida concreta se han resuelto '+
+        sinMedida.length+' peligros marcados como resueltos: una casilla no es una prueba.');
+      const sinComprobar = pel.lista.filter(([pk]) => {
+        const x = pd[pk] || {};
+        return x.v === 'si' && (x.medida || x.como) && !x.comprobacion;
+      });
+      if (sinComprobar.length) A('Peligros', sinComprobar.length+' medida(s) de protección sin '+
+        'decir cómo se comprobó que funcionan.');
     } else if ((d.puerta||{}).tipo) {
       A('Peligros', 'El tipo de puerta no corresponde a ninguno de los grupos de peligros '+
         'previstos: hay que valorarlos a mano.');
@@ -4387,8 +4399,11 @@ function expPendientes(e){
       const pd = d.peligro || {};
       const sinV = pel.lista.filter(([pk]) => !((pd[pk]||{}).v));
       if (sinV.length) falta.push(sinV.length + ' peligros propios del tipo de puerta sin valorar');
-      const sinComo = pel.lista.filter(([pk]) => (pd[pk]||{}).v === 'si' && !(pd[pk]||{}).como);
-      if (sinComo.length) falta.push('explicar cómo se han resuelto ' + sinComo.length +
+      const sinMedida = pel.lista.filter(([pk]) => {
+        const x = pd[pk] || {};
+        return x.v === 'si' && !(x.medida || x.como);
+      });
+      if (sinMedida.length) falta.push('la medida concreta de ' + sinMedida.length +
         ' de los peligros marcados como resueltos');
       const sinPor = pel.lista.filter(([pk]) => {
         const x = pd[pk] || {};
@@ -4816,10 +4831,19 @@ function expSecComponentes(e){
   const comps = EXP_COMPONENTES[e.familia] || [];
   const d = (e.datos||{}).comp || {};
   const hechos = comps.filter(c => (d[c[0]]||{}).estado).length;
+  const faltanFotos = fotosQueFaltan();
   let h = '<div class="panel-h"><h3>Elementos de la instalación</h3>'+
     '<span class="mini">'+hechos+' de '+comps.length+'</span></div>'+
     '<p class="mini" style="margin:0 0 14px">Contesta uno por uno y hazle una foto. '+
-    'Las fotos son las que hacen que el libro valga como documento y como prueba de lo que se dejó montado.</p>';
+    'Las fotos son las que hacen que el libro valga como documento y como prueba de lo que se dejó montado.</p>'+
+    /* No bloquea: recuerda. Lo que falte sale en el informe como evidencia pendiente. */
+    (faltanFotos.length
+      ? '<div class="aviso-caja" style="margin:0 0 14px"><b>Faltan '+faltanFotos.length+
+        ' de las fotos recomendadas</b><p class="mini" style="margin:4px 0 0">'+
+        esc(faltanFotos.map(x => x[1]).join(' · '))+'</p>'+
+        '<p class="mini" style="margin:4px 0 0">Puedes seguir sin ellas: lo que falte sale en el '+
+        'informe como EVIDENCIA FOTOGRÁFICA PENDIENTE.</p></div>'
+      : '<p class="nota-oficina" style="margin:0 0 14px">Están todas las fotos recomendadas.</p>');
   comps.forEach(([k, nombre, ayuda, pideDatos]) => {
     const v = (d[k]||{}).estado || '';
     h += '<div class="exp-item'+(v==='no'?' falta':'')+'">'+
@@ -5006,16 +5030,42 @@ function expSecCumplimiento(e){
             '<option value="nc"'+(v==='nc'?' selected':'')+'>No comprobado</option>'+
             '<option value="na"'+(v==='na'?' selected':'')+'>No aplicable</option>'+
           '</select></div>'+
+        /* Ficha del riesgo (apartado 9). Cada peligro se relaciona con una medida
+           CONCRETA y con el componente que la materializa, con su marca y su
+           modelo. Un «resuelto con los dispositivos previstos» no documenta nada:
+           por eso los campos van separados y cada uno pide una cosa. */
         (v === 'si'
           ? '<div class="campos" style="margin-top:8px">'+
-            expTxt('peligro.'+pk+'.como', 'Cómo se ha resuelto en esta puerta', '', 1)+'</div>'
+            expTxt('peligro.'+pk+'.zona', 'Zona afectada',
+                   'Dónde está el punto peligroso en esta puerta', 1)+
+            expTxt('peligro.'+pk+'.medida', 'Medida preventiva adoptada',
+                   'Qué se ha puesto o hecho, no «lo previsto en el proyecto»', 1)+
+            expTxt('peligro.'+pk+'.componente', 'Componente que la materializa')+
+            expTxt('peligro.'+pk+'.marca', 'Marca')+
+            expTxt('peligro.'+pk+'.modelo', 'Modelo')+
+            expTxt('peligro.'+pk+'.ident', 'Nº de serie o identificación')+
+            expTxt('peligro.'+pk+'.comprobacion', 'Comprobación realizada',
+                   'Qué se hizo para verificar que funciona', 1)+
+            expSel('peligro.'+pk+'.resultado', 'Resultado de la comprobación',
+                   [['', 'Sin contestar'], ['si','Conforme'], ['no','No conforme'],
+                    ['pendiente','Pendiente'], ['nc','No verificado']])+
+            expTxt('peligro.'+pk+'.obs', 'Observaciones', '', 1)+
+            '</div>'+
+            expFotoBloque('peligro:'+pk, 'Foto que acredita la medida',
+                          'Se cita en el informe con su número, F-01, F-02…')
           : (v === 'na' || v === 'nc'
             ? '<div class="campos" style="margin-top:8px">'+
               expTxt('peligro.'+pk+'.motivo',
                 v === 'na' ? 'Por qué no aplica' : 'Por qué no se ha comprobado', '', 1)+'</div>'
             : (v === 'no'
               ? '<div class="campos" style="margin-top:8px">'+
-                expTxt('peligro.'+pk+'.motivo', 'Qué falta y qué hay que hacer', '', 1)+'</div>'
+                expTxt('peligro.'+pk+'.zona', 'Zona afectada', '', 1)+
+                expTxt('peligro.'+pk+'.motivo', 'Qué falta y qué hay que hacer', '', 1)+
+                expSel('peligro.'+pk+'.grav', 'Prioridad de la actuación',
+                  [['', 'Sin valorar']].concat(Object.entries(PRIORIDAD_DEFICIENCIA)
+                    .map(([k2, x]) => [k2, x.nombre + ' · ' + x.ayuda])))+
+                '</div>'+
+                expFotoBloque('peligro:'+pk, 'Foto del punto sin resolver', '')
               : '')))+
         '</div>';
     });
@@ -5299,6 +5349,44 @@ function expSecEntrega(e){
 }
 
 /* ---- Fotos del expediente ---- */
+/* ===================================================================
+   EVIDENCIA FOTOGRÁFICA (apartado 10)
+   ===================================================================
+   Una foto sin pie no es evidencia: es una imagen suelta. El pie se pide
+   en tres partes, que es como se escribe un pie útil:
+
+     F-06 — Fotocélula exterior. Lado derecho del hueco. Vista frontal.
+            └ qué es          └ dónde está        └ desde dónde
+
+   La numeración F-01, F-02… la pone el documento al imprimirse, según el
+   orden en que están las fotos, para que las citas de cada comprobación
+   y de cada riesgo coincidan siempre. */
+const VISTAS_FOTO = ['Vista general', 'Vista frontal', 'Vista lateral', 'Detalle',
+                     'Desde el interior', 'Desde el exterior', 'Puerta cerrada',
+                     'Puerta abierta'];
+
+/* Fotos que conviene tener de cualquier puerta, con el apartado donde se suben.
+   No se exigen: se recuerdan, y lo que falte sale como EVIDENCIA FOTOGRÁFICA
+   PENDIENTE en el informe. */
+const FOTOS_RECOMENDADAS = [
+  ['puerta:general',   'Vista general de la puerta'],
+  ['puerta:cerrada',   'Puerta cerrada'],
+  ['puerta:abierta',   'Puerta abierta'],
+  ['comp:placa',       'Placa de características y marcado CE'],
+  ['comp:motor',       'Automatismo o motorreductor'],
+  ['comp:cuadro',      'Cuadro de maniobra, con las conexiones a la vista'],
+  ['comp:fotocelulas', 'Fotocélulas, con su altura respecto al suelo'],
+  ['comp:banda',       'Banda de seguridad'],
+  ['comp:paracaidas',  'Dispositivo anticaída'],
+  ['comp:desbloqueo',  'Desbloqueo manual y su señalización'],
+  ['comp:electrico',   'Protecciones eléctricas'],
+  ['comp:senal',       'Señalización de peligro'],
+];
+/* Qué fotos faltan de las recomendadas, para avisar sin bloquear */
+function fotosQueFaltan(){
+  return FOTOS_RECOMENDADAS.filter(([ap]) => !expFotos(ap).length);
+}
+
 function expFotoBloque(apartado, titulo, ayuda){
   const id = apartado.replace(/[^a-z0-9]/gi, '_');
   return '<div class="exp-fotos"><div class="fila" style="gap:8px;align-items:baseline">'+
@@ -5322,12 +5410,26 @@ async function pintarFotosExp(){
       const { data } = await sb.storage.from('expedientes').createSignedUrls(rutas, 7200);
       (data||[]).forEach((x,i) => { if (x && x.signedUrl) urls[rutas[i]] = x.signedUrl; });
     } catch(_){}
-    cont.innerHTML = fs.map(f =>
-      '<figure class="tira"><img src="'+esc(urls[f.ruta]||'')+'" alt="'+esc(f.pie||'')+'">'+
-      '<figcaption><input type="text" class="pie" placeholder="Pie de foto" value="'+esc(f.pie||'')+'" '+
-      'data-act="exp-pie" data-id="'+f.id+'">'+
+    /* El pie va en tres partes: qué es, dónde está y desde dónde se ve. Se
+       juntan en una sola frase al guardarlo, que es como sale impreso. */
+    cont.innerHTML = fs.map((f, i) => {
+      const partes = String(f.pie || '').split('.').map(x => x.trim());
+      const falta = !String(f.pie||'').trim();
+      return '<figure class="tira'+(falta ? ' falta' : '')+'">'+
+      '<img src="'+esc(urls[f.ruta]||'')+'" alt="'+esc(f.pie||'')+'">'+
+      '<figcaption>'+
+      '<input type="text" class="pie" placeholder="Qué es" value="'+esc(partes[0]||'')+'" '+
+        'data-act="exp-pie-parte" data-parte="0" data-id="'+f.id+'">'+
+      '<input type="text" class="pie" placeholder="Dónde está" value="'+esc(partes[1]||'')+'" '+
+        'data-act="exp-pie-parte" data-parte="1" data-id="'+f.id+'">'+
+      '<input type="text" class="pie" placeholder="Desde dónde" list="vistas-foto" value="'+
+        esc(partes[2]||'')+'" data-act="exp-pie-parte" data-parte="2" data-id="'+f.id+'">'+
+      (falta ? '<span class="mini" style="color:var(--mal)">PIE DE FOTO PENDIENTE</span>' : '')+
       '<button class="btn sm plana" data-act="exp-quitar-foto" data-id="'+f.id+'">Quitar</button>'+
-      '</figcaption></figure>').join('');
+      '</figcaption></figure>';
+    }).join('')+
+    '<datalist id="vistas-foto">'+VISTAS_FOTO.map(v =>
+      '<option value="'+esc(v)+'">').join('')+'</datalist>';
   });
 }
 
@@ -6736,9 +6838,20 @@ async function libroExpediente(id){
                   : x.v === 'na' ? '<span class="na">No aplicable</span>'
                   : x.v === 'nc' ? '<span class="no">No comprobado</span>'
                   : '<span class="pendiente">Pendiente</span>';
+          /* La medida concreta, el componente que la materializa y cómo se
+             comprobó. Si solo hay el texto antiguo, se imprime ese. */
+          const comp = [x.componente, x.marca, x.modelo].filter(Boolean).join(' ');
+          const detalle = [
+            x.zona && 'Zona: ' + x.zona,
+            x.medida || x.como,
+            comp && 'Componente: ' + comp + (x.ident ? ' (' + x.ident + ')' : ''),
+            x.comprobacion && 'Comprobación: ' + x.comprobacion,
+            x.obs,
+            x.motivo,
+          ].filter(Boolean).join('. ');
           return '<tr><td>'+esc(peligro)+
             '<span class="sub min" style="display:block">'+esc(elementos)+'</span></td>'+
-            '<td>'+r+'</td><td>'+esc(x.como || x.motivo || '—')+'</td></tr>';
+            '<td>'+r+'</td><td>'+esc(detalle || '—')+'</td></tr>';
         }).join('')+'</tbody></table>';
     }
   }
@@ -7451,22 +7564,43 @@ async function informeSituacion(id){
     '</section>';
 
   /* ---------- 14. RIESGOS DETECTADOS ---------- */
+  /* Ficha completa de cada riesgo (apartado 9): no basta con decir que está
+     resuelto, hay que decir con qué, dónde, cómo se comprobó y con qué resultado. */
+  const fichaRiesgo = r => {
+    const x = (d.peligro||{})[r.pk] || {};
+    const et = r.v === 'si' ? '<span class="ok">Resuelto</span>'
+             : r.v === 'no' ? '<span class="no">NO RESUELTO</span>'
+             : r.v === 'na' ? '<span class="na">No aplicable</span>'
+             : r.v === 'nc' ? '<span class="pendiente">NO VERIFICADO</span>'
+             : '<span class="pendiente">PENDIENTE</span>';
+    const comp = [x.componente, x.marca, x.modelo].filter(Boolean).join(' · ');
+    const res = RESULTADO_COMPROBACION[x.resultado];
+    return '<div class="comp"><h4>'+esc(r.peligro)+' '+et+'</h4>'+
+      '<table class="datos">'+
+        campo('Zona afectada', x.zona, 'no_identificado')+
+        campo('Riesgo', r.peligro)+
+        (r.v === 'si'
+          ? campo('Medida preventiva adoptada', x.medida || x.como, 'pendiente')+
+            campo('Componente que la materializa', comp, 'no_identificado')+
+            campo('Identificación', x.ident, 'no_identificado')+
+            campo('Comprobación realizada', x.comprobacion, 'no_verificado')+
+            campo('Resultado', res ? res.nombre : '', 'no_verificado')+
+            (x.obs ? campo('Observaciones', x.obs) : '')
+          : campo(r.v === 'no' ? 'Qué falta y qué hay que hacer' : 'Motivo',
+                  x.motivo, 'pendiente')+
+            (r.v === 'no'
+              ? campo('Prioridad', PRIORIDAD_DEFICIENCIA[prioridadDe(x.grav)]
+                      ? PRIORIDAD_DEFICIENCIA[prioridadDe(x.grav)].nombre : '', 'pendiente')
+              : ''))+
+        campo('Protección habitual de este punto', r.elementos)+
+        campo('Evidencia fotográfica', refFotos('peligro:'+r.pk), 'pendiente')+
+      '</table></div>';
+  };
   H += sec('Riesgos detectados')+
     (riesgos.length
-      ? '<table class="datos chk"><thead><tr><th>Peligro</th><th>Protección habitual</th>'+
-        '<th>Situación</th><th>Foto</th></tr></thead><tbody>'+
-        riesgos.map(r => {
-          const et = r.v === 'si' ? '<span class="ok">Resuelto</span>'
-                   : r.v === 'no' ? '<span class="no">NO RESUELTO</span>'
-                   : r.v === 'na' ? '<span class="na">No aplicable</span>'
-                   : r.v === 'nc' ? '<span class="pendiente">NO VERIFICADO</span>'
-                   : '<span class="pendiente">PENDIENTE</span>';
-          return '<tr><td>'+esc(r.peligro)+
-            ((r.como||r.motivo) ? '<span class="sub min" style="display:block">'+
-              esc(r.como||r.motivo)+'</span>' : '')+'</td>'+
-            '<td class="min">'+esc(r.elementos)+'</td><td>'+et+'</td>'+
-            '<td class="min">'+esc(refFotos('peligro:'+r.pk) || '—')+'</td></tr>';
-        }).join('')+'</tbody></table>'
+      ? '<p>Cada punto peligroso propio de este tipo de puerta se valora por separado y se '+
+        'relaciona con la medida concreta adoptada, no con una referencia genérica al proyecto.</p>'+
+        riesgos.map(fichaRiesgo).join('')
       : '<p class="pendiente">No se han valorado los puntos peligrosos de este tipo de puerta.</p>')+
     (riesgosAbiertos.length
       ? '<p><b>Quedan '+riesgosAbiertos.length+' punto(s) peligroso(s) sin resolver o sin '+
@@ -9780,6 +9914,19 @@ raiz.addEventListener('input', e => {
   if (e.target.dataset.act === 'busca-hist'){ S.histBusca = e.target.value; pintar(); }
   // Campos del expediente: se guardan solos y sin repintar, para no interrumpir al que escribe
   if (e.target.dataset.exp && e.target.tagName !== 'SELECT') expPon(e.target.dataset.exp, e.target.value);
+  /* Pie en tres partes: qué es, dónde está y desde dónde. Se guarda ya unido,
+     separado por puntos, que es como sale impreso debajo de la foto. */
+  if (e.target.dataset.act === 'exp-pie-parte'){
+    const f = (S.expFotos||[]).find(x => x.id === e.target.dataset.id);
+    if (!f) return;
+    const caja = e.target.closest('figcaption');
+    const partes = [...caja.querySelectorAll('[data-act="exp-pie-parte"]')]
+      .map(x => x.value.trim().replace(/\.+$/, ''));
+    f.pie = partes.filter(Boolean).join('. ') + (partes.filter(Boolean).length ? '.' : '');
+    sb.from('expediente_fotos').update({ pie: f.pie }).eq('id', f.id)
+      .then(({error}) => { if (error) fallo(error); });
+    return;
+  }
 });
 /* Las mediciones del ensayo sí repintan, pero al salir del campo, no mientras se
    teclea: si no, el técnico mete los valores y la columna de resultado se queda
