@@ -3161,10 +3161,99 @@ const CRITERIOS_MODIFICACION = {
 const criterioModificacion = f =>
   marcoDeFecha(f) === 'reglamento' ? 'reglamento_2023' : 'guia_azul';
 
+/* ===== Apartado 12: segundo nivel del árbol de modificación =====
+   Una respuesta afirmativa no dice todavía de qué tamaño es el cambio. El encargo
+   lo plantea como un árbol: «¿Se ha cambiado el cuadro de maniobra?» → si sí →
+   «¿El nuevo cuadro es equivalente en función, lógica de seguridad y prestaciones?».
+
+   Solo las preguntas que van a C llevan segundo nivel. Las decisivas (q1, q7, q9,
+   q11, q12) NO lo llevan a propósito: cambiar la función prevista, introducir un
+   riesgo nuevo, motorizar una puerta manual o tocar una prestación esencial
+   declarada no admiten matiz de equivalencia. Darles una salida por equivalencia
+   sería abrir una puerta trasera para degradar una modificación sustancial.
+
+   Qué hace cada respuesta del segundo nivel:
+     equivalente     → la pregunta deja de empujar a C, pero SOLO si se dice en qué
+                       se basa la equivalencia. Sin base escrita, bloqueo.
+     no_equivalente  → la pregunta sube de C a D.
+     desconocido     → se queda en C. No se convierte en «equivalente».
+     sin contestar   → se queda en C y el cuestionario queda señalado como incompleto. */
+const RESPUESTAS_EQUIV = {
+  equivalente:    'Sí, equivalente en función, lógica de seguridad y prestaciones',
+  no_equivalente: 'No, cambia la función, la lógica de seguridad o las prestaciones',
+  desconocido:    'No se puede determinar',
+};
+const SECUNDARIAS_MODIF = {
+  q2:  { texto:'¿El nuevo modo de accionamiento es equivalente al anterior en función, '+
+               'lógica de seguridad y prestaciones?',
+         base:'En qué se basa la equivalencia del accionamiento' },
+  q3:  { texto:'¿La nueva lógica de seguridad o sistema de mando es equivalente a la anterior '+
+               'en función, lógica de seguridad y prestaciones?',
+         base:'En qué se basa la equivalencia de la lógica de seguridad' },
+  q4:  { texto:'¿La nueva velocidad se mantiene dentro de los valores previstos por el '+
+               'fabricante y de los ensayados?',
+         base:'Dónde consta el valor admisible y qué velocidad queda' },
+  q5:  { texto:'¿Los nuevos valores de fuerza, par o potencia se mantienen dentro de los '+
+               'límites previstos por el fabricante y comprobados por ensayo?',
+         base:'Qué ensayo lo acredita y con qué resultado' },
+  q6:  { texto:'¿El nuevo recorrido se mantiene dentro del previsto por el fabricante, con los '+
+               'mismos topes y las mismas zonas protegidas?',
+         base:'Qué recorrido queda y cómo quedan las zonas de peligro' },
+  q8:  { texto:'¿El nuevo cuadro de maniobra es equivalente en función, lógica de seguridad '+
+               'y prestaciones?',
+         base:'Modelo anterior, modelo nuevo y dónde consta la equivalencia' },
+  q10: { texto:'¿Los elementos estructurales sustituidos son originales del fabricante o '+
+               'equivalentes certificados, con la misma resistencia?',
+         base:'Qué elementos y con qué documento se acredita la equivalencia' },
+};
+/* El segundo nivel vive en datos.interv.<id>.eq y datos.interv.<id>.eq_base */
+const tieneSecundaria = id => !!SECUNDARIAS_MODIF[id];
+
+/* ===== Apartado 13: respuestas que se deducen del tipo de intervención =====
+   Elegir «Motorización de puerta manual existente» ya contesta q9: no tiene sentido
+   preguntar después si se motoriza una puerta que antes era manual. La respuesta se
+   deduce, se muestra bloqueada y se marca como deducida, de modo que en el documento
+   quede claro que no la contestó nadie a mano.
+
+   El cortafuegos es distinto: ahí q12 se deduce de un hecho comprobado (se sustituyó
+   un componente que no es original ni está contemplado por el fabricante), no del
+   tipo elegido. Ver deduccionesIntervencion. */
+const DEDUCCIONES_TIPO = {
+  motorizacion: {
+    q9: { v:'si', porque:'El tipo de intervención elegido es la motorización de una puerta '+
+            'manual existente: la respuesta a esta pregunta queda deducida de esa elección.' },
+  },
+};
+
+/* Devuelve { <id>: {v, porque} } con las respuestas que la aplicación deduce de
+   hechos ya registrados, en vez de preguntarlas dos veces. */
+function deduccionesIntervencion(e){
+  const d = ((e||{}).datos) || {};
+  const out = {};
+  const porTipo = DEDUCCIONES_TIPO[((d.interv)||{}).tipo];
+  if (porTipo) Object.entries(porTipo).forEach(([k, x]) => { out[k] = Object.assign({}, x); });
+  /* Cortafuegos con componente sustituido que no es original ni contemplado por el
+     fabricante: la configuración queda fuera de la certificación. Es exactamente lo
+     que pregunta q12, y ya está contestado en el bloque de la puerta cortafuegos. */
+  if ((e||{}).familia === 'cortafuegos'){
+    const cf = d.cf || {};
+    if (cf.comp_sust === 'si' && ['no','desconocido'].indexOf(cf.comp_orig) >= 0)
+      out.q12 = { v:'si', porque:'En la puerta resistente al fuego se han sustituido componentes '+
+        (cf.comp_orig === 'no'
+          ? 'que no son originales del fabricante ni están contemplados en su documentación o certificación: '
+          : 'sin poder determinar si son originales del fabricante o están contemplados en su certificación: ')+
+        'la configuración resultante queda fuera de lo certificado.' };
+  }
+  return out;
+}
+
 function respuestasIntervencion(e){
   const d = (((e||{}).datos||{}).interv) || {};
+  const ded = deduccionesIntervencion(e);
   const r = {};
-  PREGUNTAS_MODIFICACION.forEach(p => { r[p.id] = (d[p.id] || {}).v || ''; });
+  PREGUNTAS_MODIFICACION.forEach(p => {
+    r[p.id] = ded[p.id] ? ded[p.id].v : ((d[p.id] || {}).v || '');
+  });
   return r;
 }
 
@@ -3184,6 +3273,8 @@ function evaluarIntervencion(e){
     condiciones_falladas: [],
     bloqueos: [],
     requiere_cuestionario: false,
+    deducidas: [],            // respuestas que salen de un hecho ya registrado
+    equivalencias: [],        // segundo nivel del árbol, pregunta por pregunta
   };
   if (!out.tipo){
     out.bloqueos.push('No se ha decidido el tipo de intervención. Es la decisión previa: '+
@@ -3217,7 +3308,17 @@ function evaluarIntervencion(e){
     return out;
   };
 
+  const ded = deduccionesIntervencion(e);
+  Object.entries(ded).forEach(([id, x]) => {
+    const p = PREGUNTAS_MODIFICACION.find(q => q.id === id);
+    out.deducidas.push({ id, texto: p ? p.texto : '', valor: x.v, porque: x.porque });
+  });
+
   const dichoSi = [];
+  const sinSegundoNivel = [];   // dijo que sí, tiene segundo nivel y está sin contestar
+  const sinBaseEquiv = [];      // dice equivalente y no dice en qué se basa
+  const noEquivalentes = [];    // el segundo nivel dice que NO es equivalente
+  const equivOk = [];           // equivalencia declarada y justificada
   PREGUNTAS_MODIFICACION.forEach(p => {
     const v = r[p.id];
     if (!v || RESPUESTAS_ABIERTAS.indexOf(v) >= 0){
@@ -3226,6 +3327,28 @@ function evaluarIntervencion(e){
       return;
     }
     if (v !== 'si') return;
+
+    /* ---- Segundo nivel del árbol (apartado 12) ----
+       Solo para las preguntas que admiten matiz de equivalencia. */
+    const sec = SECUNDARIAS_MODIF[p.id];
+    if (sec){
+      const x    = d[p.id] || {};
+      const eq   = x.eq || '';
+      const base = String(x.eq_base || '').trim();
+      out.equivalencias.push({ id:p.id, texto:p.texto, secundaria:sec.texto, eq, base });
+      if (!eq){ sinSegundoNivel.push({ p, sec }); return; }
+      if (eq === 'equivalente'){
+        if (!base){ sinBaseEquiv.push({ p, sec }); return; }
+        equivOk.push({ p, sec, base });
+        /* Equivalencia declarada y justificada: el cambio no empuja a C y no tumba
+           ninguna condición de A. Queda escrito en el expediente como sustitución
+           equivalente documentada, no como ausencia de cambio. */
+        return;
+      }
+      if (eq === 'no_equivalente') noEquivalentes.push({ p, sec });
+      /* «desconocido» sigue el camino normal de la pregunta: se queda en C. */
+    }
+
     dichoSi.push(p);
     const cond = PREGUNTA_TUMBA[p.id];
     if (cond && out.condiciones_falladas.indexOf(cond) < 0) out.condiciones_falladas.push(cond);
@@ -3234,6 +3357,23 @@ function evaluarIntervencion(e){
 
   /* El tipo elegido puede declarar el desenlace por sí solo */
   const forzado = TIPO_FUERZA_RESULTADO[out.tipo];
+
+  /* El segundo nivel sin contestar deja el árbol a medias: no se clasifica, igual
+     que una pregunta principal en blanco. Una equivalencia afirmada sin decir en qué
+     se basa tampoco vale: una casilla no es una prueba. */
+  if (sinBaseEquiv.length && !forzado){
+    sinBaseEquiv.forEach(({ sec }) => out.bloqueos.push('Se ha declarado equivalencia sin decir '+
+      'en qué se basa: '+sec.base+'.'));
+    return out;
+  }
+  if (sinSegundoNivel.length && !forzado){
+    sinSegundoNivel.forEach(({ sec }) => out.bloqueos.push('Pregunta de segundo nivel sin '+
+      'contestar: '+sec.texto));
+    return out;
+  }
+  if (equivOk.length)
+    equivOk.forEach(({ p, base }) => out.motivos.push('Cambio con equivalencia acreditada, '+
+      'no computa como modificación: '+p.texto+' Base: '+base));
 
   /* Sin contestar NO es lo mismo que desconocido. Una pregunta en blanco deja el
      cuestionario incompleto y no se clasifica nada, salvo que el tipo elegido ya
@@ -3259,6 +3399,14 @@ function evaluarIntervencion(e){
     aD.forEach(p => out.motivos.push('Respuesta decisiva: '+p.texto));
     return cierra('D', 'La intervención produce un cambio que obliga a evaluar de nuevo el '+
       'conjunto resultante como máquina completa.');
+  }
+  /* Segundo nivel del árbol: una sustitución declarada NO equivalente en función,
+     lógica de seguridad o prestaciones sube de C a D. Es el caso que el encargo pone
+     como ejemplo con el cuadro de maniobra. */
+  if (noEquivalentes.length){
+    noEquivalentes.forEach(({ p }) => out.motivos.push('Cambio declarado NO equivalente: '+p.texto));
+    return cierra('D', 'Lo sustituido no es equivalente en función, lógica de seguridad o '+
+      'prestaciones, de modo que el conjunto resultante no es el que se evaluó en su día.');
   }
 
   /* 2. E: condición crítica que impide decidir, o cortafuegos fuera de certificación */
@@ -3304,10 +3452,221 @@ function evaluarIntervencion(e){
       'ninguna de las doce preguntas señala modificación sustancial.');
 
   /* 5. A: mantenimiento o reparación ordinaria */
-  return cierra('A', 'Ninguna de las doce preguntas señala cambio: la intervención conserva la '+
-    'función y el uso previsto, no altera la lógica de seguridad, no introduce riesgos nuevos, '+
-    'no toca prestaciones esenciales, no motoriza una puerta manual y no altera una '+
-    'configuración certificada.');
+  return cierra('A', (equivOk.length
+      ? 'Los cambios registrados tienen equivalencia acreditada en función, lógica de seguridad '+
+        'y prestaciones, y ninguna de las doce preguntas señala modificación: '
+      : 'Ninguna de las doce preguntas señala cambio: ')+
+    'la intervención conserva la función y el uso previsto, no altera la lógica de seguridad, '+
+    'no introduce riesgos nuevos, no toca prestaciones esenciales, no motoriza una puerta manual '+
+    'y no altera una configuración certificada.');
+}
+
+/* ===================================================================
+   APARTADO 14: PUERTAS PEATONALES AUTOMÁTICAS
+   ===================================================================
+   Una peatonal automática no se evalúa como una industrial. Su seguridad de uso va
+   por la UNE-EN 16005+A1:2024, su producto por la UNE-EN 16361 y su instalación,
+   uso y mantenimiento por la UNE 85121:2018. Y, cuando está en un recorrido de
+   evacuación, entra además el Código Técnico de la Edificación.
+
+   Estas doce preguntas NO son las doce de modificación: son de caracterización. De
+   ellas depende qué se le exige a la puerta, no si la intervención es sustancial.
+   Ninguna de ellas lleva un límite numérico escrito aquí: los valores concretos se
+   contrastan con el ejemplar de la norma, igual que en el resto de la aplicación.
+
+   Las respuestas son cuatro, y «desconocido» nunca se convierte en «no». */
+const RESPUESTAS_PEATONAL = {
+  si:          'Sí',
+  no:          'No',
+  desconocido: 'No se ha podido comprobar',
+  na:          'No aplica',
+};
+const PREGUNTAS_PEATONAL = [
+  { id:'p1',  texto:'¿Está situada en un recorrido de evacuación?',
+    norma:'CTE DB-SI y UNE 85121:2018', clave:true,
+    pista:'De esta respuesta depende que se le exija apertura garantizada' },
+  { id:'p2',  texto:'¿Está prevista como salida de emergencia?',
+    norma:'CTE DB-SI y UNE 85121:2018', clave:true },
+  { id:'p3',  texto:'¿Dispone de apertura antipánico por empuje (breakout) o de otro sistema de '+
+                    'apertura de emergencia?',
+    norma:'UNE-EN 16005+A1:2024', exige_si:['p1','p2'],
+    pista:'Si está en evacuación o es salida de emergencia, esta respuesta es obligatoria' },
+  { id:'p4',  texto:'¿Dispone de batería o de sistema que garantice la apertura ante fallo de '+
+                    'tensión?',
+    norma:'UNE 85121:2018', exige_si:['p1','p2'] },
+  { id:'p5',  texto:'¿Puede abrirse manualmente ante fallo de tensión con una fuerza admisible, '+
+                    'comprobado en la propia puerta?',
+    norma:'UNE 85121:2018', exige_si:['p1','p2'],
+    pista:'Comprobado, no supuesto: hay que haberlo probado' },
+  { id:'p6',  texto:'¿El acristalamiento es de vidrio de seguridad y está señalizado?',
+    norma:'UNE-EN 16005+A1:2024', critica_no:true },
+  { id:'p7',  texto:'¿Es de uso público?',
+    norma:'UNE-EN 16005+A1:2024', clave:true },
+  { id:'p8',  texto:'¿La usan o pueden usarla personas vulnerables (niños, personas mayores, '+
+                    'personas con discapacidad)?',
+    norma:'UNE-EN 16005+A1:2024', clave:true,
+    pista:'Cambia el nivel de protección exigible, igual que en la 12453' },
+  { id:'p9',  texto:'¿Las zonas de atrapamiento lateral entre hoja y jamba, entre hojas o con '+
+                    'elementos fijos están protegidas?',
+    norma:'UNE-EN 16005+A1:2024', critica_no:true },
+  { id:'p10', texto:'¿Dispone de sensores de presencia que detecten a una persona parada en la '+
+                    'línea de cierre, en todo el hueco?',
+    norma:'UNE-EN 16005+A1:2024', exige_si:['p7','p8'], critica_no:true },
+  { id:'p11', texto:'¿Dispone de sensores de activación que cubran la aproximación por los dos '+
+                    'lados del hueco?',
+    norma:'UNE-EN 16005+A1:2024', exige_si:['p7','p8'] },
+  { id:'p12', texto:'¿Funciona en modo de baja energía?',
+    norma:'UNE-EN 16005+A1:2024',
+    pista:'El modo de baja energía tiene requisitos de protección distintos' },
+];
+
+/* Evalúa el bloque de peatonales. No dictamina conformidad: dice qué falta, qué
+   queda sin verificar y qué impide acreditar conformidad. */
+function evaluarPeatonal(e){
+  const out = { aplica:(e||{}).familia === 'peatonal', respuestas:{}, sinContestar:[],
+                desconocidas:[], bloqueos:[], avisos:[], evacuacion:false, publico:false,
+                contestadas:0, total:PREGUNTAS_PEATONAL.length };
+  if (!out.aplica) return out;
+  const pe = (((e||{}).datos||{}).pea) || {};
+  PREGUNTAS_PEATONAL.forEach(q => { out.respuestas[q.id] = (pe[q.id]||{}).v || ''; });
+  const v = id => out.respuestas[id] || '';
+
+  out.evacuacion = v('p1') === 'si' || v('p2') === 'si';
+  out.publico    = v('p7') === 'si' || v('p8') === 'si';
+
+  PREGUNTAS_PEATONAL.forEach(q => {
+    const val = v(q.id);
+    if (!val){ out.sinContestar.push(q); return; }
+    out.contestadas++;
+    if (val === 'desconocido') out.desconocidas.push(q);
+  });
+
+  /* Lo que exige una puerta en recorrido de evacuación o prevista como salida de
+     emergencia. Aquí no se interpreta nada: o consta comprobado, o no consta. */
+  if (out.evacuacion){
+    PREGUNTAS_PEATONAL.filter(q => (q.exige_si||[]).some(k => ['p1','p2'].indexOf(k) >= 0))
+      .forEach(q => {
+        const val = v(q.id);
+        if (val === 'no')
+          out.bloqueos.push('La puerta está en recorrido de evacuación o prevista como salida de '+
+            'emergencia y no cumple un requisito propio de esa condición: '+q.texto+
+            ' No puede acreditarse conformidad mientras siga así.');
+        else if (val === 'desconocido' || val === 'na' || !val)
+          out.bloqueos.push('La puerta está en recorrido de evacuación o prevista como salida de '+
+            'emergencia y este requisito no consta comprobado: '+q.texto+
+            ' Sin comprobarlo no puede acreditarse conformidad.');
+      });
+  }
+
+  /* Uso público o usuarios vulnerables: la detección de presencia y de activación
+     deja de ser opcional. */
+  if (out.publico){
+    PREGUNTAS_PEATONAL.filter(q => (q.exige_si||[]).some(k => ['p7','p8'].indexOf(k) >= 0))
+      .forEach(q => {
+        const val = v(q.id);
+        if (val === 'no')
+          out.bloqueos.push('Es una puerta de uso público o utilizada por personas vulnerables y '+
+            'falta una protección exigible: '+q.texto);
+        else if (val === 'desconocido' || !val)
+          out.avisos.push('Uso público o usuarios vulnerables, y esta protección no consta '+
+            'comprobada: '+q.texto);
+      });
+  }
+
+  /* Requisitos que no dependen del uso */
+  PREGUNTAS_PEATONAL.filter(q => q.critica_no).forEach(q => {
+    if (v(q.id) === 'no')
+      out.bloqueos.push('Requisito de seguridad no cumplido: '+q.texto);
+  });
+  out.desconocidas.forEach(q => {
+    if (out.bloqueos.some(b => b.indexOf(q.texto) >= 0)) return;
+    out.avisos.push('Sin comprobar, queda fuera del alcance del documento: '+q.texto);
+  });
+  if (out.sinContestar.length)
+    out.avisos.push(out.sinContestar.length+' de las '+out.total+' preguntas propias de la puerta '+
+      'peatonal automática están sin contestar.');
+  return out;
+}
+
+/* ===================================================================
+   APARTADO 15: PUERTAS RESISTENTES AL FUEGO
+   ===================================================================
+   Una puerta resistente al fuego es, además de máquina, un producto de construcción
+   con una clasificación de resistencia al fuego que depende de un ensayo concreto y
+   de una configuración concreta. Nosotros no la ensayamos ni la clasificamos: eso lo
+   hizo su fabricante. Lo que la aplicación tiene que hacer es exigir que conste de
+   dónde sale esa clasificación y, sobre todo, registrar si la configuración sigue
+   siendo la certificada después de nuestra intervención.
+
+   No hay lista de clasificaciones ni de organismos notificados escrita aquí: se
+   copian de la documentación del fabricante, porque inventarlas sería precisamente
+   lo que el encargo prohíbe. */
+const CAMPOS_CORTAFUEGOS = [
+  ['fabricante',  'Fabricante de la puerta cortafuegos',
+   'Tal como figura en la placa o en la documentación'],
+  ['modelo',      'Modelo o referencia del fabricante'],
+  ['clasificacion','Clasificación de resistencia al fuego declarada',
+   'Cópiala literalmente de la documentación del fabricante, con su designación completa'],
+  ['dop',         'Número de la declaración de prestaciones (DoP) del fabricante'],
+  ['certificado', 'Referencia del certificado de constancia de las prestaciones'],
+  ['organismo',   'Organismo notificado que lo emitió',
+   'Nombre y número de organismo notificado'],
+];
+/* Lo que el encargo llama «la pregunta obligatoria»: qué se ha sustituido y si lo
+   sustituido es original o está contemplado por el fabricante. */
+const RESPUESTAS_CF_ORIG = {
+  si:          'Sí, originales del fabricante o contemplados en su documentación o certificación',
+  no:          'No, no son originales ni están contemplados',
+  desconocido: 'No se ha podido determinar',
+};
+
+function evaluarCortafuegos(e){
+  const out = { aplica:(e||{}).familia === 'cortafuegos', faltan:[], bloqueos:[], avisos:[],
+                fueraCertificacion:false, cf:{} };
+  if (!out.aplica) return out;
+  const cf = out.cf = (((e||{}).datos||{}).cf) || {};
+
+  CAMPOS_CORTAFUEGOS.forEach(([k, etiqueta]) => {
+    if (!String(cf[k] || '').trim()) out.faltan.push(etiqueta);
+  });
+  /* Sin fabricante, modelo, clasificación y DoP no hay nada que acreditar: la
+     clasificación de resistencia al fuego es del fabricante, no nuestra. */
+  ['fabricante','modelo','clasificacion','dop'].forEach(k => {
+    if (!String(cf[k] || '').trim())
+      out.bloqueos.push('Falta un dato sin el cual no puede acreditarse la clasificación de '+
+        'resistencia al fuego: '+
+        (CAMPOS_CORTAFUEGOS.find(c => c[0] === k)||[])[1]+'.');
+  });
+  ['certificado','organismo'].forEach(k => {
+    if (!String(cf[k] || '').trim())
+      out.avisos.push('No consta '+((CAMPOS_CORTAFUEGOS.find(c => c[0] === k)||[])[1]||'').toLowerCase()+
+        ': la clasificación queda declarada por el fabricante pero sin su respaldo documental '+
+        'en el expediente.');
+  });
+
+  if (!cf.comp_sust)
+    out.bloqueos.push('No consta si se ha sustituido algún componente de la puerta resistente al '+
+      'fuego. Es la pregunta obligatoria de esta familia y no puede quedar en blanco.');
+  if (cf.comp_sust === 'si'){
+    if (!String(cf.comp_lista || '').trim())
+      out.bloqueos.push('Se han sustituido componentes de la puerta resistente al fuego pero no '+
+        'consta cuáles.');
+    if (!cf.comp_orig)
+      out.bloqueos.push('Se han sustituido componentes y no consta si son originales del '+
+        'fabricante o están contemplados en su documentación o certificación.');
+    if (['no','desconocido'].indexOf(cf.comp_orig) >= 0){
+      out.fueraCertificacion = true;
+      out.bloqueos.push(cf.comp_orig === 'no'
+        ? 'Se han sustituido componentes que no son originales del fabricante ni están '+
+          'contemplados en su documentación o certificación. La configuración resultante queda '+
+          'fuera de lo certificado: NO puede declararse que la puerta mantiene su clasificación '+
+          'de resistencia al fuego.'
+        : 'No se ha podido determinar si los componentes sustituidos son originales o están '+
+          'contemplados por el fabricante. Mientras no se determine, la configuración no puede '+
+          'presentarse como certificada.');
+    }
+  }
+  return out;
 }
 
 /* ---- Componentes de la instalación, con foto de cada uno ----
@@ -3946,9 +4305,13 @@ function expSecciones(e){
     ['intervencion','Tipo de intervención'],
     ['obra',        'Dónde y para quién'],
     ['puerta',      'La puerta'],
-    ['componentes', 'Elementos de la instalación'],
-    ['cumplimiento','Cumplimiento de normativa'],
   ];
+  /* Dos familias tienen preguntas propias que no caben en el tronco común: la
+     peatonal automática (apartado 14) y la resistente al fuego (apartado 15). */
+  if (e.familia === 'peatonal')    s.push(['familia', 'Peatonal automática']);
+  if (e.familia === 'cortafuegos') s.push(['familia', 'Resistente al fuego']);
+  s.push(['componentes', 'Elementos de la instalación']);
+  s.push(['cumplimiento','Cumplimiento de normativa']);
   if (expVal('puerta.motorizada', 'si') === 'si') s.push(['fuerzas', 'Ensayo de fuerzas']);
   /* Las prestaciones declaradas solo tienen sentido si de esta familia sale una
      declaración de prestaciones. En peatonales y en barreras de solo vehículos no
@@ -3990,6 +4353,42 @@ function validarExpediente(e){
       RESULTADOS_INTERVENCION[iv.resultado].nombre+'», que no genera una declaración propia '+
       'nueva, pero el expediente está planteado como fabricante. No pueden ser las dos cosas: '+
       'revisa el tipo de intervención o la situación del expediente.');
+  }
+
+  /* --- Apartado 14: puerta peatonal automática --- */
+  {
+    const pea = evaluarPeatonal(e);
+    if (pea.aplica){
+      pea.bloqueos.forEach(t => B('Peatonal', t));
+      pea.avisos.forEach(t => A('Peatonal', t));
+    }
+  }
+
+  /* --- Apartado 15: puerta resistente al fuego --- */
+  {
+    const cfv = evaluarCortafuegos(e);
+    if (cfv.aplica){
+      cfv.bloqueos.forEach(t => B('Cortafuegos', t));
+      cfv.avisos.forEach(t => A('Cortafuegos', t));
+    }
+  }
+
+  /* --- Apartado 13: coherencia de la motorización ---
+     Si se motoriza una puerta manual, la puerta no puede quedar declarada como no
+     motorizada, y al contrario: si q9 dice que se motoriza, el tipo de intervención
+     tiene que recogerlo. No se corrige solo: se avisa para que lo arregle quien sabe
+     cuál de los dos está mal. */
+  {
+    const tipo = ((d.interv)||{}).tipo || '';
+    const q9   = respuestasIntervencion(e).q9;
+    if (tipo === 'motorizacion' && (d.puerta||{}).motorizada === 'no')
+      B('Intervención', 'El tipo de intervención es la motorización de una puerta manual, pero en '+
+        '«La puerta» consta como no motorizada. Al terminar la intervención lo está: revisa uno '+
+        'de los dos datos.');
+    if (q9 === 'si' && tipo && ['motorizacion','modif_sustancial','no_clasificable'].indexOf(tipo) < 0)
+      A('Intervención', 'Consta que se motoriza una puerta que antes era manual y el tipo de '+
+        'intervención elegido es «'+((TIPOS_INTERVENCION[tipo]||{}).nombre||tipo)+'». Motorizar es '+
+        'poner en servicio una máquina nueva: comprueba que el tipo elegido es el correcto.');
   }
 
   /* --- Legal --- */
@@ -4340,6 +4739,31 @@ function expPendientes(e){
   }
   if (!(d.obra && d.obra.emplazamiento)) falta.push('el emplazamiento de la puerta');
   if (!(d.puerta && d.puerta.tipo)) falta.push('el tipo de puerta');
+
+  /* Lo propio de la familia: peatonal automática y resistente al fuego */
+  {
+    const pea = evaluarPeatonal(e);
+    if (pea.aplica && pea.sinContestar.length)
+      falta.push(pea.sinContestar.length+' de las '+pea.total+' preguntas propias de la puerta '+
+        'peatonal automática, en el paso «Peatonal automática»');
+    const cfv = evaluarCortafuegos(e);
+    if (cfv.aplica && cfv.faltan.length)
+      falta.push(cfv.faltan.length+' datos de la puerta resistente al fuego: '+
+        cfv.faltan.join(', ').toLowerCase());
+    if (cfv.aplica && !((d.cf||{}).comp_sust))
+      falta.push('contestar si se ha sustituido algún componente de la puerta resistente al fuego');
+  }
+
+  /* Segundo nivel del árbol de modificación */
+  {
+    const iv = evaluarIntervencion(e);
+    const sinEq = (iv.equivalencias||[]).filter(x => !x.eq);
+    if (sinEq.length) falta.push(sinEq.length+' pregunta(s) de segundo nivel del cuestionario de '+
+      'modificación, en el paso «Tipo de intervención»');
+    const sinBase = (iv.equivalencias||[]).filter(x => x.eq === 'equivalente' && !x.base);
+    if (sinBase.length) falta.push('decir en qué se basa la equivalencia declarada en '+
+      sinBase.length+' pregunta(s) del cuestionario de modificación');
+  }
   const comps = EXP_COMPONENTES[e.familia] || [];
   const sinResponder = comps.filter(c => !((d.comp||{})[c[0]]||{}).estado);
   if (sinResponder.length) falta.push(sinResponder.length + ' elementos de la instalación sin contestar');
@@ -4574,6 +4998,7 @@ function vistaExpediente(id){
   if (actual === 'intervencion')  h += expSecIntervencion(e);
   else if (actual === 'obra')     h += expSecObra(e, p, c);
   else if (actual === 'puerta')   h += expSecPuerta(e, p);
+  else if (actual === 'familia')  h += expSecFamilia(e);
   else if (actual === 'componentes') h += expSecComponentes(e);
   else if (actual === 'cumplimiento') h += expSecCumplimiento(e);
   else if (actual === 'fuerzas')  h += expSecFuerzas(e);
@@ -4645,15 +5070,34 @@ function expSecIntervencion(e){
     '<p class="mini" style="margin:0 0 12px"><b>Desconocido</b> y <b>Requiere revisión técnica</b> '+
     'no cuentan como un «no»: dejan el expediente en «no puede determinarse».</p>';
 
+  const ded = deduccionesIntervencion(e);
   PREGUNTAS_MODIFICACION.forEach((p, i) => {
-    const val = (r[p.id] || {}).v || '';
-    const abierta = !val || RESPUESTAS_ABIERTAS.indexOf(val) >= 0;
+    const dd  = ded[p.id];
+    const val = dd ? dd.v : ((r[p.id] || {}).v || '');
+    const abierta = !dd && (!val || RESPUESTAS_ABIERTAS.indexOf(val) >= 0);
+    const sec = SECUNDARIAS_MODIF[p.id];
+    /* Una respuesta deducida se muestra, no se pregunta: el campo va bloqueado y
+       dice de dónde sale. Así en el documento consta que no la contestó nadie. */
     h += '<div class="campos'+(abierta ? ' bloque-sin' : '')+'" style="margin-bottom:10px">'+
-      expSel('interv.'+p.id+'.v', (i+1)+'. '+p.texto,
-        [['', 'Sin contestar']].concat(Object.entries(RESPUESTAS_MODIF)),
-        '')+
+      (dd
+        ? '<div class="campo full"><label>'+esc((i+1)+'. '+p.texto)+'</label>'+
+          '<input type="text" value="'+esc(RESPUESTAS_MODIF[val] || val)+'" disabled>'+
+          '<span class="pista"><b>Respuesta deducida.</b> '+esc(dd.porque)+'</span></div>'
+        : expSel('interv.'+p.id+'.v', (i+1)+'. '+p.texto,
+            [['', 'Sin contestar']].concat(Object.entries(RESPUESTAS_MODIF)), ''))+
       (val === 'si' || val === 'revision'
         ? expArea('interv.'+p.id+'.nota', 'En qué consiste', 'Concreta el cambio o lo que hay que revisar', 2)
+        : '')+
+      /* Segundo nivel del árbol: solo cuando la principal dice que sí */
+      (val === 'si' && sec
+        ? expSel('interv.'+p.id+'.eq', '↳ '+sec.texto,
+            [['', 'Sin contestar']].concat(Object.entries(RESPUESTAS_EQUIV)),
+            'Equivalente y justificado no computa como modificación. No equivalente sube a '+
+            'modificación sustancial. Desconocido no es un sí')+
+          ((((r[p.id]||{}).eq) === 'equivalente')
+            ? expArea('interv.'+p.id+'.eq_base', '↳ '+sec.base,
+                'Sin esto escrito, la equivalencia no vale: una casilla no es una prueba', 2)
+            : '')
         : '')+
       '</div>';
   });
@@ -4682,6 +5126,120 @@ function expSecIntervencion(e){
         : '')+
       '</div>';
   }
+  return h;
+}
+
+/* ---- Apartados 14 y 15: lo propio de cada familia ---- */
+function expSecFamilia(e){
+  if (e.familia === 'peatonal')    return expBloquePeatonal(e);
+  if (e.familia === 'cortafuegos') return expBloqueCortafuegos(e);
+  return '<p class="mini">Esta familia no tiene preguntas propias.</p>';
+}
+
+function expBloquePeatonal(e){
+  const v = evaluarPeatonal(e);
+  const pe = ((e.datos||{}).pea) || {};
+  let h = '<div class="panel-h"><h3>Puerta peatonal automática</h3>'+
+      '<span class="mini">'+v.contestadas+' de '+v.total+'</span></div>'+
+    '<p class="mini" style="margin:0 0 12px">Doce preguntas de caracterización. No deciden si la '+
+    'intervención es sustancial: deciden <b>qué se le exige a esta puerta</b>. Su seguridad de uso '+
+    'va por la <b>UNE-EN 16005+A1:2024</b>, su instalación y mantenimiento por la '+
+    '<b>UNE 85121:2018</b> y, si está en recorrido de evacuación, entra además el Código Técnico '+
+    'de la Edificación. La matriz de la UNE-EN 12453 no se aplica a esta familia.</p>'+
+    '<p class="mini" style="margin:0 0 12px"><b>No se ha podido comprobar</b> no es un «no»: deja '+
+    'el requisito fuera del alcance del documento.</p>';
+
+  if (v.evacuacion)
+    h += '<p class="aviso" style="margin:0 0 12px"><b>Puerta en recorrido de evacuación o prevista '+
+      'como salida de emergencia.</b> Las preguntas 3, 4 y 5 pasan a ser obligatorias: sin ellas '+
+      'comprobadas no puede acreditarse conformidad.</p>';
+  if (v.publico)
+    h += '<p class="aviso" style="margin:0 0 12px"><b>Uso público o usuarios vulnerables.</b> La '+
+      'detección de presencia y la de activación dejan de ser opcionales.</p>';
+
+  PREGUNTAS_PEATONAL.forEach((q, i) => {
+    const val = (pe[q.id]||{}).v || '';
+    const exigida = (q.exige_si||[]).length &&
+      ((v.evacuacion && q.exige_si.some(k => k === 'p1' || k === 'p2')) ||
+       (v.publico    && q.exige_si.some(k => k === 'p7' || k === 'p8')));
+    const malo = val === 'no' || val === 'desconocido' || (!val && exigida);
+    h += '<div class="campos'+(malo ? ' bloque-sin' : '')+'" style="margin-bottom:10px">'+
+      expSel('pea.'+q.id+'.v', (i+1)+'. '+q.texto+(exigida ? ' (obligatoria en este caso)' : ''),
+        [['', 'Sin contestar']].concat(Object.entries(RESPUESTAS_PEATONAL)),
+        (q.pista ? q.pista+'. ' : '')+q.norma)+
+      (val && val !== 'si'
+        ? expArea('pea.'+q.id+'.motivo',
+            val === 'na' ? 'Por qué no aplica' : (val === 'no' ? 'Qué falta o qué se ha visto'
+                                                              : 'Por qué no se ha podido comprobar'),
+            'Sin motivo escrito, el documento no puede explicar esta respuesta', 2)
+        : '')+
+      '</div>';
+  });
+
+  h += '<div class="panel-h" style="margin-top:18px"><h3>Qué sale de estas respuestas</h3></div>';
+  if (!v.bloqueos.length && !v.avisos.length)
+    h += '<p class="nota-oficina" style="margin:0">Las doce preguntas están contestadas y ninguna '+
+      'impide acreditar conformidad por esta vía.</p>';
+  if (v.bloqueos.length)
+    h += '<div class="bloque-sin" style="padding:12px"><p style="margin:0 0 8px"><b>IMPIDE '+
+      'ACREDITAR CONFORMIDAD</b></p><ul class="mini" style="margin:0;padding-left:18px">'+
+      v.bloqueos.map(x => '<li>'+esc(x)+'</li>').join('')+'</ul></div>';
+  if (v.avisos.length)
+    h += '<ul class="mini" style="margin:10px 0 0;padding-left:18px">'+
+      v.avisos.map(x => '<li>'+esc(x)+'</li>').join('')+'</ul>';
+  return h;
+}
+
+function expBloqueCortafuegos(e){
+  const v = evaluarCortafuegos(e);
+  const cf = ((e.datos||{}).cf) || {};
+  let h = '<div class="panel-h"><h3>Puerta resistente al fuego</h3></div>'+
+    '<p class="mini" style="margin:0 0 12px">La clasificación de resistencia al fuego la declaró '+
+    'su fabricante a partir de un ensayo y de una configuración concretos. Nosotros no la '+
+    'ensayamos ni la clasificamos: lo que hacemos es <b>registrar de dónde sale</b> y si sigue '+
+    'siendo la misma configuración después de nuestra intervención. Copia los datos literalmente '+
+    'de la documentación del fabricante.</p>'+
+    '<div class="campos">'+
+    CAMPOS_CORTAFUEGOS.map(([k, etiqueta, pista]) =>
+      expTxt('cf.'+k, etiqueta, pista, k === 'clasificacion' ? 1 : 0)).join('')+
+    '</div>';
+
+  h += '<div class="panel-h" style="margin-top:18px"><h3>Componentes sustituidos</h3></div>'+
+    '<p class="mini" style="margin:0 0 12px">Pregunta obligatoria de esta familia. Un componente '+
+    'que no sea original ni esté contemplado por el fabricante deja la puerta fuera de su '+
+    'certificación, por pequeño que parezca el cambio.</p>'+
+    '<div class="campos">'+
+    expSel('cf.comp_sust', '¿Se ha sustituido algún componente de la puerta?',
+      [['', 'Sin contestar'], ['si','Sí'], ['no','No'],
+       ['desconocido','No se puede determinar qué se sustituyó antes de nuestra intervención']],
+      'Cierrapuertas, bisagras, cerradura, retenedor, junta intumescente, selector de cierre, vidrio...')+
+    (cf.comp_sust === 'si'
+      ? expArea('cf.comp_lista', 'Qué componentes se han sustituido',
+          'Uno por línea, con marca y modelo si consta', 3)+
+        expSel('cf.comp_orig', '¿Son originales del fabricante o están contemplados en su '+
+          'documentación o certificación?',
+          [['', 'Sin contestar']].concat(Object.entries(RESPUESTAS_CF_ORIG)),
+          'De esta respuesta depende que la puerta siga dentro de lo certificado')+
+        expArea('cf.comp_base', 'En qué se basa la respuesta',
+          'Documento del fabricante, referencia del catálogo, certificado del componente...', 2)
+      : '')+
+    '</div>';
+
+  h += '<div class="panel-h" style="margin-top:18px"><h3>Qué sale de estas respuestas</h3></div>';
+  if (v.fueraCertificacion)
+    h += '<p class="aviso" style="margin:0 0 10px"><b>Configuración fuera de lo certificado.</b> '+
+      'Esto contesta por sí mismo la pregunta 12 del cuestionario de modificación, que queda '+
+      'marcada como deducida, y lleva el expediente a <b>revisión técnica obligatoria</b>.</p>';
+  if (v.bloqueos.length)
+    h += '<div class="bloque-sin" style="padding:12px"><p style="margin:0 0 8px"><b>IMPIDE '+
+      'ACREDITAR CONFORMIDAD</b></p><ul class="mini" style="margin:0;padding-left:18px">'+
+      v.bloqueos.map(x => '<li>'+esc(x)+'</li>').join('')+'</ul></div>';
+  if (v.avisos.length)
+    h += '<ul class="mini" style="margin:10px 0 0;padding-left:18px">'+
+      v.avisos.map(x => '<li>'+esc(x)+'</li>').join('')+'</ul>';
+  if (!v.bloqueos.length && !v.avisos.length)
+    h += '<p class="nota-oficina" style="margin:0">Los datos de la puerta resistente al fuego '+
+      'constan completos y la configuración sigue siendo la certificada.</p>';
   return h;
 }
 
@@ -6630,9 +7188,17 @@ async function libroExpediente(id){
         H += '<p>Evaluación de modificación, doce preguntas:</p>'+
           '<table class="datos">'+
           PREGUNTAS_MODIFICACION.map((p, i) => {
-            const x = (((e.datos||{}).interv)||{})[p.id] || {};
-            const v = RESPUESTAS_MODIF[x.v] || 'Sin contestar';
-            return campo((i+1)+'. '+p.texto, v + (x.nota ? ' — '+x.nota : ''));
+            const x   = (((e.datos||{}).interv)||{})[p.id] || {};
+            const ded = (iv.deducidas||[]).find(y => y.id === p.id);
+            const v   = ded ? (RESPUESTAS_MODIF[ded.valor]||ded.valor)+' (respuesta deducida)'
+                            : (RESPUESTAS_MODIF[x.v] || 'Sin contestar');
+            const sec = SECUNDARIAS_MODIF[p.id];
+            const seg = (sec && x.eq)
+              ? ' ↳ '+sec.texto+' '+(RESPUESTAS_EQUIV[x.eq]||x.eq)+
+                (x.eq_base ? '. Base: '+x.eq_base : '')
+              : '';
+            return campo((i+1)+'. '+p.texto,
+              v + (x.nota ? ' — '+x.nota : '') + (ded ? ' — '+ded.porque : '') + seg);
           }).join('')+
           '</table>';
       }
@@ -6645,6 +7211,55 @@ async function libroExpediente(id){
       if (iv.bloqueos.length)
         H += '<p class="aviso">'+iv.bloqueos.map(esc).join(' ')+'</p>';
       H += '</section>';
+    }
+  }
+
+  /* ---------- Lo propio de la familia: apartados 14 y 15 ---------- */
+  {
+    const pea = evaluarPeatonal(e);
+    if (pea.aplica){
+      const pe = d.pea || {};
+      H += abreSec('Requisitos propios de la puerta peatonal automática')+
+        '<p>Evaluados con la UNE-EN 16005+A1:2024 y la UNE 85121:2018. La matriz de protección de '+
+        'la UNE-EN 12453 no es aplicable a esta familia.</p>'+
+        '<table class="datos">'+
+        PREGUNTAS_PEATONAL.map((q, i) => {
+          const x = pe[q.id] || {};
+          return campo((i+1)+'. '+q.texto,
+            (x.v ? (RESPUESTAS_PEATONAL[x.v]||x.v) : 'NO VERIFICADO')+
+            (x.motivo ? ' — '+x.motivo : '')+' ['+q.norma+']');
+        }).join('')+
+        '</table>'+
+        (pea.evacuacion
+          ? '<p class="aviso"><b>Puerta en recorrido de evacuación o prevista como salida de '+
+            'emergencia.</b></p>' : '')+
+        (pea.bloqueos.length
+          ? '<p class="aviso">'+pea.bloqueos.map(esc).join(' ')+'</p>' : '')+
+        '</section>';
+    }
+    const cfv = evaluarCortafuegos(e);
+    if (cfv.aplica){
+      const cf = d.cf || {};
+      H += abreSec('Puerta resistente al fuego')+
+        '<p>La clasificación de resistencia al fuego es la declarada por el fabricante de la '+
+        'puerta. Esta empresa no la ha ensayado ni clasificado.</p>'+
+        '<table class="datos">'+
+        CAMPOS_CORTAFUEGOS.map(([k, etiqueta]) => campo(etiqueta, cf[k])).join('')+
+        campo('¿Se ha sustituido algún componente?',
+              ({si:'Sí', no:'No', desconocido:'No se puede determinar'})[cf.comp_sust])+
+        (cf.comp_sust === 'si'
+          ? campo('Componentes sustituidos', cf.comp_lista)+
+            campo('¿Originales o contemplados por el fabricante?', RESPUESTAS_CF_ORIG[cf.comp_orig])+
+            campo('En qué se basa', cf.comp_base)
+          : '')+
+        '</table>'+
+        (cfv.fueraCertificacion
+          ? '<p class="aviso"><b>LA CONFIGURACIÓN ACTUAL QUEDA FUERA DE LO CERTIFICADO POR EL '+
+            'FABRICANTE.</b> No puede declararse que la puerta mantiene su clasificación de '+
+            'resistencia al fuego.</p>' : '')+
+        (cfv.bloqueos.length
+          ? '<p class="aviso">'+cfv.bloqueos.map(esc).join(' ')+'</p>' : '')+
+        '</section>';
     }
   }
 
@@ -7436,6 +8051,71 @@ async function informeSituacion(id){
       : '<p class="pendiente">EVIDENCIA FOTOGRÁFICA PENDIENTE</p>')+
     '</section>';
 
+  /* ---------- Lo propio de la familia: peatonal (ap. 14) y cortafuegos (ap. 15) ---------- */
+  {
+    const pea = evaluarPeatonal(e);
+    if (pea.aplica){
+      const pe = d.pea || {};
+      H += sec('Requisitos propios de la puerta peatonal automática')+
+        '<p>La seguridad de uso de esta puerta se evalúa con la UNE-EN 16005+A1:2024 y su '+
+        'instalación, uso y mantenimiento con la UNE 85121:2018. La matriz de protección de la '+
+        'UNE-EN 12453 no es aplicable a esta familia.</p>'+
+        '<table class="datos chk"><thead><tr><th>Requisito</th><th>Resultado</th>'+
+        '<th>Observaciones</th><th>Norma</th></tr></thead><tbody>'+
+        PREGUNTAS_PEATONAL.map(q => {
+          const x = pe[q.id] || {};
+          return '<tr><td>'+esc(q.texto)+'</td>'+
+            '<td'+(x.v === 'si' ? '' : ' class="pendiente"')+'>'+
+            esc(x.v ? (RESPUESTAS_PEATONAL[x.v]||x.v) : HUECO.no_verificado)+'</td>'+
+            '<td>'+esc(x.motivo || (x.v === 'si' ? '' : HUECO.pendiente))+'</td>'+
+            '<td class="min">'+esc(q.norma||'')+'</td></tr>';
+        }).join('')+
+        '</tbody></table>'+
+        (pea.evacuacion
+          ? '<p><b>La puerta está situada en recorrido de evacuación o prevista como salida de '+
+            'emergencia.</b> Esa condición le exige apertura garantizada ante fallo de tensión y '+
+            'apertura manual con fuerza admisible, con arreglo a la UNE 85121:2018 y al Código '+
+            'Técnico de la Edificación.</p>' : '')+
+        (pea.bloqueos.length
+          ? '<p class="pendiente">Lo siguiente impide acreditar conformidad:</p><ul>'+
+            pea.bloqueos.map(x => '<li>'+esc(x)+'</li>').join('')+'</ul>' : '')+
+        (pea.avisos.length
+          ? '<ul class="min">'+pea.avisos.map(x => '<li>'+esc(x)+'</li>').join('')+'</ul>' : '')+
+        '</section>';
+    }
+    const cfv = evaluarCortafuegos(e);
+    if (cfv.aplica){
+      const cf = d.cf || {};
+      H += sec('Puerta resistente al fuego: clasificación y configuración')+
+        '<p>La clasificación de resistencia al fuego que figura a continuación es la declarada por '+
+        'el fabricante de la puerta. Esta empresa no ha ensayado ni clasificado la puerta: lo que '+
+        'se hace constar es el origen documental de esa clasificación y si la configuración sigue '+
+        'siendo la certificada.</p>'+
+        '<table class="datos">'+
+        CAMPOS_CORTAFUEGOS.map(([k, etiqueta]) =>
+          campo(etiqueta, cf[k], 'no_aportado')).join('')+
+        campo('¿Se ha sustituido algún componente?',
+              ({si:'Sí', no:'No', desconocido:'No se puede determinar'})[cf.comp_sust],
+              'no_verificado')+
+        (cf.comp_sust === 'si'
+          ? campo('Componentes sustituidos', cf.comp_lista, 'no_identificado')+
+            campo('¿Originales o contemplados por el fabricante?',
+                  RESPUESTAS_CF_ORIG[cf.comp_orig], 'no_verificado')+
+            campo('En qué se basa', cf.comp_base, 'pendiente')
+          : '')+
+        '</table>'+
+        (cfv.fueraCertificacion
+          ? '<p class="pendiente">LA CONFIGURACIÓN ACTUAL QUEDA FUERA DE LO CERTIFICADO POR EL '+
+            'FABRICANTE. No puede declararse que la puerta mantiene su clasificación de '+
+            'resistencia al fuego.</p>' : '')+
+        (cfv.bloqueos.length
+          ? '<ul>'+cfv.bloqueos.map(x => '<li>'+esc(x)+'</li>').join('')+'</ul>' : '')+
+        (cfv.avisos.length
+          ? '<ul class="min">'+cfv.avisos.map(x => '<li>'+esc(x)+'</li>').join('')+'</ul>' : '')+
+        '</section>';
+    }
+  }
+
   /* ---------- 6. OBJETO DEL INFORME ---------- */
   const iv = evaluarIntervencion(e);
   H += sec('Objeto del informe')+
@@ -7449,7 +8129,23 @@ async function informeSituacion(id){
         campo('Resultado del motor de intervención',
               iv.resultado ? iv.resultado+'. '+RESULTADOS_INTERVENCION[iv.resultado].nombre
                            : 'No puede determinarse')+
-        '</table>' : '')+
+        '</table>'+
+        ((iv.deducidas||[]).length
+          ? '<p class="min"><b>Respuestas deducidas, no contestadas a mano:</b></p><ul class="min">'+
+            iv.deducidas.map(x => '<li>'+esc(x.texto)+' → '+
+              esc(RESPUESTAS_MODIF[x.valor]||x.valor)+'. '+esc(x.porque)+'</li>').join('')+'</ul>'
+          : '')+
+        ((iv.equivalencias||[]).filter(x => x.eq).length
+          ? '<p class="min"><b>Equivalencia de lo sustituido:</b></p>'+
+            '<table class="datos chk"><thead><tr><th>Cambio</th><th>Equivalencia</th>'+
+            '<th>En qué se basa</th></tr></thead><tbody>'+
+            iv.equivalencias.filter(x => x.eq).map(x => '<tr><td>'+esc(x.texto)+'</td>'+
+              '<td'+(x.eq === 'equivalente' ? '' : ' class="pendiente"')+'>'+
+              esc(RESPUESTAS_EQUIV[x.eq]||x.eq)+'</td>'+
+              '<td>'+esc(x.base || HUECO.pendiente)+'</td></tr>').join('')+
+            '</tbody></table>'
+          : '')
+        : '')+
     '<p class="aviso-borrador" style="margin:4mm 0 0">'+esc(AVISO_NO_CONFORMIDAD)+'</p>'+
     '</section>';
 
@@ -9933,7 +10629,10 @@ raiz.addEventListener('input', e => {
    con lo de antes. Repintar en cada tecla le quitaría el foco. */
 raiz.addEventListener('focusout', e => {
   const r = e.target.dataset && e.target.dataset.exp;
-  if (r && /^fuerzas\.m\d+\./.test(r)) pintar();
+  /* Lo mismo vale para la base de una equivalencia y para los datos de la puerta
+     cortafuegos: de lo que se escriba ahí depende el resultado del motor, así que
+     hay que repintarlo al salir del campo, no mientras se teclea. */
+  if (r && (/^fuerzas\.m\d+\./.test(r) || /\.eq_base$/.test(r) || /^cf\./.test(r))) pintar();
 }, true);
 raiz.addEventListener('change', e => {
   if (e.target.dataset.act === 'equipo-rol'){
@@ -9964,7 +10663,11 @@ raiz.addEventListener('change', e => {
     // de prestaciones, y con ella todo un paso del cuestionario.
     // interv.tipo entra aquí porque decide si se abre el cuestionario de
     // modificación y, con él, el resultado del motor de intervención.
-    if (/\.(estado|v|incluir)$|motorizada|hueco$|\.via$|acceso_personas$|emitir_ddp$|\.modo$|usuarios$|puerta\.tipo$|interv\.tipo$/.test(ruta)) pintar();
+    // interv.*.eq entra porque abre la pregunta de en qué se basa la equivalencia y
+    // cambia el resultado del motor. cf.comp_sust y cf.comp_orig, porque abren el
+    // detalle de los componentes sustituidos y pueden dejar la puerta fuera de su
+    // certificación, lo que a su vez deduce la respuesta a la pregunta 12.
+    if (/\.(estado|v|incluir|eq)$|motorizada|hueco$|\.via$|acceso_personas$|emitir_ddp$|\.modo$|usuarios$|puerta\.tipo$|interv\.tipo$|cf\.comp_(sust|orig)$/.test(ruta)) pintar();
     return;
   }
   if (e.target.dataset.expChk !== undefined){
