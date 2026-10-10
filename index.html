@@ -4159,6 +4159,60 @@ function validarExpediente(e){
   return { bloqueos, avisos, puedeEmitir: bloqueos.length === 0 };
 }
 
+/* ---- Prioridad de una deficiencia (apartado 18 del encargo) ----
+   Las tres antiguas se conservan para no perder lo ya valorado en expedientes
+   existentes: leve, grave y muy_grave siguen leyéndose y se muestran con su
+   equivalencia. */
+const PRIORIDAD_DEFICIENCIA = {
+  critica:     { nombre:'CRÍTICA',     orden:1, color:'mal',
+                 ayuda:'Riesgo inmediato para las personas. La puerta no debería usarse' },
+  alta:        { nombre:'ALTA',        orden:2, color:'mal',
+                 ayuda:'Hay que resolverlo cuanto antes' },
+  media:       { nombre:'MEDIA',       orden:3, color:'aviso',
+                 ayuda:'Debe programarse su corrección' },
+  baja:        { nombre:'BAJA',        orden:4, color:'aviso',
+                 ayuda:'Conviene corregirlo, sin urgencia' },
+  observacion: { nombre:'OBSERVACIÓN', orden:5, color:'gris',
+                 ayuda:'Se deja constancia, no exige actuación' },
+};
+/* Equivalencia de lo valorado con el esquema antiguo */
+const PRIORIDAD_ANTIGUA = { muy_grave:'critica', grave:'alta', leve:'media' };
+const prioridadDe = v => PRIORIDAD_DEFICIENCIA[v] ? v : (PRIORIDAD_ANTIGUA[v] || '');
+const nombrePrioridad = v => (PRIORIDAD_DEFICIENCIA[prioridadDe(v)] || {}).nombre || 'Sin valorar';
+
+/* ---- Textos de conclusión (apartado 19) ----
+   Literales del encargo. No se improvisan ni se adornan: una conclusión ambigua
+   en un informe técnico es lo que acaba en un juzgado. */
+const CONCLUSION_INFORME = {
+  deficiencias:
+    'En la fecha de inspección no ha podido acreditarse la conformidad integral de la puerta '+
+    'con las condiciones técnicas y documentales evaluadas. Se han identificado las deficiencias '+
+    'y comprobaciones pendientes recogidas en este informe. Se recomienda ejecutar las actuaciones '+
+    'indicadas y realizar una posterior verificación.',
+  falta_doc:
+    'No ha sido posible comprobar documentalmente determinados aspectos de la instalación por '+
+    'ausencia de la documentación indicada. Esta circunstancia no implica por sí sola que el '+
+    'elemento sea no conforme, pero impide acreditar su conformidad documental.',
+  sin_deficiencias:
+    'En la fecha de inspección no se han detectado deficiencias en los aspectos comprobados. '+
+    'Este informe recoge el estado observado de la instalación y el alcance de lo comprobado; '+
+    'no sustituye a la documentación de conformidad de la puerta.',
+};
+const AVISO_NO_CONFORMIDAD =
+  'Este documento constituye un informe técnico del estado observado de la instalación en la '+
+  'fecha indicada. No constituye una declaración de conformidad ni acredita por sí mismo el '+
+  'cumplimiento integral de la normativa aplicable. Las deficiencias, comprobaciones pendientes '+
+  'y riesgos detectados se indican en el presente informe con objeto de informar al titular y, '+
+  'en su caso, definir las actuaciones necesarias para su adecuación.';
+const AVISO_FIRMA_RECEPCION =
+  'La firma acredita la recepción del presente informe y no supone aceptación de que la '+
+  'instalación sea conforme ni renuncia a las actuaciones correctoras indicadas.';
+/* Cómo se escribe un hueco. Nunca se inventa un dato: se dice qué clase de hueco es. */
+const HUECO = { pendiente:'PENDIENTE', no_aportado:'NO APORTADO',
+                no_identificado:'NO IDENTIFICADO', no_verificado:'NO VERIFICADO' };
+const oHueco = (v, clase) => (v && String(v).trim()) ? String(v) : (HUECO[clase||'pendiente']);
+
+
 /* ===================================================================
    QUÉ DOCUMENTO SE PUEDE EMITIR
    ===================================================================
@@ -4421,6 +4475,8 @@ function vistaExpediente(id){
        '<button class="btn sm plana" data-act="exp-marcado" data-id="'+e.id+'">Marcado CE</button>'+
        '<button class="btn sm plana" data-act="exp-hoja-campo" data-id="'+e.id+'">Hoja de campo</button>'+
        '<button class="btn sm plana" data-act="exp-libro-mant" data-id="'+e.id+'">Libro de mantenimiento</button>'+
+       '<button class="btn sm plana" data-act="exp-informe" data-id="'+e.id+'">Informe de situación</button>'+
+       '<button class="btn sm plana" data-act="exp-propuesta" data-id="'+e.id+'">Propuesta de actuaciones</button>'+
        '<button class="btn" data-act="exp-libro" data-id="'+e.id+'">Ver el libro</button>'+
        (esGestion() && e.estado !== 'emitido'
          ? '<button class="btn pri" data-act="exp-emitir" data-id="'+e.id+'">Emitir</button>' : '')+
@@ -5002,8 +5058,9 @@ function expSecCumplimiento(e){
       h += '<div class="campos" style="margin-top:8px">'+
            expTxt('cumple.'+k+'.def', 'Qué se ha encontrado', '', 1)+
            expTxt('cumple.'+k+'.sol', 'Qué hay que hacer para resolverlo', '', 1)+
-           expSel('cumple.'+k+'.grav', 'Gravedad',
-             [['', 'Sin valorar'], ['leve','Leve'], ['grave','Grave'], ['muy_grave','Muy grave, la puerta no debería usarse']])+
+           expSel('cumple.'+k+'.grav', 'Prioridad de la actuación',
+             [['', 'Sin valorar']].concat(Object.entries(PRIORIDAD_DEFICIENCIA)
+               .map(([k2, x]) => [k2, x.nombre + ' · ' + x.ayuda])))+
            '</div>';
     /* Aquí había un segundo «Por qué no aplica», guardado en cumple.<k>.nota, que
        preguntaba lo mismo que el campo de arriba y además no salía en ningún
@@ -5154,7 +5211,7 @@ function expSecRiesgos(e){
     defs.forEach(([k, texto]) => {
       const x = d[k] || {};
       h += '<tr><td>'+esc(x.def || texto)+'</td>'+
-        '<td>'+esc({leve:'Leve',grave:'Grave',muy_grave:'Muy grave'}[x.grav] || 'Sin valorar')+'</td>'+
+        '<td>'+esc(nombrePrioridad(x.grav))+'</td>'+
         '<td>'+esc(x.sol || '—')+'</td></tr>';
     });
     h += '</tbody></table></div>';
@@ -6873,7 +6930,7 @@ async function libroExpediente(id){
       '<th>Deficiencia</th><th style="width:80px">Gravedad</th><th style="width:40%">Actuación propuesta</th></tr></thead><tbody>'+
       incum.map(([k, texto]) => { const x = kd[k]||{};
         return '<tr><td>'+esc(x.def || texto)+'</td><td>'+
-          esc({leve:'Leve',grave:'Grave',muy_grave:'Muy grave'}[x.grav] || 'Sin valorar')+
+          esc(nombrePrioridad(x.grav))+
           '</td><td>'+esc(x.sol || '—')+'</td></tr>'; }).join('')+
       '</tbody></table>';
   } else {
@@ -7078,6 +7135,637 @@ async function libroExpediente(id){
     H.replace('<!--MARCADOR-INDICE-->',
       '<ol class="indice">'+ secciones.map(x => '<li>'+esc(x)+'</li>').join('') +'</ol>')+
     '</body></html>');
+  w.document.close();
+}
+
+/* ===================================================================
+   INFORME TÉCNICO DE SITUACIÓN Y DEFICIENCIAS
+   ===================================================================
+   El documento que sale cuando NO se puede acreditar la conformidad:
+   una inspección, un estudio que pide el cliente, una puerta de la que
+   se desconoce su documentación, una adecuación a medias.
+
+   No es una declaración de conformidad y lo dice en la portada y en la
+   conclusión. Se puede generar con campos sin completar: lo que falta
+   sale como PENDIENTE, NO APORTADO, NO IDENTIFICADO o NO VERIFICADO.
+   Nunca se inventa un dato.
+
+   Las 22 secciones son las del apartado 18 del encargo, en su orden. */
+async function informeSituacion(id){
+  const e = expDe(id);
+  if (!e) return;
+  await cargarFotosExp(id);
+  await cargarDocsExp(id);
+  const em = datosEmpresa();
+  const p = e.puerta_id ? (puertaDe(e.puerta_id) || {}) : {};
+  const c = e.cliente_id ? (clienteDe(e.cliente_id) || {}) : {};
+  const d = e.datos || {};
+  const pu = d.puerta || {};
+  const sd = salidaDocumental(e);
+  const chk = EXP_COMPROBACIONES[e.familia] || [];
+  const kd = d.cumple || {};
+
+  /* Fotos, con su numeración F-01, F-02... y su pie obligatorio */
+  const rutas = (S.expFotos || []).map(f => f.ruta);
+  const url = {};
+  if (rutas.length){
+    try {
+      const { data } = await sb.storage.from('expedientes').createSignedUrls(rutas, 7200);
+      (data||[]).forEach((x,i) => { if (x && x.signedUrl) url[rutas[i]] = x.signedUrl; });
+    } catch(_){}
+  }
+  const conUrl = (S.expFotos||[]).filter(f => url[f.ruta]);
+  const numFoto = {};          // ruta → F-01
+  conUrl.forEach((f, i) => { numFoto[f.ruta] = 'F-' + String(i+1).padStart(2,'0'); });
+  const fotosDe = ap => conUrl.filter(f => f.apartado === ap);
+  const refFotos = ap => fotosDe(ap).map(f => numFoto[f.ruta]).join(', ');
+
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana.'); return; }
+
+  const campo = (k, v, clase) => '<tr><th>'+esc(k)+'</th><td>'+
+    esc(oHueco(v, clase))+'</td></tr>';
+  const dir = [ (d.obra||{}).emplazamiento, (d.obra||{}).ubicacion ].filter(Boolean).join(' · ')
+            || [p.direccion, p.ubicacion].filter(Boolean).join(' · ');
+  const titular = (d.obra||{}).titular || c.nombre || p.cliente || '';
+  const sello = em.razon_social + (em.nif ? ' · ' + em.nif : '');
+  const esFicticio = d.ficticio === 'si';
+
+  /* Clasificación de las comprobaciones */
+  const aplicables = [], pendientes = [], deficiencias = [], conformes = [];
+  chk.forEach(([k, texto, norma, , critico]) => {
+    const ap = procede(APLICA_COMPROBACION, k, e);
+    if (ap && ap.no) return;
+    const x = kd[k] || {};
+    const fila = { k, texto, norma, critico, x, v: x.v };
+    aplicables.push(fila);
+    if (acredita(x.v)) conformes.push(fila);
+    else if (x.v === 'no' || x.v === 'deficiencia') deficiencias.push(fila);
+    else pendientes.push(fila);
+  });
+  /* Las deficiencias se ordenan por prioridad, no por el orden del cuestionario */
+  deficiencias.sort((a, b) => {
+    const pa = PRIORIDAD_DEFICIENCIA[prioridadDe(a.x.grav)] || { orden: 9 };
+    const pb = PRIORIDAD_DEFICIENCIA[prioridadDe(b.x.grav)] || { orden: 9 };
+    return pa.orden - pb.orden;
+  });
+
+  /* Riesgos propios del tipo de puerta */
+  const pel = peligrosDe(e);
+  const pd = d.peligro || {};
+  const riesgos = pel ? pel.lista.map(([pk, peligro, elementos]) => {
+    const x = pd[pk] || {};
+    return { pk, peligro, elementos, v: x.v, como: x.como, motivo: x.motivo };
+  }) : [];
+  const riesgosAbiertos = riesgos.filter(r => r.v !== 'si' && r.v !== 'na');
+
+  const secciones = [];
+  const sec = titulo => { secciones.push(titulo);
+    return '<section><h3 class="sec">'+secciones.length+'. '+esc(titulo)+'</h3>'; };
+  let H = '';
+
+  /* ---------- 1. PORTADA ---------- */
+  H += '<section class="portada">'+
+    '<div class="marca">ARIZA <span>puertas automáticas</span></div>'+
+    '<div class="tit">'+
+      '<h1>Informe técnico de situación y deficiencias</h1>'+
+      '<h2>'+esc(EXP_FAMILIA[e.familia]||'')+'</h2>'+
+      '<p class="sit">'+esc(dir || 'Emplazamiento sin indicar')+'</p>'+
+    '</div>'+
+    (fotosDe('puerta:general')[0]
+      ? '<div class="portada-foto"><img src="'+url[fotosDe('puerta:general')[0].ruta]+'"></div>'
+      : '<div class="portada-foto vacia"><span>Sin fotografía de portada</span></div>')+
+    '<table class="port-datos">'+
+      campo('Expediente', e.referencia, 'no_identificado')+
+      campo('Titular', titular, 'no_identificado')+
+      campo('Identificación de la puerta', [p.codigo, pu.denominacion].filter(Boolean).join(' · '),
+            'no_identificado')+
+      campo('Fecha de la inspección', fechaCorta(new Date().toISOString().slice(0,10)))+
+    '</table>'+
+    '<p class="aviso-borrador">ESTE DOCUMENTO NO ES UNA DECLARACIÓN DE CONFORMIDAD</p>'+
+    '<p class="min" style="margin:4mm 0 0">'+esc(AVISO_NO_CONFORMIDAD)+'</p>'+
+    (esFicticio
+      ? '<p class="aviso-borrador">DATOS Y MEDICIONES FICTICIOS. Caso de prueba: '+
+        'no corresponde a ninguna instalación real.</p>' : '')+
+    '<div class="pie-portada">'+esc(sello)+(em.telefono?(' · '+esc(em.telefono)):'')+'</div>'+
+    '</section>';
+
+  H += '<section class="indice-sec"><h3>Índice</h3><!--MARCADOR-INDICE--></section>';
+
+  /* ---------- 2. IDENTIFICACIÓN DEL EXPEDIENTE ---------- */
+  const vs = versionesDe(e);
+  H += sec('Identificación del expediente')+
+    '<table class="datos">'+
+      campo('Referencia', e.referencia, 'no_identificado')+
+      campo('Versión de este informe', String(vs.length + 1))+
+      campo('Fecha de emisión', fechaCorta(new Date().toISOString().slice(0,10)))+
+      campo('Empresa que lo emite', em.razon_social, 'no_identificado')+
+      campo('NIF', em.nif, 'no_aportado')+
+      campo('Técnico que realiza la inspección',
+            (d.entrega||{}).tecnico || e.autor, 'no_identificado')+
+    '</table>'+
+    (vs.length
+      ? '<h4>Versiones anteriores</h4><table class="datos chk"><thead><tr>'+
+        '<th>Versión</th><th>Fecha</th><th>Documento</th><th>Motivo</th></tr></thead><tbody>'+
+        vs.map(x => '<tr><td>'+x.n+'</td><td>'+esc(fechaCorta(x.fecha))+'</td>'+
+          '<td>'+esc(x.salida||'')+'</td><td>'+esc(x.motivo||'')+'</td></tr>').join('')+
+        '</tbody></table>' : '')+
+    '</section>';
+
+  /* ---------- 3. TITULAR ---------- */
+  H += sec('Titular')+
+    '<table class="datos">'+
+      campo('Titular de la instalación', titular, 'no_identificado')+
+      campo('NIF o CIF', c.nif, 'no_aportado')+
+      campo('Persona de contacto', c.contacto || (d.obra||{}).contacto, 'no_aportado')+
+      campo('Teléfono', c.telefono, 'no_aportado')+
+    '</table></section>';
+
+  /* ---------- 4. EMPLAZAMIENTO ---------- */
+  H += sec('Emplazamiento')+
+    '<table class="datos">'+
+      campo('Dirección', (d.obra||{}).emplazamiento || p.direccion, 'no_identificado')+
+      campo('Ubicación concreta de la puerta', (d.obra||{}).ubicacion || p.ubicacion, 'no_identificado')+
+      campo('¿Es centro de trabajo?',
+            ({si:'Sí', no:'No'})[(d.obra||{}).centro_trabajo], 'no_verificado')+
+    '</table>'+
+    ((d.obra||{}).centro_trabajo === 'si'
+      ? '<p>Al tratarse de un centro de trabajo le son exigibles además el Real Decreto '+
+        '486/1997 sobre lugares de trabajo y el Real Decreto 1215/1997 sobre equipos de trabajo, '+
+        'cuyo cumplimiento corresponde al empresario titular del equipo.</p>' : '')+
+    '</section>';
+
+  /* ---------- 5. IDENTIFICACIÓN DE LA PUERTA ---------- */
+  const orig = d.orig || {};
+  H += sec('Identificación de la puerta')+
+    '<table class="datos">'+
+      campo('Código interno', p.codigo, 'no_identificado')+
+      campo('Tipo', pu.tipo || p.tipo, 'no_identificado')+
+      campo('Denominación', pu.denominacion, 'no_identificado')+
+      campo('Fabricante original', orig.fabricante, 'no_identificado')+
+      campo('Modelo original', orig.modelo, 'no_identificado')+
+      campo('Número de serie original', orig.serie, 'no_identificado')+
+      campo('Marcado CE original', ({
+        comprobado:'Comprobado y legible', ilegible:'Presente pero ilegible o incompleto',
+        ausente:'No existe', desconocido:'No se ha podido comprobar',
+      })[orig.marcado], 'no_verificado')+
+      campo('Dimensiones del hueco',
+            [pu.ancho && pu.ancho+' mm', pu.alto && pu.alto+' mm'].filter(Boolean).join(' × '),
+            'no_identificado')+
+      campo('Motorizada', ({si:'Sí', no:'No'})[pu.motorizada] || (pu.motorizada ? '' : 'Sí'))+
+      campo('Modo de accionamiento',
+            (MODOS_ACCIONAMIENTO[pu.modo]||{}).nombre, 'no_identificado')+
+      campo('Tipo de usuario', TIPOS_USUARIO[pu.usuarios], 'no_identificado')+
+    '</table>'+
+    (refFotos('puerta:general') || refFotos('comp:placa')
+      ? '<p class="min">Evidencia fotográfica: '+
+        esc([refFotos('puerta:general'), refFotos('comp:placa')].filter(Boolean).join(', '))+'</p>'
+      : '<p class="pendiente">EVIDENCIA FOTOGRÁFICA PENDIENTE</p>')+
+    '</section>';
+
+  /* ---------- 6. OBJETO DEL INFORME ---------- */
+  const iv = evaluarIntervencion(e);
+  H += sec('Objeto del informe')+
+    '<p>Dejar constancia del estado observado de la instalación identificada, de las '+
+    'comprobaciones realizadas y de su resultado, de las comprobaciones que no ha sido '+
+    'posible realizar, y de las deficiencias y riesgos detectados, con objeto de informar '+
+    'al titular y, en su caso, definir las actuaciones necesarias para su adecuación.</p>'+
+    (iv.tipo
+      ? '<table class="datos">'+
+        campo('Tipo de intervención', (TIPOS_INTERVENCION[iv.tipo]||{}).nombre)+
+        campo('Resultado del motor de intervención',
+              iv.resultado ? iv.resultado+'. '+RESULTADOS_INTERVENCION[iv.resultado].nombre
+                           : 'No puede determinarse')+
+        '</table>' : '')+
+    '<p class="aviso-borrador" style="margin:4mm 0 0">'+esc(AVISO_NO_CONFORMIDAD)+'</p>'+
+    '</section>';
+
+  /* ---------- 7. ALCANCE DE LA INSPECCIÓN ---------- */
+  H += sec('Alcance de la inspección')+
+    '<p>Se han evaluado '+aplicables.length+' puntos de comprobación aplicables a esta '+
+    'familia de puerta, de los que se han resuelto '+(conformes.length + deficiencias.length)+
+    ' y han quedado '+pendientes.length+' sin resultado.</p>'+
+    '<table class="datos">'+
+      campo('Normas y criterios aplicados',
+            (BASE_NORMAS ? Object.keys(BASE_NORMAS).filter(n =>
+              (BASE_NORMAS[n].familia||[]).indexOf(e.familia) >= 0 ||
+              !BASE_NORMAS[n].familia).join('; ') : ''), 'pendiente')+
+      campo('Inspección visual', 'Sí')+
+      campo('Ensayo de fuerzas',
+            ((d.fuerzas||{}).fecha ? 'Realizado el '+fechaCorta(d.fuerzas.fecha) : ''),
+            'no_verificado')+
+      campo('Desmontaje de elementos', 'No se ha desmontado ningún elemento')+
+    '</table>'+
+    '<p>El alcance de este informe se limita a lo que ha podido observarse y comprobarse en '+
+    'la fecha indicada, con los medios empleados y sin desmontar elementos de la instalación.</p>'+
+    '</section>';
+
+  /* ---------- 8 y 9. DOCUMENTACIÓN ---------- */
+  const docs = (S.expDocs || []);
+  const faltaDoc = [];
+  if (!orig.ddp || orig.ddp === 'desconocido') faltaDoc.push('Declaración de prestaciones original');
+  if (!orig.declaracion || orig.declaracion === 'desconocido') faltaDoc.push('Declaración de conformidad original');
+  if (orig.marcado === 'ausente' || orig.marcado === 'ilegible' || orig.marcado === 'desconocido')
+    faltaDoc.push('Marcado CE y placa de características del fabricante original');
+  if (!docs.length) faltaDoc.push('Manuales e instrucciones de los componentes');
+  if (!(d.fuerzas||{}).fecha) faltaDoc.push('Registro de ensayo de fuerzas');
+
+  H += sec('Documentación disponible')+
+    (docs.length
+      ? '<table class="datos chk"><thead><tr><th>Documento</th><th>Tipo</th></tr></thead><tbody>'+
+        docs.map(x => '<tr><td>'+esc(x.nombre||'')+'</td><td>'+esc(x.tipo||'')+'</td></tr>').join('')+
+        '</tbody></table>'
+      : '<p class="pendiente">NO APORTADA. No se ha aportado documentación de la instalación.</p>')+
+    '</section>';
+
+  H += sec('Documentación no disponible')+
+    (faltaDoc.length
+      ? '<ul>'+faltaDoc.map(x => '<li>'+esc(x)+' — <b>NO APORTADO</b></li>').join('')+'</ul>'+
+        '<p>'+esc(CONCLUSION_INFORME.falta_doc)+'</p>'
+      : '<p>No se ha echado en falta documentación relevante para el alcance de este informe.</p>')+
+    '</section>';
+
+  /* ---------- 10. DESCRIPCIÓN DE LA INSTALACIÓN ---------- */
+  H += sec('Descripción de la instalación')+
+    '<table class="datos">'+
+      campo('Tipo de puerta', pu.tipo || p.tipo, 'no_identificado')+
+      campo('Número de hojas', pu.hojas, 'no_identificado')+
+      campo('Peso aproximado', pu.peso ? pu.peso+' kg' : '', 'no_identificado')+
+      campo('Uso', pu.uso_puerta || p.uso, 'no_identificado')+
+      campo('Ciclos estimados al día', pu.ciclos_dia, 'no_identificado')+
+      campo('Alimentación eléctrica', pu.alimentacion, 'no_identificado')+
+      campo('Sistema de activación', pu.activacion, 'no_identificado')+
+    '</table></section>';
+
+  /* ---------- 11. COMPONENTES IDENTIFICADOS ---------- */
+  const comps = EXP_COMPONENTES[e.familia] || [];
+  const dc = d.comp || {};
+  H += sec('Componentes identificados')+
+    '<table class="datos chk"><thead><tr><th>Elemento</th><th>Estado</th>'+
+    '<th>Marca y modelo</th><th>Nº de serie</th><th>Foto</th></tr></thead><tbody>'+
+    comps.map(([k, nombre]) => {
+      const x = dc[k] || {};
+      const datos = k === 'hoja' ? datosHoja(e) : x;
+      const est = !x.estado ? '<span class="pendiente">NO VERIFICADO</span>'
+                : x.estado === 'si' ? '<span class="ok">Instalado</span>'
+                : x.estado === 'no' ? '<span class="no">No lo lleva</span>'
+                : '<span class="na">No aplica</span>';
+      return '<tr><td>'+esc(nombre)+'</td><td>'+est+'</td>'+
+        '<td>'+esc([datos.marca, datos.modelo].filter(Boolean).join(' ') || 'NO IDENTIFICADO')+'</td>'+
+        '<td>'+esc(datos.serie || 'NO IDENTIFICADO')+'</td>'+
+        '<td class="min">'+esc(refFotos('comp:'+k) || '—')+'</td></tr>';
+    }).join('')+'</tbody></table>'+
+    '<p class="min">Un componente sin marca, modelo ni número de serie no puede trazarse: '+
+    'se deja constancia de ello y no se da por identificado.</p>'+
+    '</section>';
+
+  /* ---------- 12 y 13. COMPROBACIONES ---------- */
+  const filaChk = f => {
+    const ficha = RESULTADO_COMPROBACION[f.v];
+    const clase = { ok:'ok', mal:'no', aviso:'pendiente', gris:'na' };
+    return '<tr><td>'+esc(f.texto)+(f.critico?' <b>(imprescindible)</b>':'')+
+      (f.x.motivo ? '<span class="sub min" style="display:block">'+esc(f.x.motivo)+'</span>' : '')+
+      '</td><td>'+(ficha
+        ? '<span class="'+(clase[ficha.color]||'pendiente')+'">'+esc(ficha.nombre)+'</span>'
+        : '<span class="pendiente">PENDIENTE</span>')+
+      '</td><td class="min">'+esc(f.norma)+'</td>'+
+      '<td class="min">'+esc(refFotos('cumple:'+f.k) || '—')+'</td></tr>';
+  };
+  H += sec('Comprobaciones realizadas')+
+    (conformes.length || deficiencias.length
+      ? '<table class="datos chk"><thead><tr><th>Comprobación</th><th>Resultado</th>'+
+        '<th>Exigencia</th><th>Foto</th></tr></thead><tbody>'+
+        conformes.concat(deficiencias).map(filaChk).join('')+'</tbody></table>'
+      : '<p class="pendiente">No se ha resuelto ninguna comprobación.</p>')+
+    '</section>';
+
+  H += sec('Comprobaciones pendientes')+
+    (pendientes.length
+      ? '<p>Las siguientes comprobaciones no tienen resultado en la fecha de este informe. '+
+        'Su ausencia no implica que el elemento sea no conforme, pero impide acreditar su '+
+        'conformidad.</p>'+
+        '<table class="datos chk"><thead><tr><th>Comprobación</th><th>Estado</th>'+
+        '<th>Exigencia</th><th>Foto</th></tr></thead><tbody>'+
+        pendientes.map(filaChk).join('')+'</tbody></table>'
+      : '<p>No quedan comprobaciones pendientes dentro del alcance de este informe.</p>')+
+    '</section>';
+
+  /* ---------- 14. RIESGOS DETECTADOS ---------- */
+  H += sec('Riesgos detectados')+
+    (riesgos.length
+      ? '<table class="datos chk"><thead><tr><th>Peligro</th><th>Protección habitual</th>'+
+        '<th>Situación</th><th>Foto</th></tr></thead><tbody>'+
+        riesgos.map(r => {
+          const et = r.v === 'si' ? '<span class="ok">Resuelto</span>'
+                   : r.v === 'no' ? '<span class="no">NO RESUELTO</span>'
+                   : r.v === 'na' ? '<span class="na">No aplicable</span>'
+                   : r.v === 'nc' ? '<span class="pendiente">NO VERIFICADO</span>'
+                   : '<span class="pendiente">PENDIENTE</span>';
+          return '<tr><td>'+esc(r.peligro)+
+            ((r.como||r.motivo) ? '<span class="sub min" style="display:block">'+
+              esc(r.como||r.motivo)+'</span>' : '')+'</td>'+
+            '<td class="min">'+esc(r.elementos)+'</td><td>'+et+'</td>'+
+            '<td class="min">'+esc(refFotos('peligro:'+r.pk) || '—')+'</td></tr>';
+        }).join('')+'</tbody></table>'
+      : '<p class="pendiente">No se han valorado los puntos peligrosos de este tipo de puerta.</p>')+
+    (riesgosAbiertos.length
+      ? '<p><b>Quedan '+riesgosAbiertos.length+' punto(s) peligroso(s) sin resolver o sin '+
+        'comprobar.</b> Se recogen entre las actuaciones recomendadas.</p>' : '')+
+    '</section>';
+
+  /* ---------- 15. DEFICIENCIAS DETECTADAS ---------- */
+  H += sec('Deficiencias detectadas')+
+    (deficiencias.length
+      ? '<table class="datos chk"><thead><tr><th>Deficiencia</th><th>Prioridad</th>'+
+        '<th>Exigencia</th><th>Foto</th></tr></thead><tbody>'+
+        deficiencias.map(f => {
+          const pr = PRIORIDAD_DEFICIENCIA[prioridadDe(f.x.grav)];
+          const clase = { mal:'no', aviso:'pendiente', gris:'na' };
+          return '<tr><td><b>'+esc(f.x.def || f.texto)+'</b>'+
+            (f.x.motivo ? '<span class="sub min" style="display:block">'+esc(f.x.motivo)+'</span>' : '')+
+            '</td><td>'+(pr
+              ? '<span class="'+(clase[pr.color]||'no')+'">'+esc(pr.nombre)+'</span>'
+              : '<span class="pendiente">SIN VALORAR</span>')+'</td>'+
+            '<td class="min">'+esc(f.norma)+'</td>'+
+            '<td class="min">'+esc(refFotos('cumple:'+f.k) || '—')+'</td></tr>';
+        }).join('')+'</tbody></table>'
+      : '<p>No se han detectado deficiencias en los aspectos comprobados.</p>')+
+    '</section>';
+
+  /* ---------- 16. EVIDENCIAS FOTOGRÁFICAS ---------- */
+  H += sec('Evidencias fotográficas')+
+    (conUrl.length
+      ? '<div class="gal c2">'+conUrl.map(f =>
+          '<figure><img src="'+url[f.ruta]+'">'+
+          '<figcaption><b>'+esc(numFoto[f.ruta])+'</b> — '+
+          esc(f.pie || 'Sin pie de foto')+'</figcaption></figure>').join('')+'</div>'
+      : '<p class="pendiente">EVIDENCIA FOTOGRÁFICA PENDIENTE. No se ha incorporado ninguna '+
+        'fotografía a este expediente.</p>')+
+    '</section>';
+
+  /* ---------- 17 y 18. ACTUACIONES ---------- */
+  const actuaciones = deficiencias.map(f => ({
+    que: f.x.def || f.texto,
+    como: f.x.sol,
+    prioridad: prioridadDe(f.x.grav),
+    norma: f.norma,
+    fotos: refFotos('cumple:'+f.k),
+  })).concat(riesgosAbiertos.map(r => ({
+    que: 'Punto peligroso sin resolver: ' + r.peligro,
+    como: r.elementos ? 'Protección habitual: ' + r.elementos : '',
+    prioridad: r.v === 'no' ? 'alta' : '',
+    norma: 'UNE-EN 12604',
+    fotos: refFotos('peligro:'+r.pk),
+  }))).concat(pendientes.filter(f => f.critico).map(f => ({
+    que: 'Comprobación imprescindible sin resultado: ' + f.texto,
+    como: 'Realizar la comprobación y dejar constancia de su resultado.',
+    prioridad: 'alta',
+    norma: f.norma,
+    fotos: '',
+  })));
+  actuaciones.sort((a, b) => {
+    const pa = PRIORIDAD_DEFICIENCIA[a.prioridad] || { orden: 9 };
+    const pb = PRIORIDAD_DEFICIENCIA[b.prioridad] || { orden: 9 };
+    return pa.orden - pb.orden;
+  });
+
+  H += sec('Actuaciones recomendadas')+
+    (actuaciones.length
+      ? '<table class="datos chk"><thead><tr><th>Nº</th><th>Actuación</th>'+
+        '<th>Prioridad</th><th>Foto</th></tr></thead><tbody>'+
+        actuaciones.map((a, i) => '<tr><td>A-'+String(i+1).padStart(2,'0')+'</td>'+
+          '<td><b>'+esc(a.que)+'</b>'+
+          (a.como ? '<span class="sub min" style="display:block">'+esc(a.como)+'</span>'
+                  : '<span class="sub min" style="display:block">PENDIENTE DE DEFINIR</span>')+
+          '</td><td>'+esc(PRIORIDAD_DEFICIENCIA[a.prioridad]
+            ? PRIORIDAD_DEFICIENCIA[a.prioridad].nombre : 'SIN VALORAR')+'</td>'+
+          '<td class="min">'+esc(a.fotos || '—')+'</td></tr>').join('')+
+        '</tbody></table>'
+      : '<p>No procede recomendar actuaciones dentro del alcance de este informe.</p>')+
+    '</section>';
+
+  H += sec('Prioridad de actuaciones')+
+    '<table class="datos chk"><thead><tr><th>Prioridad</th><th>Qué significa</th>'+
+    '<th>Cuántas</th></tr></thead><tbody>'+
+    Object.entries(PRIORIDAD_DEFICIENCIA).map(([k2, x]) => {
+      const n = actuaciones.filter(a => a.prioridad === k2).length;
+      return '<tr><td><b>'+esc(x.nombre)+'</b></td><td class="min">'+esc(x.ayuda)+'</td>'+
+        '<td>'+n+'</td></tr>';
+    }).join('')+
+    (actuaciones.some(a => !a.prioridad)
+      ? '<tr><td><b>SIN VALORAR</b></td><td class="min">Falta decidir su prioridad</td><td>'+
+        actuaciones.filter(a => !a.prioridad).length+'</td></tr>' : '')+
+    '</tbody></table>'+
+    (actuaciones.filter(a => a.prioridad === 'critica').length
+      ? '<p class="aviso-borrador">HAY ACTUACIONES DE PRIORIDAD CRÍTICA. Existe riesgo '+
+        'inmediato para las personas: la puerta no debería utilizarse hasta resolverlas.</p>' : '')+
+    '</section>';
+
+  /* ---------- 19. LIMITACIONES DEL INFORME ---------- */
+  H += sec('Limitaciones del informe')+
+    '<ul>'+
+    '<li>Recoge el estado observado en la fecha de la inspección. No se pronuncia sobre el '+
+    'estado anterior ni posterior de la instalación.</li>'+
+    '<li>Se limita a lo comprobado con los medios empleados, sin desmontar elementos.</li>'+
+    (pendientes.length
+      ? '<li>Quedan '+pendientes.length+' comprobación(es) sin resultado, que se relacionan en '+
+        'el apartado correspondiente.</li>' : '')+
+    (faltaDoc.length
+      ? '<li>No se ha aportado parte de la documentación de la instalación, lo que impide '+
+        'acreditar documentalmente determinados aspectos.</li>' : '')+
+    ((d.fuerzas||{}).fecha && !perfilFuerza(e).validado
+      ? '<li>Los límites y el método del perfil de ensayo de fuerzas empleado no han sido '+
+        'contrastados con el texto de la norma. Las mediciones quedan registradas, pero no se '+
+        'emite dictamen de conformidad sobre ellas.</li>' : '')+
+    ((d.riesgos||{}).limitaciones
+      ? '<li>'+esc(d.riesgos.limitaciones)+'</li>' : '')+
+    '<li>No sustituye a la documentación de conformidad de la puerta ni a una inspección '+
+    'por organismo de control.</li>'+
+    '</ul></section>';
+
+  /* ---------- 20. CONCLUSIÓN ---------- */
+  const hayProblema = deficiencias.length || pendientes.length || riesgosAbiertos.length;
+  H += sec('Conclusión')+
+    '<p class="conclusion">'+esc(hayProblema
+      ? CONCLUSION_INFORME.deficiencias
+      : CONCLUSION_INFORME.sin_deficiencias)+'</p>'+
+    (faltaDoc.length ? '<p class="conclusion">'+esc(CONCLUSION_INFORME.falta_doc)+'</p>' : '')+
+    '<table class="datos">'+
+      campo('Comprobaciones conformes', String(conformes.length))+
+      campo('Deficiencias detectadas', String(deficiencias.length))+
+      campo('Comprobaciones sin resultado', String(pendientes.length))+
+      campo('Actuaciones recomendadas', String(actuaciones.length))+
+    '</table></section>';
+
+  /* ---------- 21 y 22. FIRMAS ---------- */
+  H += sec('Firma del técnico')+
+    '<table class="datos">'+
+      campo('Técnico que realiza la inspección',
+            (d.entrega||{}).tecnico || e.autor, 'no_identificado')+
+      campo('Empresa', em.razon_social, 'no_identificado')+
+      campo('Fecha', fechaCorta(new Date().toISOString().slice(0,10)))+
+    '</table>'+
+    '<div class="firmas"><div class="firma"><span>Firma del técnico</span></div></div>'+
+    '</section>';
+
+  H += sec('Recepción por el cliente')+
+    '<p class="aviso-borrador">'+esc(AVISO_FIRMA_RECEPCION)+'</p>'+
+    '<table class="datos">'+
+      campo('Recibido por', (d.entrega||{}).firmante, 'pendiente')+
+      campo('DNI', (d.entrega||{}).firmante_dni, 'no_aportado')+
+      campo('Fecha de recepción', '', 'pendiente')+
+    '</table>'+
+    '<div class="firmas"><div class="firma"><span>Firma de recepción</span></div></div>'+
+    '</section>';
+
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
+    '<title>Informe de situación · '+esc(e.referencia||'')+' · '+esc(titular)+'</title>'+
+    '<style>'+ cssLibro() +
+      marcaDeAgua([].concat(
+        ['NO ES UNA DECLARACIÓN DE CONFORMIDAD'],
+        esFicticio ? ['DATOS Y MEDICIONES FICTICIOS'] : []))+
+    '</style></head><body>'+
+    H.replace('<!--MARCADOR-INDICE-->',
+      '<ol class="indice">'+ secciones.map(x => '<li>'+esc(x)+'</li>').join('') +'</ol>')+
+    '</body></html>');
+  w.document.close();
+}
+
+/* ===================================================================
+   PROPUESTA DE ACTUACIONES DE ADECUACIÓN (apartado 20)
+   ===================================================================
+   Sale del informe de situación y arrastra sus deficiencias, riesgos,
+   actuaciones, prioridades y fotos.
+
+   Separación que no se negocia: el DIAGNÓSTICO TÉCNICO es el informe y
+   no se toca. Esto es la propuesta de trabajo. Si mañana cambia el
+   presupuesto, cambia la propuesta, nunca el informe. */
+async function propuestaActuaciones(id){
+  const e = expDe(id);
+  if (!e) return;
+  const em = datosEmpresa();
+  const p = e.puerta_id ? (puertaDe(e.puerta_id) || {}) : {};
+  const c = e.cliente_id ? (clienteDe(e.cliente_id) || {}) : {};
+  const d = e.datos || {};
+  const chk = EXP_COMPROBACIONES[e.familia] || [];
+  const kd = d.cumple || {};
+
+  /* Mismo cálculo que el informe: la propuesta no puede decir otra cosa */
+  const deficiencias = [], pendientesCriticas = [];
+  chk.forEach(([k, texto, norma, , critico]) => {
+    const ap = procede(APLICA_COMPROBACION, k, e);
+    if (ap && ap.no) return;
+    const x = kd[k] || {};
+    if (x.v === 'no' || x.v === 'deficiencia') deficiencias.push({ k, texto, norma, x });
+    else if (critico && esAbierto(x.v)) pendientesCriticas.push({ k, texto, norma, x });
+  });
+  const pel = peligrosDe(e);
+  const pd = d.peligro || {};
+  const riesgosAbiertos = pel
+    ? pel.lista.filter(([pk]) => { const v = (pd[pk]||{}).v; return v !== 'si' && v !== 'na'; })
+        .map(([pk, peligro, elementos]) => ({ pk, peligro, elementos, x: pd[pk]||{} }))
+    : [];
+
+  const items = deficiencias.map(f => ({
+    origen: 'Deficiencia', que: f.x.def || f.texto, como: f.x.sol,
+    prioridad: prioridadDe(f.x.grav), norma: f.norma,
+  })).concat(riesgosAbiertos.map(r => ({
+    origen: 'Riesgo', que: r.peligro,
+    como: r.elementos ? 'Protección habitual: ' + r.elementos : '',
+    prioridad: (r.x.v === 'no' ? 'alta' : ''), norma: 'UNE-EN 12604',
+  }))).concat(pendientesCriticas.map(f => ({
+    origen: 'Comprobación pendiente', que: f.texto,
+    como: 'Realizar la comprobación y dejar constancia de su resultado.',
+    prioridad: 'alta', norma: f.norma,
+  })));
+  items.sort((a, b) => ((PRIORIDAD_DEFICIENCIA[a.prioridad]||{orden:9}).orden)
+                     - ((PRIORIDAD_DEFICIENCIA[b.prioridad]||{orden:9}).orden));
+
+  if (!items.length){
+    toast('No hay deficiencias ni riesgos abiertos de los que hacer propuesta.');
+    return;
+  }
+
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana.'); return; }
+
+  const campo = (k, v, clase) => '<tr><th>'+esc(k)+'</th><td>'+esc(oHueco(v, clase))+'</td></tr>';
+  const titular = (d.obra||{}).titular || c.nombre || p.cliente || '';
+  const dir = [ (d.obra||{}).emplazamiento, (d.obra||{}).ubicacion ].filter(Boolean).join(' · ')
+            || [p.direccion, p.ubicacion].filter(Boolean).join(' · ');
+  const hoy = new Date().toISOString().slice(0,10);
+
+  let H = '<section class="portada">'+
+    '<div class="marca">ARIZA <span>puertas automáticas</span></div>'+
+    '<div class="tit"><h1>Propuesta de actuaciones de adecuación</h1>'+
+    '<h2>'+esc(EXP_FAMILIA[e.familia]||'')+'</h2>'+
+    '<p class="sit">'+esc(dir || 'Emplazamiento sin indicar')+'</p></div>'+
+    '<table class="port-datos">'+
+      campo('Expediente', e.referencia, 'no_identificado')+
+      campo('Titular', titular, 'no_identificado')+
+      campo('Identificación de la puerta', [p.codigo, (d.puerta||{}).denominacion]
+            .filter(Boolean).join(' · '), 'no_identificado')+
+      campo('Fecha', fechaCorta(hoy))+
+    '</table>'+
+    '<p class="aviso-borrador">PROPUESTA DE TRABAJO. NO ES UNA OFERTA ECONÓMICA NI UNA '+
+    'DECLARACIÓN DE CONFORMIDAD</p>'+
+    '<div class="pie-portada">'+esc(em.razon_social)+
+      (em.telefono?(' · '+esc(em.telefono)):'')+'</div></section>';
+
+  H += '<section><h3 class="sec">1. De dónde sale esta propuesta</h3>'+
+    '<p>Las actuaciones que siguen proceden del <b>informe técnico de situación y '+
+    'deficiencias</b> del expediente '+esc(e.referencia||'')+'. Ese informe recoge el '+
+    'diagnóstico técnico y no se modifica: esta propuesta es un documento aparte.</p>'+
+    '<p>Si el presupuesto cambia, cambia esta propuesta. El informe técnico permanece tal '+
+    'como se emitió.</p></section>';
+
+  H += '<section><h3 class="sec">2. Actuaciones propuestas</h3>'+
+    '<table class="datos chk"><thead><tr><th>Nº</th><th>Origen</th><th>Actuación</th>'+
+    '<th>Prioridad</th><th>Exigencia</th></tr></thead><tbody>'+
+    items.map((a, i) => '<tr><td>A-'+String(i+1).padStart(2,'0')+'</td>'+
+      '<td class="min">'+esc(a.origen)+'</td>'+
+      '<td><b>'+esc(a.que)+'</b>'+
+      (a.como ? '<span class="sub min" style="display:block">'+esc(a.como)+'</span>'
+              : '<span class="sub min" style="display:block">PENDIENTE DE DEFINIR</span>')+'</td>'+
+      '<td>'+esc(PRIORIDAD_DEFICIENCIA[a.prioridad]
+        ? PRIORIDAD_DEFICIENCIA[a.prioridad].nombre : 'SIN VALORAR')+'</td>'+
+      '<td class="min">'+esc(a.norma)+'</td></tr>').join('')+
+    '</tbody></table></section>';
+
+  H += '<section><h3 class="sec">3. Orden recomendado</h3>'+
+    '<table class="datos chk"><thead><tr><th>Prioridad</th><th>Cuántas</th>'+
+    '<th>Qué significa</th></tr></thead><tbody>'+
+    Object.entries(PRIORIDAD_DEFICIENCIA).map(([k2, x]) => {
+      const n = items.filter(a => a.prioridad === k2).length;
+      return n ? '<tr><td><b>'+esc(x.nombre)+'</b></td><td>'+n+'</td>'+
+        '<td class="min">'+esc(x.ayuda)+'</td></tr>' : '';
+    }).join('')+
+    (items.some(a => !a.prioridad)
+      ? '<tr><td><b>SIN VALORAR</b></td><td>'+items.filter(a => !a.prioridad).length+'</td>'+
+        '<td class="min">Falta decidir su prioridad</td></tr>' : '')+
+    '</tbody></table>'+
+    (items.filter(a => a.prioridad === 'critica').length
+      ? '<p class="aviso-borrador">Las actuaciones de prioridad CRÍTICA deben ejecutarse antes '+
+        'de seguir usando la puerta.</p>' : '')+
+    '</section>';
+
+  H += '<section><h3 class="sec">4. Qué no incluye esta propuesta</h3>'+
+    '<ul>'+
+    '<li><b>El importe.</b> La valoración económica se emite aparte, en presupuesto.</li>'+
+    '<li>Lo que no se pudo comprobar en la inspección y pueda aparecer al ejecutar los trabajos.</li>'+
+    '<li>Elementos cuya sustitución dependa de su estado una vez desmontados.</li>'+
+    '<li>Trabajos de albañilería, electricidad o cerrajería ajenos a la puerta.</li>'+
+    '</ul>'+
+    '<p>Ejecutadas las actuaciones, procede una <b>verificación posterior</b> que permita '+
+    'actualizar el expediente y, si entonces se cumplen las condiciones, emitir la '+
+    'documentación de conformidad que corresponda.</p></section>';
+
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
+    '<title>Propuesta de actuaciones · '+esc(e.referencia||'')+'</title>'+
+    '<style>'+ cssLibro() +
+      marcaDeAgua(['PROPUESTA DE TRABAJO'].concat(
+        d.ficticio === 'si' ? ['DATOS FICTICIOS'] : []))+
+    '</style></head><body>'+H+'</body></html>');
   w.document.close();
 }
 
@@ -8746,6 +9434,8 @@ raiz.addEventListener('click', async e => {
     if (e && e.puerta_id) S.ficha = e.puerta_id; pintar(); window.scrollTo({top:0}); }
   else if (a === 'exp-paso'){ S.expPaso = b.dataset.v; pintar(); window.scrollTo({top:0}); }
   else if (a === 'exp-libro') libroExpediente(b.dataset.id);
+  else if (a === 'exp-informe') informeSituacion(b.dataset.id);
+  else if (a === 'exp-propuesta') propuestaActuaciones(b.dataset.id);
   else if (a === 'exp-emitir') dlgEmitirExpediente(b.dataset.id);
   else if (a === 'exp-marcado') etiquetaCE(b.dataset.id);
   else if (a === 'exp-dte') documentoDTE(S.exp);
