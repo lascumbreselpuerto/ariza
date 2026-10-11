@@ -5195,7 +5195,12 @@ function validarExpediente(e){
 
   /* --- Documentación --- */
   {
-    const marcados = ['ddp_fab','dc_fab','manual'].filter(k => ((d.entrega||{}).docs||{})[k] === 'si');
+    /* Documentos que son DEL FABRICANTE y que, si se marcan como entregados,
+       tienen que estar subidos. Ojo con «manual»: en una puerta que montamos
+       nosotros, el manual es el nuestro y va dentro del libro, así que no hay
+       nada que subir. Solo cuando somos meros instaladores de un kit el manual
+       es del fabricante. */
+    const marcados = DOCS_DEL_FABRICANTE(e).filter(k => ((d.entrega||{}).docs||{})[k] === 'si');
     if (marcados.length && !(S.expDocs||[]).length)
       B('Documentación', 'Se ha marcado como entregada documentación del fabricante que no está '+
         'subida: el anexo quedaría anunciado y vacío.');
@@ -5453,6 +5458,13 @@ const DOCS_EXPEDIENTE = [
   ['acta',               'Acta de entrega y recepción', 'cliente',
    'Acredita qué se entregó, a quién y cuándo. Una copia se archiva.'],
 ];
+/* Cuáles de los documentos marcados son del fabricante y, por tanto, tienen que
+   estar subidos si se dicen entregados. El manual solo lo es cuando montamos un
+   kit completo: si la puerta la hacemos nosotros, el manual es nuestro y va
+   dentro del libro, no hay nada que subir. */
+const DOCS_DEL_FABRICANTE = e => ['ddp_fab', 'dc_fab']
+  .concat((e||{}).situacion === 'nueva_instalador' ? ['manual'] : []);
+
 const docsPorDestino = dest => DOCS_EXPEDIENTE.filter(x => x[2] === dest);
 const destinoDe = clave => (DOCS_EXPEDIENTE.find(x => x[0] === clave) || [])[2] || '';
 const nombreDoc = clave => (DOCS_EXPEDIENTE.find(x => x[0] === clave) || [])[1] || clave;
@@ -5884,7 +5896,7 @@ function expPendientes(e){
 
   /* Si se marca que se entrega documentación del fabricante, tiene que estar
      subida: si no, el libro anuncia un anexo que no existe. */
-  const marcadosFab = ['ddp_fab','dc_fab','manual'].filter(k => ((d.entrega||{}).docs||{})[k] === 'si');
+  const marcadosFab = DOCS_DEL_FABRICANTE(e).filter(k => ((d.entrega||{}).docs||{})[k] === 'si');
   if (marcadosFab.length && !(S.expDocs||[]).length)
     falta.push('subir la documentación del fabricante que se ha marcado como entregada: '+
       'ahora mismo el anexo quedaría anunciado pero vacío');
@@ -8937,10 +8949,14 @@ async function libroExpediente(id){
             normasDe(e).europeas.map(([n]) => '<li>'+esc(n)+'</li>').join('')+'</ul>'+
             '<p class="min">La condición de norma armonizada citada en el Diario Oficial '+
             'bajo esta Directiva está pendiente de verificar para cada una de ellas.</p></li>'+
+          /* Aquí van normas y especificaciones técnicas, y nada más. Las
+             observaciones de la entrega iban antes en este punto, y eso no es
+             lo que pide el anexo II: una nota sobre lo que se le explicó al
+             presidente de la comunidad no es una especificación técnica. */
           '<li><b>Otras normas y especificaciones técnicas utilizadas:</b> '+
             (normasDe(e).nacionales.length
-              ? normasDe(e).nacionales.map(([n]) => esc(n)).join('; ')+'. ' : '')+
-            esc((d.entrega||{}).observaciones || '')+'</li>';
+              ? normasDe(e).nacionales.map(([n]) => esc(n)).join('; ')+'.'
+              : 'ninguna además de las anteriores.')+'</li>';
       }
     H += '</ol>'+ bloqueFirma(em, d, e) +'</section>';
   }
