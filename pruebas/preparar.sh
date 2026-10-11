@@ -27,7 +27,16 @@ if [ "$1" != "--bajar" ] && [ -f "../index.html" ]; then
   echo "Origen: ../index.html (copia de trabajo)"
 else
   echo "Origen: https://arizapa.es/index.html (descargando)"
-  curl -fsS "https://arizapa.es/index.html?v=$(date +%s)" -o index-descargado.html
+  if ! curl -fsS "https://arizapa.es/index.html?v=$(date +%s)" -o index-descargado.html; then
+    echo
+    echo "No se ha podido descargar el index.html publicado."
+    echo "Suele ser que no hay internet, o que la red por la que sales lo bloquea."
+    echo "Salidas:"
+    echo "  · ./preparar.sh          usa ../index.html, la copia del repositorio"
+    echo "  · o guarda a mano el fichero de https://arizapa.es/index.html"
+    echo "    en esta carpeta como index-descargado.html y vuelve a lanzarlo"
+    exit 1
+  fi
   ORIGEN="index-descargado.html"
 fi
 
@@ -73,7 +82,10 @@ EXP_FAMILIA APLICA_COMPROBACION RESULTADO_COMPROBACION EXP_COMPONENTES
 MODOS_ACCIONAMIENTO TIPOS_USUARIO MATRIZ_PROTECCION_FABRICA EXP_PUNTOS_FUERZA
 PERFILES_FUERZA MEDIOS_ENTREGA RELACION_RECEPTOR CLASE_PENDIENTE
 TIPOS_SIN_CUESTIONARIO PREGUNTAS_CRITICAS PREGUNTA_DESTINO VISTAS_FOTO
-FOTOS_RECOMENDADAS CRITERIOS_MODIFICACION EXP_MARCO S
+FOTOS_RECOMENDADAS CRITERIOS_MODIFICACION EXP_MARCO
+REGLAS_FECHA ESTADO_REGLA fechaRegla reglaCompleta diasHasta reglasProximas
+CLASES_VIDA recogerVida EXP_SITUACION ASISTENCIAS tipoAsis nombreTec
+S
 """.split()
 
 lineas = ['\n/* ===== Inyectado por preparar.sh SOLO en la copia de pruebas ===== */',
@@ -108,12 +120,22 @@ if ! tiene_pw; then
   echo "AVISO: no se encuentra playwright. Instálalo aquí con:  npm i playwright"
 fi
 
-# El servidor que hubiera, fuera
-pkill -f "$AQUI/servidor.py" 2>/dev/null || true
+# El servidor que hubiera, fuera. Se mata CUALQUIER servidor del banco, no solo el
+# de esta carpeta: si quedó uno de otra copia del banco se queda con el puerto 8899
+# y las pruebas acabarían midiendo un index.html que no es el que acabas de preparar.
+pkill -f "servidor.py" 2>/dev/null || true
 sleep 1
 setsid nohup python3 "$AQUI/servidor.py" > "$AQUI/servidor.log" 2>&1 &
 sleep 2
 if curl -fsS -o /dev/null "http://127.0.0.1:8899/index.html"; then
+  # Y se comprueba que quien responde es ESTA copia, no otra que se quedara el puerto
+  SERVIDO="$(curl -fsS "http://127.0.0.1:8899/index.html" | wc -c)"
+  LOCAL="$(wc -c < "$AQUI/index.html")"
+  if [ "$SERVIDO" != "$LOCAL" ]; then
+    echo "ERROR: en el puerto 8899 responde otra copia del banco ($SERVIDO bytes"
+    echo "       frente a los $LOCAL de esta carpeta). Cierra ese servidor y repite."
+    exit 1
+  fi
   echo "Servidor en marcha: http://127.0.0.1:8899/index.html"
   echo "Ahora:  ./todas.sh"
 else
