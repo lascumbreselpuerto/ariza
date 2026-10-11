@@ -1266,6 +1266,24 @@ function vistaMiTrabajo(){
        '</p></div><span class="sp"></span>'+
        '<button class="btn" data-act="asistencia-nueva">Nueva asistencia</button></div>';
 
+  /* Aviso de copia de seguridad pendiente. Solo lo ve quien puede hacerla, y
+     solo cuando ya hace tiempo: no se avisa por avisar. No bloquea nada. */
+  if (esAdmin()){
+    const u = copiaUltima();
+    const dias = u.fecha
+      ? Math.floor((Date.now() - new Date(u.fecha).getTime()) / 86400000) : null;
+    if (dias === null)
+      h += '<div class="panel mal-caja"><b>No hay ninguna copia de seguridad.</b>'+
+        '<p class="mini" style="margin:4px 0 8px">Supabase no hace copias en el plan '+
+        'gratuito: si se perdiera el proyecto, se perderían los expedientes y las fotos.</p>'+
+        '<button class="btn sm" data-act="ir-equipo">Hacer la primera copia</button></div>';
+    else if (dias >= 30)
+      h += '<div class="panel mal-caja"><b>La última copia de seguridad es de hace '+dias+
+        ' días.</b><p class="mini" style="margin:4px 0 8px">Del '+esc(fechaCorta(u.fecha))+
+        '. Todo lo que se ha hecho después no está copiado en ningún sitio.</p>'+
+        '<button class="btn sm" data-act="ir-equipo">Hacer una copia</button></div>';
+  }
+
   if (!mias.length){
     h += '<div class="panel"><p class="muted" style="margin:0">Ahora mismo no tienes ninguna asistencia asignada. '+
          'Cuando la oficina te asigne un trabajo, aparecerá aquí y te llegará un correo.</p>'+
@@ -2209,6 +2227,7 @@ function panelEmpresa(){
     '<button class="btn" data-act="guardar-limites">Guardar límites</button></div></div>';
 
   h += panelReglasFecha();
+  h += panelCopia();
   return h;
 }
 
@@ -2270,6 +2289,370 @@ function panelReglasFecha(){
     '<div class="fila" style="margin-top:8px"><span class="sp"></span>'+
     '<button class="btn plana" data-act="reglas-fabrica">Volver a las fechas de fábrica</button>'+
     '<button class="btn" data-act="guardar-reglas">Guardar fechas</button></div></div>';
+  return h;
+}
+
+/* ===================================================================
+   COPIA DE SEGURIDAD
+   ===================================================================
+   El plan gratuito de Supabase no hace copias de seguridad. Si se pierde
+   el proyecto, se pierden los expedientes, las fotos y las firmas, y con
+   ellos la documentación legal de las puertas. Esto lo arregla.
+
+   Lo que se descarga NO es un volcado que solo entienda un informático:
+     · datos.json          todo el contenido de las tablas
+     · restaurar.sql       las órdenes para volver a meterlo, en el orden
+                           correcto, listas para pegar en Supabase
+     · MANIFIESTO.txt      cuántas filas y cuántos ficheros lleva la copia,
+                           para poder comprobar que está completa
+     · LEEME.txt           cómo se restaura, paso a paso
+     · ficheros/…          las fotos, los PDF y las firmas
+
+   Una copia que nadie sabe restaurar no es una copia, y una copia que no
+   se puede comprobar tampoco. De ahí el manifiesto y el LEEME.
+
+   El ZIP se construye aquí mismo, sin librerías de internet: así la copia
+   no depende de que una página de terceros siga en pie el día que haga
+   falta. Va sin comprimir, porque las fotos y los PDF ya lo están. */
+
+/* Tablas que se copian, EN ORDEN de dependencias: una tabla nunca va antes
+   que aquella a la que apunta. Si alguna no existe, la copia no falla: lo
+   anota en el manifiesto y sigue. */
+const TABLAS_COPIA = [
+  'perfiles', 'ajustes', 'tarifas', 'etiquetas', 'catalogo', 'articulos',
+  'clientes', 'puertas', 'contratos', 'contrato_puertas',
+  'avisos', 'materiales', 'revisiones', 'fotos', 'documentos', 'valoraciones',
+  'expedientes', 'expediente_fotos', 'expediente_docs',
+];
+/* Carpetas de ficheros */
+const BUCKETS_COPIA = ['expedientes', 'fotos', 'documentos', 'firmas', 'equipo'];
+
+/* ---- CRC32, que es lo que el formato ZIP usa para detectar corrupción ---- */
+let TABLA_CRC = null;
+function crc32(datos){
+  if (!TABLA_CRC){
+    TABLA_CRC = new Uint32Array(256);
+    for (let i = 0; i < 256; i++){
+      let c = i;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      TABLA_CRC[i] = c >>> 0;
+    }
+  }
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < datos.length; i++) c = TABLA_CRC[(c ^ datos[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+/* ---- ZIP sin compresión, formato «store» ---- */
+function crearZip(entradas){
+  const te = new TextEncoder();
+  const bin = s => te.encode(s);
+  const u16 = n => [n & 0xFF, (n >>> 8) & 0xFF];
+  const u32 = n => [n & 0xFF, (n >>> 8) & 0xFF, (n >>> 16) & 0xFF, (n >>> 24) & 0xFF];
+  /* Fecha y hora en el formato que usa el ZIP, que es de 1980 */
+  const d = new Date();
+  const hora = ((d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1)) & 0xFFFF;
+  const fecha = (((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate()) & 0xFFFF;
+
+  const trozos = [], central = [];
+  let desplaz = 0;
+
+  entradas.forEach(e => {
+    const nombre = bin(e.nombre);
+    const datos = e.datos instanceof Uint8Array ? e.datos : bin(String(e.datos));
+    const crc = crc32(datos);
+    const cab = [].concat(
+      u32(0x04034b50), u16(20), u16(0x0800), u16(0),   // 0x0800: nombres en UTF-8
+      u16(hora), u16(fecha), u32(crc), u32(datos.length), u32(datos.length),
+      u16(nombre.length), u16(0));
+    trozos.push(new Uint8Array(cab), nombre, datos);
+    central.push({ nombre, crc, tam: datos.length, desplaz });
+    desplaz += cab.length + nombre.length + datos.length;
+  });
+
+  const inicioCentral = desplaz;
+  let tamCentral = 0;
+  central.forEach(c => {
+    const cab = [].concat(
+      u32(0x02014b50), u16(20), u16(20), u16(0x0800), u16(0),
+      u16(hora), u16(fecha), u32(c.crc), u32(c.tam), u32(c.tam),
+      u16(c.nombre.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(c.desplaz));
+    trozos.push(new Uint8Array(cab), c.nombre);
+    tamCentral += cab.length + c.nombre.length;
+  });
+  trozos.push(new Uint8Array([].concat(
+    u32(0x06054b50), u16(0), u16(0), u16(central.length), u16(central.length),
+    u32(tamCentral), u32(inicioCentral), u16(0))));
+
+  return new Blob(trozos, { type:'application/zip' });
+}
+
+/* ---- Un valor de Postgres escrito como SQL ---- */
+function sqlValor(v){
+  if (v === null || v === undefined) return 'NULL';
+  if (typeof v === 'number') return isFinite(v) ? String(v) : 'NULL';
+  if (typeof v === 'boolean') return v ? 'true' : 'false';
+  if (typeof v === 'object')
+    return '\'' + JSON.stringify(v).replace(/'/g, '\'\'') + '\'::jsonb';
+  return '\'' + String(v).replace(/'/g, '\'\'') + '\'';
+}
+function sqlInserts(tabla, filas){
+  if (!filas || !filas.length) return '-- '+tabla+': sin filas\n';
+  const cols = Object.keys(filas[0]);
+  let s = '-- '+tabla+': '+filas.length+' fila(s)\n';
+  filas.forEach(f => {
+    s += 'INSERT INTO public.'+tabla+' ('+cols.map(c => '"'+c+'"').join(', ')+')\n'+
+         '  VALUES ('+cols.map(c => sqlValor(f[c])).join(', ')+')\n'+
+         '  ON CONFLICT DO NOTHING;\n';
+  });
+  return s + '\n';
+}
+
+const copiaUltima = () => ((S.ajustes || {}).backup || {});
+
+/* Hace la copia. conFicheros=false baja solo los datos, que es rápido y
+   pequeño; true baja también fotos, PDF y firmas. */
+async function copiaSeguridad(conFicheros){
+  const aviso = t => { const c = document.getElementById('copia-estado'); if (c) c.textContent = t; };
+  const t0 = Date.now();
+  const em = datosEmpresa();
+  const resumen = { fecha: new Date().toISOString(), tablas: {}, buckets: {},
+                    faltan: [], errores: [], bytes_ficheros: 0 };
+  const entradas = [];
+  const datos = {};
+
+  try {
+    /* ---- Tablas ---- */
+    for (const t of TABLAS_COPIA){
+      aviso('Copiando la tabla '+t+'…');
+      const { data, error } = await sb.from(t).select('*');
+      if (error){
+        /* Una tabla que no existe no rompe la copia: se anota */
+        resumen.faltan.push(t);
+        resumen.errores.push(t+': '+error.message);
+        continue;
+      }
+      datos[t] = data || [];
+      resumen.tablas[t] = (data || []).length;
+    }
+
+    /* ---- Ficheros ---- */
+    if (conFicheros){
+      for (const b of BUCKETS_COPIA){
+        aviso('Listando los ficheros de '+b+'…');
+        const rutas = await listarBucket(b);
+        resumen.buckets[b] = rutas.length;
+        let n = 0;
+        for (const r of rutas){
+          n++;
+          if (n % 5 === 0 || n === rutas.length)
+            aviso('Descargando ficheros de '+b+': '+n+' de '+rutas.length+'…');
+          try {
+            const { data, error } = await sb.storage.from(b).download(r);
+            if (error || !data) { resumen.errores.push(b+'/'+r+': '+((error||{}).message||'sin datos')); continue; }
+            const buf = new Uint8Array(await data.arrayBuffer());
+            resumen.bytes_ficheros += buf.length;
+            entradas.push({ nombre: 'ficheros/'+b+'/'+r, datos: buf });
+          } catch(err){ resumen.errores.push(b+'/'+r+': '+err.message); }
+        }
+      }
+    }
+
+    /* ---- Los tres documentos que acompañan a los datos ---- */
+    aviso('Preparando el fichero…');
+    const sello = fechaHora(resumen.fecha);
+    let sql = '-- ================================================================\n'+
+      '-- RESTAURACIÓN DE ARIZA SAT\n'+
+      '-- Copia del '+sello+'\n'+
+      '-- Empresa: '+(em.razon_social||'')+'\n'+
+      '--\n'+
+      '-- Pega este fichero completo en el editor SQL de Supabase y ejecútalo.\n'+
+      '-- Las órdenes llevan ON CONFLICT DO NOTHING: si una fila ya existe, no\n'+
+      '-- se duplica ni da error, así que se puede ejecutar más de una vez.\n'+
+      '-- Las tablas van en orden: primero las que no dependen de nada.\n'+
+      '--\n'+
+      '-- ATENCIÓN: esto restaura los DATOS. Las tablas tienen que existir ya.\n'+
+      '-- Si el proyecto es nuevo, ejecuta antes los ficheros .sql de creación\n'+
+      '-- de tablas que te entregó Claude (fase2.sql, fase3.sql, fase4.sql,\n'+
+      '-- fase5.sql, ajustes.sql, documentos.sql, comercial.sql, avisos.sql).\n'+
+      '-- Los ficheros (fotos, PDF, firmas) van aparte, en la carpeta\n'+
+      '-- ficheros/ de este mismo ZIP, y se suben al Storage a mano.\n'+
+      '-- ================================================================\n\n';
+    TABLAS_COPIA.forEach(t => { if (datos[t]) sql += sqlInserts(t, datos[t]); });
+
+    const total = Object.values(resumen.tablas).reduce((a, b) => a + b, 0);
+    const manifiesto =
+      'COPIA DE SEGURIDAD DE ARIZA SAT\n'+
+      '================================\n\n'+
+      'Fecha de la copia: '+sello+'\n'+
+      'Empresa: '+(em.razon_social||'')+(em.nif ? ' · '+em.nif : '')+'\n'+
+      'Hecha por: '+((S.perfil||{}).nombre || '')+'\n'+
+      'Tipo: '+(conFicheros ? 'completa, con datos y ficheros' : 'solo datos')+'\n\n'+
+      'FILAS POR TABLA\n'+
+      '---------------\n'+
+      TABLAS_COPIA.map(t => '  '+t.padEnd(22, '.')+' '+
+        (resumen.tablas[t] !== undefined ? resumen.tablas[t] : 'NO EXISTE')).join('\n')+'\n'+
+      '  '+'TOTAL'.padEnd(22, '.')+' '+total+'\n\n'+
+      (conFicheros
+        ? 'FICHEROS POR CARPETA\n'+
+          '--------------------\n'+
+          BUCKETS_COPIA.map(b => '  '+b.padEnd(22, '.')+' '+
+            (resumen.buckets[b] !== undefined ? resumen.buckets[b] : '0')).join('\n')+'\n'+
+          '  '+'TAMAÑO TOTAL'.padEnd(22, '.')+' '+
+          (resumen.bytes_ficheros/1048576).toFixed(1)+' MB\n\n'
+        : 'Esta copia NO incluye los ficheros: ni fotos, ni PDF, ni firmas.\n'+
+          'Para incluirlos, usa el botón de copia completa.\n\n')+
+      'CÓMO COMPROBAR QUE LA COPIA ESTÁ BIEN\n'+
+      '-------------------------------------\n'+
+      'Abre el ZIP y comprueba que:\n'+
+      '  1. Existe datos.json y pesa más de unos pocos kilobytes.\n'+
+      '  2. Existe restaurar.sql.\n'+
+      '  3. Los números de arriba cuadran con lo que tienes en la aplicación.\n'+
+      '     Por ejemplo, las puertas que ves en la pestaña Puertas deben ser\n'+
+      '     las mismas que dice la línea «puertas» de esta lista.\n'+
+      (conFicheros ? '  4. La carpeta ficheros/ tiene las subcarpetas con las fotos.\n' : '')+
+      '\n'+
+      (resumen.errores.length
+        ? 'AVISOS DE ESTA COPIA ('+resumen.errores.length+')\n'+
+          '---------------------\n'+
+          resumen.errores.slice(0, 50).map(x => '  - '+x).join('\n')+'\n'+
+          (resumen.errores.length > 50 ? '  ... y '+(resumen.errores.length-50)+' más\n' : '')+
+          '\nLo que aparece aquí NO se ha copiado. Revísalo antes de confiar en\n'+
+          'esta copia como única.\n'
+        : 'Sin avisos: todo lo que se ha intentado copiar se ha copiado.\n');
+
+    const leeme =
+      'CÓMO RESTAURAR ARIZA SAT\n'+
+      '========================\n\n'+
+      'Esta copia es del '+sello+'.\n\n'+
+      'QUÉ HAY EN ESTE ZIP\n'+
+      '-------------------\n'+
+      '  datos.json      Todo el contenido de las tablas, tal cual.\n'+
+      '  restaurar.sql   Las órdenes para volver a meter esos datos.\n'+
+      '  MANIFIESTO.txt  Cuántas filas y ficheros lleva la copia.\n'+
+      '  ficheros/       Las fotos, los PDF y las firmas, por carpetas.\n\n'+
+      'SI SOLO SE HA BORRADO ALGO POR ERROR\n'+
+      '------------------------------------\n'+
+      'Abre restaurar.sql, busca la tabla que toque, copia las líneas de lo\n'+
+      'que falte y pégalas en el editor SQL de Supabase. No hace falta\n'+
+      'restaurar todo.\n\n'+
+      'SI SE HA PERDIDO EL PROYECTO ENTERO\n'+
+      '-----------------------------------\n'+
+      '  1. Crea un proyecto nuevo en Supabase.\n'+
+      '  2. Ejecuta los ficheros .sql de creación de tablas, en su orden.\n'+
+      '  3. Ejecuta restaurar.sql.\n'+
+      '  4. Crea en Storage las carpetas: '+BUCKETS_COPIA.join(', ')+'\n'+
+      '     y sube a cada una el contenido de su carpeta en ficheros/.\n'+
+      '  5. En el index.html de la aplicación, cambia la dirección y la clave\n'+
+      '     del proyecto por las del proyecto nuevo.\n'+
+      '  6. Entra y comprueba los números del MANIFIESTO.\n\n'+
+      'QUÉ NO ESTÁ EN ESTA COPIA\n'+
+      '-------------------------\n'+
+      '  - Las contraseñas de los usuarios. Las gestiona Supabase y hay que\n'+
+      '    volver a invitar a cada técnico.\n'+
+      '  - La estructura de las tablas y los permisos. Están en los .sql de\n'+
+      '    creación, no aquí.\n'+
+      '  - La aplicación en sí, que está en GitHub y en arizapa.es.\n\n'+
+      'CADA CUÁNTO HACERLA\n'+
+      '-------------------\n'+
+      'Una vez a la semana la copia completa, y guardarla en dos sitios\n'+
+      'distintos: el ordenador de la oficina y un disco o una nube aparte.\n'+
+      'Una copia que está solo en el mismo ordenador no protege de un robo\n'+
+      'ni de una avería del disco.\n';
+
+    entradas.unshift(
+      { nombre:'datos.json', datos: JSON.stringify({ copia: resumen, datos }, null, 1) },
+      { nombre:'restaurar.sql', datos: sql },
+      { nombre:'MANIFIESTO.txt', datos: manifiesto },
+      { nombre:'LEEME.txt', datos: leeme });
+
+    const zip = crearZip(entradas);
+    const nombre = 'ariza-sat-copia-'+resumen.fecha.slice(0,10)+
+      (conFicheros ? '-completa' : '-datos')+'.zip';
+    const url = URL.createObjectURL(zip);
+    const a = document.createElement('a');
+    a.href = url; a.download = nombre; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 4000);
+
+    /* Queda registrado cuándo se hizo y qué llevaba */
+    const reg = { fecha: resumen.fecha, filas: total, tipo: conFicheros ? 'completa' : 'datos',
+                  ficheros: Object.values(resumen.buckets).reduce((a,b) => a+b, 0),
+                  mb: +(resumen.bytes_ficheros/1048576).toFixed(1),
+                  avisos: resumen.errores.length, por: (S.perfil||{}).nombre || '' };
+    try {
+      await sb.from('ajustes').upsert({ clave:'backup', valor: reg }, { onConflict:'clave' });
+      S.ajustes.backup = reg;
+    } catch(_){}
+
+    const seg = Math.round((Date.now() - t0)/1000);
+    aviso('');
+    toast('Copia descargada: '+total+' filas'+
+      (conFicheros ? ' y '+reg.ficheros+' ficheros ('+reg.mb+' MB)' : '')+
+      ', en '+seg+' s.'+(resumen.errores.length ? ' CON '+resumen.errores.length+' AVISO(S).' : ''));
+    pintar();
+  } catch(err){
+    aviso('');
+    fallo(err);
+  }
+}
+
+/* Lista recursiva de un bucket. El listado de Supabase es por carpetas, así que
+   hay que bajar nivel a nivel. */
+async function listarBucket(bucket, prefijo){
+  const salida = [];
+  const { data, error } = await sb.storage.from(bucket)
+    .list(prefijo || '', { limit:1000, sortBy:{ column:'name', order:'asc' } });
+  if (error || !data) return salida;
+  for (const x of data){
+    const ruta = prefijo ? prefijo+'/'+x.name : x.name;
+    /* Una carpeta no trae metadatos de fichero */
+    if (x.id === null || !x.metadata) salida.push(...await listarBucket(bucket, ruta));
+    else salida.push(ruta);
+  }
+  return salida;
+}
+
+/* ---- El panel, en Equipo ---- */
+function panelCopia(){
+  const u = copiaUltima();
+  const dias = u.fecha
+    ? Math.floor((Date.now() - new Date(u.fecha).getTime()) / 86400000) : null;
+
+  let h = '<div class="panel"><div class="panel-h"><h3>Copia de seguridad</h3></div>'+
+    '<p class="nota-oficina" style="margin:0 0 10px">El plan gratuito de Supabase '+
+    '<b>no hace copias de seguridad</b>. Si se perdiera el proyecto, se perderían los '+
+    'expedientes, las fotos y las firmas. Esta es la copia de la casa: se descarga a tu '+
+    'ordenador y lleva dentro las instrucciones para restaurarla.</p>';
+
+  if (!u.fecha)
+    h += '<div class="mal-caja" style="margin:0 0 12px"><b>NO SE HA HECHO NINGUNA COPIA.</b>'+
+      '<p class="mini" style="margin:4px 0 0">Ahora mismo no hay ninguna copia de los datos '+
+      'en ningún sitio que no sea Supabase.</p></div>';
+  else {
+    const caja = dias >= 30 ? 'mal-caja' : (dias >= 7 ? 'aviso-caja' : 'nota-oficina');
+    h += '<div class="'+caja+'" style="margin:0 0 12px">'+
+      '<b>Última copia: '+esc(fechaHora(u.fecha))+'</b>'+
+      ' · hace '+dias+' día(s)'+
+      '<p class="mini" style="margin:4px 0 0">'+
+      esc((u.tipo === 'completa' ? 'Completa' : 'Solo datos')+', '+(u.filas||0)+' filas'+
+        (u.ficheros ? ' y '+u.ficheros+' ficheros ('+u.mb+' MB)' : '')+
+        (u.por ? ', hecha por '+u.por : ''))+
+      (u.avisos ? ' · <b>con '+u.avisos+' aviso(s)</b>' : '')+
+      (dias >= 7 ? ' · <b>conviene hacer una nueva</b>' : '')+'</p></div>';
+  }
+
+  h += '<div class="fila" style="gap:8px;flex-wrap:wrap">'+
+    '<button class="btn" data-act="copia-datos">Copia de datos</button>'+
+    '<button class="btn pri" data-act="copia-completa">Copia completa, con fotos</button>'+
+    '<span class="sp"></span><span class="mini" id="copia-estado"></span></div>'+
+    '<p class="mini" style="margin:10px 0 0">La copia de datos tarda segundos. La completa '+
+    'descarga todas las fotos y los PDF, así que puede tardar varios minutos y pesar '+
+    'bastante: <b>hazla desde el ordenador, no desde el móvil</b>. Guárdala en dos sitios '+
+    'distintos: una copia que vive en el mismo ordenador no te protege de un robo ni de que '+
+    'se rompa el disco.</p>'+
+    '<p class="mini" style="margin:6px 0 0">Dentro del ZIP van las órdenes de restauración '+
+    'listas para pegar en Supabase, un manifiesto con el recuento para que puedas comprobar '+
+    'que la copia está completa, y un LEEME con los pasos.</p>'+
+    '</div>';
   return h;
 }
 
@@ -12091,6 +12474,7 @@ raiz.addEventListener('click', async e => {
     await quitarCara(b.dataset.id);
   }
   else if (a === 'ir-avisos'){ S.tab = 'avisos'; S.tabElegida = true; pintar(); window.scrollTo({top:0}); }
+  else if (a === 'ir-equipo'){ S.tab = 'equipo'; S.tabElegida = true; pintar(); window.scrollTo({top:0}); }
   else if (a === 'con-filtro'){ S.conFiltro = b.dataset.f; pintar(); }
   else if (a === 'contrato-hoja') await hojaContrato(b.dataset.id);
   else if (a === 'contrato-firmar') dlgFirmaContrato(b.dataset.id);
@@ -12285,6 +12669,8 @@ raiz.addEventListener('click', async e => {
       toast(esEmp ? 'Datos de la empresa guardados.' : 'Límites guardados.');
     } catch(err){ fallo(err); }
   }
+  else if (a === 'copia-datos'){ b.disabled = true; await copiaSeguridad(false); b.disabled = false; }
+  else if (a === 'copia-completa'){ b.disabled = true; await copiaSeguridad(true); b.disabled = false; }
   /* Apartado 16: corregir una fecha normativa sin tocar el código */
   else if (a === 'guardar-reglas'){
     const o = Object.assign({}, (S.ajustes||{}).reglas_fecha || {});
