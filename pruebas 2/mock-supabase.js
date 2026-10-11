@@ -1,0 +1,334 @@
+/* ================================================================
+   Simulador de Supabase para el banco de pruebas de ARIZA SAT.
+   Reconstruido el 10-10-2026 después de que el entorno se reciclara.
+
+   No pretende imitar Postgres: imita exactamente lo que la aplicación
+   le pide. Una base de datos en memoria por pestaña, un constructor de
+   consultas con los métodos que la aplicación encadena, almacenamiento
+   de ficheros en memoria y los procedimientos (RPC) que la aplicación
+   llama de verdad.
+   ================================================================ */
+
+let n = 0;
+const id = () => 'id-' + (++n).toString().padStart(6, '0');
+const ahora = () => new Date().toISOString();
+
+/* ---- Semilla ---- */
+function semilla(){
+  const cliente = {
+    id: id(), nombre: 'Comunidad Las Flores', nif: 'H11223344',
+    direccion: 'Avenida de la Bajamar 14, 11500 El Puerto de Santa María',
+    telefono: '600 000 001', email: 'presidencia@lasflores.es',
+    contrato: false, archivado: false, creado: ahora(),
+  };
+  const cliente2 = {
+    id: id(), nombre: 'Talleres Guadalete', nif: 'B11556677',
+    direccion: 'Polígono El Palmar, nave 7, 11500 El Puerto de Santa María',
+    telefono: '600 000 002', email: 'taller@guadalete.es',
+    contrato: true, archivado: false, creado: ahora(),
+  };
+  const puerta = {
+    id: id(), codigo: 'AR-0001', cliente_id: cliente.id, cliente: cliente.nombre,
+    direccion: cliente.direccion, ubicacion: 'Rampa de garaje',
+    tipo: 'Corredera', marca: 'Erreka', modelo: 'Rino 4',
+    estado: 'ok', token: 'tok-0001', creado: ahora(),
+  };
+  const puerta2 = {
+    id: id(), codigo: 'AR-0002', cliente_id: cliente2.id, cliente: cliente2.nombre,
+    direccion: cliente2.direccion, ubicacion: 'Muelle 2',
+    tipo: 'Seccional', marca: 'Hörmann', modelo: 'SPU F42',
+    estado: 'ok', token: 'tok-0002', creado: ahora(),
+  };
+  const perfil = {
+    id: 'usuario-admin', nombre: 'David Ariza Arana',
+    rol: 'admin', activo: true, creado: ahora(),
+  };
+  return {
+    clientes: [cliente, cliente2],
+    puertas: [puerta, puerta2],
+    perfiles: [perfil],
+    etiquetas: [
+      { codigo:'AR-0001', token:'tok-0001', creado: ahora() },
+      { codigo:'AR-0002', token:'tok-0002', creado: ahora() },
+      { codigo:'AR-0003', token:'tok-0003', creado: ahora() },
+    ],
+    avisos: [],
+    ajustes: [],
+    contratos: [],
+    contrato_puertas: [],
+    tarifas: [{
+      id: id(), hora_tecnico: 38, hora_equipo: 62, desplazamiento: 25,
+      minimo_horas: 1, margen_material: 35, kilometro: 0.45,
+    }],
+    catalogo: [],
+    valoraciones: [],
+    expedientes: [],
+    expediente_fotos: [],
+    expediente_docs: [],
+    materiales: [],
+    documentos: [],
+    fotos: [],
+    articulos: [],
+    movimientos: [],
+    revisiones: [],
+    partes: [],
+    lineas_parte: [],
+    historico: [],
+  };
+}
+
+const DB = semilla();
+
+/* Los ajustes de arranque llegan desde la prueba, como en el entorno real
+   llegan de la tabla «ajustes». */
+if (typeof window !== 'undefined' && window.__AJUSTES)
+  Object.entries(window.__AJUSTES).forEach(([clave, valor]) =>
+    DB.ajustes.push({ clave, valor, actualizado: ahora() }));
+
+/* Cada prueba puede retocar la semilla antes de que arranque la aplicación. */
+if (typeof window !== 'undefined' && typeof window.__PARCHE === 'function')
+  window.__PARCHE(DB);
+
+if (typeof window !== 'undefined') window.__DB = DB;
+
+/* ---- Utilidades ---- */
+const clonar = x => (x === undefined || x === null) ? x : JSON.parse(JSON.stringify(x));
+const tabla = t => (DB[t] = DB[t] || []);
+
+/* Constructor de consultas. Es «thenable»: al esperarlo resuelve {data,error}. */
+class Consulta {
+  constructor(t){
+    this.t = t; this.op = 'select'; this.filtros = []; this.ord = null;
+    this.lim = null; this.payload = null; this.devolver = false;
+    this.uno = false; this.conflicto = null; this.contar = false;
+  }
+  /* --- operaciones --- */
+  select(cols, opciones){
+    if (this.op === 'select') this.cols = cols || '*';
+    else this.devolver = true;
+    if (opciones && opciones.count) this.contar = true;
+    return this;
+  }
+  insert(o){ this.op = 'insert'; this.payload = o; return this; }
+  update(o){ this.op = 'update'; this.payload = o; return this; }
+  upsert(o, opciones){
+    this.op = 'upsert'; this.payload = o;
+    this.conflicto = (opciones && opciones.onConflict) || 'id';
+    return this;
+  }
+  delete(){ this.op = 'delete'; return this; }
+  /* --- filtros --- */
+  eq(c, v){ this.filtros.push(x => String(x[c]) === String(v)); return this; }
+  neq(c, v){ this.filtros.push(x => String(x[c]) !== String(v)); return this; }
+  is(c, v){ this.filtros.push(x => (v === null ? (x[c] === null || x[c] === undefined) : x[c] === v)); return this; }
+  not(c, op, v){ this.filtros.push(x => !(op === 'is' ? (x[c] === null || x[c] === undefined) : String(x[c]) === String(v))); return this; }
+  in(c, arr){ this.filtros.push(x => arr.map(String).indexOf(String(x[c])) >= 0); return this; }
+  gte(c, v){ this.filtros.push(x => x[c] >= v); return this; }
+  lte(c, v){ this.filtros.push(x => x[c] <= v); return this; }
+  gt(c, v){ this.filtros.push(x => x[c] > v); return this; }
+  lt(c, v){ this.filtros.push(x => x[c] < v); return this; }
+  like(c, v){ const r = new RegExp(String(v).replace(/%/g,'.*'), 'i'); this.filtros.push(x => r.test(x[c]||'')); return this; }
+  ilike(c, v){ return this.like(c, v); }
+  or(expr){
+    /* Solo lo que usa la aplicación: "campo.eq.valor,campo2.eq.valor" */
+    const partes = String(expr).split(',').map(p => p.split('.'));
+    this.filtros.push(x => partes.some(([c, op, v]) =>
+      op === 'eq' ? String(x[c]) === String(v) : op === 'is' ? (x[c] === null || x[c] === undefined) : false));
+    return this;
+  }
+  order(c, o){ this.ord = { c, asc: !(o && o.ascending === false) }; return this; }
+  limit(k){ this.lim = k; return this; }
+  range(a, b){ this.desde = a; this.lim = (b - a + 1); return this; }
+  single(){ this.uno = 'estricto'; return this; }
+  maybeSingle(){ this.uno = 'quizas'; return this; }
+  /* --- ejecución --- */
+  _filas(){
+    let f = tabla(this.t);
+    this.filtros.forEach(fn => { f = f.filter(fn); });
+    return f;
+  }
+  _ejecutar(){
+    const t = tabla(this.t);
+    let data = null;
+    try {
+      if (this.op === 'select'){
+        let f = this._filas().slice();
+        if (this.ord) f.sort((a, b) => {
+          const x = a[this.ord.c], y = b[this.ord.c];
+          const r = (x === y) ? 0 : ((x === null || x === undefined) ? -1 :
+                     (y === null || y === undefined) ? 1 : (x > y ? 1 : -1));
+          return this.ord.asc ? r : -r;
+        });
+        if (this.desde) f = f.slice(this.desde);
+        if (this.lim !== null) f = f.slice(0, this.lim);
+        data = clonar(f);
+      }
+      else if (this.op === 'insert'){
+        const arr = Array.isArray(this.payload) ? this.payload : [this.payload];
+        const nuevas = arr.map(o => Object.assign({ id: id(), creado: ahora() }, clonar(o)));
+        nuevas.forEach(x => t.push(x));
+        data = clonar(nuevas);
+      }
+      else if (this.op === 'update'){
+        const f = this._filas();
+        f.forEach(x => Object.assign(x, clonar(this.payload)));
+        data = clonar(f);
+      }
+      else if (this.op === 'upsert'){
+        const arr = Array.isArray(this.payload) ? this.payload : [this.payload];
+        const claves = String(this.conflicto).split(',').map(s => s.trim());
+        const hechas = [];
+        arr.forEach(o => {
+          const ya = t.find(x => claves.every(k => String(x[k]) === String(o[k])));
+          if (ya){ Object.assign(ya, clonar(o)); hechas.push(ya); }
+          else { const nueva = Object.assign({ id: id(), creado: ahora() }, clonar(o));
+                 t.push(nueva); hechas.push(nueva); }
+        });
+        data = clonar(hechas);
+      }
+      else if (this.op === 'delete'){
+        const f = this._filas();
+        f.forEach(x => { const i = t.indexOf(x); if (i >= 0) t.splice(i, 1); });
+        data = clonar(f);
+      }
+    } catch(err){
+      return { data:null, error:{ message: err.message } };
+    }
+    if (this.uno){
+      const uno = Array.isArray(data) ? (data[0] || null) : data;
+      if (this.uno === 'estricto' && !uno)
+        return { data:null, error:{ message:'No se ha encontrado la fila' } };
+      return { data: uno, error:null, count: Array.isArray(data) ? data.length : (data?1:0) };
+    }
+    if (this.op !== 'select' && !this.devolver) return { data:null, error:null };
+    return { data, error:null, count: Array.isArray(data) ? data.length : 0 };
+  }
+  then(resolver, rechazar){
+    try { return Promise.resolve(this._ejecutar()).then(resolver, rechazar); }
+    catch(err){ return Promise.resolve({ data:null, error:{ message:err.message } }).then(resolver); }
+  }
+  catch(fn){ return this.then(x => x).catch(fn); }
+  finally(fn){ return this.then(x => x).finally(fn); }
+}
+
+/* ---- Almacenamiento de ficheros ---- */
+const FICHEROS = new Map();   // bucket/ruta -> { blob, tipo }
+const PNG_VACIO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ'+
+                  'AAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==';
+function almacen(bucket){
+  return {
+    async upload(ruta, blob, opciones){
+      FICHEROS.set(bucket + '/' + ruta, { blob, tipo: (opciones||{}).contentType || '' });
+      return { data:{ path: ruta }, error:null };
+    },
+    async remove(rutas){
+      (rutas||[]).forEach(r => FICHEROS.delete(bucket + '/' + r));
+      return { data:[], error:null };
+    },
+    async download(ruta){
+      const x = FICHEROS.get(bucket + '/' + ruta);
+      return x ? { data: x.blob, error:null }
+               : { data:null, error:{ message:'No existe el fichero' } };
+    },
+    async createSignedUrl(ruta){
+      const x = FICHEROS.get(bucket + '/' + ruta);
+      if (!x) return { data:null, error:{ message:'No existe el fichero' } };
+      let url = PNG_VACIO;
+      try { if (x.blob instanceof Blob) url = URL.createObjectURL(x.blob); } catch(_){}
+      return { data:{ signedUrl: url }, error:null };
+    },
+    async createSignedUrls(rutas){
+      const out = [];
+      for (const r of (rutas||[])){
+        const u = await this.createSignedUrl(r);
+        out.push(u.data ? { path:r, signedUrl:u.data.signedUrl } : { path:r, error:'no existe' });
+      }
+      return { data: out, error:null };
+    },
+    getPublicUrl(ruta){ return { data:{ publicUrl: 'blob:'+bucket+'/'+ruta } }; },
+  };
+}
+
+/* ---- Procedimientos ---- */
+const RPC = {
+  crear_expediente({ p_puerta, p_situacion, p_familia, p_aviso }){
+    const pu = DB.puertas.find(x => String(x.id) === String(p_puerta));
+    if (!pu) return { ok:false, motivo:'sin_puerta' };
+    const nro = DB.expedientes.length + 1;
+    const referencia = 'EXP-2026-' + String(nro).padStart(4, '0');
+    const fila = {
+      id: id(), referencia, puerta_id: pu.id, cliente_id: pu.cliente_id,
+      aviso_id: p_aviso || null, situacion: p_situacion || '', familia: p_familia || '',
+      estado: 'borrador', datos: {}, fecha_puesta_servicio: null,
+      autor: 'David Ariza Arana', creado: ahora(), actualizado: ahora(),
+    };
+    DB.expedientes.push(fila);
+    return { ok:true, id: fila.id, referencia };
+  },
+  emitir_expediente({ p_exp, p_firmante, p_cargo }){
+    if (!p_firmante) return { ok:false, motivo:'sin_firmante' };
+    const e = DB.expedientes.find(x => String(x.id) === String(p_exp));
+    if (!e) return { ok:false, motivo:'sin_expediente' };
+    e.estado = 'emitido';
+    e.firmante = p_firmante;
+    e.firmante_cargo = p_cargo || '';
+    e.fecha_emision = ahora().slice(0, 10);
+    e.actualizado = ahora();
+    return { ok:true, id: e.id, referencia: e.referencia };
+  },
+  siguiente_contrato(){ return 'CT-2026-' + String(DB.contratos.length + 1).padStart(3, '0'); },
+  generar_preventivas(){ return { ok:true, creadas:0 }; },
+  valorar_aviso(){ return { ok:true }; },
+  archivar_asistencia(){ return { ok:true }; },
+  borrar_asistencia({ p_aviso }){
+    DB.avisos = DB.avisos.filter(x => String(x.id) !== String(p_aviso));
+    return { ok:true };
+  },
+  reabrir_asistencia(){ return { ok:true }; },
+  duplicar_asistencia(){ return { ok:true }; },
+  anular_asistencia(){ return { ok:true }; },
+  archivar_cliente(){ return { ok:true }; },
+  borrar_cliente({ p_cliente }){
+    DB.clientes = DB.clientes.filter(x => String(x.id) !== String(p_cliente));
+    return { ok:true };
+  },
+  enviar_contrato(){ return { ok:true }; },
+  contrato_publico(){ return { ok:false, motivo:'sin_token' }; },
+  aviso_publico(){ return { ok:false, motivo:'sin_token' }; },
+  ficha_publica({ p_codigo }){
+    const pu = DB.puertas.find(x => x.codigo === p_codigo);
+    if (!pu) return { ok:false, motivo:'sin_puerta' };
+    return { ok:true, puerta: clonar(pu) };
+  },
+};
+
+/* ---- Cliente ---- */
+export function createClient(){
+  const sesion = {
+    user: { id:'usuario-admin', email:'arizapuertasautomaticas@gmail.com' },
+    access_token: 'prueba',
+  };
+  return {
+    from: t => new Consulta(t),
+    rpc: async (nombre, args) => {
+      const fn = RPC[nombre];
+      if (!fn) return { data:null, error:{ message:'Procedimiento no simulado: '+nombre } };
+      try { return { data: fn(args || {}), error:null }; }
+      catch(err){ return { data:null, error:{ message:err.message } }; }
+    },
+    auth: {
+      async getSession(){ return { data:{ session: sesion }, error:null }; },
+      async getUser(){ return { data:{ user: sesion.user }, error:null }; },
+      onAuthStateChange(){ return { data:{ subscription:{ unsubscribe(){} } } }; },
+      async signInWithPassword(){ return { data:{ session: sesion }, error:null }; },
+      async signOut(){ return { error:null }; },
+      async resetPasswordForEmail(){ return { data:{}, error:null }; },
+      async updateUser(){ return { data:{ user: sesion.user }, error:null }; },
+    },
+    storage: { from: almacen },
+    functions: { invoke: async () => ({ data:{ ok:true }, error:null }) },
+    channel(){ return { on(){ return this; }, subscribe(){ return this; }, unsubscribe(){} }; },
+    removeChannel(){},
+  };
+}
+export default { createClient };
