@@ -4319,6 +4319,7 @@ function expSecciones(e){
   if (EXP_ES_FABRICANTE(e.situacion) && regimenDe(e).ddp) s.push(['prestaciones', 'Prestaciones declaradas']);
   s.push(['docs', 'Documentación de fabricantes']);
   s.push(['riesgos', e.situacion === 'adecuacion' ? 'Riesgos y deficiencias' : 'Riesgos residuales']);
+  s.push(['mantenimiento', 'Mantenimiento']);
   s.push(['entrega', 'Entrega y firma']);
   return s;
 }
@@ -4557,6 +4558,55 @@ function validarExpediente(e){
     }
   }
 
+  /* --- Apartados 17, 24 y 25: destino, entrega y firma --- */
+  {
+    const est = estadoEntregas(e);
+    /* Un documento interno marcado como entregado es un error de concepto: el
+       expediente técnico no se entrega. */
+    est.marcados.filter(k => destinoDe(k) === 'interno').forEach(k =>
+      A('Entrega', 'El documento «'+nombreDoc(k)+'» figura entre lo que se entrega al titular, '+
+        'y es documentación interna: se conserva y se presenta a las autoridades si lo '+
+        'requieren, pero no se entrega.'));
+    if (est.sinRegistrar.length)
+      A('Entrega', est.sinRegistrar.length+' documento(s) marcados como que procede entregar sin '+
+        'entrega registrada. Hasta que se registre, en los documentos consta GENERADO y NO '+
+        'CONSTA ENTREGADO.');
+    est.incompletos.forEach(r =>
+      B('Entrega', 'El registro de entrega número '+r.n+' no tiene '+
+        [!String(r.receptor||'').trim() && 'nombre legible de quien recibe',
+         !String(r.dni||'').trim() && 'DNI'].filter(Boolean).join(' ni ')+
+        '. Un acuse de recibo sin esos datos no acredita a quién se entregó.'));
+    /* Apartado 25: firmar no cierra nada. Si se asume la firma con puntos
+       abiertos, se avisa de que siguen abiertos. */
+    {
+      const pend = pendientesAlFirmar(e);
+      if (pend.length && (d.entrega||{}).firmante_ok === 'si')
+        A('Firma', 'Se ha asumido la firma de la documentación con '+pend.length+' punto(s) '+
+          'pendientes. La firma acredita la recepción del documento tal como está: no convierte '+
+          'en conforme ninguna comprobación pendiente ni subsana ninguna deficiencia.');
+    }
+    /* El plazo de conservación depende del marco, y el marco de la fecha. */
+    {
+      const cons = conservacionExpediente(e);
+      if (fab && cons.aproximado)
+        A('Expediente', 'No consta la fecha de fabricación de la puerta, y con la Directiva '+
+          '2006/42/CE los diez años de conservación del expediente técnico cuentan desde esa '+
+          'fecha. El plazo que se imprime está calculado desde la puesta en servicio y puede '+
+          'ser más largo del que corresponde.');
+    }
+  }
+
+  /* --- Apartado 21: periodicidad de mantenimiento --- */
+  {
+    const per = periodicidadMantenimiento(e);
+    per.falta.forEach(t => A('Mantenimiento', 'Falta '+t+'.'));
+    const m = datosMantenimiento(e);
+    if (m.acordada_meses && per.meses && +m.acordada_meses > per.meses)
+      A('Mantenimiento', 'La periodicidad acordada con el titular ('+
+        nombrePeriodo(+m.acordada_meses)+') es más larga que la que corresponde ('+
+        nombrePeriodo(per.meses)+'). Queda recogido en el documento.');
+  }
+
   /* --- Documentación --- */
   {
     const marcados = ['ddp_fab','dc_fab','manual'].filter(k => ((d.entrega||{}).docs||{})[k] === 'si');
@@ -4723,6 +4773,444 @@ function nuevaVersion(e, motivo, estadoNuevo, tecnico){
   return vs;
 }
 
+/* ===================================================================
+   APARTADO 17: EXPEDIENTE TÉCNICO INTERNO vs DOCUMENTACIÓN DE CLIENTE
+   ===================================================================
+   No es lo mismo lo que hay que TENER que lo que hay que ENTREGAR, y
+   mezclarlo tiene dos consecuencias malas: se entrega al cliente papel que
+   no le corresponde, y se da por entregado lo que en realidad solo hay que
+   conservar.
+
+   Lo verificado en fuente oficial (consultado el 11-10-2026):
+
+   · El expediente técnico NO se entrega. Solo tiene que estar a disposición
+     de las autoridades, y se presenta ante requerimiento motivado.
+       - Directiva 2006/42/CE, anexo VII parte A, punto 2: a disposición de
+         las autoridades competentes al menos DIEZ AÑOS desde la fecha de
+         fabricación de la máquina o, en fabricación en serie, de la última
+         unidad producida.
+       - Punto 3 del mismo anexo: no presentarlo ante un requerimiento
+         motivado puede ser por sí solo motivo suficiente para dudar de la
+         conformidad de la máquina.
+       - Reglamento (UE) 2023/1230, artículo 10.3: también diez años, pero
+         contados desde la INTRODUCCIÓN EN EL MERCADO O LA PUESTA EN
+         SERVICIO. Cambia el día inicial, no el plazo.
+   · Lo que SÍ acompaña a la máquina:
+       - Las instrucciones de uso: Directiva, anexo I, punto 1.7.4
+         («toda máquina deberá ir acompañada de instrucciones») y
+         Reglamento, artículo 10.7, con el anexo III.
+       - La declaración de conformidad: Directiva, anexo II; Reglamento,
+         artículo 10.8, con el anexo V parte A.
+   · Reglamento, artículo 10.7: las instrucciones pueden darse en formato
+     digital, pero si el usuario las pide en el momento de la compra hay que
+     facilitarlas en papel y gratis en el plazo máximo de un mes.
+
+   Pendiente de que David lo contraste con el texto del Real Decreto
+   1644/2008: su anexo VII parte A es transposición literal del de la
+   Directiva, pero no se ha podido leer el anexo en el BOE. */
+const DESTINO_DOC = {
+  interno: {
+    nombre: 'Expediente técnico interno',
+    entrega: false,
+    marca: 'EXPEDIENTE TÉCNICO INTERNO · NO SE ENTREGA AL CLIENTE',
+    nota: 'Queda a disposición de las autoridades competentes, que pueden requerirlo de forma '+
+          'motivada. No forma parte de lo que se entrega al titular.',
+  },
+  cliente: {
+    nombre: 'Documentación para el titular',
+    entrega: true,
+    marca: 'DOCUMENTACIÓN PARA EL TITULAR',
+    nota: 'Acompaña a la puerta y se entrega. La entrega se registra con receptor, nombre '+
+          'legible y DNI.',
+  },
+  puerta: {
+    nombre: 'Va colocado en la puerta',
+    entrega: true,
+    marca: 'COLOCADO EN LA PUERTA',
+    nota: 'No es papel que se entregue en mano: va fijado a la puerta y legible.',
+  },
+};
+/* clave, nombre, destino, por qué. El orden es el del expediente. */
+/* Las claves son las que ya usa la pantalla de entrega y las que están guardadas en
+   los expedientes anteriores: no se renombran, para no perder lo ya marcado. */
+const DOCS_EXPEDIENTE = [
+  ['expediente',         'Expediente técnico de construcción', 'interno',
+   'Directiva 2006/42/CE, anexo VII parte A. Se conserva diez años. No se entrega.'],
+  ['eval_riesgos',       'Evaluación de riesgos, cálculos y esquemas', 'interno',
+   'Forma parte del expediente técnico.'],
+  ['ensayo',             'Registro del ensayo de fuerzas', 'interno',
+   'Forma parte del expediente técnico. Se puede entregar copia si el titular la pide, '+
+   'pero no es obligatorio entregarla.'],
+  ['dte',                'Documentación Técnica Específica', 'interno',
+   'Artículos 37 y 38 del Reglamento (UE) 305/2011. Se archiva, no se entrega.'],
+  ['dc',                 'Declaración de conformidad', 'cliente',
+   'Directiva 2006/42/CE, anexo II. Acompaña a la máquina hasta su destino final.'],
+  ['ddp',                'Declaración de prestaciones', 'cliente',
+   'Reglamento (UE) 305/2011. Se facilita con el producto.'],
+  ['manual',             'Manual de instrucciones de uso y mantenimiento', 'cliente',
+   'Directiva 2006/42/CE, anexo I punto 1.7.4. Toda máquina va acompañada de instrucciones.'],
+  ['libro',              'Libro de mantenimiento', 'cliente',
+   'Se entrega con la puerta y se queda en la instalación.'],
+  ['marcado',            'Marcado CE y placa de características', 'puerta',
+   'Va fijado a la puerta, visible y legible.'],
+  ['ddp_fab',            'Declaración de prestaciones del fabricante', 'cliente',
+   'No es nuestra: la recopilamos y la transmitimos al titular.'],
+  ['dc_fab',             'Declaración de conformidad del fabricante', 'cliente',
+   'No es nuestra: la recopilamos y la transmitimos al titular.'],
+  ['cert_inst',          'Certificado de instalación', 'cliente',
+   'Lo firmamos nosotros como instaladores. Acredita cómo se ha montado, no la '+
+   'conformidad del producto.'],
+  ['informe',            'Informe técnico de situación y deficiencias', 'cliente',
+   'Informa al titular del estado encontrado.'],
+  ['propuesta',          'Propuesta de actuaciones', 'cliente',
+   'Define las actuaciones necesarias para la adecuación.'],
+  ['acta',               'Acta de entrega y recepción', 'cliente',
+   'Acredita qué se entregó, a quién y cuándo. Una copia se archiva.'],
+];
+const docsPorDestino = dest => DOCS_EXPEDIENTE.filter(x => x[2] === dest);
+const destinoDe = clave => (DOCS_EXPEDIENTE.find(x => x[0] === clave) || [])[2] || '';
+const nombreDoc = clave => (DOCS_EXPEDIENTE.find(x => x[0] === clave) || [])[1] || clave;
+
+/* Plazo de conservación del expediente, con el día inicial que corresponde al
+   marco legal de la fecha de puesta en servicio. */
+const CONSERVACION_EXPEDIENTE = {
+  directiva: {
+    anios: 10,
+    desde: 'la fecha de fabricación de la máquina o, en fabricación en serie, de la última '+
+           'unidad producida',
+    referencia: 'Directiva 2006/42/CE, anexo VII parte A, punto 2',
+    campo: 'fabricacion',
+  },
+  reglamento: {
+    anios: 10,
+    desde: 'la introducción en el mercado o la puesta en servicio',
+    referencia: 'Reglamento (UE) 2023/1230, artículo 10, apartado 3',
+    campo: 'servicio',
+  },
+};
+function conservacionExpediente(e){
+  const marco = marcoDeFecha((e||{}).fecha_puesta_servicio);
+  const c = CONSERVACION_EXPEDIENTE[marco];
+  if (!c) return { pendiente:true,
+    motivo:'Sin fecha de puesta en servicio no se sabe qué marco legal se aplica, y de él '+
+           'depende desde cuándo cuentan los diez años de conservación.' };
+  const d = (e||{}).datos || {};
+  const base = c.campo === 'fabricacion'
+    ? ((d.puerta||{}).fecha_fabricacion || (e||{}).fecha_puesta_servicio)
+    : (e||{}).fecha_puesta_servicio;
+  const propia = c.campo === 'fabricacion' && !!(d.puerta||{}).fecha_fabricacion;
+  let hasta = '';
+  if (base){
+    /* En UTC a propósito: construyendo la fecha en hora local y pasándola después
+       por toISOString se perdía un día en España, que va una o dos horas por
+       delante de UTC. El plazo se imprime en los documentos, así que no puede
+       bailar un día. */
+    const [y, mm, dd] = base.split('-').map(Number);
+    hasta = new Date(Date.UTC(y + c.anios, mm - 1, dd)).toISOString().slice(0, 10);
+  }
+  return { anios:c.anios, desde:c.desde, referencia:c.referencia, base, hasta,
+           /* Si no consta fecha de fabricación propia se usa la de puesta en servicio,
+              y hay que decirlo: no es el día inicial que pide la norma. */
+           aproximado: c.campo === 'fabricacion' && !propia };
+}
+
+/* ===================================================================
+   APARTADO 21: MANTENIMIENTO SEGÚN USO, CICLOS Y ENTORNO
+   ===================================================================
+   Una puerta de un garaje de ocho vecinos y una de un muelle de carga con
+   trescientos ciclos al día no se mantienen igual, y poner a las dos «revisión
+   anual» es una respuesta inventada.
+
+   Jerarquía, verificada en fuente oficial (consultado el 11-10-2026):
+
+   1. MANDA EL FABRICANTE. Real Decreto 1215/1997, artículo 3.5: el
+      mantenimiento «se realizará teniendo en cuenta las instrucciones del
+      fabricante o, en su defecto, las características de estos equipos». El
+      Real Decreto no fija plazos. Y la Directiva 2006/42/CE, anexo I punto
+      1.7.4.2.r), obliga al fabricante a describir en el manual las
+      operaciones de mantenimiento y las medidas preventivas.
+   2. EN SU DEFECTO, recomendación de norma voluntaria. No existe en España
+      ninguna norma estatal que fije una periodicidad obligatoria de
+      mantenimiento de puertas industriales, comerciales o de garaje: no hay
+      un reglamento de seguridad específico equivalente al de ascensores.
+   3. EL ENTORNO lo ajusta, y ese ajuste es criterio de esta empresa, no de
+      ninguna norma. Va marcado como tal.
+
+   ATENCIÓN, igual que con los perfiles de fuerza: las periodicidades de la
+   UNE 85635:2012 que se recogen aquí NO vienen del texto de la norma, que es
+   de pago, sino de la ficha divulgativa FD-138 del Instituto de Seguridad y
+   Salud Laboral de la Región de Murcia, que las reproduce. Por eso nacen con
+   validado:false y la aplicación las presenta como recomendación a contrastar,
+   no como requisito. */
+const RECOM_PERIODICIDAD = {
+  fuente: 'ficha divulgativa FD-138 del Instituto de Seguridad y Salud Laboral de la Región '+
+          'de Murcia, que reproduce las periodicidades de la UNE 85635:2012',
+  norma: 'UNE 85635:2012, «Puertas industriales, comerciales, de garaje y portones ya '+
+         'instalados o de nueva instalación. Requisitos específicos de instalación, uso, '+
+         'mantenimiento y modificación»',
+  advertencia: 'Son periodicidades mínimas recomendadas por una norma de aplicación '+
+               'voluntaria, subsidiarias de lo que diga el fabricante. No son un plazo legal.',
+  validado: false,          // no contrastado con el texto de la norma
+  verificado: '2026-10-11',
+  reglas: [
+    { clave:'industrial_rapida', meses:4,  texto:'Puerta industrial rápida',
+      cuando:'La puerta es industrial de apertura rápida' },
+    { clave:'industrial',        meses:6,  texto:'Puerta industrial',
+      cuando:'La puerta es industrial' },
+    { clave:'comercial_mucho',   meses:4,  texto:'Puerta comercial con más de 10 ciclos al día',
+      cuando:'Uso comercial y más de diez ciclos diarios' },
+    { clave:'comercial',         meses:6,  texto:'Puerta comercial con 10 ciclos al día o menos',
+      cuando:'Uso comercial y diez ciclos diarios o menos' },
+    { clave:'enrollable',        meses:12, texto:'Cierre enrollable',
+      cuando:'Es un cierre enrollable' },
+  ],
+};
+/* De dónde sale el número de ciclos. Un contador leído no vale lo mismo que
+   una estimación de oído, y el documento tiene que decir cuál es. */
+const ORIGEN_CICLOS = {
+  contador:    'Leído en el contador del cuadro de maniobra',
+  registro:    'Calculado a partir de lecturas anteriores del contador',
+  titular:     'Estimación facilitada por el titular',
+  tecnico:     'Estimación del técnico a partir de lo observado',
+};
+/* Condiciones del entorno que acortan la periodicidad. El ajuste es criterio de
+   la empresa: se declara como tal y se puede discutir. */
+const ENTORNO_PUERTA = [
+  ['marino',   'Ambiente marino o salino',            'Corrosión acelerada de guías, herrajes y tornillería'],
+  ['polvo',    'Polvo, serrín, harina o áridos',      'Ensuciamiento de fotocélulas, guías y finales de carrera'],
+  ['quimico',  'Ambiente químico o corrosivo',        'Ataque a cableado, contactos y partes metálicas'],
+  ['lavado',   'Lavado a presión en la zona',         'Entrada de agua en cuadro, motor y sensores'],
+  ['frio',     'Cámara frigorífica o frío extremo',   'Condensación, hielo y endurecimiento de juntas'],
+  ['exterior', 'Expuesta a la intemperie',            'Viento, lluvia y sol sobre hoja y automatismo'],
+  ['trafico',  'Tráfico de carretillas o vehículos',  'Golpes en hoja, guías y protecciones'],
+];
+/* Ajuste por entorno: cada condición marcada acorta un tramo, con un suelo de
+   tres meses para no acabar en un número absurdo. */
+const TRAMOS_PERIODICIDAD = [12, 6, 4, 3];
+
+function datosMantenimiento(e){
+  const d = (e||{}).datos || {};
+  return Object.assign({ ent:{} }, d.mant || {});
+}
+/* Devuelve la periodicidad, de dónde sale y qué le falta. NUNCA devuelve un
+   número si no puede justificarlo. */
+function periodicidadMantenimiento(e){
+  const m  = datosMantenimiento(e);
+  const d  = (e||{}).datos || {};
+  const pu = d.puerta || {};
+  const out = { origen:'', meses:null, texto:'', motivos:[], falta:[], ajustes:[],
+                base:null, entorno:[] };
+
+  /* 1. El manual del fabricante manda */
+  if (m.fab_consta === 'si'){
+    const meses = +m.fab_meses || 0;
+    if (!meses){
+      out.origen = 'fabricante';
+      out.falta.push('la periodicidad que fija el manual del fabricante, en meses');
+      out.texto = 'PENDIENTE';
+      return out;
+    }
+    out.origen = 'fabricante';
+    out.meses  = meses;
+    out.base   = meses;
+    out.texto  = nombrePeriodo(meses);
+    out.motivos.push('La fija el manual del fabricante'+
+      (m.fab_donde ? ', en '+m.fab_donde : '')+'. Real Decreto 1215/1997, artículo 3.5: el '+
+      'mantenimiento se realiza teniendo en cuenta las instrucciones del fabricante.');
+    if (!m.fab_donde) out.falta.push('dónde consta esa periodicidad en el manual');
+    return out;
+  }
+
+  /* 2. Sin instrucciones del fabricante: recomendación subsidiaria */
+  if (m.fab_consta !== 'no'){
+    out.origen = 'sin_datos';
+    out.falta.push('si el manual del fabricante fija una periodicidad de mantenimiento');
+    out.texto = 'PENDIENTE';
+    return out;
+  }
+
+  const ciclos = m.ciclos_dia === '' || m.ciclos_dia === undefined || m.ciclos_dia === null
+    ? null : +m.ciclos_dia;
+  const uso = (d.obra||{}).uso_edificio || '';
+  const tipo = String(pu.tipo || '');
+  const esEnrollable = /enrollable/i.test(tipo);
+  const esRapida     = m.rapida === 'si';
+  const esComercial  = /Comercio|Hotel|Oficinas|Pública/i.test(uso);
+  const esIndustrial = (e||{}).familia === 'industrial' && /Industria/i.test(uso);
+
+  let regla = null;
+  if (esEnrollable)       regla = RECOM_PERIODICIDAD.reglas.find(r => r.clave === 'enrollable');
+  else if (esRapida)      regla = RECOM_PERIODICIDAD.reglas.find(r => r.clave === 'industrial_rapida');
+  else if (esIndustrial)  regla = RECOM_PERIODICIDAD.reglas.find(r => r.clave === 'industrial');
+  else if (esComercial){
+    if (ciclos === null){
+      out.origen = 'sin_datos';
+      out.falta.push('cuántos ciclos al día hace la puerta: de eso depende la periodicidad '+
+        'recomendada en uso comercial');
+      out.texto = 'PENDIENTE';
+      return out;
+    }
+    regla = RECOM_PERIODICIDAD.reglas.find(r =>
+      r.clave === (ciclos > 10 ? 'comercial_mucho' : 'comercial'));
+  }
+
+  if (!regla){
+    out.origen = 'sin_recomendacion';
+    out.motivos.push('Ni el fabricante fija periodicidad ni esta puerta encaja en ninguno de '+
+      'los casos recogidos en la recomendación: hay que decidirla a mano y dejar escrito con '+
+      'qué criterio.');
+    out.falta.push('la periodicidad que propone la empresa, decidida a mano');
+    if (m.propuesta_meses){
+      out.meses = +m.propuesta_meses;
+      out.base  = +m.propuesta_meses;
+      out.texto = nombrePeriodo(out.meses);
+      out.origen = 'empresa';
+      out.falta = [];
+      out.motivos.push('Decidida por la empresa'+
+        (m.propuesta_motivo ? ': '+m.propuesta_motivo : ' sin motivo escrito'));
+      if (!m.propuesta_motivo) out.falta.push('con qué criterio se ha decidido esa periodicidad');
+    }
+  } else {
+    out.origen = 'recomendacion';
+    out.base   = regla.meses;
+    out.meses  = regla.meses;
+    out.regla  = regla;
+    out.motivos.push('Recomendación para «'+regla.texto+'»: '+nombrePeriodo(regla.meses)+'. '+
+      RECOM_PERIODICIDAD.advertencia);
+    if (ciclos !== null && !m.ciclos_origen)
+      out.falta.push('de dónde sale el número de ciclos al día');
+  }
+
+  /* 3. Ajuste por entorno, criterio de la empresa */
+  out.entorno = ENTORNO_PUERTA.filter(([k]) => (m.ent||{})[k] === 'si');
+  if (out.meses && out.entorno.length){
+    let i = TRAMOS_PERIODICIDAD.indexOf(out.meses);
+    if (i < 0){ /* una periodicidad fuera de los tramos no se toca */ }
+    else {
+      const j = Math.min(TRAMOS_PERIODICIDAD.length - 1, i + out.entorno.length);
+      if (j !== i){
+        out.ajustes.push('Se acorta de '+nombrePeriodo(TRAMOS_PERIODICIDAD[i])+' a '+
+          nombrePeriodo(TRAMOS_PERIODICIDAD[j])+' por '+out.entorno.length+
+          ' condición(es) del entorno: '+out.entorno.map(x => x[1].toLowerCase()).join(', ')+
+          '. Este ajuste es criterio de esta empresa, no de ninguna norma.');
+        out.meses = TRAMOS_PERIODICIDAD[j];
+      }
+    }
+    out.texto = nombrePeriodo(out.meses);
+  } else if (out.meses){
+    out.texto = nombrePeriodo(out.meses);
+  }
+  return out;
+}
+
+/* ===================================================================
+   APARTADOS 24 y 25: GENERADO NO ES ENTREGADO, Y FIRMAR NO ES CONFORMAR
+   ===================================================================
+   Un documento puede estar generado, impreso y archivado y no haberse
+   entregado a nadie. Son dos hechos distintos y se registran por separado.
+
+   Y la firma de quien recibe acredita UNA cosa: que recibió ese documento,
+   tal como estaba, en esa fecha. No convierte en conforme nada de lo que
+   estuviera pendiente. Por eso cada registro de entrega guarda la lista de
+   pendientes que había en el momento de firmar: así el acta dice qué se
+   entregó y qué quedaba abierto, y no se puede releer años después como si
+   la firma hubiera cerrado el expediente. */
+const MEDIOS_ENTREGA = {
+  mano:       'En mano, en la instalación',
+  email:      'Por correo electrónico',
+  mensajeria: 'Por mensajería o correo postal',
+  plataforma: 'Subido a una plataforma del cliente',
+  qr:         'Consultado por el QR de la puerta',
+};
+const RELACION_RECEPTOR = {
+  titular:        'El titular de la instalación',
+  representante:  'Representante legal del titular',
+  administrador:  'Administrador de la finca',
+  presidente:     'Presidente de la comunidad',
+  encargado:      'Encargado o responsable de mantenimiento',
+  empleado:       'Empleado del titular',
+  otro:           'Otra relación',
+};
+const AVISO_FIRMA_NO_CONVIERTE =
+  'La firma de este acta acredita únicamente la recepción de los documentos relacionados, '+
+  'en el estado en que se encuentran en la fecha indicada. No supone aceptación de que la '+
+  'instalación sea conforme, no convierte en conforme ninguna comprobación pendiente, no '+
+  'subsana ninguna deficiencia y no supone renuncia a las actuaciones correctoras '+
+  'relacionadas en el presente acta.';
+
+function entregasDe(e){
+  return (((e||{}).datos||{}).entregas) || [];
+}
+/* Lo que está abierto AHORA MISMO. Se guarda dentro del registro de entrega para
+   que el acta diga qué quedaba pendiente cuando se firmó. */
+function pendientesAlFirmar(e){
+  const d = (e||{}).datos || {};
+  const chk = EXP_COMPROBACIONES[(e||{}).familia] || [];
+  const kd = d.cumple || {};
+  const out = [];
+  const abiertas = chk.filter(([k]) => {
+    const ap = procede(APLICA_COMPROBACION, k, e);
+    if (ap && ap.no) return false;
+    return !acredita((kd[k]||{}).v);
+  });
+  chk.forEach(([k, texto]) => {
+    const ap = procede(APLICA_COMPROBACION, k, e);
+    if (ap && ap.no) return;
+    const v = (kd[k]||{}).v;
+    if (v === 'no' || v === 'deficiencia')
+      out.push({ clase:'deficiencia', texto:texto });
+  });
+  const sinResultado = abiertas.filter(([k]) => {
+    const v = (kd[k]||{}).v;
+    return v !== 'no' && v !== 'deficiencia';
+  });
+  sinResultado.forEach(([k, texto]) => out.push({ clase:'sin_resultado', texto:texto }));
+  const pel = peligrosDe(e);
+  if (pel){
+    const pd = d.peligro || {};
+    pel.lista.forEach(([pk, peligro]) => {
+      const x = pd[pk] || {};
+      if (x.v !== 'si' && x.v !== 'na')
+        out.push({ clase:'riesgo', texto:peligro });
+    });
+  }
+  const pea = evaluarPeatonal(e);
+  if (pea.aplica) pea.bloqueos.forEach(t => out.push({ clase:'peatonal', texto:t }));
+  const cfv = evaluarCortafuegos(e);
+  if (cfv.aplica) cfv.bloqueos.forEach(t => out.push({ clase:'cortafuegos', texto:t }));
+  return out;
+}
+const CLASE_PENDIENTE = {
+  deficiencia:  'Deficiencia detectada',
+  sin_resultado:'Comprobación sin resultado',
+  riesgo:       'Riesgo sin resolver',
+  peatonal:     'Requisito de puerta peatonal',
+  cortafuegos:  'Puerta resistente al fuego',
+};
+
+/* Estado de entrega de cada documento que procede entregar */
+function estadoEntregas(e){
+  const d = (e||{}).datos || {};
+  const marcados = Object.entries(((d.entrega||{}).docs)||{})
+    .filter(([, v]) => v === 'si').map(([k]) => k);
+  const regs = entregasDe(e);
+  const entregados = {};
+  regs.forEach(r => (r.docs||[]).forEach(k => { entregados[k] = r; }));
+  /* Ojo: «procede» a secas es una función global del validador. */
+  const entregables = marcados.filter(k => DESTINO_DOC[destinoDe(k)]
+    ? DESTINO_DOC[destinoDe(k)].entrega : true);
+  return {
+    marcados, regs, entregables,
+    /* Marcados como que procede entregar y sin registro de entrega */
+    sinRegistrar: entregables.filter(k => !entregados[k]),
+    entregados,
+    /* Registros incompletos: sin receptor o sin DNI no acreditan a quién se entregó */
+    incompletos: regs.filter(r => !String(r.receptor||'').trim() || !String(r.dni||'').trim()),
+    /* Registros firmados que llevaban pendientes encima */
+    conPendientes: regs.filter(r => (r.pendientes||[]).length),
+  };
+}
+
 function expPendientes(e){
   const falta = [];
   const d = e.datos || {};
@@ -4752,6 +5240,18 @@ function expPendientes(e){
         cfv.faltan.join(', ').toLowerCase());
     if (cfv.aplica && !((d.cf||{}).comp_sust))
       falta.push('contestar si se ha sustituido algún componente de la puerta resistente al fuego');
+  }
+
+  /* Mantenimiento y entrega (apartados 21 y 24) */
+  {
+    const per = periodicidadMantenimiento(e);
+    per.falta.forEach(t => falta.push(t+', en el paso «Mantenimiento»'));
+    const est = estadoEntregas(e);
+    if (est.sinRegistrar.length)
+      falta.push('registrar la entrega de '+est.sinRegistrar.length+' documento(s) marcados '+
+        'como que procede entregar');
+    est.incompletos.forEach(r =>
+      falta.push('el nombre legible y el DNI de quien recibió la entrega número '+r.n));
   }
 
   /* Segundo nivel del árbol de modificación */
@@ -4916,6 +5416,9 @@ function vistaExpediente(id){
        '<button class="btn sm plana" data-act="exp-libro-mant" data-id="'+e.id+'">Libro de mantenimiento</button>'+
        '<button class="btn sm plana" data-act="exp-informe" data-id="'+e.id+'">Informe de situación</button>'+
        '<button class="btn sm plana" data-act="exp-propuesta" data-id="'+e.id+'">Propuesta de actuaciones</button>'+
+       (entregasDe(e).length
+         ? '<button class="btn sm plana" data-act="exp-acta" data-v="'+
+           entregasDe(e).length+'" data-id="'+e.id+'">Acta de entrega</button>' : '')+
        '<button class="btn" data-act="exp-libro" data-id="'+e.id+'">Ver el libro</button>'+
        (esGestion() && e.estado !== 'emitido'
          ? '<button class="btn pri" data-act="exp-emitir" data-id="'+e.id+'">Emitir</button>' : '')+
@@ -5005,6 +5508,7 @@ function vistaExpediente(id){
   else if (actual === 'prestaciones') h += expSecPrestaciones(e);
   else if (actual === 'docs')     h += expSecDocs(e);
   else if (actual === 'riesgos')  h += expSecRiesgos(e);
+  else if (actual === 'mantenimiento') h += expSecMantenimiento(e);
   else if (actual === 'entrega')  h += expSecEntrega(e);
   h += '</div>';
 
@@ -5845,6 +6349,117 @@ function expSecRiesgos(e){
 }
 
 /* ---- Entrega y firma ---- */
+/* ---- Apartado 21: mantenimiento según uso, ciclos y entorno ---- */
+function expSecMantenimiento(e){
+  const m = datosMantenimiento(e);
+  const v = periodicidadMantenimiento(e);
+  const uso = (e.datos||{}).obra ? (e.datos.obra.uso_edificio || '') : '';
+
+  let h = '<div class="panel-h"><h3>Mantenimiento</h3></div>'+
+    '<p class="mini" style="margin:0 0 12px">La periodicidad no es un número fijo. Manda el '+
+    '<b>manual del fabricante</b>: el Real Decreto 1215/1997, artículo 3.5, dice que el '+
+    'mantenimiento se realiza teniendo en cuenta sus instrucciones. Solo si el fabricante no '+
+    'la fija se recurre a la recomendación de norma voluntaria, y el entorno la ajusta con el '+
+    'criterio de esta empresa.</p>';
+
+  h += '<div class="panel-h" style="margin-top:4px"><h3>Lo que dice el fabricante</h3></div>'+
+    '<div class="campos">'+
+    expSel('mant.fab_consta', '¿El manual del fabricante fija una periodicidad?',
+      [['', 'Sin contestar'],
+       ['si','Sí, y consta por escrito'],
+       ['no','No la fija, o no tenemos el manual']],
+      'Es la primera pregunta: si la fija, es la que vale')+
+    (m.fab_consta === 'si'
+      ? expSel('mant.fab_meses', 'Periodicidad que fija el fabricante',
+          [['', 'Sin contestar']].concat(PERIODOS.map(([mm,t]) => [String(mm), t])))+
+        expTxt('mant.fab_donde', 'Dónde consta',
+          'Manual, apartado y página, o referencia del documento', 1)
+      : '')+
+    '</div>';
+
+  if (m.fab_consta === 'no'){
+    h += '<div class="panel-h" style="margin-top:18px"><h3>Uso y ciclos</h3></div>'+
+      '<p class="mini" style="margin:0 0 12px">De aquí sale la recomendación cuando el '+
+      'fabricante no fija nada. El uso del edificio se toma de «Dónde y para quién»: '+
+      '<b>'+esc(uso || 'sin contestar')+'</b>.</p>'+
+      '<div class="campos">'+
+      expNum('mant.ciclos_dia', 'Ciclos al día', 'Una apertura y su cierre es un ciclo', '1')+
+      expSel('mant.ciclos_origen', 'De dónde sale ese número',
+        [['', 'Sin contestar']].concat(Object.entries(ORIGEN_CICLOS)),
+        'Un contador leído no vale lo mismo que una estimación, y el documento lo dice')+
+      expTxt('mant.contador', 'Lectura del contador del cuadro',
+        'Si el cuadro lleva contador de maniobras, su lectura y la fecha')+
+      expSel('mant.rapida', '¿Es una puerta de apertura rápida?',
+        [['', 'Sin contestar'], ['si','Sí'], ['no','No']],
+        'Las rápidas llevan periodicidad más corta')+
+      '</div>';
+
+    h += '<div class="panel-h" style="margin-top:18px"><h3>Entorno</h3></div>'+
+      '<p class="mini" style="margin:0 0 10px">Marca lo que haya. Cada condición acorta un '+
+      'tramo la periodicidad, con un suelo de tres meses. <b>Este ajuste es criterio de esta '+
+      'empresa, no de ninguna norma</b>, y así sale escrito en el documento.</p>'+
+      '<div class="lista">'+
+      ENTORNO_PUERTA.map(([k, nombre, porque]) =>
+        '<label class="item" style="cursor:pointer"><input type="checkbox" data-exp-chk="mant.ent.'+k+'"'+
+        ((m.ent||{})[k] === 'si' ? ' checked' : '')+' style="margin-right:10px">'+
+        '<span><span class="tit">'+esc(nombre)+'</span>'+
+        '<span class="sub mini" style="display:block">'+esc(porque)+'</span></span></label>').join('')+
+      '</div>';
+
+    if (v.origen === 'sin_recomendacion')
+      h += '<div class="campos" style="margin-top:14px">'+
+        expSel('mant.propuesta_meses', 'Periodicidad que propone la empresa',
+          [['', 'Sin decidir']].concat(PERIODOS.map(([mm,t]) => [String(mm), t])),
+          'Esta puerta no encaja en ninguno de los casos recogidos: hay que decidirlo a mano')+
+        expArea('mant.propuesta_motivo', 'Con qué criterio se ha decidido',
+          'Qué se ha tenido en cuenta: uso, ciclos, estado, histórico de averías...', 2)+
+        '</div>';
+  }
+
+  h += '<div class="panel-h" style="margin-top:18px"><h3>Periodicidad que sale de todo esto</h3></div>';
+  if (v.meses){
+    h += '<p class="nota-oficina" style="margin:0 0 10px"><b>'+esc(v.texto)+'</b> · '+
+      esc(({ fabricante:'La fija el fabricante', recomendacion:'Recomendación de norma voluntaria',
+             empresa:'Decidida por la empresa' })[v.origen] || v.origen)+'</p>'+
+      '<ul class="mini" style="margin:0 0 10px;padding-left:18px">'+
+      v.motivos.map(x => '<li>'+esc(x)+'</li>').join('')+
+      v.ajustes.map(x => '<li><b>'+esc(x)+'</b></li>').join('')+'</ul>';
+    if (v.origen === 'recomendacion')
+      h += '<p class="mini" style="margin:0 0 10px">Procedencia del dato: '+
+        esc(RECOM_PERIODICIDAD.fuente)+'. <b>No viene del texto de la norma</b>, que es de pago, '+
+        'así que conviene contrastarlo con el ejemplar de la '+esc(RECOM_PERIODICIDAD.norma)+'.</p>';
+    /* Hay número, pero puede faltar algo para poder justificarlo del todo */
+    if (v.falta.length)
+      h += '<ul class="mini" style="margin:0 0 10px;padding-left:18px">'+
+        v.falta.map(x => '<li>Falta '+esc(x)+'</li>').join('')+'</ul>';
+  } else {
+    h += '<div class="bloque-sin" style="padding:12px"><p style="margin:0 0 8px"><b>NO PUEDE '+
+      'PROPONERSE UNA PERIODICIDAD</b></p><ul class="mini" style="margin:0;padding-left:18px">'+
+      v.falta.map(x => '<li>Falta '+esc(x)+'</li>').join('')+'</ul>'+
+      (v.motivos.length ? '<ul class="mini" style="margin:8px 0 0;padding-left:18px">'+
+        v.motivos.map(x => '<li>'+esc(x)+'</li>').join('')+'</ul>' : '')+
+      '</div>';
+  }
+
+  h += '<div class="panel-h" style="margin-top:18px"><h3>Lo que se acuerda con el titular</h3></div>'+
+    '<p class="mini" style="margin:0 0 10px">Lo que se propone y lo que el titular acepta pueden '+
+    'no coincidir. Si no coinciden, el documento recoge las dos cosas: no se puede hacer pasar '+
+    'por recomendación técnica lo que en realidad es lo que el cliente ha querido contratar.</p>'+
+    '<div class="campos">'+
+    expSel('mant.acordada_meses', 'Periodicidad acordada',
+      [['', 'Sin acordar']].concat(PERIODOS.map(([mm,t]) => [String(mm), t])))+
+    expSel('mant.contrato', '¿Hay contrato de mantenimiento?',
+      [['', 'Sin contestar'], ['si','Sí'], ['no','No'], ['ofrecido','Ofrecido y no aceptado']])+
+    expArea('mant.observaciones', 'Observaciones sobre el mantenimiento', '', 2)+
+    '</div>';
+  if (m.acordada_meses && v.meses && +m.acordada_meses > v.meses)
+    h += '<p class="aviso" style="margin:12px 0 0"><b>La periodicidad acordada ('+
+      esc(nombrePeriodo(+m.acordada_meses))+') es más larga que la que corresponde ('+
+      esc(v.texto)+').</b> Queda recogido en el documento: el titular conoce la recomendación '+
+      'y ha contratado otra cosa.</p>';
+  return h;
+}
+
 function expSecEntrega(e){
   const fab = EXP_ES_FABRICANTE(e.situacion);
   const marco = marcoDeFecha(e.fecha_puesta_servicio);
@@ -5869,20 +6484,107 @@ function expSecEntrega(e){
        ['libro','Certificación en el libro de mantenimiento'],
        ['manual','Instrucciones de uso entregadas']];
 
+  const est = estadoEntregas(e);
+  const cons = conservacionExpediente(e);
+  const pend = pendientesAlFirmar(e);
+
   let h = '<div class="panel-h"><h3>Entrega y firma</h3></div>'+
-    '<p class="mini" style="margin:0 0 14px">Lo que se entrega al titular y quién lo firma.</p>';
-  h += '<div class="lista">';
+    '<p class="mini" style="margin:0 0 14px">Lo que se entrega al titular, lo que solo se '+
+    'conserva, y quién ha recibido qué. <b>Generado no es entregado</b>, y la firma de quien '+
+    'recibe no convierte en conforme nada de lo que esté pendiente.</p>';
+
+  /* ---- Apartado 17: lo que NO se entrega ---- */
+  h += '<div class="panel-h" style="margin-top:4px"><h3>'+esc(DESTINO_DOC.interno.nombre)+'</h3>'+
+    '<span class="mini">no se entrega</span></div>'+
+    '<p class="mini" style="margin:0 0 10px">'+esc(DESTINO_DOC.interno.nota)+'</p>'+
+    '<ul class="mini" style="margin:0 0 10px;padding-left:18px">'+
+    docsPorDestino('interno').map(([k, t, , porque]) =>
+      '<li><b>'+esc(t)+'.</b> '+esc(porque)+'</li>').join('')+'</ul>';
+  if (cons.pendiente)
+    h += '<p class="aviso" style="margin:0 0 12px">'+esc(cons.motivo)+'</p>';
+  else
+    h += '<p class="nota-oficina" style="margin:0 0 12px"><b>Conservar '+cons.anios+' años'+
+      (cons.hasta ? ', hasta el '+esc(fechaCorta(cons.hasta)) : '')+'.</b> El plazo cuenta desde '+
+      esc(cons.desde)+' ('+esc(cons.referencia)+').'+
+      (cons.aproximado
+        ? ' <b>Atención:</b> no consta la fecha de fabricación de la puerta, así que la fecha '+
+          'se ha calculado desde la puesta en servicio. Si la fabricación fue anterior, el '+
+          'plazo vence antes.'
+        : '')+'</p>';
+
+  /* ---- Lo que sí se entrega ---- */
+  h += '<div class="panel-h" style="margin-top:18px"><h3>'+esc(DESTINO_DOC.cliente.nombre)+'</h3>'+
+    '<span class="mini">'+est.marcados.length+' marcados</span></div>'+
+    '<p class="mini" style="margin:0 0 10px">Marca lo que procede entregar en este expediente. '+
+    'Marcarlo significa que el documento <b>está generado</b>, no que ya se haya entregado.</p>'+
+    '<div class="lista">';
   docs.forEach(([k, t]) => {
     const v = expVal('entrega.docs.'+k, '') === 'si';
+    const reg = est.entregados[k];
+    const dest = destinoDe(k);
     h += '<label class="item" style="cursor:pointer"><input type="checkbox" data-exp-chk="entrega.docs.'+k+'"'+
-      (v?' checked':'')+' style="margin-right:10px"><span><span class="tit">'+esc(t)+'</span></span></label>';
+      (v?' checked':'')+' style="margin-right:10px"><span><span class="tit">'+esc(t)+'</span>'+
+      '<span class="sub mini" style="display:block">'+
+      (dest === 'puerta' ? 'Va colocado en la puerta. ' : '')+
+      (!v ? 'Sin marcar.'
+          : (reg ? 'ENTREGADO el '+esc(fechaCorta(reg.fecha))+' a '+esc(reg.receptor||'')
+                 : (dest === 'interno' ? 'Se conserva, no se entrega.'
+                                       : 'GENERADO · NO CONSTA ENTREGADO')))+
+      '</span></span></label>';
   });
   h += '</div>';
 
-  h += '<div class="campos" style="margin-top:14px">'+
-    expTxt('entrega.recibido_por', 'Recibido por', 'Nombre de quien recibe la documentación')+
-    '<div class="campo"><label>Fecha de entrega</label>'+
-      '<input type="date" data-exp="entrega.fecha" value="'+esc(expVal('entrega.fecha',''))+'"></div>'+
+  if (est.sinRegistrar.length)
+    h += '<p class="aviso" style="margin:12px 0 0"><b>'+est.sinRegistrar.length+' documento(s) '+
+      'marcados y sin entrega registrada.</b> Mientras no se registre, en los documentos consta '+
+      'GENERADO · NO CONSTA ENTREGADO, que es la verdad.</p>';
+
+  /* ---- Apartado 24: registro de entregas ---- */
+  h += '<div class="panel-h" style="margin-top:18px"><h3>Entregas registradas</h3>'+
+    '<span class="mini">'+est.regs.length+'</span></div>';
+  if (!est.regs.length)
+    h += '<p class="mini" style="margin:0 0 10px">Todavía no se ha registrado ninguna entrega.</p>';
+  else
+    h += '<div class="tabla-wrap"><table class="tabla"><thead><tr>'+
+      '<th>Nº</th><th>Fecha</th><th>Recibido por</th><th>DNI</th><th>Relación</th>'+
+      '<th>Medio</th><th>Documentos</th><th>Pendientes al firmar</th><th></th>'+
+      '</tr></thead><tbody>'+
+      est.regs.slice().reverse().map(r => '<tr>'+
+        '<td>'+r.n+'</td>'+
+        '<td>'+esc(fechaCorta(r.fecha))+'</td>'+
+        '<td>'+esc(r.receptor || HUECO.no_identificado)+'</td>'+
+        '<td>'+esc(r.dni || HUECO.no_identificado)+'</td>'+
+        '<td>'+esc(RELACION_RECEPTOR[r.relacion] || '')+'</td>'+
+        '<td>'+esc(MEDIOS_ENTREGA[r.medio] || '')+'</td>'+
+        '<td>'+esc((r.docs||[]).map(nombreDoc).join('; '))+'</td>'+
+        '<td>'+((r.pendientes||[]).length
+                 ? '<b>'+(r.pendientes||[]).length+'</b>' : '—')+'</td>'+
+        '<td><button class="btn sm plana" data-act="exp-acta" data-v="'+r.n+'">Acta</button></td>'+
+        '</tr>').join('')+
+      '</tbody></table></div>';
+  h += '<div class="fila" style="margin-top:10px">'+
+    '<button class="btn" data-act="exp-nueva-entrega">Registrar una entrega</button>'+
+    '<span class="sp"></span></div>';
+  if (est.incompletos.length)
+    h += '<p class="aviso" style="margin:10px 0 0"><b>'+est.incompletos.length+' registro(s) sin '+
+      'nombre legible o sin DNI.</b> Un acuse sin esos dos datos no acredita a quién se entregó.</p>';
+
+  /* ---- Apartado 25: lo que la firma NO hace ---- */
+  if (pend.length)
+    h += '<div class="bloque-sin" style="margin-top:14px;padding:12px">'+
+      '<p style="margin:0 0 6px"><b>Ahora mismo quedan '+pend.length+' punto(s) pendientes.</b></p>'+
+      '<p class="mini" style="margin:0 0 8px">Si se firma una entrega en este momento, el acta '+
+      'los recoge uno a uno y deja escrito que la firma <b>no</b> los convierte en conformes. '+
+      'Se guardan dentro del registro, de modo que el acta siga diciendo dentro de cinco años '+
+      'qué estaba pendiente el día que se firmó.</p>'+
+      '<ul class="mini" style="margin:0;padding-left:18px">'+
+      pend.slice(0, 8).map(x => '<li><b>'+esc(CLASE_PENDIENTE[x.clase]||'')+':</b> '+
+        esc(x.texto)+'</li>').join('')+
+      (pend.length > 8 ? '<li>y '+(pend.length-8)+' más</li>' : '')+
+      '</ul></div>';
+
+  h += '<div class="panel-h" style="margin-top:18px"><h3>Quién firma por la empresa</h3></div>'+
+    '<div class="campos">'+
     expTxt('entrega.tecnico', 'Técnico que ha ejecutado la intervención',
       'Quien ha hecho el trabajo y las pruebas. Puede no ser quien firma')+
     expTxt('entrega.firmante', 'Firma por la empresa',
@@ -7802,33 +8504,101 @@ async function libroExpediente(id){
       campo('Número único del marcado CE', pu.serie)+
       campo('Ubicación', dir)+
       campo('Fecha de instalación', e.fecha_puesta_servicio ? fechaCorta(e.fecha_puesta_servicio) : '')+
-      campo('Periodicidad de mantenimiento acordada', (d.entrega||{}).periodicidad || periodicidadSugerida(e, d))+
+      campo('Periodicidad de mantenimiento', (d.entrega||{}).periodicidad || periodicidadSugerida(e, d))+
     '</table>'+
+    /* Apartado 21: de dónde sale la periodicidad y con qué se ha ajustado. Sin esto,
+       un número en una tabla no se puede defender ante nadie. */
+    (() => {
+      const per = periodicidadMantenimiento(e);
+      const m = d.mant || {};
+      if (!per.meses && !per.falta.length) return '';
+      return '<h4>De dónde sale la periodicidad</h4>'+
+        '<table class="datos">'+
+        campo('Origen', ORIGEN_PERIODICIDAD[per.origen] || '', 'pendiente')+
+        campo('El manual del fabricante fija periodicidad',
+              ({si:'Sí', no:'No, o no se dispone del manual'})[m.fab_consta], 'no_verificado')+
+        (m.fab_consta === 'si' ? campo('Dónde consta', m.fab_donde, 'no_identificado') : '')+
+        (m.fab_consta === 'no'
+          ? campo('Ciclos al día', m.ciclos_dia !== undefined && m.ciclos_dia !== ''
+                    ? String(m.ciclos_dia) : '', 'no_verificado')+
+            campo('De dónde sale ese número', ORIGEN_CICLOS[m.ciclos_origen], 'no_identificado')+
+            campo('Lectura del contador', m.contador, 'no_verificado')
+          : '')+
+        campo('Condiciones del entorno',
+              per.entorno.map(x => x[1]).join('; '), 'pendiente')+
+        '</table>'+
+        (per.ajustes.length
+          ? '<ul>'+per.ajustes.map(x => '<li>'+esc(x)+'</li>').join('')+'</ul>' : '')+
+        (per.origen === 'recomendacion'
+          ? '<p class="min">Procedencia del dato: '+esc(RECOM_PERIODICIDAD.fuente)+'. '+
+            esc(RECOM_PERIODICIDAD.advertencia)+'</p>' : '')+
+        (per.falta.length
+          ? '<p class="pendiente">Para poder justificar la periodicidad falta: '+
+            esc(per.falta.join('; '))+'.</p>' : '');
+    })()+
     '<h4>Registro de revisiones</h4>'+
     '<table class="datos chk reg"><thead><tr><th style="width:80px">Fecha</th><th>Trabajo realizado</th>'+
     '<th style="width:110px">Técnico</th><th style="width:90px">Firma</th></tr></thead><tbody>'+
     Array.from({length:14}).map(() => '<tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>').join('')+
     '</tbody></table></section>';
 
-  /* ---------- ENTREGA ---------- */
+  /* ---------- ENTREGA ----------
+     Apartados 17 y 24: lo que se conserva no se presenta como entregado, y lo
+     marcado no se presenta como entregado hasta que hay registro de entrega. */
   const en = d.entrega || {};
+  const estEnt = estadoEntregas(e);
+  const consEx = conservacionExpediente(e);
   H += abreSec('Entrega y firmas')+
     '<p>Se hace entrega al titular de la instalación de la documentación que se relaciona, '+
     'que deberá conservarse junto a la puerta.</p>'+
-    '<table class="datos chk"><tbody>'+
+    '<table class="datos chk"><thead><tr><th>Documento</th><th>Destino</th>'+
+    '<th>Situación</th></tr></thead><tbody>'+
     Object.entries(en.docs || {}).filter(([,v]) => v === 'si')
-      .map(([k]) => '<tr><td>'+esc(nombreDocEntrega(k, e, marco))+'</td><td style="width:60px"><span class="ok">Entregado</span></td></tr>').join('')+
+      .map(([k]) => {
+        const dest = destinoDe(k);
+        const reg  = estEnt.entregados[k];
+        const dd   = DESTINO_DOC[dest];
+        return '<tr><td>'+esc(nombreDocEntrega(k, e, marco))+'</td>'+
+          '<td>'+esc(dd ? dd.nombre : 'Documentación para el titular')+'</td>'+
+          '<td>'+(dd && !dd.entrega
+            ? 'Se conserva, no se entrega'
+            : (reg
+                ? 'Entregado el '+esc(fechaCorta(reg.fecha))+' a '+
+                  esc(reg.receptor || HUECO.no_identificado)+
+                  (reg.dni ? ' ('+esc(reg.dni)+')' : '')
+                : '<b>GENERADO · NO CONSTA ENTREGADO</b>'))+'</td></tr>';
+      }).join('')+
     '</tbody></table>'+
+    (consEx.pendiente
+      ? '<p>'+esc(consEx.motivo)+'</p>'
+      : '<p>El expediente técnico de construcción no se entrega: queda a disposición de las '+
+        'autoridades competentes durante '+consEx.anios+' años'+
+        (consEx.hasta ? ', hasta el '+esc(fechaCorta(consEx.hasta)) : '')+', contados desde '+
+        esc(consEx.desde)+' ('+esc(consEx.referencia)+').</p>')+
+    (estEnt.regs.length
+      ? '<p>Entregas registradas:</p><table class="datos chk"><thead><tr><th>Nº</th>'+
+        '<th>Fecha</th><th>Recibido por</th><th>DNI</th><th>Relación</th><th>Medio</th>'+
+        '</tr></thead><tbody>'+
+        estEnt.regs.map(r => '<tr><td>'+r.n+'</td><td>'+esc(fechaCorta(r.fecha))+'</td>'+
+          '<td>'+esc(r.receptor || HUECO.no_identificado)+'</td>'+
+          '<td>'+esc(r.dni || HUECO.no_identificado)+'</td>'+
+          '<td>'+esc(RELACION_RECEPTOR[r.relacion]||'')+'</td>'+
+          '<td>'+esc(MEDIOS_ENTREGA[r.medio]||'')+'</td></tr>').join('')+
+        '</tbody></table>'
+      : '<p>No consta registrada ninguna entrega de documentación.</p>')+
     (en.observaciones ? '<p>'+esc(en.observaciones).replace(/\n/g,'<br>')+'</p>' : '')+
     '<div class="firmas">'+
       '<div><p class="min">Por la empresa</p><div class="linea"></div>'+
         '<p>'+esc(en.firmante || em.responsable_tecnico || '')+'</p>'+
         '<p class="min">'+esc(en.cargo || em.cargo_firmante || '')+' · '+esc(em.razon_social)+'</p></div>'+
       '<div><p class="min">Recibí, el titular</p><div class="linea"></div>'+
-        '<p>'+esc(en.recibido_por || '')+'</p>'+
+        '<p>'+esc((estEnt.regs.length ? estEnt.regs[estEnt.regs.length-1].receptor : '') ||
+                  en.recibido_por || '')+'</p>'+
         '<p class="min">'+esc(titular)+'</p></div>'+
     '</div>'+
-    '<p class="min" style="margin-top:14px">'+esc([em.poblacion, en.fecha ? fechaCorta(en.fecha) : fechaCorta(hoy)].filter(Boolean).join(', '))+'</p>'+
+    '<p class="min" style="margin-top:14px">'+esc([em.poblacion,
+      fechaCorta((estEnt.regs.length ? estEnt.regs[estEnt.regs.length-1].fecha : '') ||
+                 en.fecha || hoy)].filter(Boolean).join(', '))+'</p>'+
     '</section>';
 
   /* ---------- CONTRAPORTADA ---------- */
@@ -8392,6 +9162,39 @@ async function informeSituacion(id){
     '</section>';
 
   /* ---------- 19. LIMITACIONES DEL INFORME ---------- */
+  /* ---------- Mantenimiento (apartado 21) ---------- */
+  {
+    const per = periodicidadMantenimiento(e);
+    const m = d.mant || {};
+    H += sec('Mantenimiento de la instalación')+
+      '<p>El mantenimiento de la puerta se realiza teniendo en cuenta las instrucciones de su '+
+      'fabricante. Así lo establece el artículo 3, apartado 5, del Real Decreto 1215/1997, que '+
+      'no fija plazos: los fija el fabricante en su manual. Cuando no constan, la periodicidad '+
+      'se propone a partir del uso, los ciclos y el entorno de la puerta.</p>'+
+      '<table class="datos">'+
+        campo('Periodicidad que corresponde', per.meses ? nombrePeriodo(per.meses) : '', 'pendiente')+
+        campo('Origen', ORIGEN_PERIODICIDAD[per.origen] || '', 'pendiente')+
+        campo('Periodicidad acordada con el titular',
+              m.acordada_meses ? nombrePeriodo(+m.acordada_meses) : '', 'pendiente')+
+        campo('Contrato de mantenimiento',
+              ({si:'Sí', no:'No', ofrecido:'Ofrecido y no aceptado'})[m.contrato], 'pendiente')+
+        campo('Ciclos al día',
+              (m.ciclos_dia !== undefined && m.ciclos_dia !== '') ? String(m.ciclos_dia) : '',
+              'no_verificado')+
+        campo('De dónde sale ese número', ORIGEN_CICLOS[m.ciclos_origen], 'no_identificado')+
+        campo('Condiciones del entorno', per.entorno.map(x => x[1]).join('; '), 'pendiente')+
+      '</table>'+
+      (per.ajustes.length ? '<ul>'+per.ajustes.map(x => '<li>'+esc(x)+'</li>').join('')+'</ul>' : '')+
+      (per.origen === 'recomendacion'
+        ? '<p class="min">Procedencia del dato: '+esc(RECOM_PERIODICIDAD.fuente)+'. '+
+          esc(RECOM_PERIODICIDAD.advertencia)+'</p>' : '')+
+      (per.falta.length
+        ? '<p class="pendiente">Para poder justificar la periodicidad falta: '+
+          esc(per.falta.join('; '))+'.</p>' : '')+
+      (m.observaciones ? '<p>'+esc(m.observaciones).replace(/\n/g,'<br>')+'</p>' : '')+
+      '</section>';
+  }
+
   H += sec('Limitaciones del informe')+
     '<ul>'+
     '<li>Recoge el estado observado en la fecha de la inspección. No se pronuncia sobre el '+
@@ -8438,15 +9241,33 @@ async function informeSituacion(id){
     '<div class="firmas"><div class="firma"><span>Firma del técnico</span></div></div>'+
     '</section>';
 
-  H += sec('Recepción por el cliente')+
-    '<p class="aviso-borrador">'+esc(AVISO_FIRMA_RECEPCION)+'</p>'+
-    '<table class="datos">'+
-      campo('Recibido por', (d.entrega||{}).firmante, 'pendiente')+
-      campo('DNI', (d.entrega||{}).firmante_dni, 'no_aportado')+
-      campo('Fecha de recepción', '', 'pendiente')+
-    '</table>'+
-    '<div class="firmas"><div class="firma"><span>Firma de recepción</span></div></div>'+
-    '</section>';
+  /* ---------- 22. RECEPCIÓN (apartados 24 y 25) ----------
+     Quien recibe NO es quien firma por la empresa. Y si no hay entrega registrada,
+     el documento lo dice en vez de rellenar el hueco con el nombre del técnico. */
+  {
+    const estEnt = estadoEntregas(e);
+    const ult = estEnt.regs.length ? estEnt.regs[estEnt.regs.length-1] : null;
+    H += sec('Recepción por el cliente')+
+      '<p class="aviso-borrador">'+esc(AVISO_FIRMA_RECEPCION)+'</p>'+
+      '<p class="aviso-borrador">'+esc(AVISO_FIRMA_NO_CONVIERTE)+'</p>'+
+      '<table class="datos">'+
+        campo('Recibido por', ult ? ult.receptor : '', 'pendiente')+
+        campo('DNI o NIE', ult ? ult.dni : '', 'no_aportado')+
+        campo('Relación con el titular', ult ? RELACION_RECEPTOR[ult.relacion] : '', 'pendiente')+
+        campo('Fecha de recepción', ult ? fechaCorta(ult.fecha) : '', 'pendiente')+
+        campo('Medio de entrega', ult ? MEDIOS_ENTREGA[ult.medio] : '', 'pendiente')+
+      '</table>'+
+      (ult
+        ? ((ult.pendientes||[]).length
+            ? '<p>En la fecha de la entrega quedaban '+ult.pendientes.length+' punto(s) '+
+              'pendientes, que se relacionan en el acta de entrega número '+ult.n+'. La firma '+
+              'de recepción no los convierte en conformes.</p>'
+            : '<p>Entrega registrada en el acta número '+ult.n+'.</p>')
+        : '<p class="pendiente">NO CONSTA ENTREGADO. Este documento está generado y no se ha '+
+          'registrado su entrega.</p>')+
+      '<div class="firmas"><div class="firma"><span>Firma de recepción</span></div></div>'+
+      '</section>';
+  }
 
   w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
     '<title>Informe de situación · '+esc(e.referencia||'')+' · '+esc(titular)+'</title>'+
@@ -8470,6 +9291,235 @@ async function informeSituacion(id){
    Separación que no se negocia: el DIAGNÓSTICO TÉCNICO es el informe y
    no se toca. Esto es la propuesta de trabajo. Si mañana cambia el
    presupuesto, cambia la propuesta, nunca el informe. */
+/* ===== Apartados 24 y 25: registrar una entrega y su acta =====
+   Registrar la entrega es un acto distinto de generar el documento, y se guarda
+   con quién recibió, su DNI y la lista de pendientes que había ese día. */
+function dlgRegistrarEntrega(id){
+  const e = expDe(id); if (!e) return;
+  const est = estadoEntregas(e);
+  const pend = pendientesAlFirmar(e);
+  const em = datosEmpresa();
+  const d = e.datos || {};
+  const c = e.cliente_id ? (clienteDe(e.cliente_id) || {}) : {};
+  const titular = (d.obra||{}).titular || c.nombre || '';
+
+  /* Solo se pueden entregar los documentos marcados como que proceden y que de
+     verdad se entregan: el expediente técnico interno no aparece aquí. */
+  const candidatos = est.entregables;
+  let h = '<h3>Registrar una entrega</h3>';
+  if (!candidatos.length)
+    return abrirDlg(h+'<p class="mini">No hay ningún documento marcado como que procede '+
+      'entregar. Márcalos primero en «Entrega y firma».</p>'+
+      '<div class="pie"><span class="sp"></span>'+
+      '<button type="button" class="btn plana" data-cerrar>Cerrar</button></div>', null);
+
+  h += '<p class="mini" style="margin:0 0 10px">Qué documentos se entregan, a quién y cuándo. '+
+    'El nombre legible y el DNI son los dos datos que acreditan a quién se entregó.</p>'+
+    '<div class="lista" style="margin-bottom:12px">'+
+    candidatos.map(k => '<label class="item" style="cursor:pointer">'+
+      '<input type="checkbox" class="re-doc" value="'+esc(k)+'" checked style="margin-right:10px">'+
+      '<span><span class="tit">'+esc(nombreDoc(k))+'</span></span></label>').join('')+
+    '</div>'+
+    '<div class="campos">'+
+    '<div class="campo"><label for="re-fecha">Fecha de entrega</label>'+
+      '<input id="re-fecha" type="date" value="'+esc(hoy())+'"></div>'+
+    '<div class="campo"><label for="re-recep">Recibido por, nombre y apellidos</label>'+
+      '<input id="re-recep" type="text" value="'+esc(titular)+'" placeholder="Nombre legible de quien recibe"></div>'+
+    '<div class="campo"><label for="re-dni">DNI o NIE de quien recibe</label>'+
+      '<input id="re-dni" type="text" placeholder="Sin él, el acuse no acredita a quién se entregó"></div>'+
+    '<div class="campo"><label for="re-rel">Relación con el titular</label><select id="re-rel">'+
+      [['', 'Sin contestar']].concat(Object.entries(RELACION_RECEPTOR))
+        .map(([v,t]) => '<option value="'+esc(v)+'">'+esc(t)+'</option>').join('')+
+      '</select></div>'+
+    '<div class="campo"><label for="re-medio">Medio de entrega</label><select id="re-medio">'+
+      [['', 'Sin contestar']].concat(Object.entries(MEDIOS_ENTREGA))
+        .map(([v,t]) => '<option value="'+esc(v)+'">'+esc(t)+'</option>').join('')+
+      '</select></div>'+
+    '<div class="campo"><label for="re-tec">Entregado por</label>'+
+      '<input id="re-tec" type="text" value="'+esc((d.entrega||{}).tecnico || em.representante || '')+'"></div>'+
+    '<div class="campo full"><label for="re-obs">Observaciones</label>'+
+      '<textarea id="re-obs" rows="2" placeholder="Lo que haga falta dejar escrito de esta entrega"></textarea></div>'+
+    '<div class="campo full"><label style="cursor:pointer">'+
+      '<input id="re-firma" type="checkbox" style="margin-right:8px">'+
+      'Quien recibe ha firmado el acta o ha acusado recibo por escrito</label></div>'+
+    '</div>';
+
+  if (pend.length)
+    h += '<div class="bloque-sin" style="margin-top:12px;padding:12px">'+
+      '<p style="margin:0 0 6px"><b>Quedan '+pend.length+' punto(s) pendientes.</b></p>'+
+      '<p class="mini" style="margin:0">Se guardan dentro de este registro y salen enumerados '+
+      'en el acta. La firma acredita la recepción, <b>no</b> convierte en conforme ninguno de '+
+      'ellos.</p></div>';
+
+  h += '<p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Registrar la entrega</button></div>';
+
+  abrirDlg(h, async () => {
+    try {
+      const docs = [...document.querySelectorAll('.re-doc:checked')].map(x => x.value);
+      if (!docs.length) return setErr('Marca al menos un documento.');
+      if (!val('re-recep')) return setErr('Pon el nombre de quien recibe la documentación.');
+      if (!val('re-fecha')) return setErr('Pon la fecha de entrega.');
+      const regs = entregasDe(e).slice();
+      regs.push({
+        n: regs.length + 1,
+        fecha: val('re-fecha'),
+        docs,
+        receptor: val('re-recep'),
+        dni: val('re-dni'),
+        relacion: val('re-rel'),
+        medio: val('re-medio'),
+        entregado_por: val('re-tec'),
+        observaciones: val('re-obs'),
+        firmado: document.getElementById('re-firma').checked ? 'si' : '',
+        /* Apartado 25: foto de lo que estaba pendiente el día de la firma */
+        pendientes: pend,
+        registrado: new Date().toISOString(),
+      });
+      e.datos = e.datos || {};
+      e.datos.entregas = regs;
+      const { error } = await sb.from('expedientes')
+        .update({ datos: e.datos, actualizado: new Date().toISOString() }).eq('id', e.id);
+      if (error) throw error;
+      cerrarDlg(); await cargar();
+      toast('Entrega registrada. Acta número '+regs.length+'.');
+    } catch(err){ setErr(err.message); }
+  });
+}
+
+/* Acta de entrega y recepción. Documento aparte, con su propia firma. */
+function actaEntrega(id, n){
+  const e = expDe(id); if (!e) return;
+  const reg = entregasDe(e).find(x => x.n === +n);
+  if (!reg){ toast('No existe ese registro de entrega.'); return; }
+  const em = datosEmpresa();
+  const d = e.datos || {};
+  const p = e.puerta_id ? (puertaDe(e.puerta_id) || {}) : {};
+  const c = e.cliente_id ? (clienteDe(e.cliente_id) || {}) : {};
+  const titular = (d.obra||{}).titular || c.nombre || p.cliente || '';
+  const dir = [ (d.obra||{}).emplazamiento, (d.obra||{}).ubicacion ].filter(Boolean).join(' · ')
+            || [p.direccion, p.ubicacion].filter(Boolean).join(' · ');
+  const cons = conservacionExpediente(e);
+  const per = periodicidadMantenimiento(e);
+
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana.'); return; }
+  const campo = (k, v, clase) => '<tr><th>'+esc(k)+'</th><td>'+esc(oHueco(v, clase))+'</td></tr>';
+
+  let H = '<section class="portada">'+
+    '<div class="marca">ARIZA <span>puertas automáticas</span></div>'+
+    '<div class="tit"><h1>Acta de entrega y recepción de documentación</h1>'+
+    '<h2>'+esc(EXP_FAMILIA[e.familia]||'')+'</h2>'+
+    '<p class="sit">'+esc(dir || 'Emplazamiento sin indicar')+'</p></div>'+
+    '<table class="port-datos">'+
+      campo('Expediente', e.referencia, 'no_identificado')+
+      campo('Acta número', String(reg.n))+
+      campo('Titular', titular, 'no_identificado')+
+      campo('Identificación de la puerta',
+            [p.codigo, (d.puerta||{}).denominacion].filter(Boolean).join(' · '), 'no_identificado')+
+      campo('Fecha de entrega', fechaCorta(reg.fecha))+
+    '</table>'+
+    (reg.pendientes && reg.pendientes.length
+      ? '<p class="aviso-borrador">SE ENTREGA CON '+reg.pendientes.length+' PUNTO(S) '+
+        'PENDIENTES. LA FIRMA NO LOS CONVIERTE EN CONFORMES</p>' : '')+
+    '<div class="pie-portada">'+esc(em.razon_social)+
+      (em.telefono?(' · '+esc(em.telefono)):'')+'</div></section>';
+
+  H += '<section><h3 class="sec">1. Documentación que se entrega</h3>'+
+    '<table class="datos chk"><thead><tr><th>Documento</th><th>Qué acredita</th>'+
+    '</tr></thead><tbody>'+
+    (reg.docs||[]).map(k => {
+      const fila = DOCS_EXPEDIENTE.find(x => x[0] === k) || [k, nombreDoc(k), 'cliente', ''];
+      return '<tr><td>'+esc(fila[1])+'</td><td class="min">'+esc(fila[3]||'')+'</td></tr>';
+    }).join('')+
+    '</tbody></table>'+
+    '<p>La documentación relacionada se entrega al titular de la instalación, que deberá '+
+    'conservarla junto a la puerta y facilitarla a quien realice su mantenimiento.</p>'+
+    '</section>';
+
+  H += '<section><h3 class="sec">2. Documentación que no se entrega y se conserva</h3>'+
+    '<p>El expediente técnico de construcción y los documentos que lo integran no se entregan '+
+    'al titular. Quedan a disposición de las autoridades competentes, que pueden requerirlos de '+
+    'forma motivada.</p>'+
+    '<table class="datos chk"><thead><tr><th>Documento</th><th>Régimen</th></tr></thead><tbody>'+
+    docsPorDestino('interno').map(([, t, , porque]) =>
+      '<tr><td>'+esc(t)+'</td><td class="min">'+esc(porque)+'</td></tr>').join('')+
+    '</tbody></table>'+
+    (cons.pendiente
+      ? '<p>'+esc(cons.motivo)+'</p>'
+      : '<p>Plazo de conservación: <b>'+cons.anios+' años'+
+        (cons.hasta ? ', hasta el '+esc(fechaCorta(cons.hasta)) : '')+'</b>, contados desde '+
+        esc(cons.desde)+'. '+esc(cons.referencia)+'.</p>')+
+    '</section>';
+
+  H += '<section><h3 class="sec">3. Quién recibe</h3>'+
+    '<table class="datos">'+
+      campo('Nombre y apellidos', reg.receptor, 'no_identificado')+
+      campo('DNI o NIE', reg.dni, 'no_identificado')+
+      campo('Relación con el titular', RELACION_RECEPTOR[reg.relacion], 'no_identificado')+
+      campo('Medio de entrega', MEDIOS_ENTREGA[reg.medio], 'pendiente')+
+      campo('Entregado por', reg.entregado_por, 'no_identificado')+
+      campo('Acuse de recibo firmado', reg.firmado === 'si' ? 'Sí' : 'No consta')+
+    '</table>'+
+    (reg.observaciones ? '<p>'+esc(reg.observaciones).replace(/\n/g,'<br>')+'</p>' : '')+
+    '</section>';
+
+  /* ---- Apartado 25: lo que estaba pendiente el día de la firma ---- */
+  H += '<section><h3 class="sec">4. Situación en la fecha de esta entrega</h3>';
+  if (!(reg.pendientes||[]).length)
+    H += '<p>En la fecha de esta entrega no constaban comprobaciones sin resultado, deficiencias '+
+      'ni riesgos sin resolver en el expediente.</p>';
+  else
+    H += '<p>En la fecha de esta entrega quedaban abiertos los puntos que se relacionan. Se hacen '+
+      'constar uno a uno para que el titular los conozca:</p>'+
+      '<table class="datos chk"><thead><tr><th>Clase</th><th>Punto pendiente</th>'+
+      '</tr></thead><tbody>'+
+      reg.pendientes.map(x => '<tr><td class="min">'+esc(CLASE_PENDIENTE[x.clase]||'')+'</td>'+
+        '<td>'+esc(x.texto)+'</td></tr>').join('')+
+      '</tbody></table>'+
+      '<p class="aviso-borrador">'+esc(AVISO_FIRMA_NO_CONVIERTE)+'</p>';
+  H += '</section>';
+
+  H += '<section><h3 class="sec">5. Mantenimiento</h3>'+
+    '<table class="datos">'+
+      campo('Periodicidad que corresponde', per.meses ? nombrePeriodo(per.meses) : '', 'pendiente')+
+      campo('De dónde sale',
+            ({ fabricante:'La fija el manual del fabricante',
+               recomendacion:'Recomendación de norma de aplicación voluntaria, subsidiaria del fabricante',
+               empresa:'Decidida por esta empresa' })[per.origen], 'pendiente')+
+      campo('Periodicidad acordada con el titular',
+            (d.mant||{}).acordada_meses ? nombrePeriodo(+d.mant.acordada_meses) : '', 'pendiente')+
+    '</table>'+
+    (per.ajustes.length ? '<ul>'+per.ajustes.map(x => '<li>'+esc(x)+'</li>').join('')+'</ul>' : '')+
+    '<p>El titular de la instalación es responsable de su conservación y de que se realice el '+
+    'mantenimiento con la periodicidad indicada, dejando constancia en el libro de '+
+    'mantenimiento.</p></section>';
+
+  H += '<section><h3 class="sec">6. Firmas</h3>'+
+    '<div class="firmas">'+
+      '<div><p class="min">Por la empresa</p><div class="linea"></div>'+
+        '<p>'+esc(reg.entregado_por || (d.entrega||{}).firmante || em.representante || '')+'</p>'+
+        '<p class="min">'+esc(em.razon_social)+'</p></div>'+
+      '<div><p class="min">Recibí</p><div class="linea"></div>'+
+        '<p>'+esc(reg.receptor || '')+'</p>'+
+        '<p class="min">'+esc(reg.dni ? 'DNI '+reg.dni : HUECO.no_identificado)+'</p></div>'+
+    '</div>'+
+    '<p class="min" style="margin-top:14px">'+esc([em.poblacion, fechaCorta(reg.fecha)]
+      .filter(Boolean).join(', '))+'</p>'+
+    '<p class="min">Se firman dos ejemplares de la misma fecha y contenido, uno para cada '+
+    'parte.</p></section>';
+
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
+    '<title>Acta de entrega '+esc(String(reg.n))+' · '+esc(e.referencia||'')+'</title>'+
+    '<style>'+ cssLibro() +
+      marcaDeAgua([].concat(
+        (reg.pendientes||[]).length ? ['ENTREGA CON PUNTOS PENDIENTES'] : [],
+        d.ficticio === 'si' ? ['DATOS FICTICIOS'] : []))+
+    '</style></head><body>'+H+'</body></html>');
+  w.document.close();
+}
+
 async function propuestaActuaciones(id){
   const e = expDe(id);
   if (!e) return;
@@ -8624,14 +9674,26 @@ function nombreDocEntrega(k, e, marco){
     ddp_fab:'Declaración de prestaciones del fabricante', dc_fab:'Declaración de conformidad del fabricante',
     cert_inst:'Certificado de instalación', informe:'Informe de riesgos y deficiencias detectadas' })[k] || k;
 }
-/* Periodicidad orientativa. No es obligación legal: procede de la circular del
-   Colegio de Administradores de Fincas de Madrid elaborada con el Ministerio. */
+/* Apartado 21: la periodicidad que se imprime, con su procedencia.
+   Ya no hay un número orientativo igual para todos: sale de periodicidadMantenimiento,
+   que atiende primero al manual del fabricante y después al uso, los ciclos y el
+   entorno. Si no puede justificarse, se imprime PENDIENTE y no un número inventado. */
+const ORIGEN_PERIODICIDAD = {
+  fabricante:   'según el manual del fabricante',
+  recomendacion:'recomendada por norma de aplicación voluntaria, subsidiaria del fabricante',
+  empresa:      'propuesta por esta empresa',
+};
 function periodicidadSugerida(e, d){
-  const u = (d.obra||{}).uso_edificio || '';
-  if (e.familia === 'peatonal') return 'Semestral, orientativa';
-  if (/Industria/i.test(u)) return 'Semestral, orientativa';
-  if (/Comercio|Hotel|Pública/i.test(u)) return 'Semestral, orientativa';
-  return 'Anual, orientativa';
+  const per = periodicidadMantenimiento(e);
+  const m = ((d||{}).mant) || {};
+  if (m.acordada_meses)
+    return nombrePeriodo(+m.acordada_meses) + ', acordada con el titular' +
+      (per.meses && +m.acordada_meses > per.meses
+        ? ' (la que corresponde es ' + nombrePeriodo(per.meses) + ')' : '');
+  if (per.meses)
+    return nombrePeriodo(per.meses) +
+      (ORIGEN_PERIODICIDAD[per.origen] ? ', ' + ORIGEN_PERIODICIDAD[per.origen] : '');
+  return HUECO.pendiente;
 }
 
 /* Marca de agua de página. Se devuelve como regla CSS lista para pegar: un SVG
@@ -10267,6 +11329,8 @@ raiz.addEventListener('click', async e => {
   else if (a === 'exp-informe') informeSituacion(b.dataset.id);
   else if (a === 'exp-propuesta') propuestaActuaciones(b.dataset.id);
   else if (a === 'exp-emitir') dlgEmitirExpediente(b.dataset.id);
+  else if (a === 'exp-nueva-entrega') dlgRegistrarEntrega(S.exp);
+  else if (a === 'exp-acta') actaEntrega(S.exp, b.dataset.v);
   else if (a === 'exp-marcado') etiquetaCE(b.dataset.id);
   else if (a === 'exp-dte') documentoDTE(S.exp);
   else if (a === 'exp-dte-codigo'){
@@ -10667,11 +11731,18 @@ raiz.addEventListener('change', e => {
     // cambia el resultado del motor. cf.comp_sust y cf.comp_orig, porque abren el
     // detalle de los componentes sustituidos y pueden dejar la puerta fuera de su
     // certificación, lo que a su vez deduce la respuesta a la pregunta 12.
-    if (/\.(estado|v|incluir|eq)$|motorizada|hueco$|\.via$|acceso_personas$|emitir_ddp$|\.modo$|usuarios$|puerta\.tipo$|interv\.tipo$|cf\.comp_(sust|orig)$/.test(ruta)) pintar();
+    // mant.* entra porque de esas respuestas sale la periodicidad de mantenimiento,
+    // que se recalcula y se vuelve a explicar en la misma pantalla.
+    if (/\.(estado|v|incluir|eq)$|motorizada|hueco$|\.via$|acceso_personas$|emitir_ddp$|\.modo$|usuarios$|puerta\.tipo$|interv\.tipo$|cf\.comp_(sust|orig)$|^mant\./.test(ruta)) pintar();
     return;
   }
   if (e.target.dataset.expChk !== undefined){
-    expPon(e.target.dataset.expChk, e.target.checked ? 'si' : '');
+    const ruta = e.target.dataset.expChk;
+    expPon(ruta, e.target.checked ? 'si' : '');
+    /* Las condiciones del entorno cambian la periodicidad, y marcar un documento
+       como que procede entregar cambia lo que dice de él la pantalla de entrega:
+       en los dos casos hay que repintar para no dejar en pantalla lo de antes. */
+    if (/^mant\.|^entrega\.docs\./.test(ruta)) pintar();
     return;
   }
   if (e.target.dataset.act === 'exp-fps'){
