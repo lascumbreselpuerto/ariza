@@ -944,6 +944,10 @@ function vistaFicha(id){
   const av = avisosDe(p.id), abierto = av.find(a => !a.cerrado);
   let h = '<div class="stack">';
   h += '<div class="fila"><button class="btn sm plana" data-act="volver">‹ Volver</button><span class="sp"></span>'+
+       '<button class="btn sm plana" data-act="vida-puerta" data-id="'+p.id+'" data-v="cliente">Vida de la puerta</button>'+
+       (esGestion()
+         ? '<button class="btn sm plana" data-act="vida-puerta" data-id="'+p.id+'" data-v="interno">Vida (interna)</button>'
+         : '')+
        '<button class="btn sm" data-act="puerta-editar" data-id="'+p.id+'">Editar ficha</button></div>';
 
   h += '<div class="panel"><div class="ficha-h"><h2>'+esc(p.cliente||'Sin cliente')+'</h2><span class="codigo">'+esc(p.codigo||'')+'</span><span class="sp"></span>'+estadoChip(p.estado)+'</div>'+
@@ -2203,6 +2207,69 @@ function panelEmpresa(){
     '</div>'+
     '<div class="fila" style="margin-top:12px"><span class="sp"></span>'+
     '<button class="btn" data-act="guardar-limites">Guardar límites</button></div></div>';
+
+  h += panelReglasFecha();
+  return h;
+}
+
+/* ---- Apartado 16: las fechas que deciden, a la vista y corregibles ---- */
+function panelReglasFecha(){
+  const reglas = Object.keys(REGLAS_FECHA).map(reglaCompleta)
+    .map(r => Object.assign({}, r, { dias: diasHasta(fechaRegla(r.clave)) }))
+    .sort((a, b) => (fechaRegla(a.clave) || '') < (fechaRegla(b.clave) || '') ? -1 : 1);
+  const proximas = reglasProximas(365);
+
+  let h = '<div class="panel"><div class="panel-h"><h3>Fechas que deciden</h3>'+
+    '<span class="mini">'+reglas.length+'</span></div>'+
+    '<p class="nota-oficina" style="margin:0 0 10px">Cada una de estas fechas cambia lo que hace '+
+    'la aplicación. Están aquí para que, si una norma se aplaza o se adelanta, <b>se corrija el '+
+    'dato y no haya que reprogramar nada</b>. Lo que la aplicación no hace es dar por buena una '+
+    'fecha anunciada y no publicada: esa queda marcada como anuncio y no se aplica.</p>';
+
+  if (proximas.length)
+    h += '<div class="aviso-caja" style="margin:0 0 12px"><b>Lo que viene este año</b>'+
+      '<ul class="mini" style="margin:6px 0 0;padding-left:18px">'+
+      proximas.map(r => '<li><b>'+esc(fechaCorta(fechaRegla(r.clave)))+'</b>, en '+r.dias+
+        ' día(s): '+esc(r.nombre)+
+        (r.estado === 'anunciada' ? ' <b>(solo anunciada, no se aplica)</b>' : '')+'</li>').join('')+
+      '</ul></div>';
+
+  h += '<div class="tabla-wrap"><table class="tabla"><thead><tr>'+
+    '<th>Fecha</th><th>Regla</th><th>Qué cambia</th><th>Situación</th>'+
+    '<th>Fuente</th><th>Comprobado</th></tr></thead><tbody>'+
+    reglas.map(r => {
+      const f = fechaRegla(r.clave);
+      const est = ESTADO_REGLA[r.estado] || {};
+      return '<tr>'+
+        '<td><input type="date" data-regla="'+esc(r.clave)+'" value="'+esc(f)+'" '+
+          'style="padding:4px 6px;border:1px solid var(--line);border-radius:6px;'+
+          'background:var(--surface);font-size:13px">'+
+          (r.dias !== null && r.dias >= 0
+            ? '<span class="pista">en '+r.dias+' día(s)</span>'
+            : '<span class="pista">ya pasó</span>')+
+          (r.cambiada ? '<span class="pista"><b>corregida a mano</b>, de fábrica '+
+            esc(fechaCorta(REGLAS_FECHA[r.clave].fecha))+'</span>' : '')+'</td>'+
+        '<td><b>'+esc(r.nombre)+'</b><span class="sub mini" style="display:block">'+
+          esc(r.afecta||'')+'</span></td>'+
+        '<td class="mini">'+esc(r.que_cambia||'')+'</td>'+
+        '<td><span class="chip '+(r.estado === 'publicada' ? 'ok' : 'aviso')+' sin">'+
+          esc(est.nombre||r.estado)+'</span>'+
+          '<span class="sub mini" style="display:block">'+esc(est.ayuda||'')+'</span></td>'+
+        '<td class="mini">'+esc(r.fuente||'')+'</td>'+
+        '<td class="mini">'+esc(r.verificado ? fechaCorta(r.verificado) : 'sin comprobar')+'</td>'+
+        '</tr>';
+    }).join('')+
+    '</tbody></table></div>'+
+    '<p class="mini" style="margin:10px 0 0">Si corriges una fecha, queda constancia de que se ha '+
+    'cambiado a mano y de cuál era la de fábrica. Pon también la fecha en la que lo has '+
+    'comprobado, para que dentro de un año se sepa de cuándo es el dato.</p>'+
+    '<div class="campos" style="max-width:420px;margin-top:10px">'+
+    '<div class="campo"><label for="reglas-verif">Fecha de esta comprobación</label>'+
+    '<input id="reglas-verif" type="date" value="'+esc(hoy())+'">'+
+    '<span class="pista">Se guarda en las reglas que cambies</span></div></div>'+
+    '<div class="fila" style="margin-top:8px"><span class="sp"></span>'+
+    '<button class="btn plana" data-act="reglas-fabrica">Volver a las fechas de fábrica</button>'+
+    '<button class="btn" data-act="guardar-reglas">Guardar fechas</button></div></div>';
   return h;
 }
 
@@ -2756,6 +2823,139 @@ function regimenDe(e){
   return r;
 }
 
+/* ===================================================================
+   APARTADO 16: REGLAS NORMATIVAS CON FECHA DE VIGENCIA
+   ===================================================================
+   Las normas cambian de fecha. Un plazo se aplaza, un reglamento se
+   retrasa, una orden ministerial corre la entrada en vigor. Cuando eso
+   pasa, lo que NO puede ocurrir es que haya que reprogramar la
+   aplicación: hay que poder cambiar el dato.
+
+   Por eso cada fecha que decide algo vive aquí, con tres cosas al lado:
+   de dónde sale, cuándo se comprobó por última vez y si está publicada
+   de verdad o solo anunciada. Y se puede corregir desde Equipo sin
+   tocar una línea de código.
+
+   Lo que la aplicación NO hace es cambiar una fecha por su cuenta ni
+   dar por buena una fecha anunciada en una nota de prensa. Un anuncio
+   sin publicación en el BOE queda como anuncio, y así sale escrito. */
+const ESTADO_REGLA = {
+  publicada: { nombre:'Publicada', ayuda:'Está en el BOE o en el DOUE y es derecho aplicable' },
+  anunciada: { nombre:'Anunciada, sin publicar',
+               ayuda:'Se ha anunciado pero todavía no está publicada: no es derecho aplicable' },
+  propia:    { nombre:'Criterio de la empresa',
+               ayuda:'No viene de ninguna norma: lo decide esta empresa' },
+};
+const REGLAS_FECHA = {
+  maquinas_reglamento: {
+    nombre: 'El Reglamento de máquinas sustituye a la Directiva',
+    fecha: '2027-01-20',
+    estado: 'publicada',
+    que_cambia: 'A partir de esta fecha el documento deja de ser «Declaración CE de '+
+      'conformidad» y pasa a ser «Declaración UE de conformidad», con apartados distintos, '+
+      'y el expediente técnico se rige por el anexo IV en lugar del anexo VII.',
+    fuente: 'Reglamento (UE) 2023/1230, artículo 54. Deroga la Directiva 2006/42/CE.',
+    verificado: '2026-10-07',
+    afecta: 'Marco legal de cada expediente, nombre de la declaración y anexos citados.',
+  },
+  modificacion_criterio: {
+    nombre: 'Cambia el criterio de modificación sustancial',
+    fecha: '2027-01-20',
+    estado: 'publicada',
+    que_cambia: 'Hasta esa fecha se juzga con el apartado 2.1 de la Guía azul 2022, que exige '+
+      'tres condiciones cumulativas. Desde ella, con el artículo 3.16 del Reglamento, que es '+
+      'más amplio: basta un nuevo peligro o un riesgo aumentado que obligue a modificar el '+
+      'sistema de control de seguridad o a añadir medidas de estabilidad.',
+    fuente: 'Comunicación 2022/C 247/01 (Guía azul) y Reglamento (UE) 2023/1230, artículo 3.16.',
+    verificado: '2026-10-07',
+    afecta: 'Motor de intervención: una misma obra puede no ser sustancial hoy y sí serlo después.',
+  },
+  conservacion_dia_inicial: {
+    nombre: 'Cambia desde cuándo cuentan los diez años del expediente',
+    fecha: '2027-01-20',
+    estado: 'publicada',
+    que_cambia: 'El plazo sigue siendo de diez años, pero el día inicial cambia: con la '+
+      'Directiva cuenta desde la fabricación y con el Reglamento desde la introducción en el '+
+      'mercado o la puesta en servicio.',
+    fuente: 'Directiva 2006/42/CE, anexo VII parte A punto 2, y Reglamento (UE) 2023/1230, '+
+            'artículo 10 apartado 3.',
+    verificado: '2026-10-11',
+    afecta: 'Fecha hasta la que hay que conservar cada expediente técnico.',
+  },
+  verifactu_sociedades: {
+    nombre: 'Verifactu: sujetos del Impuesto sobre Sociedades',
+    fecha: '2027-01-01',
+    estado: 'publicada',
+    que_cambia: 'Desde esa fecha la facturación de los sujetos del Impuesto sobre Sociedades '+
+      'tiene que cumplir el reglamento de sistemas informáticos de facturación.',
+    fuente: 'Real Decreto 1007/2023.',
+    verificado: '2026-10-08',
+    afecta: 'Solo si la aplicación llega a emitir facturas. Hoy no las emite.',
+  },
+  verifactu_resto: {
+    nombre: 'Verifactu: resto de obligados',
+    fecha: '2027-07-01',
+    estado: 'publicada',
+    que_cambia: 'Entrada en vigor para el resto de obligados tributarios.',
+    fuente: 'Real Decreto 1007/2023.',
+    verificado: '2026-10-08',
+    afecta: 'Solo si la aplicación llega a emitir facturas. Hoy no las emite.',
+  },
+  verifactu_aplazamiento: {
+    nombre: 'Aplazamiento de Verifactu anunciado por Hacienda',
+    fecha: '2028-10-01',
+    estado: 'anunciada',
+    que_cambia: 'Una nota de la Agencia Tributaria del 5 de octubre de 2026 anuncia el '+
+      'aplazamiento a octubre de 2028. NO está publicado en el BOE, de modo que las fechas '+
+      'que siguen siendo derecho aplicable son las dos anteriores.',
+    fuente: 'Nota de la Agencia Tributaria de 5 de octubre de 2026. Sin publicación en el BOE.',
+    verificado: '2026-10-08',
+    afecta: 'Nada todavía. Está aquí para no perderlo de vista.',
+  },
+  factura_e_grandes: {
+    nombre: 'Factura electrónica obligatoria entre empresas, más de 8 M€',
+    fecha: '2027-10-06',
+    estado: 'publicada',
+    que_cambia: 'Obligación de factura electrónica en las operaciones entre empresas y '+
+      'profesionales para quienes facturen más de ocho millones de euros.',
+    fuente: 'Real Decreto 238/2026 y Orden HAC/1028/2026. Fecha calculada a partir de sus '+
+            'plazos de entrada en vigor.',
+    verificado: '2026-10-08',
+    afecta: 'Facturación. No afecta a la documentación técnica de las puertas.',
+  },
+  factura_e_resto: {
+    nombre: 'Factura electrónica obligatoria entre empresas, resto',
+    fecha: '2028-10-06',
+    estado: 'publicada',
+    que_cambia: 'Obligación de factura electrónica para el resto de empresas y profesionales, '+
+      'entre los que está Ariza.',
+    fuente: 'Real Decreto 238/2026 y Orden HAC/1028/2026. Fecha calculada a partir de sus '+
+            'plazos de entrada en vigor.',
+    verificado: '2026-10-08',
+    afecta: 'Facturación. Es la fecha que afecta a esta empresa.',
+  },
+};
+/* La fecha que vale: la corregida en Equipo si la hay, y si no la de fábrica. */
+const fechaRegla = clave => {
+  const g = ((S.ajustes || {}).reglas_fecha || {})[clave] || {};
+  return g.fecha || (REGLAS_FECHA[clave] || {}).fecha || '';
+};
+const reglaCompleta = clave => {
+  const base = REGLAS_FECHA[clave] || {};
+  const g = ((S.ajustes || {}).reglas_fecha || {})[clave] || {};
+  return Object.assign({}, base, g, { clave, cambiada: !!g.fecha && g.fecha !== base.fecha });
+};
+/* Días que faltan para una fecha. Negativo si ya pasó. */
+const diasHasta = f => f ? Math.round((new Date(f+'T00:00:00Z') -
+  new Date(hoy()+'T00:00:00Z')) / 86400000) : null;
+/* Las reglas que vienen por delante, de la más próxima a la más lejana */
+function reglasProximas(dias){
+  return Object.keys(REGLAS_FECHA).map(reglaCompleta)
+    .map(r => Object.assign({}, r, { dias: diasHasta(fechaRegla(r.clave)) }))
+    .filter(r => r.dias !== null && r.dias >= 0 && (!dias || r.dias <= dias))
+    .sort((a, b) => a.dias - b.dias);
+}
+
 /* Legislación según el marco que toque por la fecha de puesta en servicio */
 const EXP_MARCO = {
   directiva: {
@@ -2773,7 +2973,10 @@ const EXP_MARCO = {
     hasta: 'Aplicable a puertas puestas en servicio a partir del 20 de enero de 2027.',
   },
 };
-const marcoDeFecha = f => !f ? 'pendiente' : (f < '2027-01-20' ? 'directiva' : 'reglamento');
+/* La fecha del corte NO está escrita aquí: sale de la tabla de reglas, que se puede
+   corregir desde Equipo si la Unión Europea mueve la fecha. Apartado 16. */
+const marcoDeFecha = f => !f ? 'pendiente'
+  : (f < (fechaRegla('maquinas_reglamento') || '2027-01-20') ? 'directiva' : 'reglamento');
 
 /* ===== Base normativa =====
    Cada norma con su estado y, lo que más importa, bajo qué acto legal está armonizada.
@@ -5459,14 +5662,22 @@ function vistaExpediente(id){
         esc(EXP_MARCO[marco].nombre)+'</p>')+
     '</div></div>';
 
-  // Aviso cuando la puesta en servicio queda cerca del cambio de marco
-  const alCambio = e.fecha_puesta_servicio
-    ? Math.round((new Date('2027-01-20') - new Date(e.fecha_puesta_servicio)) / 86400000) : null;
-  if (marco === 'directiva' && alCambio !== null && alCambio <= 180)
-    h += '<p class="nota-oficina" style="margin:10px 0 0">Quedan '+alCambio+' días para el '+
-         '<b>20 de enero de 2027</b>, cuando el Reglamento (UE) 2023/1230 deroga la Directiva 2006/42/CE. '+
-         'Si la puesta en servicio se retrasa a esa fecha o más allá, el documento deja de ser «Declaración CE» '+
-         'y pasa a ser «Declaración UE de conformidad», con apartados distintos. Revisa la fecha antes de firmar.</p>';
+  // Aviso cuando la puesta en servicio queda cerca del cambio de marco.
+  // La fecha sale de la tabla de reglas, no escrita aquí. Apartado 16.
+  {
+    const rg = reglaCompleta('maquinas_reglamento');
+    const corte = fechaRegla('maquinas_reglamento');
+    const alCambio = (e.fecha_puesta_servicio && corte)
+      ? Math.round((new Date(corte+'T00:00:00Z') -
+                    new Date(e.fecha_puesta_servicio+'T00:00:00Z')) / 86400000) : null;
+    if (marco === 'directiva' && alCambio !== null && alCambio <= 180)
+      h += '<p class="nota-oficina" style="margin:10px 0 0">Quedan '+alCambio+' días para el '+
+           '<b>'+esc(fechaCorta(corte))+'</b>, cuando el Reglamento (UE) 2023/1230 deroga la '+
+           'Directiva 2006/42/CE. Si la puesta en servicio se retrasa a esa fecha o más allá, el '+
+           'documento deja de ser «Declaración CE» y pasa a ser «Declaración UE de conformidad», '+
+           'con apartados distintos. Revisa la fecha antes de firmar.'+
+           (rg.cambiada ? ' <b>Atención:</b> esta fecha se ha corregido a mano en Equipo.' : '')+'</p>';
+  }
   h += '</div>';
 
   /* Historial de versiones: cada emisión deja su línea y ninguna se borra */
@@ -9291,6 +9502,417 @@ async function informeSituacion(id){
    Separación que no se negocia: el DIAGNÓSTICO TÉCNICO es el informe y
    no se toca. Esto es la propuesta de trabajo. Si mañana cambia el
    presupuesto, cambia la propuesta, nunca el informe. */
+/* ===================================================================
+   APARTADO 22: EXPEDIENTE DE VIDA DE LA PUERTA
+   ===================================================================
+   Una puerta no es un expediente: es una vida. Se instala, se avería, se
+   mantiene, se le cambian piezas, se adecúa, se vuelve a documentar. Lo
+   que hasta ahora estaba repartido entre asistencias, revisiones y
+   expedientes se reúne aquí en una sola línea de tiempo.
+
+   Dos versiones del mismo documento:
+     · para el titular, sin precios ni notas internas
+     · interna, con horas, desplazamientos e importes, solo para
+       administración y oficina
+
+   Y una regla que no se salta: el documento dice DESDE CUÁNDO hay
+   registro. Que no conste una avería de 2015 no significa que no la
+   hubiera; significa que no está registrada, y eso es lo que se escribe.
+   ================================================================ */
+const CLASES_VIDA = {
+  alta:        { nombre:'Alta en el sistema',        orden:1 },
+  instalacion: { nombre:'Instalación',               orden:2 },
+  servicio:    { nombre:'Puesta en servicio',        orden:3 },
+  asistencia:  { nombre:'Asistencia',                orden:4 },
+  revision:    { nombre:'Revisión',                  orden:5 },
+  expediente:  { nombre:'Expediente documental',     orden:6 },
+  version:     { nombre:'Emisión de documentación',  orden:7 },
+  entrega:     { nombre:'Entrega de documentación',  orden:8 },
+  ensayo:      { nombre:'Ensayo de fuerzas',         orden:9 },
+};
+
+/* Reúne la vida de una puerta. Devuelve los hechos ordenados por fecha y los
+   recuentos. Las lecturas de la base de datos van en una sola consulta por tabla. */
+async function recogerVida(puertaId){
+  const p = puertaDe(puertaId) || {};
+  const av = S.avisos.filter(a => a.puerta_id === puertaId && !a.anulada)
+    .sort((x, y) => (x.creado||'') < (y.creado||'') ? -1 : 1);
+  const xs = S.expedientes.filter(x => x.puerta_id === puertaId)
+    .sort((x, y) => (x.creado||'') < (y.creado||'') ? -1 : 1);
+
+  let revs = [], mats = [];
+  try {
+    const r = await sb.from('revisiones').select('*').eq('puerta_id', puertaId).order('fecha');
+    revs = r.data || [];
+  } catch(_){}
+  if (av.length){
+    try {
+      const m = await sb.from('materiales').select('*').in('aviso_id', av.map(a => a.id));
+      mats = m.data || [];
+    } catch(_){}
+  }
+  const matsDe = id => mats.filter(m => m.aviso_id === id);
+
+  const hechos = [];
+  const mete = (fecha, clase, titulo, detalle, extra) => {
+    if (!fecha) return;
+    hechos.push(Object.assign({ fecha: String(fecha).slice(0,10), clase, titulo,
+      detalle: detalle || '' }, extra || {}));
+  };
+
+  if (p.creado) mete(p.creado, 'alta',
+    'La puerta se da de alta con el código '+(p.codigo||''),
+    [p.tipo, p.marca, p.modelo].filter(Boolean).join(' · '));
+
+  av.forEach(a => {
+    const piezas = matsDe(a.id);
+    const clase = (a.tipo === 'instalacion' ? 'instalacion'
+                 : (a.tipo === 'puesta_servicio' ? 'servicio' : 'asistencia'));
+    mete(a.cerrado || a.fecha_prevista || a.creado, clase,
+      tipoAsis(a.tipo) + (a.cerrado ? '' : ' (sin cerrar)'),
+      [a.diagnostico, a.trabajo].filter(Boolean).join(' — '),
+      { aviso: a,
+        estado_final: a.estado_final || '',
+        pendiente: a.pendiente ? (a.pendiente_texto || 'queda pendiente') : '',
+        piezas: piezas.map(m => [m.cantidad, m.unidad, m.descripcion].filter(Boolean).join(' ')),
+        /* Solo interna */
+        horas: a.horas, km: a.desplazamiento, tecnicos: a.num_tecnicos,
+        importe: a.cobro_importe, forma: a.cobro_forma,
+        sin_cargo: a.sin_cargo ? (a.sin_cargo_motivo || 'sin cargo') : '',
+        notas_oficina: a.notas_oficina || '',
+        tecnico: nombreTec(a.tecnico_id) || a.tecnico || '' });
+  });
+
+  revs.forEach(r => {
+    const malos = (r.puntos||[]).filter(x => x.r === 'mal');
+    const res = r.resultado || (r.apta === false ? 'no_apta' : 'apta');
+    mete(r.fecha, 'revision',
+      'Revisión: '+({ apta:'apta', reservas:'apta con reservas', no_apta:'no apta' }[res] || res),
+      malos.length ? malos.length+' punto(s) no conformes' : 'todos los puntos conformes',
+      { revision: r, riesgo: !!r.riesgo, tecnico: r.tecnico || '',
+        malos: malos.map(x => x.t + (x.v != null ? ' ('+x.v+')' : '')) });
+  });
+
+  xs.forEach(x => {
+    const iv = evaluarIntervencion(x);
+    mete(x.creado, 'expediente',
+      'Se abre el expediente '+(x.referencia||''),
+      [EXP_SITUACION[x.situacion], EXP_FAMILIA[x.familia],
+       iv.tipoNombre && ('tipo: '+iv.tipoNombre)].filter(Boolean).join(' · '),
+      { exp: x });
+    if (x.fecha_puesta_servicio) mete(x.fecha_puesta_servicio, 'servicio',
+      'Puesta en servicio declarada en el expediente '+(x.referencia||''),
+      'Marco legal: '+((EXP_MARCO[marcoDeFecha(x.fecha_puesta_servicio)]||{}).documento||''));
+    const f = ((x.datos||{}).fuerzas) || {};
+    if (f.fecha) mete(f.fecha, 'ensayo',
+      'Ensayo de fuerzas',
+      [f.instrumento && ('instrumento: '+f.instrumento),
+       f.calibracion && ('calibración: '+f.calibracion)].filter(Boolean).join(' · '),
+      { exp: x, fuerzas: f, perfil: perfilFuerza(x) });
+    versionesDe(x).forEach(v => mete(v.fecha, 'version',
+      'Se emite: '+(v.salida || (EXP_ESTADO[v.estado_nuevo]||'')),
+      [v.motivo, v.tecnico && ('firma: '+v.tecnico)].filter(Boolean).join(' · '),
+      { exp: x, version: v }));
+    entregasDe(x).forEach(r => mete(r.fecha, 'entrega',
+      'Entrega de documentación, acta '+r.n,
+      [(r.docs||[]).map(nombreDoc).join('; '),
+       r.receptor && ('recibió '+r.receptor+(r.dni ? ' ('+r.dni+')' : ''))]
+        .filter(Boolean).join(' — '),
+      { exp: x, entrega: r, pendientes: (r.pendientes||[]).length }));
+  });
+
+  hechos.sort((a, b) => a.fecha === b.fecha
+    ? (CLASES_VIDA[a.clase].orden - CLASES_VIDA[b.clase].orden)
+    : (a.fecha < b.fecha ? -1 : 1));
+
+  /* Piezas sustituidas a lo largo de la vida, con la fecha de cada una */
+  const piezas = [];
+  av.forEach(a => matsDe(a.id).forEach(m => piezas.push({
+    fecha: String(a.cerrado || a.creado || '').slice(0,10),
+    descripcion: m.descripcion || '', cantidad: m.cantidad, unidad: m.unidad || '',
+    motivo: tipoAsis(a.tipo), aviso: a.id })));
+  piezas.sort((x, y) => x.fecha < y.fecha ? -1 : 1);
+
+  const desde = hechos.length ? hechos[0].fecha : '';
+  return {
+    p, av, xs, revs, piezas, hechos, desde,
+    cuenta: {
+      asistencias: av.filter(a => a.cerrado).length,
+      abiertas:    av.filter(a => !a.cerrado).length,
+      revisiones:  revs.length,
+      noAptas:     revs.filter(r => (r.resultado || (r.apta === false ? 'no_apta' : 'apta')) === 'no_apta').length,
+      expedientes: xs.length,
+      emisiones:   xs.reduce((n, x) => n + versionesDe(x).length, 0),
+      entregas:    xs.reduce((n, x) => n + entregasDe(x).length, 0),
+      piezas:      piezas.length,
+    },
+    /* Solo para la versión interna */
+    economia: {
+      horas: av.reduce((n, a) => n + (+a.horas || 0), 0),
+      km:    av.reduce((n, a) => n + (+a.desplazamiento || 0), 0),
+      cobrado: av.reduce((n, a) => n + (+a.cobro_importe || 0), 0),
+      sinCargo: av.filter(a => a.sin_cargo).length,
+    },
+  };
+}
+
+async function vidaPuerta(puertaId, modo){
+  const interno = modo === 'interno';
+  if (interno && !esGestion()){ toast('La versión interna solo la ve administración y oficina.'); return; }
+  const v = await recogerVida(puertaId);
+  const p = v.p;
+  if (!p.id){ toast('No se encuentra la puerta.'); return; }
+  const c = p.cliente_id ? (clienteDe(p.cliente_id) || {}) : {};
+  const em = datosEmpresa();
+
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana.'); return; }
+  const campo = (k, val, clase) => '<tr><th>'+esc(k)+'</th><td>'+esc(oHueco(val, clase))+'</td></tr>';
+  const titular = p.cliente || c.nombre || '';
+  const dir = [p.direccion, p.ubicacion].filter(Boolean).join(' · ');
+  const secciones = [];
+  const sec = titulo => { secciones.push(titulo);
+    return '<section><h3 class="sec">'+secciones.length+'. '+esc(titulo)+'</h3>'; };
+
+  let H = '<section class="portada">'+
+    '<div class="marca">ARIZA <span>puertas automáticas</span></div>'+
+    '<div class="tit"><h1>Expediente de vida de la puerta</h1>'+
+    '<h2>'+esc(p.codigo || '')+(p.tipo ? ' · '+esc(p.tipo) : '')+'</h2>'+
+    '<p class="sit">'+esc(dir || 'Emplazamiento sin indicar')+'</p></div>'+
+    '<table class="port-datos">'+
+      campo('Titular', titular, 'no_identificado')+
+      campo('Identificación', p.codigo, 'no_identificado')+
+      campo('Hechos registrados', String(v.hechos.length))+
+      campo('Desde', v.desde ? fechaCorta(v.desde) : '', 'pendiente')+
+      campo('Documento emitido el', fechaCorta(hoy()))+
+    '</table>'+
+    (interno
+      ? '<p class="aviso-borrador">USO INTERNO. CONTIENE HORAS E IMPORTES. NO SE ENTREGA AL CLIENTE</p>'
+      : '')+
+    '<div class="pie-portada">'+esc(em.razon_social)+
+      (em.telefono?(' · '+esc(em.telefono)):'')+'</div></section>'+
+    '<section><h3 class="sec">Índice</h3><!--MARCADOR-INDICE--></section>';
+
+  /* ---- 1. De qué puerta hablamos ---- */
+  H += sec('De qué puerta hablamos')+
+    '<table class="datos">'+
+      campo('Código interno', p.codigo, 'no_identificado')+
+      campo('Titular', titular, 'no_identificado')+
+      campo('Emplazamiento', p.direccion, 'no_identificado')+
+      campo('Situación dentro del edificio', p.ubicacion, 'no_identificado')+
+      campo('Tipo', p.tipo, 'no_identificado')+
+      campo('Marca', p.marca, 'no_identificado')+
+      campo('Modelo', p.modelo, 'no_identificado')+
+      campo('Alta en el sistema', p.creado ? fechaCorta(p.creado) : '', 'pendiente')+
+    '</table></section>';
+
+  /* ---- 2. Resumen ---- */
+  H += sec('Resumen de su vida')+
+    '<table class="datos chk"><thead><tr><th>Concepto</th><th>Cuántos</th></tr></thead><tbody>'+
+    [['Asistencias cerradas', v.cuenta.asistencias],
+     ['Asistencias abiertas ahora mismo', v.cuenta.abiertas],
+     ['Revisiones realizadas', v.cuenta.revisiones],
+     ['Revisiones con resultado «no apta»', v.cuenta.noAptas],
+     ['Expedientes de documentación', v.cuenta.expedientes],
+     ['Documentos emitidos', v.cuenta.emisiones],
+     ['Entregas de documentación registradas', v.cuenta.entregas],
+     ['Piezas o componentes sustituidos', v.cuenta.piezas]]
+      .map(([k, n]) => '<tr><td>'+esc(k)+'</td><td>'+n+'</td></tr>').join('')+
+    '</tbody></table></section>';
+
+  /* ---- 3. Línea de vida ---- */
+  H += sec('Línea de vida, por orden de fecha');
+  if (!v.hechos.length)
+    H += '<p class="pendiente">NO CONSTA NINGÚN HECHO REGISTRADO para esta puerta.</p>';
+  else
+    H += '<table class="datos chk"><thead><tr><th style="width:74px">Fecha</th>'+
+      '<th style="width:112px">Qué</th><th>Detalle</th></tr></thead><tbody>'+
+      v.hechos.map(x => '<tr><td>'+esc(fechaCorta(x.fecha))+'</td>'+
+        '<td class="min">'+esc(CLASES_VIDA[x.clase].nombre)+'</td>'+
+        '<td><b>'+esc(x.titulo)+'</b>'+
+        (x.detalle ? '<br>'+esc(x.detalle) : '')+
+        (x.tecnico ? '<br><span class="min">Técnico: '+esc(x.tecnico)+'</span>' : '')+
+        (x.estado_final ? '<br><span class="min">Queda: '+esc(x.estado_final)+'</span>' : '')+
+        (x.pendiente ? '<br><span class="min"><b>Pendiente:</b> '+esc(x.pendiente)+'</span>' : '')+
+        ((x.piezas||[]).length ? '<br><span class="min">Piezas: '+esc(x.piezas.join('; '))+'</span>' : '')+
+        ((x.malos||[]).length ? '<br><span class="min">No conformes: '+esc(x.malos.join('; '))+'</span>' : '')+
+        (x.riesgo ? '<br><span class="min"><b>Se apreció riesgo para las personas</b></span>' : '')+
+        (x.pendientes ? '<br><span class="min">Se entregó con '+x.pendientes+
+          ' punto(s) pendientes</span>' : '')+
+        (interno && x.notas_oficina ? '<br><span class="min">Oficina: '+esc(x.notas_oficina)+'</span>' : '')+
+        (interno && (x.horas || x.km)
+          ? '<br><span class="min">'+[x.horas && (x.horas+' h'),
+              x.tecnicos > 1 && (x.tecnicos+' técnicos'),
+              x.km && (x.km+' km'),
+              x.importe && ('cobrado '+x.importe+' €'+(x.forma ? ' ('+x.forma+')' : '')),
+              x.sin_cargo && ('sin cargo: '+x.sin_cargo)].filter(Boolean).join(' · ')+'</span>'
+          : '')+
+        '</td></tr>').join('')+
+      '</tbody></table>';
+  H += '</section>';
+
+  /* ---- 4. Piezas y componentes sustituidos ---- */
+  H += sec('Piezas y componentes sustituidos')+
+    '<p>Importa saberlo por dos razones: para conocer el estado real de la puerta y porque, '+
+    'si se sustituye un componente por otro que no sea equivalente, la puerta puede dejar de '+
+    'ser la que se evaluó en su día.</p>';
+  if (!v.piezas.length)
+    H += '<p class="pendiente">NO CONSTA NINGUNA SUSTITUCIÓN registrada.</p>';
+  else
+    H += '<table class="datos chk"><thead><tr><th style="width:74px">Fecha</th>'+
+      '<th>Pieza o componente</th><th style="width:80px">Cantidad</th>'+
+      '<th style="width:140px">En qué intervención</th></tr></thead><tbody>'+
+      v.piezas.map(x => '<tr><td>'+esc(fechaCorta(x.fecha))+'</td>'+
+        '<td>'+esc(x.descripcion)+'</td>'+
+        '<td>'+esc([x.cantidad, x.unidad].filter(y => y != null && y !== '').join(' '))+'</td>'+
+        '<td class="min">'+esc(x.motivo)+'</td></tr>').join('')+
+      '</tbody></table>';
+  H += '</section>';
+
+  /* ---- 5. Revisiones ---- */
+  H += sec('Revisiones realizadas');
+  if (!v.revs.length)
+    H += '<p class="pendiente">NO CONSTA NINGUNA REVISIÓN registrada.</p>';
+  else
+    H += '<table class="datos chk"><thead><tr><th style="width:74px">Fecha</th>'+
+      '<th>Resultado</th><th>Puntos no conformes</th><th style="width:110px">Técnico</th>'+
+      '</tr></thead><tbody>'+
+      v.revs.map(r => {
+        const res = r.resultado || (r.apta === false ? 'no_apta' : 'apta');
+        const malos = (r.puntos||[]).filter(x => x.r === 'mal');
+        return '<tr><td>'+esc(fechaCorta(r.fecha))+'</td>'+
+          '<td'+(res === 'apta' ? '' : ' class="pendiente"')+'>'+
+          esc({ apta:'Apta', reservas:'Apta con reservas', no_apta:'No apta' }[res] || res)+
+          (r.riesgo ? ' · riesgo para las personas' : '')+'</td>'+
+          '<td class="min">'+esc(malos.length ? malos.map(x => x.t).join('; ') : 'ninguno')+'</td>'+
+          '<td class="min">'+esc(r.tecnico || HUECO.no_identificado)+'</td></tr>';
+      }).join('')+
+      '</tbody></table>';
+  H += '</section>';
+
+  /* ---- 6. Documentación ---- */
+  H += sec('Documentación de esta puerta');
+  if (!v.xs.length)
+    H += '<p class="pendiente">NO CONSTA NINGÚN EXPEDIENTE de documentación.</p>';
+  else
+    H += v.xs.map(x => {
+      const iv = evaluarIntervencion(x);
+      const ents = entregasDe(x);
+      return '<table class="datos">'+
+        campo('Expediente', x.referencia, 'no_identificado')+
+        campo('Situación', EXP_SITUACION[x.situacion], 'pendiente')+
+        campo('Familia', EXP_FAMILIA[x.familia], 'pendiente')+
+        campo('Tipo de intervención', iv.tipoNombre, 'pendiente')+
+        campo('Resultado del motor', iv.resultado
+          ? iv.resultado+'. '+RESULTADOS_INTERVENCION[iv.resultado].nombre
+          : 'no puede determinarse')+
+        campo('Estado documental', EXP_ESTADO[estadoExp(x)] || estadoExp(x))+
+        campo('Puesta en servicio', x.fecha_puesta_servicio
+          ? fechaCorta(x.fecha_puesta_servicio) : '', 'pendiente')+
+        campo('Documentos emitidos', String(versionesDe(x).length))+
+        campo('Entregas registradas', ents.length
+          ? ents.map(r => 'acta '+r.n+' el '+fechaCorta(r.fecha)+
+              ' a '+(r.receptor || HUECO.no_identificado)).join('; ')
+          : '', 'no_verificado')+
+        '</table>';
+    }).join('');
+  H += '</section>';
+
+  /* ---- 7. Ensayos de fuerzas ---- */
+  const ensayos = v.hechos.filter(x => x.clase === 'ensayo');
+  H += sec('Ensayos de fuerzas realizados');
+  if (!ensayos.length)
+    H += '<p class="pendiente">NO CONSTA NINGÚN ENSAYO de fuerzas registrado.</p>';
+  else
+    H += '<table class="datos chk"><thead><tr><th style="width:74px">Fecha</th>'+
+      '<th>Instrumento</th><th>Calibración</th><th>Dictamen</th></tr></thead><tbody>'+
+      ensayos.map(x => '<tr><td>'+esc(fechaCorta(x.fecha))+'</td>'+
+        '<td>'+esc((x.fuerzas||{}).instrumento || HUECO.no_identificado)+'</td>'+
+        '<td>'+esc((x.fuerzas||{}).calibracion || HUECO.no_aportado)+'</td>'+
+        '<td class="min">'+((x.perfil||{}).validado
+          ? 'según el perfil de ensayo aplicado'
+          : 'las medidas quedan registradas, sin dictamen: el perfil de ensayo no está '+
+            'contrastado con el texto de la norma')+'</td></tr>').join('')+
+      '</tbody></table>';
+  H += '</section>';
+
+  /* ---- 8. Cómo está hoy ---- */
+  const abiertas = v.av.filter(a => !a.cerrado);
+  const pendientesHoy = [];
+  v.av.filter(a => a.cerrado && a.pendiente).forEach(a =>
+    pendientesHoy.push('De la asistencia del '+fechaCorta(a.cerrado)+': '+
+      (a.pendiente_texto || 'quedó algo pendiente')));
+  v.xs.forEach(x => {
+    const falta = expPendientes(x);
+    if (falta.length) pendientesHoy.push('En el expediente '+(x.referencia||'')+' faltan '+
+      falta.length+' cosas por rellenar');
+    const est = estadoEntregas(x);
+    if (est.sinRegistrar.length) pendientesHoy.push('En el expediente '+(x.referencia||'')+
+      ', '+est.sinRegistrar.length+' documento(s) sin entrega registrada');
+  });
+  H += sec('Cómo está la puerta a día de hoy')+
+    '<table class="datos">'+
+      campo('Estado que consta', ({ ok:'Operativa', aviso:'Con incidencias',
+        fuera:'Fuera de servicio' })[p.estado] || p.estado, 'no_verificado')+
+      campo('Asistencias abiertas', abiertas.length
+        ? abiertas.map(a => tipoAsis(a.tipo)+' del '+fechaCorta(a.creado)).join('; ') : 'ninguna')+
+    '</table>'+
+    (pendientesHoy.length
+      ? '<p>Lo que consta pendiente:</p><ul>'+
+        pendientesHoy.map(x => '<li>'+esc(x)+'</li>').join('')+'</ul>'
+      : '<p>No consta nada pendiente en los registros de esta puerta.</p>')+
+    '</section>';
+
+  /* ---- 9. Solo interna: horas, desplazamientos e importes ---- */
+  if (interno){
+    H += sec('Horas, desplazamientos e importes')+
+      '<p class="aviso-borrador">Este apartado es de uso interno y no figura en la versión que '+
+      'se entrega al titular.</p>'+
+      '<table class="datos">'+
+        campo('Horas facturadas en total', String(v.economia.horas))+
+        campo('Kilómetros de desplazamiento', String(v.economia.km))+
+        campo('Importes cobrados en mano', v.economia.cobrado ? v.economia.cobrado+' €' : '0 €')+
+        campo('Asistencias sin cargo', String(v.economia.sinCargo))+
+      '</table>'+
+      '<p class="min">Las horas son las facturadas, no las trabajadas, y los importes solo '+
+      'recogen lo cobrado en el momento de la visita. La facturación no se lleva en esta '+
+      'aplicación, de modo que esto no es un resumen contable.</p>'+
+      '</section>';
+  }
+
+  /* ---- 10. Alcance y limitaciones ---- */
+  H += sec('Alcance de este documento')+
+    '<ul>'+
+    '<li>Recoge <b>lo que está registrado en la aplicación</b>'+
+    (v.desde ? ', y el primer hecho registrado es del '+esc(fechaCorta(v.desde)) : '')+
+    '. Lo anterior a esa fecha, o lo que no se registró, no consta aquí: <b>que no conste no '+
+    'significa que no ocurriera</b>.</li>'+
+    '<li>No es una declaración de conformidad ni acredita por sí mismo que la puerta cumpla la '+
+    'normativa aplicable. Esa acreditación, cuando procede, está en el expediente de '+
+    'documentación correspondiente.</li>'+
+    '<li>Los ensayos de fuerzas se recogen con su fecha e instrumento. Mientras el perfil de '+
+    'ensayo no esté contrastado con el texto de la norma, las medidas quedan registradas sin '+
+    'dictamen de conformidad.</li>'+
+    '<li>Las piezas sustituidas son las que consta que se anotaron en cada parte de trabajo.</li>'+
+    '</ul>'+
+    '<table class="datos">'+
+      campo('Documento emitido el', fechaCorta(hoy()))+
+      campo('Emitido por', (S.perfil||{}).nombre || em.representante, 'no_identificado')+
+      campo('Versión', interno ? 'Interna, con horas e importes'
+                               : 'Para el titular de la instalación')+
+    '</table></section>';
+
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
+    '<title>Vida de la puerta '+esc(p.codigo||'')+' · '+esc(titular)+'</title>'+
+    '<style>'+ cssLibro() +
+      marcaDeAgua(interno ? ['USO INTERNO'] : [])+
+    '</style></head><body>'+
+    H.replace('<!--MARCADOR-INDICE-->',
+      '<ol class="indice">'+ secciones.map(x => '<li>'+esc(x)+'</li>').join('') +'</ol>')+
+    '</body></html>');
+  w.document.close();
+}
+
 /* ===== Apartados 24 y 25: registrar una entrega y su acta =====
    Registrar la entrega es un acto distinto de generar el documento, y se guarda
    con quién recibió, su DNI y la lista de pendientes que había ese día. */
@@ -11329,6 +11951,7 @@ raiz.addEventListener('click', async e => {
   else if (a === 'exp-informe') informeSituacion(b.dataset.id);
   else if (a === 'exp-propuesta') propuestaActuaciones(b.dataset.id);
   else if (a === 'exp-emitir') dlgEmitirExpediente(b.dataset.id);
+  else if (a === 'vida-puerta') vidaPuerta(b.dataset.id, b.dataset.v);
   else if (a === 'exp-nueva-entrega') dlgRegistrarEntrega(S.exp);
   else if (a === 'exp-acta') actaEntrega(S.exp, b.dataset.v);
   else if (a === 'exp-marcado') etiquetaCE(b.dataset.id);
@@ -11660,6 +12283,38 @@ raiz.addEventListener('click', async e => {
       if (error) throw error;
       S.ajustes[clave] = o; pintar();
       toast(esEmp ? 'Datos de la empresa guardados.' : 'Límites guardados.');
+    } catch(err){ fallo(err); }
+  }
+  /* Apartado 16: corregir una fecha normativa sin tocar el código */
+  else if (a === 'guardar-reglas'){
+    const o = Object.assign({}, (S.ajustes||{}).reglas_fecha || {});
+    const verif = val('reglas-verif') || hoy();
+    let cambiadas = 0;
+    document.querySelectorAll('[data-regla]').forEach(x => {
+      const k = x.dataset.regla, f = x.value;
+      const base = (REGLAS_FECHA[k] || {}).fecha || '';
+      if (!f || f === base){ if (o[k]) { delete o[k]; cambiadas++; } return; }
+      if ((o[k]||{}).fecha !== f){
+        o[k] = { fecha: f, verificado: verif, cambiada_el: new Date().toISOString(),
+                 cambiada_por: yo() };
+        cambiadas++;
+      }
+    });
+    try {
+      const { error } = await sb.from('ajustes')
+        .upsert({ clave:'reglas_fecha', valor:o }, { onConflict:'clave' });
+      if (error) throw error;
+      S.ajustes.reglas_fecha = o; pintar();
+      toast(cambiadas ? cambiadas+' fecha(s) actualizadas.' : 'No había nada que cambiar.');
+    } catch(err){ fallo(err); }
+  }
+  else if (a === 'reglas-fabrica'){
+    try {
+      const { error } = await sb.from('ajustes')
+        .upsert({ clave:'reglas_fecha', valor:{} }, { onConflict:'clave' });
+      if (error) throw error;
+      S.ajustes.reglas_fecha = {}; pintar();
+      toast('Fechas de fábrica restauradas.');
     } catch(err){ fallo(err); }
   }
   else if (a === 'equipo-activo'){
