@@ -75,3 +75,21 @@ El `index.html` de producción **no se toca nunca**. La copia de pruebas es
 
 `index.html` (la copia de pruebas), `index-descargado.html`, `node_modules`,
 `servidor.log`, `resultado.txt`, `reg.log`. Están en el `.gitignore` de esta carpeta.
+
+## Copias de seguridad
+
+La suite `copias.mjs` comprueba la copia de seguridad de la aplicación de
+extremo a extremo: descarga el ZIP de verdad, lo abre, comprueba que el
+manifiesto cuadra con los datos, que el SQL de restauración escapa bien los
+apóstrofos y los nulos, que los ficheros llegan con su tamaño completo y que
+el aviso de copia vieja aparece cuando toca.
+
+Dos cosas que conviene no olvidar:
+
+- **El CRC32 se comprueba contra un valor conocido** (`123456789` → `0xCBF43926`).
+  Si alguien toca el generador de ZIP y lo rompe, se nota ahí.
+- **Las pruebas que rellenan campos de la puerta cortafuegos usan `rellenarCf`**,
+  que escribe, comprueba y reintenta. Esos campos repintan la pantalla al salir
+  de cada uno, y rellenarlos de corrido hacía fallar la prueba una vez de cada
+  muchas. Una prueba que falla a veces es peor que no tenerla: enseña a ignorar
+  los fallos.

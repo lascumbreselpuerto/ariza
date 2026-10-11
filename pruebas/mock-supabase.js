@@ -230,6 +230,33 @@ function almacen(bucket){
       return x ? { data: x.blob, error:null }
                : { data:null, error:{ message:'No existe el fichero' } };
     },
+    /* Listado por carpeta, como el de verdad: las carpetas vienen con id y
+       metadata a null, y los ficheros con su tamaño. */
+    async list(prefijo, opciones){
+      const pre = prefijo ? String(prefijo).replace(/^\/+|\/+$/g, '') : '';
+      const raiz = pre ? pre + '/' : '';
+      const vistos = new Map();
+      for (const clave of FICHEROS.keys()){
+        if (!clave.startsWith(bucket + '/')) continue;
+        const ruta = clave.slice(bucket.length + 1);
+        if (raiz && !ruta.startsWith(raiz)) continue;
+        const resto = ruta.slice(raiz.length);
+        if (!resto) continue;
+        const corte = resto.indexOf('/');
+        if (corte < 0){
+          const x = FICHEROS.get(clave);
+          let tam = 0;
+          try { tam = (x.blob && x.blob.size) || 0; } catch(_){}
+          vistos.set(resto, { name: resto, id: 'f-'+resto,
+                              metadata: { size: tam, mimetype: x.tipo || '' } });
+        } else {
+          const carpeta = resto.slice(0, corte);
+          if (!vistos.has(carpeta))
+            vistos.set(carpeta, { name: carpeta, id: null, metadata: null });
+        }
+      }
+      return { data: [...vistos.values()], error: null };
+    },
     async createSignedUrl(ruta){
       const x = FICHEROS.get(bucket + '/' + ruta);
       if (!x) return { data:null, error:{ message:'No existe el fichero' } };

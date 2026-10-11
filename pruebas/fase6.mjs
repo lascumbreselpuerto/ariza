@@ -65,6 +65,27 @@ const todasModif = async (pag, v) => {
 };
 const motor = async pag => (await pag.textContent('#vista'));
 
+/* Los campos de la puerta cortafuegos repintan la pantalla al salir de cada
+   uno, porque de lo que se escriba depende el resultado del motor. Si se
+   rellenan de corrido, un repintado puede pillar a medias el campo siguiente.
+   Por eso se rellena, se comprueba y se reintenta: así la prueba mide el
+   comportamiento de la aplicación y no la suerte del momento. */
+const rellenarCf = async (pag, pares) => {
+  for (const [k, v] of pares){
+    const sel = '[data-exp="cf.'+k+'"]';
+    for (let i = 0; i < 4; i++){
+      await pag.fill(sel, v);
+      await pag.waitForTimeout(320);
+      if ((await pag.inputValue(sel)) === v) break;
+    }
+  }
+  const malos = [];
+  for (const [k, v] of pares)
+    if ((await pag.inputValue('[data-exp="cf.'+k+'"]')) !== v) malos.push(k);
+  return malos;
+};
+
+
 /* ══════ 12 · EL SEGUNDO NIVEL DEL ÁRBOL ══════ */
 {
   const { ctx, pag } = await abrir();
@@ -358,11 +379,13 @@ const motor = async pag => (await pag.textContent('#vista'));
        /no puede quedar en blanco/.test(t0));
 
   // componentes sustituidos no originales: queda fuera de certificación
-  await pag.fill('[data-exp="cf.fabricante"]', 'Andreu');
-  await pag.fill('[data-exp="cf.modelo"]', 'CF-60 Metálica');
-  await pag.fill('[data-exp="cf.clasificacion"]', 'EI2 60-C5');
-  await pag.fill('[data-exp="cf.dop"]', 'DoP 2019/CF60/014');
-  await pag.waitForTimeout(500);
+  {
+    const malos = await rellenarCf(pag, [['fabricante','Andreu'],
+      ['modelo','CF-60 Metálica'], ['clasificacion','EI2 60-C5'],
+      ['dop','DoP 2019/CF60/014']]);
+    paso('15 · los cuatro datos del fabricante se guardan', malos.length === 0, malos.join(', '));
+  }
+  await pag.waitForTimeout(400);
   await pag.selectOption('select[data-exp="cf.comp_sust"]', 'si'); await pag.waitForTimeout(700);
   paso('15 · al decir que sí, pide cuáles',
        await pag.locator('[data-exp="cf.comp_lista"]').count() === 1);
@@ -415,10 +438,13 @@ const motor = async pag => (await pag.textContent('#vista'));
   const { ctx, pag } = await abrir();
   await crear(pag, 'adecuacion', 'cortafuegos');
   await irA(pag, 'familia');
-  await pag.fill('[data-exp="cf.fabricante"]', 'Andreu');
-  await pag.fill('[data-exp="cf.modelo"]', 'CF-60 Metálica');
-  await pag.fill('[data-exp="cf.clasificacion"]', 'EI2 60-C5');
-  await pag.fill('[data-exp="cf.dop"]', 'DoP 2019/CF60/014');
+  {
+    const malos = await rellenarCf(pag, [['fabricante','Andreu'],
+      ['modelo','CF-60 Metálica'], ['clasificacion','EI2 60-C5'],
+      ['dop','DoP 2019/CF60/014']]);
+    paso('15c · los cuatro datos quedan escritos antes de imprimir',
+         malos.length === 0, malos.join(', '));
+  }
   await pag.selectOption('select[data-exp="cf.comp_sust"]', 'no');
   await pag.waitForTimeout(900);
 

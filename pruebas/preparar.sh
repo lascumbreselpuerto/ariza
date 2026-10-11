@@ -85,7 +85,13 @@ TIPOS_SIN_CUESTIONARIO PREGUNTAS_CRITICAS PREGUNTA_DESTINO VISTAS_FOTO
 FOTOS_RECOMENDADAS CRITERIOS_MODIFICACION EXP_MARCO
 REGLAS_FECHA ESTADO_REGLA fechaRegla reglaCompleta diasHasta reglasProximas
 CLASES_VIDA recogerVida EXP_SITUACION ASISTENCIAS tipoAsis nombreTec
-S
+TABLAS_COPIA BUCKETS_COPIA crc32 crearZip sqlValor sqlInserts copiaUltima
+copiaSeguridad listarBucket
+libroExpediente informeSituacion propuestaActuaciones actaEntrega vidaPuerta
+hojaDeCampo libroMantenimiento etiquetaCE documentoDTE documentoCPF hojaParte
+hojaContrato hojaImprimible etiquetaTermica expDe puertaDe clienteDe cargar
+pintar peligrosDe
+S sb
 """.split()
 
 lineas = ['\n/* ===== Inyectado por preparar.sh SOLO en la copia de pruebas ===== */',
