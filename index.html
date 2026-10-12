@@ -540,13 +540,19 @@ const horasFacturables = mins => {
   const m = Math.round(+mins || 0);
   if (m <= 0) return 0;
   const enteras = Math.floor(m / 60) + ((m % 60) >= 30 ? 1 : 0);
-  const minimo = Math.max(1, Math.ceil(+((S.tarifas || {}).minimo_horas) || 0));
+  /* El mínimo facturable sale de las tarifas, que SOLO las deja leer la base de
+     datos al administrador. Para un técnico S.tarifas viene vacío, así que el parte
+     que firmaba el cliente podía poner 1 hora mientras la oficina esperaba 2. Por
+     eso el mínimo se guarda también en los ajustes, que los lee todo el mundo. */
+  const tar = (S.tarifas || {}).minimo_horas;
+  const aju = (S.ajustes || {}).minimo_horas;
+  const minimo = Math.max(1, Math.round(+(tar != null ? tar : aju) || 0));
   return Math.max(enteras, minimo);
 };
 
 /* Mes en formato 2026-09, para los filtros de la pantalla de gestión */
 const mesDe = s => String(s || '').slice(0, 7);
-const mesActual = () => new Date().toISOString().slice(0, 7);
+const mesActual = () => hoy().slice(0, 7);   // en hora local: el día 1 a las 00:30 salía el mes anterior
 const nombreMes = m => {
   if (!m) return '';
   const [a, x] = m.split('-');
@@ -559,6 +565,14 @@ function periodicidadDe(p){
   if (!p) return 12;
   if (p.periodicidad_meses) return p.periodicidad_meses;
   const c = p.cliente_id ? contratoVivo(p.cliente_id) : null;
+  /* El contrato puede fijar una periodicidad PARA ESTA PUERTA, distinta de la del
+     contrato entero: es lo que sale impreso en el contrato que firma el cliente.
+     Antes se guardaba y no se leía nunca, así que la puerta se revisaba con la
+     periodicidad general y se incumplía el contrato firmado sin que nada avisara. */
+  if (c){
+    const f = (S.contratoPuertas || []).find(x => x.contrato_id === c.id && x.puerta_id === p.id);
+    if (f && f.periodicidad_meses) return f.periodicidad_meses;
+  }
   if (c && c.periodicidad_meses) return c.periodicidad_meses;
   const d = S.ajustes.periodicidad_defecto;
   return (typeof d === 'number' && d > 0) ? d : 12;
@@ -571,6 +585,17 @@ const iso = d => new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString
 const deIso = s => { const [a,m,d] = String(s).slice(0,10).split('-').map(Number); return new Date(a, m-1, d); };
 const sumaDias = (d, n) => { const x = new Date(d); x.setDate(x.getDate()+n); return x; };
 const sumaMeses = (d, n) => { const x = new Date(d); x.setDate(1); x.setMonth(x.getMonth()+n); return x; };
+/* Sumar meses CONSERVANDO el día, que es lo que hace falta para las revisiones.
+   setMonth a secas desborda: el 31 de agosto más 6 meses da el 3 de marzo, porque
+   el 31 de febrero no existe y el navegador se lo lleva al mes siguiente. Aquí el
+   día se recorta al último del mes de destino: 31 de agosto + 6 = 28 de febrero. */
+const sumaMesesDia = (d, n) => {
+  const x = new Date(d), dia = x.getDate();
+  x.setDate(1); x.setMonth(x.getMonth() + n);
+  const ultimo = new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate();
+  x.setDate(Math.min(dia, ultimo));
+  return x;
+};
 /* lunes de la semana de una fecha */
 const lunesDe = d => { const x = new Date(d); const n = (x.getDay()+6)%7; x.setDate(x.getDate()-n); x.setHours(0,0,0,0); return x; };
 const mismoDia = (a, b) => iso(a) === iso(b);
@@ -592,11 +617,16 @@ const nombreCliente = a => {
   const p = a.puerta_id ? puertaDe(a.puerta_id) : null;
   return (p && p.cliente) || a.contacto_nombre || 'Sin cliente';
 };
+/* Dónde hay que ir. Cada paso cae al siguiente si no tiene dirección: una puerta
+   sin dirección o un cliente sin dirección dejaban la asistencia sin sitio al que
+   ir, y la dirección escrita a mano no se usaba ni para «Cómo llegar». */
 const dondeAsistencia = a => {
   const p = a.puerta_id ? puertaDe(a.puerta_id) : null;
-  if (p) return [p.direccion, p.ubicacion].filter(Boolean).join(' · ');
+  const dp = p ? [p.direccion, p.ubicacion].filter(Boolean).join(' · ') : '';
+  if (dp) return dp;
   const c = a.cliente_id ? clienteDe(a.cliente_id) : null;
-  if (c) return [c.direccion, c.poblacion].filter(Boolean).join(' · ');
+  const dc = c ? [c.direccion, c.poblacion].filter(Boolean).join(' · ') : '';
+  if (dc) return dc;
   return a.direccion_libre || '';
 };
 const tipoAsis = t => (S.ajustes.etiquetas_tipo && S.ajustes.etiquetas_tipo[t]) || ASISTENCIAS[t] || t;
@@ -786,19 +816,22 @@ async function vistaPublica(ref){
 /* ================= Datos ================= */
 async function cargar(){
   S.cargando = true; pintar();
+  /* El .range es a propósito: Supabase corta en 1.000 filas por defecto. Sin esto,
+     al pasar de 1.000 etiquetas las puertas con etiqueta posterior dejaban de
+     encontrarla, y sus botones de QR y de etiqueta desaparecían. */
   const [p, a, e, t, j, c, k] = await Promise.all([
-    sb.from('puertas').select('*').order('codigo'),
-    sb.from('avisos').select('*').order('creado', {ascending:false}),
-    sb.from('etiquetas').select('*').order('codigo'),
+    sb.from('puertas').select('*').order('codigo').range(0, 19999),
+    sb.from('avisos').select('*').order('creado', {ascending:false}).range(0, 19999),
+    sb.from('etiquetas').select('*').order('codigo').range(0, 19999),
     sb.from('perfiles').select('*').order('nombre'),
     sb.from('ajustes').select('*'),
-    sb.from('clientes').select('*').order('nombre'),
-    sb.from('contratos').select('*').order('fecha_vencimiento')
+    sb.from('clientes').select('*').order('nombre').range(0, 19999),
+    sb.from('contratos').select('*').order('fecha_vencimiento').range(0, 19999)
   ]);
   if (!k.error) S.contratos = k.data || [];
   // Puertas cubiertas por cada contrato, con su cuota. Solo las deja ver la
   // base de datos al administrador y a la oficina; al técnico le viene vacío.
-  const cp = esGestion() ? await sb.from('contrato_puertas').select('*')
+  const cp = esGestion() ? await sb.from('contrato_puertas').select('*').range(0, 19999)
                          : { data: [], error: null };
   S.contratoPuertas = cp.error ? [] : (cp.data || []);
   // Tarifas, catálogo y valoraciones: las tarifas y el margen solo los deja ver
@@ -806,7 +839,7 @@ async function cargar(){
   const [tf, cat, val] = await Promise.all([
     sb.from('tarifas').select('*').limit(1).maybeSingle(),
     sb.from('catalogo').select('*').order('descripcion'),
-    esGestion() ? sb.from('valoraciones').select('*') : Promise.resolve({ data: [], error: null })
+    esGestion() ? sb.from('valoraciones').select('*').range(0, 19999) : Promise.resolve({ data: [], error: null })
   ]);
   S.tarifas = (!tf.error && tf.data) ? tf.data : null;
   S.catalogo = cat.error ? [] : (cat.data || []);
@@ -818,7 +851,7 @@ async function cargar(){
   if (!t.error) S.equipo = t.data || [];
   if (!c.error) S.clientes = c.data || [];
   await fotosDelEquipo();
-  const xp = await sb.from('expedientes').select('*').order('creado', {ascending:false});
+  const xp = await sb.from('expedientes').select('*').order('creado', {ascending:false}).range(0, 19999);
   S.expedientes = xp.error ? [] : (xp.data || []);
   if (!j.error){ S.ajustes = {}; (j.data || []).forEach(x => { S.ajustes[x.clave] = x.valor; }); }
   // materiales ya usados, para ir sugiriéndolos al técnico
@@ -1014,8 +1047,13 @@ function vistaFicha(id){
        '<button class="btn sm plana" data-act="planificar" data-id="'+p.id+'">Planificar</button></div>';
   if (p.sin_mantenimiento) h += '<p class="muted" style="margin:0">Esta puerta está fuera del plan de mantenimiento.</p>';
   else {
+    const kv = p.cliente_id ? contratoVivo(p.cliente_id) : null;
+    const porPuertaDelContrato = kv && (S.contratoPuertas || [])
+      .some(x => x.contrato_id === kv.id && x.puerta_id === p.id && x.periodicidad_meses);
     h += '<p class="mini" style="margin:0">'+esc(nombrePeriodo(periodicidadDe(p)))+
-      (p.periodicidad_meses ? ' (fijado en esta puerta)' : (p.cliente_id && contratoVivo(p.cliente_id) ? ' (según contrato)' : ' (por defecto)'))+'</p>';
+      (p.periodicidad_meses ? ' (fijado en esta puerta)'
+        : (porPuertaDelContrato ? ' (según el contrato, fijado para esta puerta)'
+          : (kv ? ' (según contrato)' : ' (por defecto)')))+'</p>';
     h += '<div class="fila" style="margin-top:10px">'+
       (p.proxima_revision ? chipRevision(dias(p.proxima_revision))+'<span class="mini">Toca el '+esc(fechaCorta(p.proxima_revision))+'</span>'
                           : '<span class="chip gris sin">Sin fecha</span><span class="mini">Ponle fecha para que entre en el calendario</span>')+
@@ -2000,11 +2038,15 @@ function vistaGestion(){
   const coste = suma(delMes, 'coste_total');
   const margen = suma(delMes, 'margen');
 
-  // pendiente de facturar: cerradas, no cobradas en obra, no marcadas como facturadas
+  /* Pendiente de facturar: cerradas, no cobradas en obra, no marcadas como
+     facturadas. Las de importe 0 € también salen: antes se descartaban, y una
+     visita cerrada sin horas se valoraba en 0 y desaparecía de aquí, quedándose
+     cerrada, firmada y sin cobrar sin que nada lo dijera. */
   const pendientes = cerradas.filter(a => {
     const v = con(a);
-    return v && !v.facturado && !a.cobrado && !a.sin_cargo && +v.imp_total > 0;
+    return v && !v.facturado && !a.cobrado && !a.sin_cargo;
   }).sort((x, y) => x.cerrado < y.cerrado ? -1 : 1);
+  const aCero = pendientes.filter(a => !(+con(a).imp_total > 0));
   const totalPendiente = pendientes.reduce((t, a) => t + (+con(a).imp_total), 0);
   const sinValorar = cerradas.filter(a => !con(a));
 
@@ -2037,7 +2079,12 @@ function vistaGestion(){
        '<span class="mini">'+pendientes.length+' · '+eur(totalPendiente)+'</span></div>';
   if (!pendientes.length) h += '<p class="muted" style="margin:0">Nada pendiente. Todo lo cerrado está cobrado o facturado.</p>';
   else {
-    h += '<p class="mini" style="margin:0 0 10px">Visitas cerradas que nadie ha cobrado todavía. Márcalas cuando emitas la factura.</p><div class="lista">';
+    h += '<p class="mini" style="margin:0 0 10px">Visitas cerradas que nadie ha cobrado todavía. Márcalas cuando emitas la factura.</p>';
+    if (aCero.length)
+      h += '<div class="sin-ficha" style="margin-bottom:10px">'+aCero.length+' visita'+(aCero.length===1?'':'s')+
+        ' valorada'+(aCero.length===1?'':'s')+' en 0 €: se cerraron sin horas. Ábrela, pon las horas y recalcula, '+
+        'o márcala como que no se cobra.</div>';
+    h += '<div class="lista">';
     pendientes.slice(0, 60).forEach(a => {
       const v = con(a), p = a.puerta_id ? puertaDe(a.puerta_id) : null;
       const dias_ = -dias(a.cerrado);
@@ -2873,7 +2920,15 @@ async function subirFotos(puertaId, ficheros){
       const ruta = puertaId+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'.'+ext;
       const { error } = await sb.storage.from('fotos').upload(ruta, blob, { contentType: tipo });
       if (error) throw error;
-      await sb.from('fotos').insert({ puerta_id: puertaId, ruta, autor: yo() });
+      /* El alta en la tabla hay que comprobarla: supabase no lanza error, lo
+         devuelve. Si no se comprobaba, la foto se quedaba en el almacén sin
+         ninguna fila que la nombre (ocupando sitio y sin poder borrarla desde la
+         aplicación) y aun así salía el aviso de «foto subida». */
+      const { error: eFila } = await sb.from('fotos').insert({ puerta_id: puertaId, ruta, autor: yo() });
+      if (eFila){
+        await sb.storage.from('fotos').remove([ruta]);   // no se deja basura en el almacén
+        throw eFila;
+      }
       n++;
     } catch(e){ fallo(e); }
   }
@@ -2970,6 +3025,7 @@ async function pintarDocs(puertaId){
 function urlPublica(ruta){ return SUPA_URL + '/storage/v1/object/public/publicos/' + ruta.split('/').map(encodeURIComponent).join('/'); }
 async function subirDocs(puertaId, ficheros, tipo, publico){
   const bucket = publico ? 'publicos' : 'documentos';
+  let n = 0, fallos = 0;
   for (const file of ficheros){
     try {
       if (file.size > 20*1024*1024) throw new Error('El archivo "'+file.name+'" pasa de 20 MB');
@@ -2977,10 +3033,20 @@ async function subirDocs(puertaId, ficheros, tipo, publico){
       const ruta = puertaId+'/'+Date.now()+'-'+limpio;
       const { error } = await sb.storage.from(bucket).upload(ruta, file, { contentType: file.type || 'application/pdf' });
       if (error) throw error;
-      await sb.from('documentos').insert({ puerta_id: puertaId, nombre: file.name, tipo, ruta, autor: yo(), publico: !!publico, bucket });
-    } catch(e){ fallo(e); }
+      const { error: eFila } = await sb.from('documentos').insert({ puerta_id: puertaId, nombre: file.name, tipo, ruta, autor: yo(), publico: !!publico, bucket });
+      if (eFila){
+        await sb.storage.from(bucket).remove([ruta]);
+        throw eFila;
+      }
+      n++;
+    } catch(e){ fallos++; fallo(e); }
   }
-  toast('Documentación subida.');
+  /* El aviso dice lo que ha pasado de verdad. Antes decía «Documentación subida»
+     siempre, incluso cuando fallaban todos los ficheros: el certificado no estaba
+     guardado y en pantalla parecía que sí. */
+  if (n) toast(n === 1 ? 'Documento subido.' : n+' documentos subidos.');
+  if (fallos && !n) toast('No se ha podido subir nada. Mira el error de arriba.');
+  else if (fallos) toast(fallos+(fallos===1?' documento no se ha subido.':' documentos no se han subido.'));
   pintarDocs(puertaId);
 }
 async function cambiarVisibilidad(docId, puertaId){
@@ -2993,11 +3059,27 @@ async function cambiarVisibilidad(docId, puertaId){
     if (e2) throw e2;
     const { error: e3 } = await sb.storage.from(destino).upload(d.ruta, fichero, { contentType: fichero.type || 'application/pdf', upsert: true });
     if (e3) throw e3;
-    await sb.storage.from(origen).remove([d.ruta]);
+    /* Primero se cambia la ficha y solo después se borra del almacén de origen.
+       Antes se borraba antes de confirmar: si el cambio de ficha fallaba al hacer
+       público un documento, el PDF se quedaba servido en abierto mientras la
+       aplicación lo seguía listando como privado, y nadie se enteraba. */
     const { error: e4 } = await sb.from('documentos').update({ publico: !d.publico, bucket: destino }).eq('id', docId);
-    if (e4) throw e4;
-    toast(d.publico ? 'Ya no lo ve el cliente.' : 'Ahora el cliente lo ve al escanear el QR.');
+    if (e4){
+      await sb.storage.from(destino).remove([d.ruta]);    // se deshace la copia
+      throw e4;
+    }
+    const { error: e5 } = await sb.storage.from(origen).remove([d.ruta]);
     pintarDocs(puertaId);
+    if (e5){
+      /* El borrado del origen hay que comprobarlo: si no se pudo quitar del almacén
+         público, el documento sigue descargable con su enlace y decir «ya no lo ve
+         el cliente» sería mentira. */
+      toast(d.publico
+        ? 'Marcado como no visible, pero NO se ha podido quitar del almacén público: sigue descargable con su enlace. Vuelve a intentarlo.'
+        : 'Ahora el cliente lo ve al escanear el QR. Ha quedado una copia en el almacén privado.');
+      return;
+    }
+    toast(d.publico ? 'Ya no lo ve el cliente.' : 'Ahora el cliente lo ve al escanear el QR.');
   } catch(err){ fallo(err); }
 }
 
@@ -7694,7 +7776,7 @@ async function documentoDTE(expId){
   const art = via === 'micro' ? '37' : '38';
   const norma = ((EXP_NORMAS[e.familia]||[])[0]||[''])[0];
   const docs = S.expDocs || [];
-  const hoy = new Date().toISOString().slice(0,10);
+  const hoy = new Date(Date.now() - new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);  // en hora local
 
   const w = window.open('', '_blank');
   if (!w){ toast('El navegador ha bloqueado la ventana.'); return; }
@@ -7862,7 +7944,7 @@ function panelCPF(){
 
 function documentoCPF(){
   const c = datosCPF(), em = datosEmpresa();
-  const hoy = new Date().toISOString().slice(0,10);
+  const hoy = new Date(Date.now() - new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);  // en hora local
   const w = window.open('', '_blank');
   if (!w){ toast('El navegador ha bloqueado la ventana.'); return; }
   const lista = t => '<ul>'+String(t||'').split('\n').filter(x => x.trim())
@@ -8050,7 +8132,7 @@ function etiquetaCE(expId){
   const M = EXP_MARCO[marco];
   const motor = pu.motorizada !== 'no';
   const norma = ((EXP_NORMAS[e.familia]||[])[0]||[''])[0];
-  const anio = (e.fecha_puesta_servicio || new Date().toISOString().slice(0,10)).slice(0,4);
+  const anio = (e.fecha_puesta_servicio || hoy()).slice(0,4);
   const reg = regimenDe(e);
   const pr = reg.ddp ? (EXP_PRESTACIONES[e.familia] || []).filter(x => x[3]) : [];
   const pv = (d.prest||{}).v || {};
@@ -8444,7 +8526,7 @@ async function libroExpediente(id){
   const dir = [ (d.obra||{}).emplazamiento, (d.obra||{}).ubicacion ].filter(Boolean).join(' · ')
             || [p.direccion, p.ubicacion].filter(Boolean).join(' · ');
   const titular = (d.obra||{}).titular || c.nombre || p.cliente || '';
-  const hoy = new Date().toISOString().slice(0,10);
+  const hoy = new Date(Date.now() - new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);  // en hora local
   const sello = em.razon_social + (em.nif ? ' · ' + em.nif : '');
 
   const reg = regimenDe(e);
@@ -9412,7 +9494,7 @@ async function informeSituacion(id){
       campo('Titular', titular, 'no_identificado')+
       campo('Identificación de la puerta', [p.codigo, pu.denominacion].filter(Boolean).join(' · '),
             'no_identificado')+
-      campo('Fecha de la inspección', fechaCorta(new Date().toISOString().slice(0,10)))+
+      campo('Fecha de la inspección', fechaCorta(hoy()))+
     '</table>'+
     '<p class="aviso-borrador">ESTE DOCUMENTO NO ES UNA DECLARACIÓN DE CONFORMIDAD</p>'+
     '<p class="min" style="margin:4mm 0 0">'+esc(AVISO_NO_CONFORMIDAD)+'</p>'+
@@ -9430,7 +9512,7 @@ async function informeSituacion(id){
     '<table class="datos">'+
       campo('Referencia', e.referencia, 'no_identificado')+
       campo('Versión de este informe', String(vs.length + 1))+
-      campo('Fecha de emisión', fechaCorta(new Date().toISOString().slice(0,10)))+
+      campo('Fecha de emisión', fechaCorta(hoy()))+
       campo('Empresa que lo emite', em.razon_social, 'no_identificado')+
       campo('NIF', em.nif, 'no_aportado')+
       campo('Técnico que realiza la inspección',
@@ -9910,7 +9992,7 @@ async function informeSituacion(id){
       campo('Técnico que realiza la inspección',
             (d.entrega||{}).tecnico || e.autor, 'no_identificado')+
       campo('Empresa', em.razon_social, 'no_identificado')+
-      campo('Fecha', fechaCorta(new Date().toISOString().slice(0,10)))+
+      campo('Fecha', fechaCorta(hoy()))+
     '</table>'+
     '<div class="firmas"><div class="firma"><span>Firma del técnico</span></div></div>'+
     '</section>';
@@ -10658,7 +10740,7 @@ async function propuestaActuaciones(id){
   const titular = (d.obra||{}).titular || c.nombre || p.cliente || '';
   const dir = [ (d.obra||{}).emplazamiento, (d.obra||{}).ubicacion ].filter(Boolean).join(' · ')
             || [p.direccion, p.ubicacion].filter(Boolean).join(' · ');
-  const hoy = new Date().toISOString().slice(0,10);
+  const hoy = new Date(Date.now() - new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);  // en hora local
 
   let H = '<section class="portada">'+
     '<div class="marca">ARIZA <span>puertas automáticas</span></div>'+
@@ -10883,13 +10965,28 @@ const dlg = $('#dlg'), dlgForm = $('#dlg-form');
 let alGuardar = null;
 function abrirDlg(html, guardar){ dlgForm.innerHTML = html; alGuardar = guardar; dlg.showModal(); const f = dlgForm.querySelector('input,select,textarea'); if (f) f.focus(); }
 function cerrarDlg(){ dlg.close(); alGuardar = null; }
-dlgForm.addEventListener('submit', e => { e.preventDefault(); if (alGuardar) alGuardar(); });
+/* Un solo envío por vez. Con red lenta, dos toques en «Cerrar visita» lanzaban
+   dos guardados en paralelo: dos borrados y dos altas de los mismos materiales. */
+let enviando = false;
+dlgForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  if (!alGuardar || enviando) return;
+  const btn = dlgForm.querySelector('button[type="submit"]');
+  enviando = true;
+  if (btn) btn.disabled = true;
+  try { await alGuardar(); }
+  finally { enviando = false; if (btn && btn.isConnected) btn.disabled = false; }
+});
 /* Contrato: el total se recalcula solo y la duración fija el vencimiento */
 dlgForm.addEventListener('input', e => {
   if (e.target.classList && e.target.classList.contains('k-c')) sumarCuotas();
   /* Buscador de cliente del formulario de puerta: al escribir se busca, y si el
      texto ya no es el de la ficha enlazada se desenlaza, para que no quede una
      puerta diciendo un nombre y apuntando a otra ficha. */
+  /* Contrato: las condiciones se vigilan también mientras se escribe, no solo al
+     salir del campo. Si no, escribes un descuento, le das a Guardar y el contrato
+     se firma con unas cláusulas que no hablan de ese descuento. */
+  if (e.target.dataset && e.target.dataset.act === 'k-cond'){ condicionCambiada(); return; }
   // en cuanto se escribe a mano en un campo autorrellenado, deja de ser automático
   if (e.target.id === 'f-dir' || e.target.id === 'f-tcliente') e.target.dataset.auto = '0';
   if (e.target.id === 'f-cbusca'){
@@ -10924,6 +11021,7 @@ dlgForm.addEventListener('keydown', e => {
 dlgForm.addEventListener('change', e => {
   const t = e.target;
   if (t.classList && t.classList.contains('k-p')) sumarCuotas();
+  if (t.dataset && t.dataset.act === 'k-cond'){ condicionCambiada(); return; }
   if (t.id === 'k-cli'){ pintarPuertasContrato(t.value || null, {}); return; }
   /* Asistencia: al elegir puerta se pone su cliente a la vista, ahora mismo.
      Antes solo se deducía al guardar, de modo que en pantalla parecía que la
@@ -10946,7 +11044,16 @@ dlgForm.addEventListener('click', e => {
 });
 const val = id => { const e = document.getElementById(id); return e ? e.value.trim() : ''; };
 const setErr = m => { const e = dlgForm.querySelector('.err'); if (e) e.textContent = m; };
-const opts = (arr, sel) => ['<option value=""></option>'].concat(arr.map(o => '<option'+(o===sel?' selected':'')+'>'+esc(o)+'</option>')).join('');
+/* Desplegable de una lista. IMPORTANTE: si lo que tiene guardado el registro ya no
+   está en la lista (una etiqueta que no aparece, un tipo que se quitó de Ajustes),
+   se añade de todas formas y marcado. Antes no: el navegador seleccionaba la opción
+   vacía y al guardar el campo se quedaba en blanco sin avisar, así que editar una
+   puerta para cambiarle el modelo podía borrarle el código. */
+const opts = (arr, sel) => {
+  const lista = (sel && !arr.includes(sel)) ? [sel].concat(arr) : arr;
+  return ['<option value=""></option>']
+    .concat(lista.map(o => '<option'+(o===sel?' selected':'')+'>'+esc(o)+'</option>')).join('');
+};
 const casillaSeg = (s, marcado) => '<label><input type="checkbox" class="f-seg" value="'+esc(s)+'"'+(marcado?' checked':'')+'>'+esc(s)+'</label>';
 async function guardarLista(clave, arr){
   const { error } = await sb.from('ajustes').upsert({ clave, valor: arr, actualizado: new Date().toISOString() }, { onConflict:'clave' });
@@ -11005,7 +11112,14 @@ const normTxt = s => (s == null ? '' : String(s)).toLowerCase()
   .normalize('NFD').replace(/[̀-ͯ]/g, '')
   .replace(/[^a-z0-9]+/g, ' ').trim();
 function buscarClientes(txt, tope){
-  const orden = S.clientes.slice().sort((a,b) => (a.nombre||'').localeCompare(b.nombre||'', 'es'));
+  /* Los archivados no se ofrecen: archivar un cliente es decir que ya no se
+     trabaja con él, y seguía saliendo en el buscador para enlazarle puertas
+     nuevas. Si está escrito el nombre exacto de uno archivado, sí aparece,
+     marcado, para que se vea que lo está. */
+  const q0 = normTxt(txt);
+  const orden = S.clientes.slice()
+    .filter(c => !c.archivado || (q0 && normTxt(c.nombre) === q0))
+    .sort((a,b) => (a.nombre||'').localeCompare(b.nombre||'', 'es'));
   const q = normTxt(txt);
   if (!q) return orden.slice(0, tope || 8);
   const trozos = q.split(' ');
@@ -11021,7 +11135,7 @@ function pintarListaCliente(){
   const hallados = buscarClientes(campo.value, 8);
   caja.innerHTML = hallados.length
     ? hallados.map(c => '<button type="button" class="busca-fila" data-act="cli-elegir" data-id="'+c.id+'">'+
-        '<b>'+esc(c.nombre||'(sin nombre)')+'</b>'+
+        '<b>'+esc(c.nombre||'(sin nombre)')+(c.archivado?' · archivado':'')+'</b>'+
         (lineaCliente(c) ? '<span>'+esc(lineaCliente(c))+'</span>' : '')+'</button>').join('')
     : '<div class="busca-nada">Ningún cliente con esos datos. Dale a «Crear un cliente nuevo».</div>';
   caja.hidden = false;
@@ -11285,7 +11399,14 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
     '</div></div>';
 
   h += '<div class="grupo"><h3>Planificación</h3><div class="campos">'+
-    '<div class="campo"><label for="a-estado">Situación</label><select id="a-estado">'+Object.keys(EST_AVISO).map(k => '<option value="'+k+'"'+(d.estado===k?' selected':'')+'>'+EST_AVISO[k]+'</option>').join('')+'</select></div>'+
+    /* «Cerrado» NO se puede elegir aquí. Este formulario solo guarda el estado, no
+       cierra nada: la asistencia quedaba con el chip de cerrada y seguía contando
+       como abierta, sin parte, sin valorar y sin salir en «Realizadas». Se cierra
+       con el parte, que es donde se firma. */
+    '<div class="campo"><label for="a-estado">Situación</label><select id="a-estado">'+
+      Object.keys(EST_AVISO).filter(k => k !== 'cerrado' || d.estado === 'cerrado')
+        .map(k => '<option value="'+k+'"'+(d.estado===k?' selected':'')+'>'+EST_AVISO[k]+'</option>').join('')+
+      '</select><span class="pista">La asistencia se cierra con el parte, desde «Cerrar visita»</span></div>'+
     '<div class="campo"><label for="a-prio">Prioridad</label><select id="a-prio">'+
       PRIORIDADES.map(x => '<option value="'+x+'"'+(d.prioridad===x?' selected':'')+'>'+(x==='normal'?'Normal':(x==='urgente'?'Urgente':'Programada'))+'</option>').join('')+'</select></div>'+
     '<div class="campo"><label for="a-tec">Técnico asignado</label><select id="a-tec"><option value="">Sin asignar</option>'+
@@ -11312,7 +11433,8 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
     let cid = val('a-cliente') || null;
     if (pid && !cid){ const pp = puertaDe(pid); if (pp && pp.cliente_id) cid = pp.cliente_id; }
     const o = { tipo: val('a-tipo'), estado: val('a-estado'), prioridad: val('a-prio'),
-                origen: a ? (a.origen || val('a-origen')) : val('a-origen'),
+                // el campo se pinta editable, así que lo que se elija es lo que vale
+                origen: val('a-origen') || (a ? a.origen : null),
                 puerta_id: pid, cliente_id: cid, direccion_libre: val('a-dir') || null,
                 tecnico_id: tid, tecnico: tid ? nombreTec(tid) : '',
                 fecha_prevista: val('a-fecha')||null, descripcion: val('a-desc'),
@@ -11379,7 +11501,7 @@ function dlgContrato(id, clienteId){
   const d = k || {};
   const cid = clienteId || d.cliente_id || null;
   const cli = clienteDe(cid);
-  const enUnAnio = () => { const f = new Date(); f.setFullYear(f.getFullYear()+1); return f.toISOString().slice(0,10); };
+  const enUnAnio = () => iso(sumaMesesDia(deIso(hoy()), 12));
   const clisOrd = S.clientes.slice().sort((a,b) => (a.nombre||'').localeCompare(b.nombre||'', 'es'));
 
   // puertas que ya cubre el contrato, con su cuota
@@ -11406,14 +11528,14 @@ function dlgContrato(id, clienteId){
       '<option value="0"'+(d.a_peticion?' selected':'')+'>Sin plazo: revisiones a petición</option>'+
       '</select><span class="pista">Al elegirla se calcula el vencimiento</span></div>'+
     '<div class="campo"><label for="k-venc">Vencimiento</label><input id="k-venc" type="date" value="'+esc(d.fecha_vencimiento||enUnAnio())+'"></div>'+
-    '<div class="campo"><label for="k-per">Revisiones</label><select id="k-per">'+
+    '<div class="campo"><label for="k-per">Revisiones</label><select id="k-per" data-act="k-cond">'+
       PERIODOS.map(([m,t])=>'<option value="'+m+'"'+((d.periodicidad_meses||12)===m?' selected':'')+'>'+t+'</option>').join('')+'</select>'+
       '<span class="pista">Cada puerta puede llevar otra distinta</span></div>'+
     '<div class="campo"><label for="k-pago">Forma de pago</label><select id="k-pago"><option value=""></option>'+
       lista('formas_pago', FORMAS_PAGO).map(f=>'<option'+(d.forma_pago===f?' selected':'')+'>'+esc(f)+'</option>').join('')+'</select></div>'+
     '<div class="campo"><label for="k-aviso">Avisar de la renovación con</label><input id="k-aviso" type="number" min="0" max="180" value="'+esc(d.aviso_dias!=null?d.aviso_dias:30)+'"><span class="pista">días de antelación</span></div>'+
     '<div class="campo" style="align-content:end"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
-      '<input type="checkbox" id="k-auto"'+(d.renovacion_auto===false?'':' checked')+' style="accent-color:var(--amarillo);width:18px;height:18px">Se renueva solo</label></div>'+
+      '<input type="checkbox" id="k-auto" data-act="k-cond"'+(d.renovacion_auto===false?'':' checked')+' style="accent-color:var(--amarillo);width:18px;height:18px">Se renueva solo</label></div>'+
     '</div></div>';
 
   // ---- puertas cubiertas ----
@@ -11444,6 +11566,7 @@ function dlgContrato(id, clienteId){
     '<div id="k-clausulas"></div>'+
     '<div class="fila" style="margin-top:8px"><button type="button" class="btn sm" data-act="cl-anadir">Añadir cláusula</button>'+
     '<button type="button" class="btn sm plana" data-act="cl-plantilla">Rehacer con la plantilla</button><span class="sp"></span></div>'+
+    '<p class="pista" id="k-cl-aviso" hidden style="margin:8px 0 0"></p>'+
     '<p class="mini" style="margin:8px 0 0">Son la plantilla de la casa: cámbialas a tu gusto. '+
     'Conviene que las revise tu asesoría antes de usarlas con clientes.</p></div>';
 
@@ -11498,7 +11621,12 @@ function dlgContrato(id, clienteId){
     } catch(e){ setErr(e.message); }
   });
 
-  pintarClausulas(S.contratoBorrador.clausulas || clausulasFabrica(condicionesDelForm()));
+  /* Las cláusulas con las que nace el formulario se guardan aparte: así se sabe
+     si están tal cual salieron de la plantilla o si se han editado a mano, y se
+     puede decidir si rehacerlas solas al cambiar una condición. */
+  const clIni = S.contratoBorrador.clausulas || clausulasFabrica(condicionesDelForm());
+  pintarClausulas(clIni);
+  S.clausulasBase = clIni.slice();
   pintarPuertasContrato(cid, yaCubre);
   if (!k && !val('k-ref')) ponerReferencia();
 }
@@ -11524,6 +11652,40 @@ function pintarClausulas(arr){
 function clausulasDelForm(){
   return Array.from(document.querySelectorAll('#k-clausulas .k-cl-t'))
               .map(t => t.value.trim()).filter(Boolean);
+}
+/* Se ha tocado una condición del contrato (mano de obra incluida, desplazamiento,
+   descuentos, prioridad, periodicidad o renovación). Las cláusulas hablan de todo
+   eso, así que no pueden quedarse como estaban: un contrato que se contradice es
+   peor que no tenerlo.
+     · Si las cláusulas siguen siendo las de la plantilla, se rehacen solas.
+     · Si están editadas a mano, NO se pisan: se avisa para que se repasen. */
+function condicionCambiada(){
+  const caja = document.getElementById('k-clausulas');
+  if (!caja) return;
+  const aviso = document.getElementById('k-cl-aviso');
+  const actuales = clausulasDelForm();
+  const nuevas = clausulasFabrica(condicionesDelForm());
+  const base = S.clausulasBase || [];
+  const igual = (a, b) => a.join('\n') === b.join('\n');
+  if (igual(actuales, nuevas)){
+    S.clausulasBase = nuevas.slice();
+    if (aviso) aviso.hidden = true;
+    return;
+  }
+  if (igual(actuales, base)){
+    pintarClausulas(nuevas);
+    S.clausulasBase = nuevas.slice();
+    if (aviso){
+      aviso.hidden = false; aviso.className = 'pista';
+      aviso.textContent = 'Cláusulas rehechas con las condiciones que acabas de cambiar.';
+    }
+    return;
+  }
+  if (aviso){
+    aviso.hidden = false; aviso.className = 'pista ojo';
+    aviso.textContent = 'Has cambiado las condiciones y las cláusulas están editadas a mano: '+
+      'no se tocan solas. Repásalas, o dale a «Rehacer con la plantilla».';
+  }
 }
 /* Las puertas del cliente, con su casilla, su cuota y su periodicidad */
 function pintarPuertasContrato(cid, yaCubre){
@@ -11593,8 +11755,8 @@ async function guardarPuertasContrato(kid, ids){
 async function planificarCliente(clienteId, meses){
   const sinFecha = S.puertas.filter(p => p.cliente_id === clienteId && !p.proxima_revision && !p.sin_mantenimiento);
   if (!sinFecha.length) return;
-  const f = new Date(); f.setMonth(f.getMonth() + (meses || 12));
-  const prox = f.toISOString().slice(0,10);
+  // fecha en hora local y sin desbordar el mes: ver sumaMesesDia
+  const prox = iso(sumaMesesDia(deIso(hoy()), meses || 12));
   for (const p of sinFecha) await sb.from('puertas').update({ proxima_revision: prox }).eq('id', p.id);
 }
 
@@ -11655,7 +11817,7 @@ function dlgTarifas(){
   h += '<div class="grupo"><h3>Mano de obra</h3><div class="campos">'+
     campo('t-ph', 'Precio hora de técnico (€)', t.precio_hora, '0.01', 'Lo que cobras al cliente') +
     campo('t-ch', 'Coste hora de técnico (€)', t.coste_hora, '0.01', 'Sueldo, seguridad social y estructura') +
-    campo('t-min', 'Mínimo facturable (horas)', t.minimo_horas, '0.25', 'Aunque la visita dure menos') +
+    campo('t-min', 'Mínimo facturable (horas)', t.minimo_horas, '1', 'Horas completas, aunque la visita dure menos') +
     campo('t-urg', 'Recargo de urgencia (%)', t.recargo_urgencia, '1', 'Se aplica al tipo «Urgencia fuera de horario»') +
     '</div></div>';
 
@@ -11690,6 +11852,9 @@ function dlgTarifas(){
     try {
       const { error } = await sb.from('tarifas').upsert(o, { onConflict:'id' });
       if (error) throw error;
+      // el mínimo facturable, a ajustes: es el único dato de la tarifa que el
+      // técnico necesita en obra, porque es el que sale en el parte que se firma
+      try { await guardarLista('minimo_horas', o.minimo_horas); } catch(_){}
       cerrarDlg(); await cargar(); toast('Tarifas guardadas. Recalcula las visitas para aplicarlas.');
     } catch(e){ setErr(e.message); }
   });
@@ -11930,8 +12095,14 @@ function dlgCierre(avisoId){
     '<div class="campos" style="margin-top:8px">'+
     '<div class="campo full"><label for="z-fnom">Nombre de quien firma</label><input id="z-fnom" type="text" maxlength="100" value="'+esc(a.firma_nombre||'')+'"></div>'+
     '<div class="campo full"><label for="z-sin">Si no puede firmar, indica el motivo</label><input id="z-sin" type="text" maxlength="120" value="'+esc(a.firma_sin||'')+'" placeholder="Ej.: no había nadie en la comunidad"></div>'+
+    /* Esta casilla NO envía nada: solo lo deja anotado. El correo del parte no está
+       programado todavía (el del contrato sí, por `enviar_contrato`). Decía «Enviar
+       copia del parte», de modo que el técnico se lo prometía al cliente delante de
+       él y el correo no salía nunca. Hasta que exista el envío, dice la verdad. */
     (mailCli ? '<div class="campo full"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
-      '<input type="checkbox" id="z-enviar"'+(a.enviado_cliente?' checked':'')+' style="accent-color:var(--amarillo);width:18px;height:18px">Enviar copia del parte a '+esc(mailCli)+'</label></div>' : '')+
+      '<input type="checkbox" id="z-enviar"'+(a.enviado_cliente?' checked':'')+' style="accent-color:var(--amarillo);width:18px;height:18px">'+
+      'Anotar que hay que mandarle copia del parte a '+esc(mailCli)+'</label>'+
+      '<span class="pista">Queda apuntado para la oficina. El correo no sale solo todavía.</span></div>' : '')+
     '</div></div>';
 
   h += '<p class="err"></p><div class="pie">'+
@@ -12092,7 +12263,10 @@ function materialesDelForm(){
 }
 
 async function guardarCierre(a, cerrando){
-  const dia = new Date().toISOString().slice(0,10);
+  /* El día del cierre, en hora local. Con toISOString se cogía el día en UTC: una
+     visita cerrada a las 00:30 de verano quedaba fechada el día anterior, y con ella
+     las horas de entrada y salida y la fecha de la revisión. */
+  const dia = hoy();
   const hora = id => { const v = val(id); return v ? new Date(dia+'T'+v+':00').toISOString() : null; };
   const chk = id => !!(document.getElementById(id)||{}).checked;
   const conCobro = !SIN_COBRO.includes(a.tipo);
@@ -12150,10 +12324,19 @@ async function guardarCierre(a, cerrando){
   }
   if (cerrando){
     if (!o.trabajo) return setErr('Escribe al menos qué has hecho.');
+    /* Sin horas, la visita se valora en 0 € y desaparece de «pendiente de facturar»:
+       queda cerrada, firmada y sin cobrar, y nada lo señala. Así que o se ponen las
+       horas, o se dice expresamente que esta visita no se cobra. */
+    if (conCobro && !o.sin_cargo && !(+o.horas > 0))
+      return setErr('Pon las horas a facturar. Si esta visita no se cobra, marca «Esta visita no se cobra» y di por qué.');
+    if (o.sin_cargo && !o.sin_cargo_motivo)
+      return setErr('Has marcado que la visita no se cobra: escribe por qué.');
     if (!FIRMA.pintado && !a.firma_ruta && !o.firma_sin)
       return setErr('Falta la firma del cliente. Si no hay nadie, escribe el motivo abajo.');
     if (FIRMA.pintado && !o.firma_nombre) return setErr('Pon el nombre de quien firma.');
     o.estado = 'cerrado';
+    // si nadie la tenía asignada, la cierra quien la cierra: el parte no puede salir sin técnico
+    if (!a.tecnico_id && S.perfil) { o.tecnico_id = S.perfil.id; o.tecnico = yo(); }
     o.cerrado = new Date().toISOString();
     o.cerrado_por = yo();
   }
@@ -12166,27 +12349,41 @@ async function guardarCierre(a, cerrando){
       if (error) throw error;
       o.firma_ruta = ruta;
     }
-    // materiales: se rehacen
+    /* Materiales y guión se rehacen enteros: se borra y se vuelve a meter. El riesgo
+       es quedarse sin nada si el insert falla, y eso ya pasó de verdad con un parte
+       guardado por la mañana y cerrado por la tarde. Así que antes de borrar se hace
+       una copia y, si el insert falla, se vuelve a dejar como estaba. */
+    const rehacer = async (tabla, filas) => {
+      const { data: copia } = await sb.from(tabla).select('*').eq('aviso_id', a.id);
+      const { error: eBorra } = await sb.from(tabla).delete().eq('aviso_id', a.id);
+      if (eBorra) throw eBorra;
+      if (!filas || !filas.length) return;
+      const { error } = await sb.from(tabla).insert(filas);
+      if (!error) return;
+      if (copia && copia.length) await sb.from(tabla).insert(copia);   // se deja como estaba
+      throw error;
+    };
     const mats = materialesDelForm();
-    await sb.from('materiales').delete().eq('aviso_id', a.id);
-    if (mats.length){
-      const { error } = await sb.from('materiales').insert(mats.map(m => ({ ...m, aviso_id: a.id })));
-      if (error) throw error;
-    }
-    // guión de revisión: se rehace entero
-    if (revision){
-      await sb.from('revisiones').delete().eq('aviso_id', a.id);
-      const { error } = await sb.from('revisiones').insert(revision);
-      if (error) throw error;
-    }
+    await rehacer('materiales', mats.map(m => ({ ...m, aviso_id: a.id })));
+    if (revision) await rehacer('revisiones', [revision]);
     const { error } = await sb.from('avisos').update(o).eq('id', a.id);
     if (error) throw error;
     // estado de la puerta según cómo queda
     if (a.puerta_id && cerrando){
       const mapa = { 'Operativa':'operativa', 'Operativa con reservas':'operativa', 'Fuera de servicio':'fuera_servicio', 'Esperando repuesto':'esperando_repuesto' };
       const est = mapa[o.estado_final] || 'operativa';
-      await sb.from('puertas').update({ estado: est, estado_desde: new Date().toISOString(),
-        ultima_revision: (a.tipo==='mantenimiento' ? new Date().toISOString().slice(0,10) : undefined) }).eq('id', a.puerta_id);
+      const dp = { estado: est, estado_desde: new Date().toISOString() };
+      /* Al cerrar una preventiva se anota la fecha de la revisión Y se programa la
+         siguiente. Antes solo se anotaba la última: la puerta se quedaba con la
+         fecha vieja y aparecía como vencida para siempre, de modo que el plan de
+         mantenimiento había que ir corrigiéndolo puerta por puerta a mano. */
+      if (a.tipo === 'mantenimiento'){
+        const pu = puertaDe(a.puerta_id);
+        dp.ultima_revision = dia;
+        if (pu && !pu.sin_mantenimiento)
+          dp.proxima_revision = iso(sumaMesesDia(deIso(dia), periodicidadDe(pu)));
+      }
+      await sb.from('puertas').update(dp).eq('id', a.puerta_id);
     }
     // la base de datos valora la visita: el técnico no ve tarifas ni costes
     if (cerrando) { try { await sb.rpc('valorar_aviso', { p_aviso: a.id }); } catch(_){} }
@@ -13211,17 +13408,25 @@ dlgForm.addEventListener('click', async e => {
     return;
   }
   if (a === 'alta-puerta-asis'){
+    /* Se sale del parte para dar de alta la puerta, así que primero se guarda el
+       avance. Antes se cerraba el diálogo sin guardar: el técnico podía perder el
+       diagnóstico, el trabajo, los materiales, las horas y el guión enteros. */
     const id = b.dataset.id;
-    cerrarDlg();
+    const av = S.avisos.find(x => x.id === id);
+    if (av && document.getElementById('z-trab')){
+      await guardarCierre(av, false);
+      // si no se pudo guardar, el error ya está en pantalla y no se sale del parte
+      if (document.getElementById('z-trab')) return;
+    } else cerrarDlg();
     dlgPuerta(null, id);
     return;
   }
   if (a === 'cerrar-asistencia'){ cerrarDlg(); dlgCierre(b.dataset.id); return; }
   if (a === 'aviso-anular'){ cerrarDlg(); dlgAnular(b.dataset.id); return; }
   if (a === 'pl-siguiente'){
-    const f = new Date(); f.setMonth(f.getMonth() + (+b.dataset.meses || 12));
     const campo = document.getElementById('pl-fecha');
-    if (campo) campo.value = f.toISOString().slice(0,10);
+    // en hora local y sin desbordar el mes: el 31 de agosto más 6 meses es el 28 de febrero
+    if (campo) campo.value = iso(sumaMesesDia(deIso(hoy()), +b.dataset.meses || 12));
     return;
   }
   if (a === 'articulo-baja'){
@@ -13261,7 +13466,33 @@ dlgForm.addEventListener('click', async e => {
   }
   if (a === 'puerta-borrar'){
     if (!armar(b, 'Confirmar borrado')) return;
-    try { const { error } = await sb.from('puertas').delete().eq('id', b.dataset.id); if (error) throw error; cerrarDlg(); S.ficha = null; await cargar(); toast('Puerta borrada.'); }
+    try {
+      /* Antes de borrar la puerta se limpian sus ficheros del almacén. Si no, las
+         fotos y los PDF se quedaban ahí para siempre ocupando sitio, y los que
+         estaban marcados como visibles para el cliente seguían descargables con su
+         enlace público, de una puerta que ya no existe y que nadie puede limpiar
+         desde la aplicación. */
+      const pid = b.dataset.id;
+      const [{ data: fts }, { data: dcs }] = await Promise.all([
+        sb.from('fotos').select('ruta').eq('puerta_id', pid),
+        sb.from('documentos').select('ruta,bucket,publico').eq('puerta_id', pid)
+      ]);
+      const porBucket = {};
+      (fts || []).forEach(f => { (porBucket.fotos = porBucket.fotos || []).push(f.ruta); });
+      (dcs || []).forEach(d => { const bk = d.bucket || (d.publico ? 'publicos' : 'documentos');
+                                 (porBucket[bk] = porBucket[bk] || []).push(d.ruta); });
+      let sinBorrar = 0;
+      for (const bk of Object.keys(porBucket)){
+        const { error: eb } = await sb.storage.from(bk).remove(porBucket[bk]);
+        if (eb) sinBorrar += porBucket[bk].length;
+      }
+      const { error } = await sb.from('puertas').delete().eq('id', pid);
+      if (error) throw error;
+      cerrarDlg(); S.ficha = null; await cargar();
+      toast(sinBorrar
+        ? 'Puerta borrada, pero han quedado '+sinBorrar+' ficheros en el almacén que no se han podido borrar.'
+        : 'Puerta borrada.');
+    }
     catch(err){ setErr(err.message); }
   } else if (a === 'aviso-cerrar'){
     if (!armar(b, 'Confirmar cierre')) return;
