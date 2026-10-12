@@ -44,6 +44,7 @@ El `index.html` de producción **no se toca nunca**. La copia de pruebas es
 | Suite | Qué fija |
 |---|---|
 | `humo.mjs` | Que la aplicación arranca contra el simulador y monta sus pestañas |
+| `basico.mjs` | Los flujos de todos los días: buscador de clientes, enlace puerta-cliente, alta de puerta y de cliente, asistencia, asignación, cierre con firma y parte, contrato, etiquetas y búsquedas |
 | `regresion.mjs` | Lo esencial de las fases 1 a 5, reconstruido: horas facturables, hoja igual a puerta, qué acredita conformidad, marco legal por fecha, régimen de cada familia, perfiles de fuerza sin validar, prioridades, huecos, motor de intervención, conservación del expediente, mantenimiento, salida documental, validación, entregas, firma y estados. Más pantalla y documentos |
 | `fase6.mjs` | Apartados 12 a 15: árbol de modificación con segundo nivel, motorización deducida, puertas peatonales, puertas cortafuegos |
 | `fase7.mjs` | Apartados 17, 21, 24 y 25: expediente interno frente a documentación de cliente, mantenimiento según uso y entorno, generado frente a entregado, la firma no convierte un pendiente en conforme |
@@ -88,6 +89,15 @@ Dos cosas que conviene no olvidar:
 
 - **El CRC32 se comprueba contra un valor conocido** (`123456789` → `0xCBF43926`).
   Si alguien toca el generador de ZIP y lo rompe, se nota ahí.
+- **`basico.mjs` existe por un fallo que encontró David usando la aplicación**: una
+  puerta podía quedarse con el nombre del cliente escrito a mano y sin enlazar con
+  su ficha, y eso la dejaba fuera del cliente (no salía en su listado, ni en sus
+  contratos, ni en su historial) sin que nada lo dijera. Nos habíamos centrado
+  tanto en la documentación normativa que la funcionalidad básica no tenía banco
+  propio. Ahora lo tiene, y al escribirlo aparecieron dos fallos más: la dirección
+  autorrellenada de un cliente equivocado se quedaba pegada al corregirlo, y el
+  alta de asistencia no enseñaba el cliente de la puerta elegida.
+
 - **Las pruebas que rellenan campos de la puerta cortafuegos usan `rellenarCf`**,
   que escribe, comprueba y reintenta. Esos campos repintan la pantalla al salir
   de cada uno, y rellenarlos de corrido hacía fallar la prueba una vez de cada
