@@ -93,6 +93,7 @@ clausulasDelForm pintarClausulas
 sumaMesesDia sumaMeses sumaDias opts dondeAsistencia periodicidadDe contratoVivo
 iso deIso mesActual valoracionDe nombreCliente guardarCierre materialesDelForm
 subirFotos subirDocs cambiarVisibilidad pintarFotos pintarDocs
+correoDelParte enviarParte accionesAsis
 guardarBorradorPuerta aplicarBorradorPuerta CAMPOS_PUERTA dlgPuerta dlgCliente
 libroExpediente informeSituacion propuestaActuaciones actaEntrega vidaPuerta
 hojaDeCampo libroMantenimiento etiquetaCE documentoDTE documentoCPF hojaParte

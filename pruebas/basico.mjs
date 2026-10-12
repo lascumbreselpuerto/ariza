@@ -787,7 +787,7 @@ const hoyLocal = await T(() => {
 });
 paso('al cerrar la preventiva se anota la fecha de la revisión',
   trasPrev.ultima === hoyLocal, trasPrev.ultima+' (hoy '+hoyLocal+')');
-paso('Y SE PROGRAMA LA SIGUIENTE: antes la puerta se quedaba vencida para siempre',
+paso('y se programa la siguiente, aunque el disparador del servidor no esté puesto',
   !!trasPrev.prox && trasPrev.prox !== puertaPrev.prox, trasPrev.prox);
 paso('a la distancia que marca su periodicidad',
   trasPrev.prox === await sm(hoyLocal, trasPrev.per),
@@ -938,6 +938,99 @@ const gestion = await pag.textContent('#vista').catch(() => '');
 paso('las visitas cerradas y valoradas en 0 € salen señaladas en gestión',
   /valorada[s]? en 0 €/.test(gestion) || /se cerraron sin horas/.test(gestion),
   /0 €/.test(gestion) ? 'hay aviso' : '(no sale)');
+
+/* ================================================================
+   11. Mandar el parte al cliente por correo.
+   El envío lo hace el servidor; aquí se fija que la aplicación elige
+   el mismo correo que él, que el botón solo sale donde debe y que no
+   se manda un correo a un cliente de un solo toque.
+   ================================================================ */
+bloque('11. Mandar el parte al cliente');
+
+const correos = await T(() => {
+  const g = window.__T, S = g.S;
+  const pu = S.puertas.find(x => x.codigo === 'AR-0001');
+  const cliPuerta = S.clientes.find(c => c.id === pu.cliente_id);
+  const otro = S.clientes.find(c => c.id !== pu.cliente_id && c.email);
+  return {
+    soloContacto: g.correoDelParte({ contacto_email:' jefe@obra.es ', puerta_id: pu.id }),
+    contactoManda: g.correoDelParte({ contacto_email:'jefe@obra.es', cliente_id: otro.id, puerta_id: pu.id }),
+    fichaDelAviso: g.correoDelParte({ cliente_id: otro.id, puerta_id: pu.id }),
+    fichaDeLaPuerta: g.correoDelParte({ puerta_id: pu.id }),
+    ninguno: g.correoDelParte({}),
+    esperadoPuerta: cliPuerta.email, esperadoOtro: otro.email,
+  };
+});
+paso('el contacto de la asistencia manda sobre todo lo demás',
+  correos.contactoManda === 'jefe@obra.es', correos.contactoManda);
+paso('y se le quitan los espacios de los lados',
+  correos.soloContacto === 'jefe@obra.es', '«'+correos.soloContacto+'»');
+paso('sin contacto, vale el correo de la ficha del cliente del aviso',
+  correos.fichaDelAviso === correos.esperadoOtro, correos.fichaDelAviso);
+paso('y si el aviso no tiene cliente, el de la ficha del cliente de la puerta',
+  correos.fichaDeLaPuerta === correos.esperadoPuerta, correos.fichaDeLaPuerta);
+paso('sin ningún correo, devuelve vacío y no inventa nada',
+  correos.ninguno === '', '«'+correos.ninguno+'»');
+
+/* La casilla del cierre ofrece el correo, y si no hay, lo dice */
+const avCerr = await T(() => (window.__T.S.avisos.find(a => a.cerrado && !a.anulada) || {}).id);
+paso('hay una visita cerrada con la que probar', !!avCerr, avCerr);
+
+const botones = await T(id => {
+  const g = window.__T;
+  const a = g.S.avisos.find(x => x.id === id);
+  const html = g.accionesAsis(a, false);
+  const abierta = g.S.avisos.find(x => !x.cerrado);
+  return { cerrada: html,
+           abierta: abierta ? g.accionesAsis(abierta, false) : '(ninguna abierta)',
+           correo: g.correoDelParte(a) };
+}, avCerr);
+paso('una visita cerrada ofrece mandar el parte al cliente',
+  /data-act="parte-enviar"/.test(botones.cerrada));
+paso('y dice a qué correo va a salir',
+  botones.cerrada.includes(botones.correo), botones.correo);
+paso('una visita todavía abierta no lo ofrece: no hay parte que mandar',
+  !/data-act="parte-enviar"/.test(botones.abierta));
+
+/* Mandarlo de verdad, con los dos toques */
+/* «Realizadas» es la pantalla de las visitas cerradas: ahí tiene que estar */
+await pag.click('#tabs button[data-tab="realizadas"]'); await esperar(900);
+let hayBoton = await pag.locator('[data-act="parte-enviar"]').count();
+paso('el botón está a la vista en «Realizadas»', hayBoton > 0, hayBoton);
+if (hayBoton){
+  const btn = pag.locator('[data-act="parte-enviar"]').first();
+  await btn.click(); await esperar(400);
+  paso('un solo toque no manda el correo: pide confirmación',
+    /Confirmar envío/.test(await btn.textContent()), await btn.textContent());
+  paso('y con un solo toque no se ha mandado nada todavía',
+    await T(() => !window.__T.S.avisos.some(a => a.parte_enviado_el)));
+  await btn.click(); await esperar(1500);
+  const pedido = await T(() => {
+    const g = window.__T;
+    const a = g.S.avisos.find(x => x.parte_enviado_el);
+    return a ? { id: a.id, cuando: a.parte_enviado_el, marcado: !!a.enviado_cliente } : null;
+  });
+  paso('al confirmar, el parte se manda', !!pedido, pedido && pedido.cuando);
+  paso('y queda apuntado que el cliente ya lo tiene', !!(pedido && pedido.marcado));
+  const texto = await T(id => {
+    const g = window.__T;
+    return g.accionesAsis(g.S.avisos.find(x => x.id === id), false);
+  }, (pedido||{}).id || avCerr);
+  paso('a partir de entonces el botón ofrece volver a mandarlo',
+    /Volver a mandar el parte/.test(texto));
+  paso('y se ve cuándo se mandó', /Mandado el /.test(texto));
+}
+
+/* Una visita abierta no se puede mandar ni llamando a la función a mano */
+const abiertaNo = await T(async () => {
+  const g = window.__T;
+  const a = g.S.avisos.find(x => !x.cerrado);
+  if (!a) return 'no hay ninguna abierta';
+  const { data } = await g.sb.rpc('enviar_parte', { p_aviso: a.id });
+  return data;
+});
+paso('el servidor no manda el parte de una visita que no está cerrada',
+  abiertaNo === false || abiertaNo === 'no hay ninguna abierta', String(abiertaNo));
 
 console.log('\n'+ok+' bien, '+mal+' mal.');
 /* «fallo provocado por la prueba» es un error que esta suite provoca a propósito,

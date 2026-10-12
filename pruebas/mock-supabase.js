@@ -278,6 +278,22 @@ function almacen(bucket){
 
 /* ---- Procedimientos ---- */
 const RPC = {
+  /* Enviar el parte al cliente. En la aplicación de verdad esto encola un correo
+     en el servidor; aquí se apunta la llamada en DB.__partes para que el banco
+     pueda comprobar que se ha pedido, a qué visita y a qué correo. */
+  enviar_parte({ p_aviso }){
+    const a = DB.avisos.find(x => String(x.id) === String(p_aviso));
+    if (!a || !a.cerrado) return false;
+    const pu = a.puerta_id ? DB.puertas.find(x => String(x.id) === String(a.puerta_id)) : null;
+    const c1 = a.cliente_id ? DB.clientes.find(x => String(x.id) === String(a.cliente_id)) : null;
+    const c2 = pu && pu.cliente_id ? DB.clientes.find(x => String(x.id) === String(pu.cliente_id)) : null;
+    const mail = ((a.contacto_email||'').trim()) || ((c1&&c1.email||'').trim()) || ((c2&&c2.email||'').trim());
+    if (!mail) return false;
+    (DB.__partes = DB.__partes || []).push({ aviso_id: a.id, mail, cuando: ahora() });
+    a.enviado_cliente = true;
+    a.parte_enviado_el = ahora();
+    return true;
+  },
   crear_expediente({ p_puerta, p_situacion, p_familia, p_aviso }){
     const pu = DB.puertas.find(x => String(x.id) === String(p_puerta));
     if (!pu) return { ok:false, motivo:'sin_puerta' };

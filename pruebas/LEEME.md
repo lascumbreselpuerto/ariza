@@ -107,6 +107,13 @@ Dos cosas que conviene no olvidar:
   documento podía dejarlo expuesto si fallaba el cambio de ficha, y la
   periodicidad que el contrato fija para una puerta se guardaba sin leerse nunca.
 
+- **El bloque 11 fija el envío del parte al cliente.** El correo lo manda el
+  servidor, así que lo que se puede comprobar aquí es que la aplicación elige el
+  mismo correo que él (contacto de la asistencia y, si no hay, la ficha del
+  cliente), que el botón solo aparece en visitas cerradas y no anuladas, y que no
+  se manda un correo a un cliente de un solo toque. El simulador apunta cada
+  envío pedido en `DB.__partes`.
+
 - **Algunas pruebas provocan errores a propósito.** Sustituyen el `insert` de una
   tabla por uno que falla, para comprobar que la aplicación no dice que ha
   guardado lo que no ha guardado. Esos errores llevan el texto «provocado por la
