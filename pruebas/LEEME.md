@@ -98,6 +98,21 @@ Dos cosas que conviene no olvidar:
   autorrellenada de un cliente equivocado se quedaba pegada al corregirlo, y el
   alta de asistencia no enseñaba el cliente de la puerta elegida.
 
+- **El bloque 10 de `basico.mjs` fija los fallos de la revisión general del
+  12-10-2026.** Son fallos que estaban en la aplicación y que el banco no
+  detectaba: la próxima revisión no se programaba al cerrar la preventiva, una
+  visita de pago se podía cerrar sin horas y desaparecía de «pendiente de
+  facturar», un desplegable podía borrar el valor guardado, una foto o un PDF se
+  quedaban en el almacén sin fila y aun así se decía «subido», hacer público un
+  documento podía dejarlo expuesto si fallaba el cambio de ficha, y la
+  periodicidad que el contrato fija para una puerta se guardaba sin leerse nunca.
+
+- **Algunas pruebas provocan errores a propósito.** Sustituyen el `insert` de una
+  tabla por uno que falla, para comprobar que la aplicación no dice que ha
+  guardado lo que no ha guardado. Esos errores llevan el texto «provocado por la
+  prueba» y el filtro de errores de JavaScript los descarta. Si se cambia ese
+  texto, hay que cambiar también el filtro del final de la suite.
+
 - **Las pruebas que rellenan campos de la puerta cortafuegos usan `rellenarCf`**,
   que escribe, comprueba y reintenta. Esos campos repintan la pantalla al salir
   de cada uno, y rellenarlos de corrido hacía fallar la prueba una vez de cada

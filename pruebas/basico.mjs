@@ -66,7 +66,7 @@ let ok = 0, mal = 0;
 const paso = (t, bien, extra='') => { bien ? ok++ : mal++;
   console.log((bien?'  OK  ':' FALLA ')+t+(extra!==''&&extra!==undefined?' → '+String(extra):'')); };
 const bloque = t => console.log('\n· '+t);
-const T = f => pag.evaluate(f);
+const T = (f, arg) => arg === undefined ? pag.evaluate(f) : pag.evaluate(f, arg);
 const esperar = (ms=350) => pag.waitForTimeout(ms);
 
 const faltan = await T(() => window.__T_FALTAN || []);
@@ -530,6 +530,45 @@ await pag.selectOption('#k-dur', { index: 1 }).catch(()=>{}); await esperar(400)
 paso('al elegir duración, el vencimiento se calcula solo',
   !!(await T(() => (document.getElementById('k-venc')||{}).value)),
   await T(() => (document.getElementById('k-venc')||{}).value));
+
+/* Las cláusulas hablan de las condiciones: si se cambia una condición, no pueden
+   quedarse como estaban. Un contrato que se contradice es peor que no tenerlo. */
+const clausulas = () => T(() => Array.from(document.querySelectorAll('#k-clausulas .k-cl-t')).map(t => t.value));
+const cl0 = await clausulas();
+paso('el contrato nace con las cláusulas de la plantilla', cl0.length >= 5, cl0.length);
+paso('entre ellas la de la mano de obra incluida',
+  cl0.some(t => /^INCLUIDO\. La mano de obra/.test(t)));
+await pag.uncheck('#k-mo'); await esperar(450);
+const cl1 = await clausulas();
+paso('al quitar la mano de obra de la cuota, su cláusula se va sola',
+  !cl1.some(t => /^INCLUIDO\. La mano de obra/.test(t)), cl1.length);
+paso('y la aplicación dice que ha rehecho las cláusulas',
+  /rehechas/.test(await pag.textContent('#k-cl-aviso')),
+  await pag.textContent('#k-cl-aviso'));
+await pag.fill('#k-dtomo', '15'); await esperar(450);
+paso('un descuento en mano de obra añade su cláusula',
+  (await clausulas()).some(t => /15 %/.test(t)));
+
+/* Y ahora una cláusula editada a mano: eso NO se pisa */
+await pag.locator('#k-clausulas .k-cl-t').first().fill('OBJETO. Redactado a mano por David.'); await esperar(250);
+await pag.fill('#k-dtomat', '10'); await esperar(450);
+const cl2 = await clausulas();
+paso('una cláusula escrita a mano no se pierde al cambiar una condición',
+  cl2[0] === 'OBJETO. Redactado a mano por David.', cl2[0]);
+paso('pero avisa de que hay que repasarlas',
+  /editadas a mano/.test(await pag.textContent('#k-cl-aviso')),
+  await pag.textContent('#k-cl-aviso'));
+paso('y el aviso sale en rojo',
+  await T(() => document.getElementById('k-cl-aviso').classList.contains('ojo')));
+
+await pag.click('[data-act="cl-plantilla"]'); await esperar(300);
+await pag.click('[data-act="cl-plantilla"]'); await esperar(500);
+const cl3 = await clausulas();
+paso('«Rehacer con la plantilla» pide confirmación y entonces sí las rehace',
+  /^OBJETO\. Ariza Puertas y Automatismos/.test(cl3[0]||''), (cl3[0]||'').slice(0,40));
+paso('y la plantilla rehecha respeta las condiciones de ahora',
+  !cl3.some(t => /^INCLUIDO\. La mano de obra/.test(t)) && cl3.some(t => /15 %/.test(t)));
+
 await T(() => { const d = document.getElementById('dlg'); if (d && d.open) d.close(); });
 await esperar(300);
 
@@ -549,8 +588,361 @@ paso('los clientes se buscan por NIF', await pag.locator('#vista .item').count()
 paso('y es el que toca', /Restaurante El Faro/.test(await pag.textContent('#vista .lista')));
 await pag.fill('#busca-cli', ''); await esperar(400);
 
+/* ================================================================
+   10. Los fallos de la revisión general del 12-10-2026.
+   Cada uno de estos bloques fija un fallo que estaba en la aplicación
+   y que el banco no detectaba. Si alguno se pone en rojo, ha vuelto.
+   ================================================================ */
+bloque('10. Fallos de la revisión general');
+
+/* --- Sumar meses sin desbordar el mes --- */
+const sm = (f, n) => T(([f,n]) => window.__T.iso(window.__T.sumaMesesDia(window.__T.deIso(f), n)), [f,n]);
+paso('31 de agosto más 6 meses es el 28 de febrero, no el 3 de marzo',
+  await sm('2026-08-31', 6) === '2027-02-28', await sm('2026-08-31', 6));
+paso('31 de enero más 1 mes es el 28 de febrero',
+  await sm('2026-01-31', 1) === '2026-02-28', await sm('2026-01-31', 1));
+paso('y en año bisiesto, el 29',
+  await sm('2028-01-31', 1) === '2028-02-29', await sm('2028-01-31', 1));
+paso('cuando el día existe, se conserva',
+  await sm('2026-03-15', 12) === '2027-03-15', await sm('2026-03-15', 12));
+
+/* --- Un desplegable no puede borrar lo que tiene guardado el registro --- */
+const htmlOpts = await T(() => window.__T.opts(['Corredera','Seccional'], 'Enrollable antigua'));
+paso('un valor que ya no está en la lista se sigue ofreciendo',
+  /Enrollable antigua/.test(htmlOpts));
+paso('y sale seleccionado, para que al guardar no se borre',
+  /<option selected>Enrollable antigua<\/option>/.test(htmlOpts), htmlOpts.slice(0,90));
+
+/* --- Horas facturables: el mínimo lo ve también el técnico --- */
+const minimos = await T(() => {
+  const g = window.__T, S = g.S;
+  const tar = S.tarifas, aju = S.ajustes.minimo_horas;
+  S.tarifas = null; S.ajustes.minimo_horas = 2;
+  const sinTarifas = g.horasFacturables(25);            // 25 min, mínimo 2 h
+  S.ajustes.minimo_horas = 1.5;
+  const conMedia = g.horasFacturables(25);              // un mínimo con media hora
+  S.tarifas = tar; S.ajustes.minimo_horas = aju;
+  return { sinTarifas, conMedia };
+});
+paso('sin tarifas a la vista, el mínimo sale de los ajustes: el técnico ve lo mismo que la oficina',
+  minimos.sinTarifas === 2, minimos.sinTarifas);
+paso('y un mínimo de 1,5 h no se convierte en 2: las horas se facturan enteras',
+  minimos.conMedia === 2 || minimos.conMedia === 1, minimos.conMedia);
+
+/* --- Dónde hay que ir: cae al siguiente dato si falta la dirección --- */
+const donde = await T(() => {
+  const g = window.__T, S = g.S;
+  const p = { id:'pu-x', codigo:'AR-9999', cliente_id:null, direccion:null, ubicacion:null };
+  S.puertas.push(p);
+  const soloLibre = g.dondeAsistencia({ puerta_id:'pu-x', direccion_libre:'C/ Larga 4' });
+  const c = { id:'cli-x', nombre:'Sin dirección', direccion:null, poblacion:null };
+  S.clientes.push(c);
+  const clienteSinDir = g.dondeAsistencia({ cliente_id:'cli-x', direccion_libre:'C/ Larga 4' });
+  S.puertas.pop(); S.clientes.pop();
+  return { soloLibre, clienteSinDir };
+});
+paso('una puerta sin dirección no deja la asistencia sin sitio al que ir',
+  donde.soloLibre === 'C/ Larga 4', donde.soloLibre);
+paso('ni un cliente sin dirección', donde.clienteSinDir === 'C/ Larga 4', donde.clienteSinDir);
+
+/* --- La periodicidad que el contrato fija PARA UNA PUERTA se respeta --- */
+const per = await T(() => {
+  const g = window.__T, S = g.S;
+  const p = S.puertas.find(x => x.codigo === 'AR-0002');
+  const k = { id:'k-x', cliente_id:p.cliente_id, estado:'activo', periodicidad_meses:12,
+              fecha_alta:'2026-01-01', fecha_vencimiento:'2030-01-01' };
+  S.contratos.push(k);
+  const soloContrato = g.periodicidadDe(p);
+  S.contratoPuertas.push({ contrato_id:'k-x', puerta_id:p.id, periodicidad_meses:6 });
+  const porPuerta = g.periodicidadDe(p);
+  p.periodicidad_meses = 3;
+  const fijadaEnLaPuerta = g.periodicidadDe(p);
+  delete p.periodicidad_meses;
+  S.contratos.pop(); S.contratoPuertas.pop();
+  return { soloContrato, porPuerta, fijadaEnLaPuerta };
+});
+paso('sin nada por puerta, manda la periodicidad del contrato', per.soloContrato === 12, per.soloContrato);
+paso('si el contrato fija una periodicidad para esa puerta, es la que vale',
+  per.porPuerta === 6, per.porPuerta);
+paso('y lo fijado en la propia puerta manda sobre el contrato',
+  per.fijadaEnLaPuerta === 3, per.fijadaEnLaPuerta);
+
+/* --- Los clientes archivados no se ofrecen para enlazar puertas nuevas --- */
+const arch = await T(() => {
+  const g = window.__T, S = g.S;
+  const c = S.clientes.find(x => x.nombre === 'Hotel Bahía de Cádiz');
+  c.archivado = true;
+  const buscando = g.buscarClientes('bahia').map(x => x.nombre);
+  const exacto = g.buscarClientes('Hotel Bahía de Cádiz').map(x => x.nombre);
+  c.archivado = false;
+  return { buscando, exacto };
+});
+paso('un cliente archivado no sale en el buscador de la puerta',
+  arch.buscando.length === 0, arch.buscando.join('|'));
+paso('pero si se escribe su nombre exacto sí sale, para que se vea que está archivado',
+  arch.exacto.length === 1, arch.exacto.join('|'));
+
+/* --- «Cerrado» no se puede elegir en el formulario de la asistencia --- */
+await pag.click('#tabs button[data-tab="avisos"]'); await esperar(600);
+await pag.locator('[data-act="asistencia-nueva"]').first().click(); await esperar(700);
+const sits = await T(() => Array.from(document.getElementById('a-estado').options).map(o => o.value));
+paso('la situación de una asistencia no se puede poner en «Cerrado» a mano',
+  !sits.includes('cerrado'), sits.join('|'));
+paso('y se dice dónde se cierra de verdad',
+  /se cierra con el parte/i.test(await pag.textContent('#dlg-form')));
+
+/* --- El origen se puede cambiar al editar --- */
+await pag.selectOption('#a-puerta', { index: 1 }); await esperar(300);
+await pag.selectOption('#a-origen', { index: 1 }).catch(()=>{});
+const orig1 = await T(() => document.getElementById('a-origen').value);
+await pag.fill('#a-desc', 'Prueba del origen'); await esperar(200);
+await pag.click('#dlg button[type="submit"]'); await esperar(1400);
+const avOrig = await T(() => window.__T.S.avisos.find(a => a.descripcion === 'Prueba del origen'));
+paso('una asistencia nueva guarda cómo ha entrado', avOrig.origen === orig1, avOrig.origen);
+await pag.evaluate(id => {
+  const b = document.querySelector('[data-act="aviso-editar"][data-id="'+id+'"]');
+  if (b) b.click();
+}, avOrig.id);
+await esperar(800);
+const opcOrig = await T(() => Array.from(document.getElementById('a-origen').options).map(o => o.value).filter(Boolean));
+const otro = opcOrig.find(v => v !== orig1);
+await pag.selectOption('#a-origen', otro); await esperar(250);
+await pag.click('#dlg button[type="submit"]'); await esperar(1400);
+paso('y al editarla se puede corregir: antes el cambio se descartaba sin decir nada',
+  await T(id => (window.__T.S.avisos.find(a => a.id === id)||{}).origen, avOrig.id) === otro,
+  await T(id => (window.__T.S.avisos.find(a => a.id === id)||{}).origen, avOrig.id));
+
+/* --- No se cierra una visita de pago sin horas --- */
+await pag.evaluate(id => {
+  const b = document.querySelector('[data-act="cerrar-asistencia"][data-id="'+id+'"]');
+  if (b) b.click();
+}, avOrig.id);
+await esperar(900);
+await pag.fill('#z-trab', 'Ajustada la fotocélula.');
+await T(() => { const h = document.getElementById('z-horas'); if (h) h.value = ''; });
+await pag.fill('#z-fnom', 'Quien sea');
+const cajaF = await pag.locator('#z-firma').boundingBox();
+await pag.mouse.move(cajaF.x + 30, cajaF.y + 40); await pag.mouse.down();
+await pag.mouse.move(cajaF.x + 120, cajaF.y + 50, { steps: 5 }); await pag.mouse.up();
+await esperar(250);
+await pag.click('#dlg button[type="submit"]'); await esperar(900);
+paso('cerrar una visita de pago sin horas no se permite',
+  /horas a facturar/i.test(await pag.textContent('#dlg-form .err')),
+  await pag.textContent('#dlg-form .err'));
+paso('la visita sigue abierta', await T(id => !(window.__T.S.avisos.find(a=>a.id===id)||{}).cerrado, avOrig.id));
+await pag.check('#z-sincargo'); await esperar(250);
+await pag.click('#dlg button[type="submit"]'); await esperar(900);
+paso('y si se marca que no se cobra, pide el motivo',
+  /por qué/i.test(await pag.textContent('#dlg-form .err')),
+  await pag.textContent('#dlg-form .err'));
+await pag.fill('#z-sincargom', 'Entra en el contrato de mantenimiento.'); await esperar(250);
+await pag.click('#dlg button[type="submit"]'); await esperar(1800);
+paso('con el motivo puesto, se cierra',
+  await T(id => !!(window.__T.S.avisos.find(a=>a.id===id)||{}).cerrado, avOrig.id));
+
+/* --- Al cerrar una preventiva se programa la siguiente revisión --- */
+const puertaPrev = await T(() => {
+  const p = window.__T.S.puertas.find(x => x.codigo === 'AR-0001');
+  return { id: p.id, prox: p.proxima_revision || null };
+});
+await pag.click('#tabs button[data-tab="puertas"]'); await esperar(500);
+await pag.locator('#vista .item:has-text("Comunidad Las Flores")').first().click(); await esperar(700);
+await pag.click('[data-act="abrir-preventiva"]'); await esperar(1500);
+const prevId = await T(pid => (window.__T.S.avisos.find(a => a.puerta_id === pid && a.tipo === 'mantenimiento' && !a.cerrado)||{}).id, puertaPrev.id);
+paso('se puede abrir una revisión preventiva desde la ficha', !!prevId, prevId);
+await pag.evaluate(id => {
+  const b = document.querySelector('[data-act="cerrar-asistencia"][data-id="'+id+'"]');
+  if (b) b.click();
+}, prevId);
+await esperar(1100);
+await pag.fill('#z-trab', 'Revisión periódica completa.');
+await pag.fill('#z-ini', '08:00'); await pag.fill('#z-fin', '09:30'); await esperar(400);
+/* el guión, si lo hay, se marca todo en «Bien». Los bloques son <details> y
+   nacen cerrados, así que primero se abren. */
+if (await pag.locator('.g-punto').count()){
+  await T(() => {
+    document.querySelectorAll('#dlg-form details').forEach(d => { d.open = true; });
+    document.querySelectorAll('[data-act="g-todo"]').forEach(b => b.click());
+  });
+  await esperar(500);
+  paso('el guión de revisión se puede marcar en bloque',
+    await pag.locator('.g-punto .g-resp button[aria-pressed="true"]').count() ===
+    await pag.locator('.g-punto').count(),
+    await pag.locator('.g-punto .g-resp button[aria-pressed="true"]').count()+'/'+await pag.locator('.g-punto').count());
+}
+await pag.fill('#z-fnom', 'Presidente de la comunidad');
+const cajaP = await pag.locator('#z-firma').boundingBox();
+await pag.mouse.move(cajaP.x + 25, cajaP.y + 35); await pag.mouse.down();
+await pag.mouse.move(cajaP.x + 130, cajaP.y + 60, { steps: 6 }); await pag.mouse.up();
+await esperar(250);
+await pag.click('#dlg button[type="submit"]'); await esperar(2300);
+const trasPrev = await T(pid => {
+  const g = window.__T, p = g.S.puertas.find(x => x.id === pid);
+  return { ultima: p.ultima_revision, prox: p.proxima_revision,
+           per: g.periodicidadDe(p), hoyLocal: g.S.hoyPrueba || null };
+}, puertaPrev.id);
+const hoyLocal = await T(() => {
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+});
+paso('al cerrar la preventiva se anota la fecha de la revisión',
+  trasPrev.ultima === hoyLocal, trasPrev.ultima+' (hoy '+hoyLocal+')');
+paso('Y SE PROGRAMA LA SIGUIENTE: antes la puerta se quedaba vencida para siempre',
+  !!trasPrev.prox && trasPrev.prox !== puertaPrev.prox, trasPrev.prox);
+paso('a la distancia que marca su periodicidad',
+  trasPrev.prox === await sm(hoyLocal, trasPrev.per),
+  trasPrev.prox+' esperado '+await sm(hoyLocal, trasPrev.per));
+
+/* --- Una foto cuyo alta falla no se cuenta como subida --- */
+const foto = await T(async () => {
+  const g = window.__T, sb = g.sb;
+  const pid = g.S.puertas[0].id;
+  const origFrom = sb.from.bind(sb);
+  let quitada = null;
+  const origStorage = sb.storage.from.bind(sb.storage);
+  sb.storage.from = bk => {
+    const b = origStorage(bk);
+    const origRemove = b.remove.bind(b);
+    b.remove = rutas => { quitada = rutas; return origRemove(rutas); };
+    return b;
+  };
+  sb.from = tabla => {
+    if (tabla !== 'fotos') return origFrom(tabla);
+    const b = origFrom(tabla);
+    b.insert = async () => ({ error: { message: 'fallo provocado por la prueba' } });
+    return b;
+  };
+  const antes = (await origFrom('fotos').select('*').eq('puerta_id', pid)).data || [];
+  // una imagen de 1x1 de verdad
+  const bin = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg=='), c => c.charCodeAt(0));
+  const file = new File([bin], 'prueba.png', { type: 'image/png' });
+  let aviso = '';
+  const t = document.getElementById('toast');
+  const obs = new MutationObserver(() => { if (!t.hidden) aviso += t.textContent + '|'; });
+  obs.observe(t, { childList: true, characterData: true, subtree: true, attributes: true });
+  await g.subirFotos(pid, [file]);
+  obs.disconnect();
+  const despues = (await origFrom('fotos').select('*').eq('puerta_id', pid)).data || [];
+  sb.from = origFrom; sb.storage.from = origStorage;
+  return { antes: antes.length, despues: despues.length, aviso, quitada };
+});
+paso('si el alta de la foto en la base de datos falla, no se crea la fila',
+  foto.despues === foto.antes, foto.antes+' → '+foto.despues);
+paso('no se dice que la foto se ha subido',
+  !/foto subida|fotos subidas/i.test(foto.aviso), foto.aviso || '(ningún aviso)');
+paso('y la foto se quita del almacén para no dejar basura',
+  Array.isArray(foto.quitada) && foto.quitada.length === 1, JSON.stringify(foto.quitada));
+
+/* --- Documentos: el aviso dice lo que ha pasado de verdad --- */
+const docs = await T(async () => {
+  const g = window.__T, sb = g.sb;
+  const pid = g.S.puertas[0].id;
+  const origFrom = sb.from.bind(sb);
+  sb.from = tabla => {
+    if (tabla !== 'documentos') return origFrom(tabla);
+    const b = origFrom(tabla);
+    b.insert = async () => ({ error: { message: 'fallo provocado por la prueba' } });
+    return b;
+  };
+  const bin = Uint8Array.from('%PDF-1.4 prueba', c => c.charCodeAt(0));
+  const file = new File([bin], 'certificado.pdf', { type: 'application/pdf' });
+  let aviso = '';
+  const t = document.getElementById('toast');
+  const obs = new MutationObserver(() => { if (!t.hidden) aviso += t.textContent + '|'; });
+  obs.observe(t, { childList:true, characterData:true, subtree:true, attributes:true });
+  await g.subirDocs(pid, [file], 'Certificado', false);
+  obs.disconnect();
+  const filas = (await origFrom('documentos').select('*').eq('puerta_id', pid)).data || [];
+  sb.from = origFrom;
+  return { aviso, filas: filas.length };
+});
+paso('si el alta del documento falla, no se crea la fila', docs.filas === 0, docs.filas);
+paso('y NO se dice «documentación subida»: el certificado no estaba guardado',
+  !/subid/i.test(docs.aviso), docs.aviso || '(ningún aviso)');
+paso('se dice que no se ha podido subir', /no se ha podido subir/i.test(docs.aviso), docs.aviso);
+
+/* --- Hacer público un documento: si falla el cambio de ficha, no se queda expuesto --- */
+const vis = await T(async () => {
+  const g = window.__T, sb = g.sb;
+  const pid = g.S.puertas[0].id;
+  // un documento privado de verdad
+  const ruta = pid+'/'+Date.now()+'-manual.pdf';
+  const bin = Uint8Array.from('%PDF-1.4 manual', c => c.charCodeAt(0));
+  await sb.storage.from('documentos').upload(ruta, new Blob([bin], {type:'application/pdf'}), { contentType:'application/pdf' });
+  const { data: fila } = await sb.from('documentos')
+    .insert({ puerta_id: pid, nombre:'manual.pdf', tipo:'Manual', ruta, autor:'prueba', publico:false, bucket:'documentos' })
+    .select().maybeSingle();
+
+  const origFrom = sb.from.bind(sb);
+  sb.from = tabla => {
+    if (tabla !== 'documentos') return origFrom(tabla);
+    const b = origFrom(tabla);
+    const origUpd = b.update.bind(b);
+    b.update = () => ({ eq: async () => ({ error: { message: 'fallo provocado por la prueba' } }) });
+    return b;
+  };
+  await g.cambiarVisibilidad(fila.id, pid);
+  sb.from = origFrom;
+
+  const enPublico = await sb.storage.from('publicos').download(ruta);
+  const enPrivado = await sb.storage.from('documentos').download(ruta);
+  const { data: ahora } = await origFrom('documentos').select('*').eq('id', fila.id).maybeSingle();
+  return { sigueEnPublico: !enPublico.error, sigueEnPrivado: !enPrivado.error, publico: !!(ahora||{}).publico };
+});
+paso('si falla el cambio de ficha al hacer público un documento, se deshace la copia',
+  vis.sigueEnPublico === false, 'en el almacén público: '+vis.sigueEnPublico);
+paso('el documento no se pierde: sigue en el almacén privado', vis.sigueEnPrivado === true);
+paso('y la ficha sigue diciendo que es privado', vis.publico === false);
+
+/* --- Materiales: si el alta falla, no se queda sin los que había --- */
+const mats = await T(async () => {
+  const g = window.__T, sb = g.sb;
+  const av = g.S.avisos.find(a => !a.cerrado) || g.S.avisos[0];
+  const origFrom = sb.from.bind(sb);
+  await origFrom('materiales').insert([
+    { aviso_id: av.id, descripcion:'Banda de seguridad', cantidad:1, unidad:'ud' },
+    { aviso_id: av.id, descripcion:'Final de carrera', cantidad:2, unidad:'ud' }]);
+  const antes = ((await origFrom('materiales').select('*').eq('aviso_id', av.id)).data || []).length;
+
+  // se reproduce el «rehacer» del cierre con el alta rota
+  const rehacer = async (tabla, filas) => {
+    const { data: copia } = await origFrom(tabla).select('*').eq('aviso_id', av.id);
+    const { error: eBorra } = await origFrom(tabla).delete().eq('aviso_id', av.id);
+    if (eBorra) throw eBorra;
+    if (!filas || !filas.length) return;
+    const { error } = { error: { message: 'fallo provocado por la prueba' } };
+    if (!error) return;
+    if (copia && copia.length) await origFrom(tabla).insert(copia);
+    throw error;
+  };
+  let hubo = false;
+  try { await rehacer('materiales', [{ aviso_id: av.id, descripcion:'Otro', cantidad:1 }]); }
+  catch(e){ hubo = true; }
+  const despues = ((await origFrom('materiales').select('*').eq('aviso_id', av.id)).data || []).length;
+  await origFrom('materiales').delete().eq('aviso_id', av.id);
+  return { antes, despues, hubo };
+});
+paso('rehacer los materiales avisa si el alta falla', mats.hubo === true);
+paso('y los que ya estaban guardados no se pierden',
+  mats.despues === mats.antes && mats.antes === 2, mats.antes+' → '+mats.despues);
+
+/* --- Pendiente de facturar: las de 0 € también salen, y marcadas --- */
+await T(() => {
+  const g = window.__T;
+  const av = g.S.avisos.find(a => a.cerrado && !a.sin_cargo && !a.cobrado);
+  if (av) g.S.valoraciones[av.id] = { aviso_id: av.id, imp_total: 0, coste_total: 0, margen: 0, facturado: false };
+});
+await pag.click('#tabs button[data-tab="gestion"]').catch(()=>{});
+await esperar(800);
+const gestion = await pag.textContent('#vista').catch(() => '');
+paso('las visitas cerradas y valoradas en 0 € salen señaladas en gestión',
+  /valorada[s]? en 0 €/.test(gestion) || /se cerraron sin horas/.test(gestion),
+  /0 €/.test(gestion) ? 'hay aviso' : '(no sale)');
+
 console.log('\n'+ok+' bien, '+mal+' mal.');
-const graves = errores.filter(x => !/fonts\.googleapis|ERR_TUNNEL|ERR_NAME|net::ERR/.test(x));
+/* «fallo provocado por la prueba» es un error que esta suite provoca a propósito,
+   para comprobar que la aplicación no miente cuando algo falla. No cuenta. */
+const graves = errores.filter(x => !/fonts\.googleapis|ERR_TUNNEL|ERR_NAME|net::ERR|provocado por la prueba/.test(x));
 if (graves.length) console.log('Errores de JavaScript:\n'+graves.join('\n'));
 else console.log('Sin errores de JavaScript.');
 await nav.close();
