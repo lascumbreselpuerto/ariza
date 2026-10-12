@@ -173,6 +173,16 @@ img{max-width:100%}
 .checks{display:flex;flex-wrap:wrap;gap:8px}
 .checks label{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:20px;padding:6px 12px;font-size:14px;cursor:pointer;background:var(--surface)}
 .checks input{accent-color:var(--amarillo);width:16px;height:16px}
+/* Buscador de cliente dentro del formulario de puerta */
+.lista-busca{border:1px solid var(--line);border-radius:6px;background:var(--surface);max-height:240px;overflow:auto;box-shadow:0 6px 18px rgba(0,0,0,.08)}
+.lista-busca .busca-fila{display:grid;gap:2px;width:100%;text-align:left;padding:9px 11px;border:0;border-bottom:1px solid var(--line);background:none;cursor:pointer;font:inherit}
+.lista-busca .busca-fila:last-child{border-bottom:0}
+.lista-busca .busca-fila:hover,.lista-busca .busca-fila:focus{background:var(--bg)}
+.lista-busca .busca-fila b{font-size:15px}
+.lista-busca .busca-fila span{font-size:12px;color:var(--muted)}
+.lista-busca .busca-nada{padding:9px 11px;font-size:13px;color:var(--muted)}
+.campo .pista.ojo{color:var(--mal);font-weight:600}
+.sin-ficha{background:var(--mal-bg);color:var(--mal);border-radius:6px;padding:8px 10px;font:600 13px var(--sans)}
 
 /* Ficha */
 .ficha-h{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
@@ -918,7 +928,10 @@ function vistaPuertas(){
   h += '<div class="fila"><div class="buscador sp"><input id="busca" type="search" placeholder="Buscar por código, cliente, dirección o marca" value="'+esc(S.busca)+'" data-act="busca"></div>'+
        '<button class="btn pri" data-act="puerta-nueva">Nueva puerta</button></div>';
   const libres = S.etiquetas.filter(e => !S.puertas.some(p => p.codigo === e.codigo)).length;
+  const sinFicha = S.puertas.filter(p => !p.cliente_id).length;
   h += '<p class="mini" style="margin:0">'+S.puertas.length+' puertas dadas de alta · '+libres+' etiquetas libres en la furgoneta</p>';
+  if (sinFicha) h += '<div class="sin-ficha">'+sinFicha+' puerta'+(sinFicha===1?'':'s')+' sin ficha de cliente: '+
+    'ábrela y engánchala, o no saldrá en el cliente ni en sus contratos.</div>';
   if (!lista.length) h += '<div class="panel"><p class="muted" style="margin:0">'+(S.puertas.length?'Ninguna puerta coincide con la búsqueda.':'Todavía no hay puertas. Genera etiquetas y da de alta la primera.')+'</p></div>';
   else {
     h += '<div class="lista">';
@@ -926,7 +939,9 @@ function vistaPuertas(){
       const av = abiertoDe(p.id);
       h += '<button class="item" data-act="abrir" data-id="'+p.id+'">'+
            '<span class="qr">'+esc((p.codigo||'—').replace(/^[A-Z]+-/,''))+'</span>'+
-           '<span><span class="tit">'+esc(p.cliente||'Sin cliente')+'</span><span class="sub">'+esc([p.direccion,p.ubicacion].filter(Boolean).join(' · ')||'Sin dirección')+'</span>'+
+           '<span><span class="tit">'+esc(p.cliente||'Sin cliente')+
+             (p.cliente_id ? '' : ' <span class="chip mal sin" style="font-size:11px">sin ficha</span>')+'</span>'+
+           '<span class="sub">'+esc([p.direccion,p.ubicacion].filter(Boolean).join(' · ')||'Sin dirección')+'</span>'+
            '<span class="sub">'+esc([p.tipo,p.marca,p.modelo].filter(Boolean).join(' · '))+'</span></span>'+
            '<span>'+estadoChip(p.estado)+(av?'<span class="mini" style="display:block;text-align:right;margin-top:4px">'+(EST_AVISO[av.estado]||'')+'</span>':'')+'</span>'+
            '</button>';
@@ -958,6 +973,40 @@ function vistaFicha(id){
        '<button class="btn sm" data-act="exp-nuevo" data-id="'+p.id+'">Documentación</button>'+
        '<button class="btn sm pri" data-act="aviso-nuevo" data-id="'+p.id+'">Nuevo aviso</button></div>'+
        '<p class="mini" style="margin:10px 0 0">Estado desde '+fechaCorta(p.estado_desde)+'</p></div>';
+
+  /* ---- De quién es ----
+     Una puerta puede tener el nombre del cliente escrito y no estar enlazada con
+     su ficha. Eso deja la puerta fuera del cliente: no sale en su listado, ni en
+     sus contratos, ni en su historial. Aquí se ve y se arregla. */
+  const cli = p.cliente_id ? clienteDe(p.cliente_id) : null;
+  h += '<div class="panel"><div class="panel-h"><h3>Cliente</h3><span class="sp"></span>'+
+       '<button class="btn sm plana" data-act="puerta-editar" data-id="'+p.id+'">Cambiar</button></div>';
+  if (cli){
+    h += '<button class="item" data-act="abrir-cliente" data-id="'+cli.id+'">'+
+      '<span class="qr">'+esc((cli.nombre||'?').slice(0,2).toUpperCase())+'</span>'+
+      '<span><span class="tit">'+esc(cli.nombre||'')+(cli.contrato?' · contrato':'')+'</span>'+
+      '<span class="sub">'+esc([cli.direccion,cli.poblacion].filter(Boolean).join(' · ')||'Sin dirección')+'</span>'+
+      '<span class="sub">'+esc([cli.telefono,cli.email].filter(Boolean).join(' · '))+'</span></span>'+
+      '<span class="mini">Ver ficha ›</span></button>';
+  } else {
+    const parecidos = normTxt(p.cliente) ? buscarClientes(p.cliente, 5) : [];
+    h += '<div class="sin-ficha">Esta puerta no está enlazada con ninguna ficha de cliente'+
+      (p.cliente ? ': solo tiene el nombre «'+esc(p.cliente)+'» escrito a mano.' : '.')+'</div>'+
+      '<p class="mini" style="margin:8px 0 0">Sin ficha no entra en los contratos del cliente, '+
+      'ni en su listado de puertas, ni en su historial.</p>';
+    if (parecidos.length){
+      h += '<p class="mini" style="margin:10px 0 6px">¿Es alguno de estos?</p><div class="lista">'+
+        parecidos.map(c => '<div class="item" style="cursor:default">'+
+          '<span class="qr">'+esc((c.nombre||'?').slice(0,2).toUpperCase())+'</span>'+
+          '<span><span class="tit">'+esc(c.nombre||'')+'</span>'+
+          '<span class="sub">'+esc(lineaCliente(c)||'')+'</span></span>'+
+          '<span><button class="btn sm pri" data-act="puerta-enlazar" data-id="'+p.id+'" data-cli="'+c.id+'">Enlazar</button></span>'+
+          '</div>').join('')+'</div>';
+    }
+    h += '<div class="fila" style="margin-top:10px">'+
+      '<button class="btn sm" data-act="puerta-editar" data-id="'+p.id+'">Buscar cliente o crearlo</button></div>';
+  }
+  h += '</div>';
 
   // Mantenimiento programado
   const prevAbierta = av.find(a => a.tipo === 'mantenimiento' && !a.cerrado);
@@ -1863,7 +1912,22 @@ function vistaFichaCliente(id){
   }
   h += '</div>';
 
-  h += '<div class="panel"><div class="panel-h"><h3>Puertas</h3><span class="mini">'+puertas.length+'</span></div>';
+  h += '<div class="panel"><div class="panel-h"><h3>Puertas</h3><span class="mini">'+puertas.length+'</span>'+
+       '<span class="sp"></span><button class="btn sm" data-act="puerta-nueva-cliente" data-id="'+c.id+'">Nueva puerta</button></div>';
+  /* Puertas que llevan escrito el nombre de este cliente pero no están enlazadas
+     con su ficha: se ofrecen para engancharlas de un clic. */
+  const sueltas = S.puertas.filter(p => !p.cliente_id &&
+    normTxt(p.cliente) && normTxt(p.cliente) === normTxt(c.nombre));
+  if (sueltas.length){
+    h += '<div class="sin-ficha" style="margin-bottom:10px">'+sueltas.length+' puerta'+(sueltas.length===1?'':'s')+
+      ' con este nombre escrito a mano, sin enlazar con esta ficha.</div><div class="lista" style="margin-bottom:10px">'+
+      sueltas.map(p => '<div class="item" style="cursor:default">'+
+        '<span class="qr">'+esc((p.codigo||'—').replace(/^[A-Z]+-/,''))+'</span>'+
+        '<span><span class="tit">'+esc([p.tipo,p.marca,p.modelo].filter(Boolean).join(' · ')||'Puerta')+'</span>'+
+        '<span class="sub">'+esc([p.direccion,p.ubicacion].filter(Boolean).join(' · '))+'</span></span>'+
+        '<span><button class="btn sm pri" data-act="puerta-enlazar" data-id="'+p.id+'" data-cli="'+c.id+'">Enlazar</button></span>'+
+        '</div>').join('')+'</div>';
+  }
   if (!puertas.length) h += '<p class="muted" style="margin:0">Este cliente todavía no tiene puertas dadas de alta.</p>';
   else {
     h += '<div class="lista">';
@@ -10823,11 +10887,48 @@ dlgForm.addEventListener('submit', e => { e.preventDefault(); if (alGuardar) alG
 /* Contrato: el total se recalcula solo y la duración fija el vencimiento */
 dlgForm.addEventListener('input', e => {
   if (e.target.classList && e.target.classList.contains('k-c')) sumarCuotas();
+  /* Buscador de cliente del formulario de puerta: al escribir se busca, y si el
+     texto ya no es el de la ficha enlazada se desenlaza, para que no quede una
+     puerta diciendo un nombre y apuntando a otra ficha. */
+  // en cuanto se escribe a mano en un campo autorrellenado, deja de ser automático
+  if (e.target.id === 'f-dir' || e.target.id === 'f-tcliente') e.target.dataset.auto = '0';
+  if (e.target.id === 'f-cbusca'){
+    const oculto = document.getElementById('f-clid');
+    const c = oculto && oculto.value ? clienteDe(oculto.value) : null;
+    if (oculto && c && normTxt(e.target.value) !== normTxt(c.nombre)) oculto.value = '';
+    pintarListaCliente(); estadoCliente();
+  }
+});
+/* Al entrar en el buscador se enseña la lista, salvo si ya está enlazada con una
+   ficha: ahí no hay nada que buscar y la lista solo estorbaría. */
+dlgForm.addEventListener('focusin', e => {
+  if (e.target.id === 'f-cbusca' && !val('f-clid')) pintarListaCliente();
+});
+dlgForm.addEventListener('keydown', e => {
+  if (e.target.id !== 'f-cbusca') return;
+  const caja = document.getElementById('f-clista');
+  if (e.key === 'Enter'){
+    // Enter en el buscador NO guarda la puerta: elige el primero de la lista
+    e.preventDefault();
+    const primera = caja && !caja.hidden ? caja.querySelector('.busca-fila') : null;
+    if (primera) primera.click();
+    return;
+  }
+  if (e.key === 'ArrowDown'){
+    const primera = caja && !caja.hidden ? caja.querySelector('.busca-fila') : null;
+    if (primera){ e.preventDefault(); primera.focus(); }
+    return;
+  }
+  if (e.key === 'Escape' && caja && !caja.hidden){ e.preventDefault(); cerrarListaCliente(); }
 });
 dlgForm.addEventListener('change', e => {
   const t = e.target;
   if (t.classList && t.classList.contains('k-p')) sumarCuotas();
   if (t.id === 'k-cli'){ pintarPuertasContrato(t.value || null, {}); return; }
+  /* Asistencia: al elegir puerta se pone su cliente a la vista, ahora mismo.
+     Antes solo se deducía al guardar, de modo que en pantalla parecía que la
+     asistencia iba sin cliente; y si la puerta estaba sin ficha, nada lo decía. */
+  if (t.id === 'a-puerta'){ clienteDeLaPuertaDelAviso(); return; }
   if (t.id === 'k-dur' || t.id === 'k-alta'){
     const dur = +val('k-dur'), alta = val('k-alta') || hoy();
     const venc = document.getElementById('k-venc');
@@ -10837,7 +10938,12 @@ dlgForm.addEventListener('change', e => {
     }
   }
 });
-dlgForm.addEventListener('click', e => { const b = e.target.closest('[data-cerrar]'); if (b) cerrarDlg(); });
+dlgForm.addEventListener('click', e => {
+  const b = e.target.closest('[data-cerrar]'); if (b) cerrarDlg();
+  // un clic en cualquier otro sitio cierra la lista del buscador de cliente
+  const caja = document.getElementById('f-clista');
+  if (caja && !caja.hidden && !e.target.closest('#f-clista') && e.target.id !== 'f-cbusca') cerrarListaCliente();
+});
 const val = id => { const e = document.getElementById(id); return e ? e.value.trim() : ''; };
 const setErr = m => { const e = dlgForm.querySelector('.err'); if (e) e.textContent = m; };
 const opts = (arr, sel) => ['<option value=""></option>'].concat(arr.map(o => '<option'+(o===sel?' selected':'')+'>'+esc(o)+'</option>')).join('');
@@ -10849,7 +10955,7 @@ async function guardarLista(clave, arr){
 }
 
 /* Campos del alta de puerta, para poder recuperarlos si se sale a crear un cliente */
-const CAMPOS_PUERTA = ['f-cod','f-cliente','f-clid','f-dir','f-ubi','f-tcliente','f-tipo','f-uso',
+const CAMPOS_PUERTA = ['f-cod','f-cbusca','f-clid','f-dir','f-ubi','f-tcliente','f-tipo','f-uso',
   'f-marca','f-modelo','f-cuadro','f-motor','f-anio','f-instalador','f-ancho','f-alto','f-peso',
   'f-ult','f-prox','f-notas'];
 function guardarBorradorPuerta(){
@@ -10881,6 +10987,118 @@ function aplicarBorradorPuerta(){
     if (e.tagName === 'SELECT' && !Array.from(e.options).some(o => o.value === b[id])) return;
     e.value = b[id];
   });
+  /* Si se salió a crear un cliente, al volver la puerta ya trae su ficha: se
+     pone el nombre de la ficha en el buscador y se dice con quién queda. */
+  const oculto = document.getElementById('f-clid');
+  if (oculto && oculto.value){
+    const c = clienteDe(oculto.value);
+    const campo = document.getElementById('f-cbusca');
+    if (c && campo) campo.value = c.nombre || '';
+  }
+  estadoCliente();
+}
+
+/* ---- Buscador de cliente dentro del formulario de puerta ----
+   El cliente de una puerta es UNA cosa: la ficha. El campo de texto sirve para
+   buscarla y el identificador vive en el campo oculto f-clid. */
+const normTxt = s => (s == null ? '' : String(s)).toLowerCase()
+  .normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .replace(/[^a-z0-9]+/g, ' ').trim();
+function buscarClientes(txt, tope){
+  const orden = S.clientes.slice().sort((a,b) => (a.nombre||'').localeCompare(b.nombre||'', 'es'));
+  const q = normTxt(txt);
+  if (!q) return orden.slice(0, tope || 8);
+  const trozos = q.split(' ');
+  return orden.filter(c => {
+    const donde = normTxt([c.nombre, c.nif, c.direccion, c.poblacion, c.telefono, c.email].join(' '));
+    return trozos.every(t => donde.includes(t));
+  }).slice(0, tope || 8);
+}
+const lineaCliente = c => [c.nif, c.direccion, c.poblacion, c.telefono].filter(Boolean).join(' · ');
+function pintarListaCliente(){
+  const caja = document.getElementById('f-clista'), campo = document.getElementById('f-cbusca');
+  if (!caja || !campo) return;
+  const hallados = buscarClientes(campo.value, 8);
+  caja.innerHTML = hallados.length
+    ? hallados.map(c => '<button type="button" class="busca-fila" data-act="cli-elegir" data-id="'+c.id+'">'+
+        '<b>'+esc(c.nombre||'(sin nombre)')+'</b>'+
+        (lineaCliente(c) ? '<span>'+esc(lineaCliente(c))+'</span>' : '')+'</button>').join('')
+    : '<div class="busca-nada">Ningún cliente con esos datos. Dale a «Crear un cliente nuevo».</div>';
+  caja.hidden = false;
+}
+function cerrarListaCliente(){
+  const caja = document.getElementById('f-clista');
+  if (caja){ caja.hidden = true; caja.innerHTML = ''; }
+}
+function estadoCliente(){
+  const pista = document.getElementById('f-cestado');
+  if (!pista) return;
+  const id = val('f-clid'), c = id ? clienteDe(id) : null;
+  if (c){
+    pista.innerHTML = 'Enlazada con la ficha de <b>'+esc(c.nombre||'')+'</b>.';
+    pista.classList.remove('ojo');
+  } else if (val('f-cbusca')){
+    pista.innerHTML = 'Escrito a mano, <b>sin ficha de cliente</b>. Elige uno de la lista; '+
+      'si lo dejas así, al guardar se buscará por el nombre y, si no existe, se creará la ficha.';
+    pista.classList.add('ojo');
+  } else {
+    pista.innerHTML = 'Busca el cliente y elígelo de la lista. Si no existe todavía, créalo.';
+    pista.classList.remove('ojo');
+  }
+}
+/* Asistencia: el cliente sale de la puerta elegida, y se ve en pantalla */
+function clienteDeLaPuertaDelAviso(){
+  const sel = document.getElementById('a-puerta'), cli = document.getElementById('a-cliente');
+  const pista = document.getElementById('a-cestado');
+  if (!sel || !cli) return;
+  const p = sel.value ? puertaDe(sel.value) : null;
+  if (p && p.cliente_id && Array.from(cli.options).some(o => o.value === p.cliente_id)){
+    cli.value = p.cliente_id;
+    if (pista){
+      pista.innerHTML = 'Puesto desde la puerta: <b>'+esc((clienteDe(p.cliente_id)||{}).nombre||'')+'</b>.';
+      pista.classList.remove('ojo');
+    }
+    const dir = document.getElementById('a-dir');
+    if (dir && !dir.value.trim()) dir.value = '';
+    return;
+  }
+  if (p && !p.cliente_id){
+    // la puerta está suelta: se dice, porque la asistencia nacería sin cliente
+    if (pista){
+      pista.innerHTML = 'La puerta <b>'+esc(p.codigo||'')+'</b> no tiene ficha de cliente'+
+        (p.cliente ? ' (solo el nombre «'+esc(p.cliente)+'» escrito a mano)' : '')+
+        '. Elige el cliente aquí, o arréglalo en la ficha de la puerta.';
+      pista.classList.add('ojo');
+    }
+    return;
+  }
+  if (pista){
+    pista.innerHTML = 'Se rellena solo al elegir puerta. <a href="#" data-act="cliente-rapido">Crear cliente nuevo</a>';
+    pista.classList.remove('ojo');
+  }
+}
+
+function elegirCliente(id){
+  const c = clienteDe(id);
+  if (!c) return;
+  const campo = document.getElementById('f-cbusca'), oculto = document.getElementById('f-clid');
+  if (campo) campo.value = c.nombre || '';
+  if (oculto) oculto.value = c.id;
+  cerrarListaCliente();
+  /* Lo que esté vacío se rellena con lo de la ficha, y lo que ya haya escrito a
+     mano NO se toca. Lo que puso antes este mismo autorrelleno sí se cambia: si
+     te equivocas de cliente y lo corriges, la dirección del equivocado no puede
+     quedarse pegada a la puerta del correcto. Eso se marca con data-auto. */
+  const dir = document.getElementById('f-dir');
+  if (dir && c.direccion && (!dir.value.trim() || dir.dataset.auto === '1')){
+    dir.value = c.direccion; dir.dataset.auto = '1';
+  }
+  const tc = document.getElementById('f-tcliente');
+  if (tc && c.tipo && (!tc.value || tc.dataset.auto === '1')
+      && Array.from(tc.options).some(o => o.value === c.tipo)){
+    tc.value = c.tipo; tc.dataset.auto = '1';
+  }
+  estadoCliente();
 }
 
 function dlgPuerta(id, avisoId){
@@ -10889,14 +11107,34 @@ function dlgPuerta(id, avisoId){
   const libres = S.etiquetas.filter(e => !usadas.has(e.codigo)).map(e => e.codigo);
   const d = p || { estado:'operativa', seguridad:[] };
   let h = '<h3>'+(p ? 'Editar puerta '+esc(p.codigo||'') : 'Nueva puerta')+'</h3>';
+  /* ---- De quién es la puerta ----
+     Antes había dos campos: un texto «Cliente (nombre)» y un desplegable «Ficha de
+     cliente». Se rellenaba el texto, no se tocaba el desplegable, y la puerta
+     quedaba con el nombre escrito pero SIN enlazar con la ficha: parecía tener
+     cliente y estaba suelta. Ahora el cliente es una sola cosa, con buscador. */
+  const cliActual = d.cliente_id ? (clienteDe(d.cliente_id) || null) : null;
+  h += '<div class="grupo"><h3>De quién es la puerta</h3>'+
+    '<div class="campos">'+
+    '<div class="campo full"><label for="f-cbusca">Cliente</label>'+
+      '<input id="f-cbusca" type="search" autocomplete="off" placeholder="Escribe para buscar: nombre, NIF, dirección o teléfono" '+
+        'value="'+esc(cliActual ? cliActual.nombre : (d.cliente||''))+'">'+
+      '<input type="hidden" id="f-clid" value="'+esc(d.cliente_id||'')+'">'+
+      '<div id="f-clista" class="lista-busca" hidden></div>'+
+      '<span class="pista" id="f-cestado">'+
+        (cliActual
+          ? 'Enlazada con la ficha de <b>'+esc(cliActual.nombre)+'</b>.'
+          : 'Busca el cliente y elígelo de la lista. Si no existe todavía, créalo.')+
+      '</span>'+
+      '<div class="fila" style="gap:8px;margin-top:6px">'+
+        '<button type="button" class="btn sm" data-act="cliente-desde-puerta"'+
+          (p?' data-puerta="'+p.id+'"':'')+(avisoId?' data-aviso="'+avisoId+'"':'')+
+          '>Crear un cliente nuevo</button>'+
+        '<button type="button" class="btn sm plana" data-act="cliente-quitar">Dejar sin ficha</button>'+
+      '</div></div>'+
+    '</div></div>';
+
   h += '<div class="grupo"><h3>Identificación</h3><div class="campos">'+
     '<div class="campo"><label for="f-cod">Etiqueta / código</label><select id="f-cod">'+opts(libres, d.codigo)+'</select><span class="pista">'+(libres.length?'Elige la etiqueta que acabas de pegar':'No quedan etiquetas libres: genera una serie')+'</span></div>'+
-    '<div class="campo"><label for="f-cliente">Cliente (nombre)</label><input id="f-cliente" type="text" value="'+esc(d.cliente||'')+'"></div>'+
-    '<div class="campo"><label for="f-clid">Ficha de cliente</label><select id="f-clid"><option value="">Sin ficha</option>'+
-      S.clientes.map(c => '<option value="'+c.id+'"'+(d.cliente_id===c.id?' selected':'')+'>'+esc(c.nombre)+'</option>').join('')+
-      '</select><span class="pista">Si lo dejas sin ficha, se crea una con el nombre de al lado. '+
-      '<button type="button" class="enlace" data-act="cliente-desde-puerta"'+
-      (p?' data-puerta="'+p.id+'"':'')+(avisoId?' data-aviso="'+avisoId+'"':'')+'>Crear cliente nuevo</button></span></div>'+
     '<div class="campo full"><label for="f-dir">Dirección</label><input id="f-dir" type="text" value="'+esc(d.direccion||'')+'"></div>'+
     '<div class="campo full"><label for="f-ubi">Ubicación dentro del edificio</label><input id="f-ubi" type="text" value="'+esc(d.ubicacion||'')+'" placeholder="Ej.: garaje sótano -1, muelle 2"></div>'+
     '<div class="campo"><label for="f-tcliente">Tipo de cliente</label><select id="f-tcliente">'+opts(lista('clientes', CLIENTES), d.tipo_cliente)+'</select></div>'+
@@ -10932,11 +11170,11 @@ function dlgPuerta(id, avisoId){
   h += '<p class="err" role="alert"></p><div class="pie">'+
     (p ? '<button type="button" class="btn" data-act="puerta-borrar" data-id="'+p.id+'">Borrar puerta</button>' : '')+
     '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button><button type="submit" class="btn pri">Guardar</button></div>';
-  setTimeout(aplicarBorradorPuerta, 0);
+  setTimeout(() => { aplicarBorradorPuerta(); estadoCliente(); }, 0);
   abrirDlg(h, async () => {
     const seg = Array.from(dlgForm.querySelectorAll('.f-seg')).filter(x => x.checked).map(x => x.value);
     const o = {
-      codigo: val('f-cod') || null, cliente: val('f-cliente'), direccion: val('f-dir'), ubicacion: val('f-ubi'),
+      codigo: val('f-cod') || null, cliente: val('f-cbusca'), direccion: val('f-dir'), ubicacion: val('f-ubi'),
       tipo_cliente: val('f-tcliente'), tipo: val('f-tipo'), uso: val('f-uso'), marca: val('f-marca'), modelo: val('f-modelo'),
       cuadro: val('f-cuadro'), motor: val('f-motor'), anio: val('f-anio')?+val('f-anio'):null, instalador: val('f-instalador'),
       ancho_mm: val('f-ancho')?+val('f-ancho'):null, alto_mm: val('f-alto')?+val('f-alto'):null, peso_kg: val('f-peso')?+val('f-peso'):null,
@@ -10945,9 +11183,13 @@ function dlgPuerta(id, avisoId){
     if (!o.cliente && !o.direccion) return setErr('Pon al menos el cliente o la dirección.');
     o.cliente_id = val('f-clid') || null;
     try {
-      // si no se eligió ficha de cliente pero hay nombre, se crea o se reutiliza
+      /* Si se escribió un nombre y no se eligió ficha, se busca una que se llame
+         igual y, si no la hay, se crea. Antes esto pasaba sin avisar y era la
+         fuente de los clientes duplicados: ahora el formulario enseña con quién
+         queda enlazada la puerta antes de guardar, y esto es solo la red. */
       if (!o.cliente_id && o.cliente){
-        const ya = S.clientes.find(c => (c.nombre||'').toLowerCase() === o.cliente.toLowerCase());
+        const ya = S.clientes.find(c => (c.nombre||'').trim().toLowerCase()
+                                     === o.cliente.trim().toLowerCase());
         if (ya) o.cliente_id = ya.id;
         else {
           const { data: nc } = await sb.from('clientes')
@@ -10955,6 +11197,12 @@ function dlgPuerta(id, avisoId){
             .select().maybeSingle();
           if (nc) o.cliente_id = nc.id;
         }
+      }
+      /* El nombre que se guarda en la puerta es el de la ficha enlazada: así no
+         pueden decir cosas distintas la ficha y la puerta. */
+      if (o.cliente_id){
+        const c = clienteDe(o.cliente_id);
+        if (c) o.cliente = c.nombre;
       }
       let puertaId = p ? p.id : null;
       if (p){ const { error } = await sb.from('puertas').update(o).eq('id', p.id); if (error) throw error; }
@@ -11015,8 +11263,11 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
         esc((p.codigo||'')+' · '+(p.cliente||'')+' · '+[p.direccion,p.ubicacion].filter(Boolean).join(' '))+'</option>').join('')+
       '</select><span class="pista">Si aún no se sabe, déjalo vacío: el técnico puede darla de alta en obra</span></div>'+
     '<div class="campo full"><label for="a-cliente">Cliente</label><select id="a-cliente"><option value="">Sin cliente en la ficha</option>'+
-      S.clientes.map(c => '<option value="'+c.id+'"'+(d.cliente_id===c.id?' selected':'')+'>'+esc(c.nombre+(c.poblacion?(' · '+c.poblacion):''))+'</option>').join('')+
-      '</select><span class="pista">Se rellena solo si eliges puerta. <a href="#" data-act="cliente-rapido">Crear cliente nuevo</a></span></div>'+
+      S.clientes.slice()
+        .filter(c => !c.archivado || c.id === d.cliente_id)
+        .sort((x,y) => (x.nombre||'').localeCompare(y.nombre||'', 'es'))
+        .map(c => '<option value="'+c.id+'"'+(d.cliente_id===c.id?' selected':'')+'>'+esc(c.nombre+(c.poblacion?(' · '+c.poblacion):''))+'</option>').join('')+
+      '</select><span class="pista" id="a-cestado">Se rellena solo al elegir puerta. <a href="#" data-act="cliente-rapido">Crear cliente nuevo</a></span></div>'+
     '<div class="campo full"><label for="a-dir">Dirección, si no hay puerta ni cliente</label><input id="a-dir" type="text" maxlength="200" value="'+esc(d.direccion_libre||'')+'" placeholder="Ej.: C/ Larga 4, El Puerto"></div>'+
     '</div></div>';
 
@@ -11052,6 +11303,8 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
     (a && !a.cerrado && esGestion() ? '<button type="button" class="btn plana" data-act="aviso-anular" data-id="'+a.id+'">Anular sin parte</button>' : '')+
     '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button><button type="submit" class="btn pri">Guardar</button></div>';
 
+  // en un alta nueva, si ya viene puerta elegida, su cliente se pone de entrada
+  if (!a) setTimeout(clienteDeLaPuertaDelAviso, 0);
   abrirDlg(h, async () => {
     const tid = val('a-tec') || null;
     const nom = val('a-cnom'), tel = val('a-ctel'), mail = val('a-cmail');
@@ -11082,9 +11335,9 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
 }
 
 /* Alta rápida de cliente */
-function dlgCliente(id, alGuardarExtra){
+function dlgCliente(id, alGuardarExtra, pre){
   const c = id ? clienteDe(id) : null;
-  const d = c || {};
+  const d = c || pre || {};
   let h = '<h3>'+(c ? 'Editar cliente' : 'Nuevo cliente')+'</h3><div class="campos">'+
     '<div class="campo full"><label for="c-nombre">Nombre o razón social</label><input id="c-nombre" type="text" maxlength="120" value="'+esc(d.nombre||'')+'"></div>'+
     '<div class="campo"><label for="c-nif">NIF / CIF</label><input id="c-nif" type="text" maxlength="20" value="'+esc(d.nif||'')+'"></div>'+
@@ -12334,6 +12587,23 @@ raiz.addEventListener('click', async e => {
   else if (a === 'cliente-editar') dlgCliente(b.dataset.id);
   else if (a === 'asistencia-nueva') dlgAviso(null, null, null);
   else if (a === 'asistencia-nueva-cliente') dlgAviso(null, null, b.dataset.id);
+  else if (a === 'puerta-nueva-cliente'){
+    // Alta de puerta ya enlazada con este cliente, sin tener que buscarlo otra vez
+    const c = clienteDe(b.dataset.id);
+    S.borradorPuerta = { 'f-clid': b.dataset.id, 'f-cbusca': (c||{}).nombre || '',
+                         'f-dir': (c||{}).direccion || '', 'f-tcliente': (c||{}).tipo || '' };
+    dlgPuerta(null);
+  }
+  else if (a === 'puerta-enlazar'){
+    const c = clienteDe(b.dataset.cli);
+    if (!c) return;
+    try {
+      const { error } = await sb.from('puertas')
+        .update({ cliente_id: c.id, cliente: c.nombre }).eq('id', b.dataset.id);
+      if (error) throw error;
+      await cargar(); toast('Puerta enlazada con '+c.nombre+'.');
+    } catch(err){ fallo(err); }
+  }
   else if (a === 'cerrar-asistencia') dlgCierre(b.dataset.id);
   else if (a === 'parte') hojaParte(b.dataset.id);
   else if (a === 'asignar') dlgAsignar(b.dataset.id);
@@ -12912,13 +13182,24 @@ dlgForm.addEventListener('click', async e => {
     if (av) await guardarCierre(av, false);
     return;
   }
+  if (a === 'cli-elegir'){ elegirCliente(b.dataset.id); return; }
+  if (a === 'cliente-quitar'){
+    const oculto = document.getElementById('f-clid'), campo = document.getElementById('f-cbusca');
+    if (oculto) oculto.value = '';
+    if (campo){ campo.value = ''; campo.focus(); }
+    cerrarListaCliente(); estadoCliente();
+    return;
+  }
   if (a === 'cliente-desde-puerta'){
+    /* Lo que ya esté escrito en la puerta se lleva al alta de cliente, para no
+       escribirlo dos veces. Al volver, la puerta ya trae su ficha enlazada. */
+    const pre = { nombre: val('f-cbusca'), direccion: val('f-dir'), tipo: val('f-tcliente') };
     guardarBorradorPuerta();
     const args = S.borradorPuerta.args = { id: b.dataset.puerta || null, aviso: b.dataset.aviso || null };
     dlgCliente(null, async (nuevoId) => {
       if (S.borradorPuerta && nuevoId) S.borradorPuerta['f-clid'] = nuevoId;
       dlgPuerta(args.id, args.aviso);
-    });
+    }, pre);
     return;
   }
   if (a === 'cliente-desde-contrato'){
