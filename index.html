@@ -567,8 +567,10 @@ function periodicidadDe(p){
   const c = p.cliente_id ? contratoVivo(p.cliente_id) : null;
   /* El contrato puede fijar una periodicidad PARA ESTA PUERTA, distinta de la del
      contrato entero: es lo que sale impreso en el contrato que firma el cliente.
-     Antes se guardaba y no se leía nunca, así que la puerta se revisaba con la
-     periodicidad general y se incumplía el contrato firmado sin que nada avisara. */
+     El servidor ya la respetaba (periodicidad_puerta, fase 5); esta pantalla no,
+     así que la ficha enseñaba una periodicidad y el calendario usaba otra. Este
+     orden de prioridad es el mismo que el de aquella función: hay que cambiar los
+     dos a la vez o dejarán de coincidir. */
   if (c){
     const f = (S.contratoPuertas || []).find(x => x.contrato_id === c.id && x.puerta_id === p.id);
     if (f && f.periodicidad_meses) return f.periodicidad_meses;
@@ -1265,8 +1267,33 @@ function tarjetaAviso(a){
 
 /* Segunda fila: duplicar, anular, archivar y borrar. Se separa de los botones
    de trabajo para que nadie borre nada por querer cerrar una visita. */
+/* A qué correo saldría el parte de esta visita: el contacto de la asistencia y,
+   si no hay, la ficha del cliente. Este orden es el mismo que siguen la función
+   enviar_parte de la base de datos y la función de correo: si dejaran de
+   coincidir, la aplicación ofrecería mandar el parte a un sitio y saldría a otro. */
+function correoDelParte(a){
+  const p = a.puerta_id ? puertaDe(a.puerta_id) : null;
+  const c = a.cliente_id ? clienteDe(a.cliente_id)
+                         : (p && p.cliente_id ? clienteDe(p.cliente_id) : null);
+  return ((a.contacto_email || '').trim() || ((c && c.email) || '').trim()) || '';
+}
+
 function accionesAsis(a, firmada){
   const b = [];
+  /* Mandar el parte al cliente después de cerrar: porque no se marcó la casilla en
+     obra, porque el correo se puso en la ficha más tarde, o porque el cliente dice
+     que no le ha llegado. Solo la oficina y el administrador. */
+  if (a.cerrado && !a.anulada && esGestion()){
+    const mail = correoDelParte(a);
+    if (mail)
+      b.push('<button class="btn sm plana" data-act="parte-enviar" data-id="'+a.id+'" data-mail="'+esc(mail)+'">'+
+             (a.parte_enviado_el ? 'Volver a mandar el parte' : 'Mandar el parte al cliente')+'</button>'+
+             (a.parte_enviado_el
+               ? '<span class="mini" title="'+esc(mail)+'">Mandado el '+fechaHora(a.parte_enviado_el)+'</span>'
+               : '<span class="mini" title="A este correo saldría">'+esc(mail)+'</span>'));
+    else
+      b.push('<span class="mini">Sin correo del cliente: no se le puede mandar el parte</span>');
+  }
   b.push('<button class="btn sm plana" data-act="aviso-duplicar" data-id="'+a.id+'">Duplicar</button>');
   if (!a.cerrado && esGestion())
     b.push('<button class="btn sm plana" data-act="aviso-anular" data-id="'+a.id+'">Anular sin parte</button>');
@@ -12095,14 +12122,16 @@ function dlgCierre(avisoId){
     '<div class="campos" style="margin-top:8px">'+
     '<div class="campo full"><label for="z-fnom">Nombre de quien firma</label><input id="z-fnom" type="text" maxlength="100" value="'+esc(a.firma_nombre||'')+'"></div>'+
     '<div class="campo full"><label for="z-sin">Si no puede firmar, indica el motivo</label><input id="z-sin" type="text" maxlength="120" value="'+esc(a.firma_sin||'')+'" placeholder="Ej.: no había nadie en la comunidad"></div>'+
-    /* Esta casilla NO envía nada: solo lo deja anotado. El correo del parte no está
-       programado todavía (el del contrato sí, por `enviar_contrato`). Decía «Enviar
-       copia del parte», de modo que el técnico se lo prometía al cliente delante de
-       él y el correo no salía nunca. Hasta que exista el envío, dice la verdad. */
+    /* El correo sale al cerrar la visita, lo manda el servidor. El correo al que va
+       se elige en el mismo orden que usa el servidor (contacto de la asistencia y,
+       si no hay, la ficha del cliente): si aquí se enseñara otro, la aplicación
+       prometería un envío que no se hace. */
     (mailCli ? '<div class="campo full"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
       '<input type="checkbox" id="z-enviar"'+(a.enviado_cliente?' checked':'')+' style="accent-color:var(--amarillo);width:18px;height:18px">'+
-      'Anotar que hay que mandarle copia del parte a '+esc(mailCli)+'</label>'+
-      '<span class="pista">Queda apuntado para la oficina. El correo no sale solo todavía.</span></div>' : '')+
+      'Enviar copia del parte a '+esc(mailCli)+'</label>'+
+      '<span class="pista">Sale al cerrar la visita. Si se te olvida, la oficina lo puede mandar después.</span></div>'
+      : '<p class="pista" style="margin:0">Para mandarle copia del parte por correo, hace falta el correo del cliente: '+
+        'ponlo en el contacto de esta asistencia o en su ficha.</p>')+
     '</div></div>';
 
   h += '<p class="err"></p><div class="pie">'+
@@ -12373,10 +12402,12 @@ async function guardarCierre(a, cerrando){
       const mapa = { 'Operativa':'operativa', 'Operativa con reservas':'operativa', 'Fuera de servicio':'fuera_servicio', 'Esperando repuesto':'esperando_repuesto' };
       const est = mapa[o.estado_final] || 'operativa';
       const dp = { estado: est, estado_desde: new Date().toISOString() };
-      /* Al cerrar una preventiva se anota la fecha de la revisión Y se programa la
-         siguiente. Antes solo se anotaba la última: la puerta se quedaba con la
-         fecha vieja y aparecía como vencida para siempre, de modo que el plan de
-         mantenimiento había que ir corrigiéndolo puerta por puerta a mano. */
+      /* Al cerrar una preventiva se anota la fecha de la revisión y se programa la
+         siguiente. Quien manda en esto es la base de datos: el disparador
+         avisos_tras_cerrar (fase 3) lo hace con periodicidad_puerta (fase 5), que
+         sigue el mismo orden de prioridad que periodicidadDe de aquí. Esto es la
+         red por si ese disparador no está instalado, y escribe lo mismo: si los
+         dos criterios dejaran de coincidir, el bueno es el del servidor. */
       if (a.tipo === 'mantenimiento'){
         const pu = puertaDe(a.puerta_id);
         dp.ultima_revision = dia;
@@ -12686,6 +12717,32 @@ function lienzoFirma(idCanvas){
 }
 
 /* Envía el contrato al correo del cliente */
+/* Mandar al cliente la copia del parte de una visita ya cerrada. El envío lo hace
+   el servidor: la aplicación no conoce el secreto de la función de correo, se lo
+   pide a la base de datos con enviar_parte, igual que con el contrato. */
+async function enviarParte(id, boton){
+  const a = S.avisos.find(x => x.id === id);
+  if (!a) return;
+  if (!a.cerrado) return toast('El parte se manda cuando la visita está cerrada.');
+  const mail = correoDelParte(a);
+  if (!mail) return toast('No hay ningún correo al que mandarlo. Ponlo en el contacto de la asistencia o en la ficha del cliente.');
+  // el texto original lo guarda armar() al armar el botón, no el que se ve ahora
+  const texto = boton ? (boton.dataset.orig || boton.textContent) : '';
+  if (boton) { boton.disabled = true; boton.textContent = 'Mandando…'; }
+  try {
+    const { data, error } = await sb.rpc('enviar_parte', { p_aviso: id });
+    if (error) throw error;
+    if (data === false)
+      throw new Error('No se ha podido mandar. Comprueba que la visita está cerrada y que hay un correo.');
+    /* La base de datos encola el correo y contesta sin esperar a que salga, así que
+       aquí solo se sabe que se ha pedido. La hora de envío la escribe el servidor
+       cuando el correo se acepta de verdad, y aparece al recargar. */
+    await cargar();
+    toast('Parte mandado a ' + mail + '.');
+  } catch(e){ fallo(e); }
+  if (boton) { boton.disabled = false; boton.textContent = texto || 'Mandar el parte al cliente'; }
+}
+
 async function enviarContrato(id, boton){
   const k = S.contratos.find(x => x.id === id);
   const cli = k ? clienteDe(k.cliente_id) : null;
@@ -12964,6 +13021,11 @@ raiz.addEventListener('click', async e => {
   else if (a === 'contrato-enviar'){
     if (!armar(b, 'Confirmar envío')) return;
     await enviarContrato(b.dataset.id, b);
+  }
+  else if (a === 'parte-enviar'){
+    // dos toques: el primero arma el botón. Es un correo a un cliente, no se manda sin querer
+    if (!armar(b, 'Confirmar envío a '+(b.dataset.mail||'el cliente'))) return;
+    await enviarParte(b.dataset.id, b);
   }
   else if (a === 'contrato-nuevo') dlgContrato(null, b.dataset.id || null);
   else if (a === 'contrato-editar') dlgContrato(b.dataset.id);
