@@ -44,6 +44,7 @@ El `index.html` de producción **no se toca nunca**. La copia de pruebas es
 | Suite | Qué fija |
 |---|---|
 | `humo.mjs` | Que la aplicación arranca contra el simulador y monta sus pestañas |
+| `fuerzas.mjs` | Las tres vías del ensayo de fuerzas: medido, no procede porque la protección va por detección de presencia, o no se incluye por decisión del firmante. Y que el libro nunca se calla que no hubo ensayo |
 | `componentes.mjs` | El inventario de lo que hay montado en cada puerta: qué componentes le tocan y de dónde sale cada uno, alta y retirada, marcado automático de la seguridad instalada, y el puente con el expediente en los dos sentidos |
 | `basico.mjs` | Los flujos de todos los días: buscador de clientes, enlace puerta-cliente, alta de puerta y de cliente, asistencia, asignación, cierre con firma y parte, contrato, etiquetas y búsquedas |
 | `regresion.mjs` | Lo esencial de las fases 1 a 5, reconstruido: horas facturables, hoja igual a puerta, qué acredita conformidad, marco legal por fecha, régimen de cada familia, perfiles de fuerza sin validar, prioridades, huecos, motor de intervención, conservación del expediente, mantenimiento, salida documental, validación, entregas, firma y estados. Más pantalla y documentos |
@@ -126,6 +127,27 @@ Dos cosas que conviene no olvidar:
   que hay en memoria, así que llamarla antes de recargar la dejaba trabajando con
   la lista vieja y las casillas de seguridad no se marcaban. Hay comprobaciones que
   lo fijan.
+
+- **El ensayo de fuerzas tiene tres vías, y ninguna deja el libro mudo.** Medir
+  exige un dinamómetro calibrado que buena parte del sector no tiene, así que la
+  aplicación no lo impone: se puede emitir sin ensayo. Lo que no se puede es que el
+  documento no lo mencione, porque un libro que calla el ensayo deja suponer que se
+  hizo, y eso perjudica a quien firma. Hay comprobaciones que fijan el texto en el
+  apartado propio y en las limitaciones, y que la nota va en texto normal, sin
+  recuadros de aviso.
+
+- **El criterio del texto NO es la longitud, es el énfasis.** Los textos de ARIZA
+  SAT son amplios y explicativos a propósito. Lo que no puede hacer el apartado del
+  ensayo es marcar máxima atención sobre el hecho de no haber medido: nada de
+  mayúsculas de alarma, ni llamarlo deficiencia, carencia o incumplimiento. Eso es
+  lo que comprueban las pruebas, no cuántos caracteres ocupa.
+
+- **Sin motivo escrito, el párrafo del motivo no se imprime.** No se deja una
+  etiqueta «Motivo» vacía esperando a que alguien la rellene. Hay una comprobación.
+
+- **`conFuerzas` del libro mira que la vía sea exactamente «si».** Comparar con
+  `!== 'no'` dejaba fuera solo una de las tres vías, de modo que «no procede»
+  imprimía el apartado de mediciones vacío. Una comprobación lo fija.
 
 - **Algunas pruebas provocan errores a propósito.** Sustituyen el `insert` de una
   tabla por uno que falla, para comprobar que la aplicación no dice que ha
