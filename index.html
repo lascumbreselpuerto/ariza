@@ -3508,10 +3508,60 @@ const NIVEL_AVISO = {
 };
 
 /* Somos fabricante de la máquina en estas dos situaciones. Motorizar una puerta
-   manual es modificación sustancial y convierte al instalador en fabricante:
-   lo dice la nota informativa del Ministerio sobre automatización de puertas. */
+   manual es modificación sustancial y convierte al instalador en fabricante.
+
+   PENDIENTE DE CONCRETAR: el criterio es el que maneja el sector y es el mismo que
+   sale de la «Guía azul» y del Reglamento 2023/1230, que sí están citados con su
+   referencia en CRITERIOS_MODIFICACION. Lo que no se ha podido concretar es en qué
+   apartado exacto del informe del Ministerio (INFORME_MINISTERIO) está escrito, ni
+   si viene de ese informe o de una nota informativa aparte sobre automatización de
+   puertas. Hasta comprobarlo, aquí no se atribuye a un documento concreto: lo que
+   se imprime en el libro son la Guía azul y el Reglamento, que son los que están
+   verificados uno a uno. */
 const EXP_ES_FABRICANTE = s => s === 'nueva_fabricante' || s === 'modificacion';
 const EXP_ES_NUEVA      = s => s === 'nueva_fabricante' || s === 'nueva_instalador';
+
+/* ===== El informe del Ministerio =====
+   Es el documento con el que trabaja el sector en España. No es una norma ni un
+   reglamento: es el criterio de la Administración sobre cómo se aplican los que
+   sí lo son, y conviene que el documento lo diga así de claro.
+
+   Se cita SIEMPRE con número de versión y fecha. Hay ocho versiones anteriores
+   circulando por internet y la número 8, de septiembre de 2019, sigue siendo la
+   que aparece en media docena de webs del sector; citarlo «a secas» no dice cuál
+   de las nueve se está siguiendo, y las nueve no dicen lo mismo.
+
+   QUÉ CUBRE Y QUÉ NO. Su título alcanza a puertas industriales, comerciales, de
+   garaje, portones y barreras. Las puertas peatonales automáticas quedan fuera,
+   así que no se cita en sus documentos: citar un documento que no habla de tu
+   producto es peor que no citar ninguno.
+
+   VERIFICACIÓN (13 de octubre de 2026). El fichero está publicado en
+   industria.gob.es con «v9» en el nombre, bajo el Ministerio de Industria y
+   Turismo. Que la versión 9 lleve fecha de 14 de febrero de 2024 y anule la
+   versión 8 de septiembre de 2019 consta en la asociación AEPA y en
+   publicaciones del sector. El PDF son 32 MB y no se ha podido abrir para leer
+   su portada directamente, así que esa fecha viene de esas fuentes y no de la
+   portada: por eso 'portada_leida' va en false y no se dice lo contrario. */
+const INFORME_MINISTERIO = {
+  version: 9,
+  fecha: '2024-02-14',
+  fecha_texto: '14 de febrero de 2024',
+  titulo: 'Requisitos de marcado CE, instalación y modificación de puertas industriales, '+
+          'comerciales, de garaje, portones y barreras',
+  organismo: 'Ministerio de Industria y Turismo',
+  anula: 'la versión 8, de septiembre de 2019',
+  familias: ['industrial', 'barrera'],
+  url: 'https://industria.gob.es/Calidad-Industrial/seguridadindustrial/productosindustriales/'+
+       'Productos-de-la-Construccion/DocumentosmarcadoCEproductosconstruccion/v9%20GUIA%20puertas%20de%20garaje.pdf',
+  verificado: '2026-10-13',
+  portada_leida: false,
+};
+/* La cita, tal como se imprime. Versión y fecha van dentro, nunca separadas. */
+const citaInforme = () =>
+  'Informe «'+INFORME_MINISTERIO.titulo+'», '+INFORME_MINISTERIO.organismo+
+  ', versión '+INFORME_MINISTERIO.version+', de '+INFORME_MINISTERIO.fecha_texto;
+const informeAplicaA = familia => INFORME_MINISTERIO.familias.includes(familia);
 
 /* Normas de referencia por familia. Se imprimen en el libro y se citan en las
    declaraciones. Las versiones son las que localicé vigentes en octubre de 2026. */
@@ -3543,10 +3593,9 @@ const EXP_NORMAS = {
 };
 
 /* ===== Régimen legal de cada familia =====
-   Verificado el 6 de octubre de 2026 contra el informe del Ministerio de Industria
-   «Requisitos de marcado CE, instalación y modificación de puertas industriales,
-   comerciales, de garaje, portones y barreras» y la nota «Marcado CE de las puertas
-   cortafuegos» de 26 de febrero de 2020.
+   Verificado el 6 de octubre de 2026 contra el informe del Ministerio que se cita en
+   INFORME_MINISTERIO (versión 9, de 14 de febrero de 2024) y contra la nota «Marcado CE
+   de las puertas cortafuegos» de 26 de febrero de 2020, que es un documento aparte.
 
    Lo que decide si hay declaración de prestaciones es si la familia está cubierta por
    una norma armonizada citada en el DOUE bajo el Reglamento (UE) 305/2011, y en qué
@@ -5197,6 +5246,35 @@ function procede(mapa, clave, e){
   return r === null ? null : (r === true ? true : r);
 }
 
+/* ===== Comprobaciones pendientes de contrastar con el texto de la norma =====
+   MISMO CASO que los perfiles de fuerza y que las periodicidades de la UNE 85635:
+   la UNE-EN 13241, la 12604 y la 12453 son de pago y no se ha trabajado sobre su
+   texto. Estos siete enunciados recogen peligros que esas normas tratan, pero NO
+   reproducen ningún apartado concreto y no se cita ninguno, porque citar un
+   apartado que no se ha leído es peor que no citar nada.
+
+   Qué significa en la práctica: la aplicación los pone delante del técnico como
+   puntos a mirar, y en los documentos los presenta como comprobaciones propias de
+   la empresa, no como requisitos acreditados de la norma. Un «No conforme» en uno
+   de ellos sigue siendo una deficiencia real y se trata como tal; lo que no hace
+   es titular el documento diciendo que acredita un apartado de la 13241.
+
+   PARA QUITAR ESTA MARCA hace falta, con el ejemplar de cada norma delante,
+   escribir al lado de cada uno el apartado exacto que lo exige, y entonces pasar
+   su clave a 'contrastadas'. No antes. */
+const COMPROBACIONES_A_CONTRASTAR = {
+  advertencia: 'Punto de comprobación propio de la empresa. Recoge un peligro que tratan las '+
+               'normas de la serie, pero su enunciado no se ha contrastado con el texto de la '+
+               'norma y no acredita por sí solo ningún apartado de la UNE-EN 13241.',
+  verificado: '2026-10-13',
+  claves: ['tropiezo', 'aprision', 'levantar', 'emc',
+           'durabilidad_mec', 'sustancias_ob', 'viento_ob'],
+  contrastadas: [],
+};
+const comprobacionSinContrastar = k =>
+  COMPROBACIONES_A_CONTRASTAR.claves.includes(k) &&
+  !COMPROBACIONES_A_CONTRASTAR.contrastadas.includes(k);
+
 const EXP_COMPROBACIONES = {
   industrial: [
     ['limitacion',  'La fuerza de la puerta está limitada y medida dentro de los valores de la norma',
@@ -5217,6 +5295,21 @@ const EXP_COMPROBACIONES = {
        'RD 486/1997 anexo I.A.6.8.º', 1, 0],
     ['finales',     'Finales de carrera y topes mecánicos correctamente puestos y fijados',
        'UNE-EN 12604', 0, 0],
+    /* ---- Los siete apartados que faltaban (ver COMPROBACIONES_A_CONTRASTAR) ---- */
+    ['tropiezo',    'Guías, carriles, umbrales y anclajes del suelo no crean riesgo de tropiezo en el paso',
+       'UNE-EN 12604 · UNE-EN 13241', 1, 0],
+    ['aprision',    'Nadie puede quedar encerrado: hay salida o desbloqueo accionable desde el lado interior',
+       'UNE-EN 12453 · UNE-EN 13241', 0, 0],
+    ['levantar',    'La puerta no puede levantar a una persona que se agarre o se suba a la hoja',
+       'UNE-EN 12604 · UNE-EN 13241', 0, 0],
+    ['emc',         'El conjunto motorizado no genera ni sufre perturbaciones electromagnéticas (declaración del fabricante del cuadro)',
+       'Directiva 2014/30/UE, transpuesta por el Real Decreto 186/2016', 0, 0],
+    ['durabilidad_mec','Los elementos sometidos a desgaste (muelles, cables, rodamientos, guías) están dentro de la vida útil declarada por el fabricante',
+       'UNE-EN 12604 · UNE-EN 13241', 0, 0],
+    ['sustancias_ob','Materiales, tratamientos y acabados sin emisión de sustancias peligrosas declarada por el fabricante',
+       'UNE-EN 13241', 0, 0],
+    ['viento_ob',   'La clase de resistencia a la carga de viento del producto es adecuada al emplazamiento (puertas exteriores)',
+       'UNE-EN 12424 · UNE-EN 13241', 0, 0],
     ['electrico',   'Instalación eléctrica con protección diferencial y magnetotérmica, y puesta a tierra',
        'Reglamento Electrotécnico de Baja Tensión', 0, 1],
     ['marcado',     'Marcado CE y placa de características colocados en la puerta y legibles',
@@ -7368,6 +7461,11 @@ function expSecCumplimiento(e){
         '</select></div>'+
       '<p class="mini" style="margin:4px 0 0">'+esc(norma)+
         (v && RESULTADO_COMPROBACION[v] ? ' · '+esc(RESULTADO_COMPROBACION[v].ayuda) : '')+'</p>'+
+      /* Los puntos cuyo enunciado no se ha contrastado con el texto de la norma lo
+         dicen aquí, donde el técnico los contesta, y no solo en el documento. */
+      (comprobacionSinContrastar(k)
+        ? '<p class="mini" style="margin:4px 0 0;opacity:.8">'+
+          esc(COMPROBACIONES_A_CONTRASTAR.advertencia)+'</p>' : '')+
       /* Todo resultado que no sea un «conforme» limpio pide explicación por escrito:
          quien lea el documento tiene que saber por qué. */
       (PREGUNTA_RESULTADO[v] && v !== 'no'
@@ -9298,7 +9396,22 @@ async function libroExpediente(id){
     '</ul>'+
     '<h4>Normas técnicas</h4><table class="datos norm-t">'+
     (EXP_NORMAS[e.familia]||[]).map(([n, q]) => '<tr><th>'+esc(n)+'</th><td>'+esc(q)+'</td></tr>').join('')+
-    '</table></section>';
+    '</table>'+
+    /* El informe del Ministerio, con su versión y su fecha. Va en apartado propio
+       y no mezclado con las normas, porque no es una norma: es el criterio de la
+       Administración sobre cómo se aplican las que sí lo son. Y solo en las
+       familias que su título alcanza. */
+    (informeAplicaA(e.familia)
+      ? '<h4>Documento interpretativo de la Administración</h4>'+
+        '<p>'+esc(citaInforme())+'.</p>'+
+        '<p>Este informe no es una norma ni un reglamento y no sustituye a ninguno: recoge el '+
+        'criterio del Ministerio sobre cómo se aplican las disposiciones anteriores a este tipo de '+
+        'puertas. Se cita con su número de versión y su fecha porque esta versión anula '+
+        esc(INFORME_MINISTERIO.anula)+', que sigue circulando y no dice lo mismo en todos sus '+
+        'apartados. Los criterios de este documento que se han seguido para redactar el presente '+
+        'expediente son los de la versión que aquí se identifica.</p>'
+      : '')+
+    '</section>';
 
   /* ---------- 4. COMPONENTES ---------- */
   const comps = EXP_COMPONENTES[e.familia] || [];
@@ -9378,8 +9491,19 @@ async function libroExpediente(id){
       return '<tr><td>'+esc(texto)+
         (motivo && v !== 'si'
           ? '<span class="sub min" style="display:block">'+esc(motivo)+'</span>' : '')+
-        '</td><td>'+r+'</td><td class="min">'+esc(norma)+'</td></tr>';
+        '</td><td>'+r+'</td><td class="min">'+esc(norma)+
+        /* Un punto cuyo enunciado no se ha contrastado con el texto de la norma no
+           puede presentarse como exigencia acreditada de esa norma. Se marca, y al
+           pie de la tabla se explica qué significa la marca. */
+        (comprobacionSinContrastar(k) ? ' <b>(*)</b>' : '')+'</td></tr>';
     }).join('')+'</tbody></table>'+
+    (chk.some(([k]) => comprobacionSinContrastar(k))
+      ? '<p class="min"><b>(*)</b> '+esc(COMPROBACIONES_A_CONTRASTAR.advertencia)+' '+
+        'Un resultado no conforme en estos puntos es una deficiencia real y se trata como tal '+
+        'en este documento; un resultado conforme no acredita por sí solo el apartado de la '+
+        'norma que se cita al lado, que se indica únicamente como referencia de dónde se trata '+
+        'ese peligro.</p>'
+      : '')+
     /* Lo que queda sin resultado se cuenta aparte: un documento con comprobaciones
        pendientes no puede leerse como si todo estuviera revisado. */
     (() => {
@@ -10303,15 +10427,28 @@ async function informeSituacion(id){
       '</td><td>'+(ficha
         ? '<span class="'+(clase[ficha.color]||'pendiente')+'">'+esc(ficha.nombre)+'</span>'
         : '<span class="pendiente">PENDIENTE</span>')+
-      '</td><td class="min">'+esc(f.norma)+'</td>'+
+      /* Un punto cuyo enunciado no se ha contrastado con el texto de la norma no se
+         presenta como exigencia de la norma. Se marca, y al pie de la tabla se dice
+         qué significa la marca: lo contrario sería hacer pasar por acreditado algo
+         que no lo está. */
+      '</td><td class="min">'+esc(f.norma)+
+        (comprobacionSinContrastar(f.k) ? ' <b>(*)</b>' : '')+'</td>'+
       '<td class="min">'+esc(refFotos('cumple:'+f.k) || '—')+'</td></tr>';
   };
+  const hayPropias = aplicables.some(f => comprobacionSinContrastar(f.k));
   H += sec('Comprobaciones realizadas')+
     (conformes.length || deficiencias.length
       ? '<table class="datos chk"><thead><tr><th>Comprobación</th><th>Resultado</th>'+
         '<th>Exigencia</th><th>Foto</th></tr></thead><tbody>'+
         conformes.concat(deficiencias).map(filaChk).join('')+'</tbody></table>'
       : '<p class="pendiente">No se ha resuelto ninguna comprobación.</p>')+
+    (hayPropias
+      ? '<p class="min"><b>(*)</b> '+esc(COMPROBACIONES_A_CONTRASTAR.advertencia)+' '+
+        'Un resultado no conforme en estos puntos es una deficiencia real y se trata como tal '+
+        'en este documento; un resultado conforme no acredita por sí solo el apartado de la '+
+        'norma que se cita al lado, que se indica únicamente como referencia de dónde se trata '+
+        'ese peligro.</p>'
+      : '')+
     '</section>';
 
   H += sec('Comprobaciones pendientes')+

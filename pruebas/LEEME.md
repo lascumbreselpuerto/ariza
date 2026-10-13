@@ -166,6 +166,27 @@ Dos cosas que conviene no olvidar:
   lista tampoco es decorativo: es el orden en que el SQL de restauración inserta,
   y una fila no puede apuntar a otra que todavía no esté.
 
+- **El informe del Ministerio se cita SIEMPRE con versión y fecha.** Hay nueve
+  versiones circulando y la número 8, de septiembre de 2019, sigue apareciendo en
+  medio sector. Citarlo «a secas» no dice cuál se ha seguido. Y no se cita en los
+  documentos de una puerta peatonal, porque su título no las alcanza: citar un
+  papel que no habla de tu producto es peor que no citar ninguno. El bloque B10 de
+  `regresion.mjs` lo fija, incluido que conste que la portada del PDF no se ha
+  leído directamente (son 32 MB y no se ha podido abrir): la fecha viene de la
+  asociación AEPA y de publicaciones del sector.
+
+- **Los siete apartados nuevos de la EN 13241 NO citan ningún apartado concreto.**
+  La 13241, la 12604 y la 12453 son de pago y no se ha trabajado sobre su texto.
+  Los siete puntos (tropiezo, aprisionamiento, levantar personas, compatibilidad
+  electromagnética, durabilidad mecánica, sustancias peligrosas y resistencia al
+  viento) recogen peligros que esas normas tratan, pero su enunciado no está
+  contrastado, así que van marcados con un asterisco y con su nota al pie, y
+  ninguno es imprescindible. El bloque B11 comprueba precisamente eso: que ninguno
+  cite un apartado, que ninguno bloquee el documento y que la nota diga que un «no
+  conforme» sí es una deficiencia real. Para quitar la marca hay que escribir el
+  apartado exacto con el ejemplar de la norma delante y pasar la clave a
+  `contrastadas`.
+
 - **El criterio del texto NO es la longitud, es el énfasis.** Los textos de ARIZA
   SAT son amplios y explicativos a propósito. Lo que no puede hacer el apartado del
   ensayo es marcar máxima atención sobre el hecho de no haber medido: nada de

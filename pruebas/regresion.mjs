@@ -662,6 +662,119 @@ const abrirDoc = async (pag, act) => {
   await ctx.close();
 }
 
+/* ================================================================
+   B10 · Cómo cita la aplicación el informe del Ministerio.
+
+   Es el documento con el que trabaja el sector, y hay nueve versiones
+   circulando. Citarlo sin versión ni fecha no dice cuál se ha seguido,
+   y la versión 8 de 2019 todavía aparece en medio sector. Además, su
+   título no alcanza a las puertas peatonales: citarlo en el documento
+   de una peatonal sería citar un papel que no habla de ese producto.
+   ================================================================ */
+{
+  const { ctx, pag } = await abrir();
+  const inf = await pag.evaluate(() => {
+    const g = window.__T;
+    return { d: g.INFORME_MINISTERIO, cita: g.citaInforme(),
+             ind: g.informeAplicaA('industrial'), bar: g.informeAplicaA('barrera'),
+             pea: g.informeAplicaA('peatonal') };
+  });
+  paso('B10 · el informe se guarda con número de versión', inf.d.version === 9, String(inf.d.version));
+  paso('B10 · y con su fecha', inf.d.fecha === '2024-02-14', inf.d.fecha);
+  paso('B10 · la cita impresa lleva las dos cosas',
+       /versión 9/.test(inf.cita) && /14 de febrero de 2024/.test(inf.cita), inf.cita.slice(-60));
+  paso('B10 · y dice qué versión anula, porque la 8 sigue circulando',
+       /versión 8/.test(inf.d.anula), inf.d.anula);
+  paso('B10 · se aplica a industriales y barreras', inf.ind && inf.bar);
+  paso('B10 · NO a las peatonales: su título no las alcanza', inf.pea === false);
+  /* Lo que no se ha podido comprobar se dice, no se da por bueno. */
+  paso('B10 · consta que la portada del PDF no se ha leído directamente',
+       inf.d.portada_leida === false);
+  paso('B10 · y la fecha de la última comprobación', !!inf.d.verificado, inf.d.verificado);
+
+  await crear(pag, 'nueva_fabricante', 'industrial');
+  const l = await abrirDoc(pag, 'exp-libro');
+  paso('B10 · el libro de una industrial cita el informe con versión y fecha',
+       /versión 9/.test(l.t) && /14 de febrero de 2024/.test(l.t));
+  paso('B10 · y deja claro que no es una norma ni un reglamento',
+       /no es una norma ni un reglamento/.test(l.t));
+  paso('B10 · en apartado propio, no mezclado con las normas técnicas',
+       /Documento interpretativo de la Administración/.test(l.t));
+  await l.doc.close();
+  await ctx.close();
+}
+{
+  const { ctx, pag } = await abrir();
+  await crear(pag, 'nueva_fabricante', 'peatonal');
+  const l = await abrirDoc(pag, 'exp-libro');
+  paso('B10 · el libro de una PEATONAL no cita el informe',
+       !/Documento interpretativo de la Administración/.test(l.t));
+  await l.doc.close();
+  await ctx.close();
+}
+
+/* ================================================================
+   B11 · Los siete apartados de la EN 13241 que faltaban.
+
+   Lo importante aquí NO es que existan, sino que la aplicación no los
+   haga pasar por apartados acreditados de una norma que no se ha
+   leído. Misma regla que los perfiles de fuerza y las periodicidades
+   de la UNE 85635: lo que no está verificado se dice.
+   ================================================================ */
+{
+  const { ctx, pag } = await abrir();
+  const c = await pag.evaluate(() => {
+    const g = window.__T;
+    const ind = g.EXP_COMPROBACIONES.industrial.map(x => x[0]);
+    return { ind, pend: g.COMPROBACIONES_A_CONTRASTAR,
+             tropiezo: g.comprobacionSinContrastar('tropiezo'),
+             presencia: g.comprobacionSinContrastar('presencia'),
+             criticos: g.EXP_COMPROBACIONES.industrial
+               .filter(x => g.comprobacionSinContrastar(x[0])).map(x => x[4]),
+             sinApartado: g.EXP_COMPROBACIONES.industrial
+               .filter(x => g.comprobacionSinContrastar(x[0]))
+               .filter(x => /apartado|cláusula|punto \d|§/i.test(x[2])).map(x => x[0]) };
+  });
+  const siete = ['tropiezo','aprision','levantar','emc','durabilidad_mec','sustancias_ob','viento_ob'];
+  paso('B11 · los siete puntos están en la familia industrial',
+       siete.every(k => c.ind.includes(k)), siete.filter(k => !c.ind.includes(k)).join(',') || 'todos');
+  paso('B11 · y los siete salen marcados como no contrastados con la norma',
+       siete.every(k => c.pend.claves.includes(k)));
+  paso('B11 · todavía no hay ninguno contrastado, y se dice',
+       Array.isArray(c.pend.contrastadas) && c.pend.contrastadas.length === 0);
+  paso('B11 · un punto de los antiguos NO sale marcado', c.presencia === false);
+  paso('B11 · uno de los nuevos SÍ', c.tropiezo === true);
+  paso('B11 · NINGUNO cita un apartado concreto de una norma que no se ha leído',
+       c.sinApartado.length === 0, c.sinApartado.join(',') || 'ninguno');
+  paso('B11 · y ninguno es imprescindible: no bloquean el documento mientras no estén contrastados',
+       c.criticos.every(x => !x), JSON.stringify(c.criticos));
+
+  await crear(pag, 'adecuacion', 'industrial');
+  await irA(pag, 'cumplimiento');
+  const vis = await pag.textContent('#vista');
+  paso('B11 · el técnico los ve en el cuestionario',
+       /riesgo de tropiezo/.test(vis) && /quedar encerrado/.test(vis));
+  paso('B11 · y lee ahí mismo que es un punto propio de la empresa',
+       /no se ha contrastado con el texto de la norma/.test(vis));
+  await ctx.close();
+}
+{
+  const { ctx, pag } = await abrir();
+  await crear(pag, 'adecuacion', 'industrial');
+  await irA(pag, 'cumplimiento');
+  await pag.selectOption('select[data-exp="cumple.tropiezo.v"]', 'si');
+  await pag.waitForTimeout(500);
+  const l = await abrirDoc(pag, 'exp-libro');
+  paso('B11 · en el libro el punto sale con su marca',
+       /\(\*\)/.test(l.t), '');
+  paso('B11 · y la nota al pie dice qué significa la marca',
+       /no acredita por sí solo el apartado de la norma/.test(l.t));
+  paso('B11 · diciendo que un NO CONFORME sí es una deficiencia real',
+       /es una deficiencia real y se trata como tal/.test(l.t));
+  await l.doc.close();
+  await ctx.close();
+}
+
 console.log('\n'+ok+' bien, '+mal+' mal.');
 if (errores.length) console.log('Errores de JavaScript:\n'+errores.join('\n'));
 else console.log('Sin errores de JavaScript.');
