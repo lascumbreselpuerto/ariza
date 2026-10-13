@@ -213,6 +213,7 @@ table.tabla{width:100%;border-collapse:collapse;font-size:14px}
 table.tabla th{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}
 table.tabla td{padding:9px 8px;border-bottom:1px solid var(--line)}
 table.tabla tr:last-child td{border-bottom:0}
+table.tabla tr.retirado td{opacity:.55}
 
 /* Pública */
 .pub{min-height:100vh;background:var(--negro);color:#F2EFEC}
@@ -855,6 +856,12 @@ async function cargar(){
   await fotosDelEquipo();
   const xp = await sb.from('expedientes').select('*').order('creado', {ascending:false}).range(0, 19999);
   S.expedientes = xp.error ? [] : (xp.data || []);
+  /* Lo que hay montado en cada puerta. Si la tabla todavía no está creada en la
+     base de datos, la aplicación sigue funcionando sin ella: el panel de
+     componentes dirá que falta ejecutar su SQL en vez de romperse. */
+  const cp2 = await sb.from('componentes').select('*').order('nombre').range(0, 19999);
+  S.componentes = cp2.error ? [] : (cp2.data || []);
+  S.sinComponentes = !!cp2.error;
   if (!j.error){ S.ajustes = {}; (j.data || []).forEach(x => { S.ajustes[x.clave] = x.valor; }); }
   // materiales ya usados, para ir sugiriéndolos al técnico
   const m = await sb.from('materiales').select('descripcion, unidad').limit(500);
@@ -1078,6 +1085,49 @@ function vistaFicha(id){
   if ((p.seguridad||[]).length) h += '<div class="linea"><dt class="eti">Seguridad instalada</dt><p style="margin:6px 0 0">'+esc((p.seguridad||[]).join(' · '))+'</p></div>';
   if (p.notas) h += '<div class="linea"><dt class="eti">Observaciones</dt><p style="margin:6px 0 0">'+esc(p.notas)+'</p></div>';
   h += '</div>';
+
+  /* ---- Lo que hay montado ----
+     Una lista de casillas dice si la puerta lleva fotocélulas; esto dice cuáles.
+     Marca, modelo, número de serie, cuándo se puso y el papel que lo acompaña:
+     lo que hace falta para pedir un repuesto, justificar una sustitución o
+     rellenar el expediente sin tener que ir a mirar a la puerta. */
+  const comps = componentesDe(p.id);
+  const min = componentesMinimos(p);
+  h += '<div class="panel"><div class="panel-h"><h3>Componentes</h3>'+
+       '<span class="mini">'+comps.length+'</span><span class="sp"></span>'+
+       (min.faltan.length ? '<button class="btn sm" data-act="comp-minimos" data-id="'+p.id+'">Añadir los que faltan ('+min.faltan.length+')</button>' : '')+
+       '<button class="btn sm pri" data-act="comp-nuevo" data-id="'+p.id+'">Añadir componente</button></div>';
+  if (S.sinComponentes){
+    h += '<p class="mini" style="margin:0">Falta ejecutar el SQL de componentes en la base de datos. '+
+         'Hasta entonces esta parte no guarda nada.</p></div>';
+  } else {
+    if (!comps.length) h += '<p class="muted" style="margin:0">Todavía no hay ningún componente dado de alta.</p>';
+    else {
+      h += '<div class="tabla-wrap"><table class="tabla"><thead><tr>'+
+        '<th>Componente</th><th>Marca y modelo</th><th>Nº de serie</th><th>Puesto el</th><th></th><th></th></tr></thead><tbody>';
+      comps.forEach(c => {
+        h += '<tr'+(c.activo === false ? ' class="retirado"' : '')+'>'+
+          '<td><b>'+esc(c.nombre||'')+'</b>'+(c.activo === false ? ' <span class="chip gris sin">retirado</span>' : '')+
+            (c.notas ? '<span class="sub" style="display:block">'+esc(c.notas)+'</span>' : '')+'</td>'+
+          '<td>'+esc([c.marca, c.modelo].filter(Boolean).join(' · ') || '—')+'</td>'+
+          '<td>'+esc(c.num_serie || '—')+'</td>'+
+          '<td>'+(c.fecha_instalacion ? esc(fechaCorta(c.fecha_instalacion)) : '—')+'</td>'+
+          '<td style="white-space:nowrap">'+
+            (c.foto_ruta ? '<button class="btn sm plana" data-act="comp-foto-ver" data-id="'+c.id+'">Foto</button>' : '')+
+            (c.doc_ruta ? '<button class="btn sm plana" data-act="comp-doc-ver" data-id="'+c.id+'">Papel</button>' : '')+
+          '</td>'+
+          '<td style="text-align:right;white-space:nowrap">'+
+            '<button class="btn sm" data-act="comp-editar" data-id="'+c.id+'">Editar</button></td></tr>';
+      });
+      h += '</tbody></table></div>';
+    }
+    if (min.faltan.length){
+      h += '<div class="sin-ficha" style="margin-top:10px">Faltan por dar de alta: '+
+        esc(min.faltan.map(x => x.nombre).join(', '))+'.</div>';
+    }
+    if (min.aviso) h += '<p class="mini" style="margin:10px 0 0">'+esc(min.aviso)+'</p>';
+    h += '</div>';
+  }
 
   h += '<div class="panel"><div class="panel-h"><h3>Fotos</h3><label class="btn sm">Añadir fotos<input type="file" accept="image/*" multiple hidden data-act="subir-foto" data-id="'+p.id+'"></label></div>'+
        '<div class="fotos" id="fotos-'+p.id+'"><p class="mini" style="margin:0">Cargando fotos…</p></div></div>';
@@ -4751,6 +4801,154 @@ const EXP_COMPONENTES = {
   ],
 };
 
+/* ===== Componentes montados en la puerta =====
+   La lista de casillas «Seguridad instalada» dice si la puerta lleva fotocélulas.
+   No dice cuáles. Cuando hay que pedir un repuesto, justificar una sustitución o
+   rellenar el expediente, hace falta la marca, el modelo, el número de serie, la
+   fecha en que se puso y el papel que lo acompaña. Eso es un componente.
+
+   El catálogo de tipos de componente es el de EXP_COMPONENTES, el mismo que ya se
+   usa para las fotos del expediente: así una foto de componente y un componente
+   del inventario hablan de la misma cosa y se llaman igual. */
+
+/* Qué casilla de «Seguridad instalada» marca cada componente. Lo que no esté aquí
+   no marca ninguna: un motor o un cuadro no son elementos de seguridad. */
+const COMPONENTE_SEGURIDAD = {
+  fotocelulas: 'Fotocélulas',
+  banda:       'Banda de seguridad',
+  limitador:   'Limitador de fuerza',
+  desbloqueo:  'Desbloqueo manual',
+  paro:        'Pulsador de emergencia',
+  destellante: 'Baliza',
+  semaforo:    'Semáforo',
+  presencia:   'Fotocélulas',
+  laterales:   'Protección de dedos',
+  pulsador:    'Pulsador de emergencia',
+};
+
+/* Los que lleva cualquier puerta de esa familia, sea cual sea su modo de
+   accionamiento. Son los del propio producto, no los de la matriz de protección. */
+const COMPONENTES_SIEMPRE = {
+  industrial:  ['hoja','guias','equilibrado','motor','cuadro','desbloqueo','finales','mandos','electrico','placa'],
+  peatonal:    ['hoja','operador','cuadro','radar_ext','radar_int','presencia','breakout','pulsador','selector','placa'],
+  barrera:     ['mastil','cuerpo','cuadro','mandos','placa'],
+  cortafuegos: ['hoja','cierrapuertas','retenedor','deteccion','etiqueta','placa'],
+};
+
+/* Los que añade el nivel de protección que resulte de la matriz. Los niveles son
+   los de la matriz de fábrica, que está PENDIENTE DE VALIDAR: por eso lo que sale
+   de aquí se ofrece como recordatorio, nunca como exigencia acreditada. */
+const COMPONENTES_POR_NIVEL = {
+  C: ['limitador'],
+  D: ['fotocelulas'],
+  E: ['banda'],
+};
+
+/* Puertas que, además, no pueden caerse encima de nadie */
+const COMPONENTES_POR_TIPO = {
+  'Seccional':   ['paracaidas'],
+  'Enrollable':  ['paracaidas'],
+  'Basculante':  ['paracaidas'],
+  'Guillotina':  ['paracaidas'],
+};
+
+const FAMILIA_POR_TIPO = { 'Peatonal automática':'peatonal', 'Barrera':'barrera' };
+
+/* La familia de una puerta. Si ya tiene expediente, manda la que eligió el técnico
+   allí, que la miró de cerca; si no, se deduce del tipo. */
+function familiaDePuerta(p){
+  if (!p) return 'industrial';
+  const xs = (S.expedientes || []).filter(x => x.puerta_id === p.id && x.familia)
+    .sort((a,b) => (a.creado||'') < (b.creado||'') ? 1 : -1);
+  if (xs.length) return xs[0].familia;
+  return FAMILIA_POR_TIPO[p.tipo] || 'industrial';
+}
+
+/* El modo de accionamiento y el tipo de usuario no se preguntan en la ficha de la
+   puerta, sino en el expediente. Si la puerta no tiene ninguno todavía, no se sabe,
+   y entonces no se puede decir qué protección le toca. */
+function proteccionDePuerta(p){
+  if (!p) return null;
+  const xs = (S.expedientes || []).filter(x => x.puerta_id === p.id)
+    .sort((a,b) => (a.creado||'') < (b.creado||'') ? 1 : -1);
+  for (const x of xs){
+    const pu = (x.datos || {}).puerta || {};
+    if (pu.modo && pu.usuarios) return { modo: pu.modo, usuarios: pu.usuarios, expediente: x.id };
+  }
+  return null;
+}
+
+const componentesDe = puertaId =>
+  (S.componentes || []).filter(c => c.puerta_id === puertaId)
+    .sort((a,b) => (a.nombre||'').localeCompare(b.nombre||'', 'es'));
+
+const catalogoComponentes = familia => EXP_COMPONENTES[familia] || EXP_COMPONENTES.industrial;
+const nombreComponente = (familia, clave) => {
+  const f = catalogoComponentes(familia).find(x => x[0] === clave);
+  return f ? f[1] : clave;
+};
+
+/* Qué componentes debería llevar esta puerta y cuáles le faltan por dar de alta.
+   Devuelve cada uno con el porqué, para que la aplicación pueda decirlo en vez de
+   soltar una lista sin explicación. */
+function componentesMinimos(p){
+  const familia = familiaDePuerta(p);
+  const cat = catalogoComponentes(familia);
+  const existe = clave => cat.some(x => x[0] === clave);
+  const salida = [];
+  const mete = (clave, porque) => {
+    if (!existe(clave) || salida.some(x => x.clave === clave)) return;
+    salida.push({ clave, nombre: nombreComponente(familia, clave), porque });
+  };
+
+  (COMPONENTES_SIEMPRE[familia] || []).forEach(c =>
+    mete(c, 'Lo lleva cualquier puerta de esta familia'));
+  (COMPONENTES_POR_TIPO[p && p.tipo] || []).forEach(c =>
+    mete(c, 'Por ser una puerta de maniobra vertical, que puede caer'));
+
+  const prot = proteccionDePuerta(p);
+  let aviso = '';
+  if (MATRIZ_NO_APLICA_A.includes(familia)){
+    aviso = 'Esta familia no se rige por la matriz de protección: sus elementos salen de su propia norma.';
+  } else if (!prot){
+    aviso = 'Esta puerta no tiene todavía ningún expediente con el modo de accionamiento y el tipo de '+
+            'usuario, así que no se puede saber qué protección le toca. Aquí solo salen los componentes '+
+            'propios del tipo de puerta.';
+  } else {
+    const base = MATRIZ_PROTECCION_FABRICA[prot.modo + '|' + prot.usuarios];
+    const niveles = base ? (base.niveles || '') : '';
+    Object.keys(COMPONENTES_POR_NIVEL).forEach(n => {
+      if (niveles.includes(n))
+        COMPONENTES_POR_NIVEL[n].forEach(c =>
+          mete(c, 'Nivel '+n+' de la matriz de protección, para '+
+                  (MODOS_ACCIONAMIENTO[prot.modo]||{}).nombre+' con '+
+                  (TIPOS_USUARIO[prot.usuarios]||prot.usuarios)));
+    });
+    aviso = 'Los elementos de seguridad salen de la matriz de protección, que está '+
+            'PENDIENTE DE VALIDAR con el ejemplar de la norma. Sirven de recordatorio, '+
+            'no acreditan por sí solos que la puerta cumpla.';
+  }
+
+  const puestos = componentesDe(p && p.id).map(c => c.clave).filter(Boolean);
+  return { familia, aviso, proteccion: prot,
+           todos: salida, faltan: salida.filter(x => !puestos.includes(x.clave)) };
+}
+
+/* Las casillas de «Seguridad instalada» de la puerta se marcan solas con lo que
+   haya dado de alta el inventario. Lo que ya estuviera marcado a mano no se quita:
+   puede haber un elemento que esté puesto y todavía sin ficha de componente. */
+function seguridadSegunComponentes(p){
+  const ya = (p && p.seguridad) || [];
+  const extra = componentesDe(p && p.id)
+    .filter(c => c.activo !== false)
+    .map(c => COMPONENTE_SEGURIDAD[c.clave])
+    .filter(Boolean);
+  const fuera = ya.slice();
+  extra.forEach(n => { if (!fuera.includes(n)) fuera.push(n); });
+  return fuera;
+}
+
+
 /* ---- Comprobaciones de cumplimiento ----
    c: clave · t: qué se comprueba · n: de dónde sale la exigencia
    f: pide foto · critico: si falla, la puerta no cumple */
@@ -6673,10 +6871,25 @@ function expSecComponentes(e){
   const d = (e.datos||{}).comp || {};
   const hechos = comps.filter(c => (d[c[0]]||{}).estado).length;
   const faltanFotos = fotosQueFaltan();
+  /* El inventario de la puerta ya sabe qué hay montado y de qué marca. Aquí se
+     puede traer de una vez, en lugar de volver a teclearlo, y al revés: lo que se
+     rellene aquí puede quedarse en la puerta para el próximo expediente. */
+  const inv = componentesDe(e.puerta_id).filter(c => c.activo !== false && c.clave);
+  const traibles = inv.filter(c => comps.some(x => x[0] === c.clave));
   let h = '<div class="panel-h"><h3>Elementos de la instalación</h3>'+
     '<span class="mini">'+hechos+' de '+comps.length+'</span></div>'+
     '<p class="mini" style="margin:0 0 14px">Contesta uno por uno y hazle una foto. '+
     'Las fotos son las que hacen que el libro valga como documento y como prueba de lo que se dejó montado.</p>'+
+    (traibles.length
+      ? '<div class="fila" style="gap:8px;flex-wrap:wrap;margin:0 0 14px">'+
+        '<button type="button" class="btn sm" data-act="exp-comp-traer" data-id="'+e.id+'">'+
+          'Traer del inventario de la puerta ('+traibles.length+')</button>'+
+        '<button type="button" class="btn sm plana" data-act="exp-comp-guardar" data-id="'+e.id+'">'+
+          'Guardar lo de aquí en el inventario</button>'+
+        '<span class="mini">La puerta tiene '+traibles.length+' componente'+(traibles.length===1?'':'s')+
+        ' con ficha. Lo que traigas se puede corregir aquí sin tocar la puerta.</span></div>'
+      : '<p class="mini" style="margin:0 0 14px">Esta puerta todavía no tiene inventario de componentes. '+
+        'Si lo rellenas en su ficha, la próxima vez estos datos vendrán solos.</p>')+
     /* No bloquea: recuerda. Lo que falte sale en el informe como evidencia pendiente. */
     (faltanFotos.length
       ? '<div class="aviso-caja" style="margin:0 0 14px"><b>Faltan '+faltanFotos.length+
@@ -7639,6 +7852,10 @@ function dlgEmitirExpediente(id){
       e.datos.versiones = nuevaVersion(e, val('xe-motivo'), sd.salida.estado, val('xe-firm'));
       e.datos.estado_doc = sd.salida.estado;
       e.datos.salida_doc = sd.clave;
+      /* La copia congelada de los componentes ya la tiene el propio expediente en
+         e.datos.comp, que es lo que imprime el documento y no cambia cuando luego
+         se sustituya una banda. No se guarda otra copia aparte: dos sitios
+         diciendo lo mismo acaban contradiciéndose. */
 
       if (sd.acredita){
         /* Documentación de conformidad: se fija la fecha y el expediente queda
@@ -11484,6 +11701,221 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
 }
 
 /* Alta rápida de cliente */
+/* Alta y edición de un componente de la puerta.
+   Si viene `clave`, es uno del catálogo que se estaba echando en falta; si no, es
+   un componente escrito a mano, que también vale: en una puerta vieja puede haber
+   cosas que no estén en ninguna lista. */
+function dlgComponente(id, puertaId, clave){
+  const c = id ? (S.componentes || []).find(x => x.id === id) : null;
+  const pid = (c && c.puerta_id) || puertaId;
+  const p = puertaDe(pid);
+  const familia = familiaDePuerta(p);
+  const cat = catalogoComponentes(familia);
+  const d = c || { clave: clave || '', nombre: clave ? nombreComponente(familia, clave) : '', activo: true };
+  const porque = clave ? (componentesMinimos(p).todos.find(x => x.clave === clave) || {}).porque : '';
+
+  let h = '<h3>'+(c ? 'Componente' : 'Nuevo componente')+'</h3>'+
+    '<p class="mini" style="margin:0 0 10px">'+esc((p && p.codigo) || '')+' · '+esc(EXP_FAMILIA[familia] || familia)+'</p>';
+  h += '<div class="campos">'+
+    '<div class="campo full"><label for="o-clave">Qué es</label><select id="o-clave">'+
+      '<option value="">Otro, lo escribo yo</option>'+
+      cat.map(x => '<option value="'+esc(x[0])+'"'+(d.clave===x[0]?' selected':'')+'>'+esc(x[1])+'</option>').join('')+
+      '</select>'+(porque ? '<span class="pista">'+esc(porque)+'</span>' : '')+'</div>'+
+    '<div class="campo full"><label for="o-nombre">Nombre</label><input id="o-nombre" type="text" maxlength="120" value="'+esc(d.nombre||'')+'" placeholder="Ej.: Fotocélulas del hueco"></div>'+
+    '<div class="campo"><label for="o-marca">Marca</label><input id="o-marca" type="text" maxlength="60" value="'+esc(d.marca||'')+'"></div>'+
+    '<div class="campo"><label for="o-modelo">Modelo</label><input id="o-modelo" type="text" maxlength="80" value="'+esc(d.modelo||'')+'"></div>'+
+    '<div class="campo"><label for="o-serie">Nº de serie</label><input id="o-serie" type="text" maxlength="60" value="'+esc(d.num_serie||'')+'"></div>'+
+    '<div class="campo"><label for="o-fecha">Puesto el</label><input id="o-fecha" type="date" value="'+esc(d.fecha_instalacion||'')+'"></div>'+
+    '<div class="campo full"><label for="o-notas">Notas</label><input id="o-notas" type="text" maxlength="200" value="'+esc(d.notas||'')+'" placeholder="Ej.: par inferior a 40 cm del suelo"></div>'+
+    '</div>';
+
+  /* Foto y papel del componente. La declaración de prestaciones de una banda o el
+     manual de un cuadro valen de poco en un cajón: van pegados a su componente. */
+  h += '<div class="grupo" style="margin-top:12px"><h3>Foto y papel</h3><div class="fila" style="gap:8px;flex-wrap:wrap">'+
+    '<label class="btn sm">'+(d.foto_ruta?'Cambiar la foto':'Subir foto')+
+      '<input type="file" accept="image/*" hidden data-act="comp-foto" data-id="'+esc(id||'')+'"></label>'+
+    '<label class="btn sm">'+(d.doc_ruta?'Cambiar el papel':'Subir PDF')+
+      '<input type="file" accept="application/pdf,.pdf" hidden data-act="comp-doc" data-id="'+esc(id||'')+'"></label>'+
+    (d.doc_nombre ? '<span class="mini">'+esc(d.doc_nombre)+'</span>' : '')+
+    '</div>'+(id ? '' : '<p class="mini" style="margin:8px 0 0">Guarda primero el componente y luego podrás ponerle la foto y el papel.</p>')+'</div>';
+
+  if (c) h += '<div class="grupo" style="margin-top:12px"><h3>Si se ha retirado</h3><div class="campos">'+
+    '<div class="campo"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+      '<input type="checkbox" id="o-retirado"'+(c.activo===false?' checked':'')+' style="accent-color:var(--amarillo);width:18px;height:18px">Ya no está puesto</label></div>'+
+    '<div class="campo"><label for="o-rfecha">Retirado el</label><input id="o-rfecha" type="date" value="'+esc(c.retirado_el||'')+'"></div>'+
+    '<div class="campo full"><label for="o-rmotivo">Por qué</label><input id="o-rmotivo" type="text" maxlength="160" value="'+esc(c.retirado_motivo||'')+'" placeholder="Ej.: sustituida por avería"></div>'+
+    '</div><p class="mini" style="margin:8px 0 0">Un componente retirado no se borra: se marca. '+
+    'Así el historial de la puerta sigue diciendo lo que hubo.</p></div>';
+
+  h += '<p class="err"></p><div class="pie">'+
+    (c ? '<button type="button" class="btn plana" data-act="comp-borrar" data-id="'+c.id+'">Borrar</button>' : '')+
+    '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Guardar</button></div>';
+
+  abrirDlg(h, async () => {
+    const o = { puerta_id: pid, clave: val('o-clave') || null, nombre: val('o-nombre'),
+                marca: val('o-marca') || null, modelo: val('o-modelo') || null,
+                num_serie: val('o-serie') || null, fecha_instalacion: val('o-fecha') || null,
+                notas: val('o-notas') || null, actualizado: new Date().toISOString() };
+    if (c){
+      o.activo = !(document.getElementById('o-retirado')||{}).checked;
+      o.retirado_el = o.activo ? null : (val('o-rfecha') || hoy());
+      o.retirado_motivo = o.activo ? null : (val('o-rmotivo') || null);
+    }
+    if (!o.nombre && o.clave) o.nombre = nombreComponente(familia, o.clave);
+    if (!o.nombre) return setErr('Ponle un nombre al componente, o elige qué es.');
+    try {
+      if (c){ const { error } = await sb.from('componentes').update(o).eq('id', c.id); if (error) throw error; }
+      else {
+        o.creado_por = yo();
+        const { error } = await sb.from('componentes').insert(o); if (error) throw error;
+      }
+      cerrarDlg(); await cargar();
+      await sincronizarSeguridad(pid);
+      pintar();
+      toast(c ? 'Componente guardado.' : 'Componente añadido.');
+    } catch(e){ setErr(e.message || 'No se pudo guardar.'); }
+  });
+}
+
+/* ---- Puente entre el inventario de la puerta y el expediente ----
+   El expediente ya pedía marca, modelo y número de serie de cada elemento. Lo que
+   no hacía era aprovechar lo que ya se sabe de la puerta, así que en el segundo
+   expediente de la misma puerta había que teclearlo todo otra vez. Estas dos
+   funciones son el puente, en los dos sentidos, y siempre a petición: la
+   aplicación no cambia datos de un expediente firmado por su cuenta. */
+async function expTraerComponentes(expId){
+  const e = expDe(expId);
+  if (!e) return;
+  const comps = EXP_COMPONENTES[e.familia] || [];
+  const inv = componentesDe(e.puerta_id).filter(c => c.activo !== false && c.clave);
+  e.datos = e.datos || {}; e.datos.comp = e.datos.comp || {};
+  let n = 0;
+  inv.forEach(c => {
+    if (!comps.some(x => x[0] === c.clave)) return;
+    const d = e.datos.comp[c.clave] = e.datos.comp[c.clave] || {};
+    // lo que ya esté contestado aquí no se pisa: puede haberse corregido en obra
+    if (!d.estado) d.estado = 'si';
+    if (!d.marca && c.marca)      d.marca  = c.marca;
+    if (!d.modelo && c.modelo)    d.modelo = c.modelo;
+    if (!d.serie && c.num_serie)  d.serie  = c.num_serie;
+    n++;
+  });
+  try {
+    const { error } = await sb.from('expedientes')
+      .update({ datos: e.datos, actualizado: new Date().toISOString() }).eq('id', expId);
+    if (error) throw error;
+    await cargar();
+    toast(n ? n+' elemento'+(n===1?' traído':'s traídos')+' del inventario de la puerta.'
+            : 'No había nada que traer.');
+  } catch(err){ fallo(err); }
+}
+
+async function expGuardarComponentes(expId){
+  const e = expDe(expId);
+  if (!e || !e.puerta_id) return;
+  const comps = EXP_COMPONENTES[e.familia] || [];
+  const d = (e.datos || {}).comp || {};
+  const inv = componentesDe(e.puerta_id);
+  const altas = [], cambios = [];
+  comps.forEach(([k, nombre]) => {
+    const x = d[k] || {};
+    if (x.estado !== 'si') return;                    // solo lo que está instalado
+    if (!x.marca && !x.modelo && !x.serie) return;    // sin datos no hay nada que guardar
+    const ya = inv.find(c => c.clave === k);
+    if (ya){
+      const o = {};
+      if (!ya.marca && x.marca)      o.marca = x.marca;
+      if (!ya.modelo && x.modelo)    o.modelo = x.modelo;
+      if (!ya.num_serie && x.serie)  o.num_serie = x.serie;
+      if (Object.keys(o).length){ o.actualizado = new Date().toISOString(); cambios.push([ya.id, o]); }
+    } else {
+      altas.push({ puerta_id: e.puerta_id, clave: k, nombre,
+                   marca: x.marca || null, modelo: x.modelo || null,
+                   num_serie: x.serie || null, activo: true, creado_por: yo() });
+    }
+  });
+  if (!altas.length && !cambios.length) return toast('El inventario ya está al día.');
+  try {
+    if (altas.length){ const { error } = await sb.from('componentes').insert(altas); if (error) throw error; }
+    for (const [id, o] of cambios){
+      const { error } = await sb.from('componentes').update(o).eq('id', id);
+      if (error) throw error;
+    }
+    await cargar();
+    await sincronizarSeguridad(e.puerta_id);
+    pintar();
+    toast((altas.length ? altas.length+' componente'+(altas.length===1?'':'s')+' al inventario. ' : '')+
+          (cambios.length ? cambios.length+' actualizado'+(cambios.length===1?'':'s')+'.' : ''));
+  } catch(err){ fallo(err); }
+}
+
+/* La foto y el papel de un componente. La foto va al almacén de fotos y el papel al
+   de documentos, los mismos que usa la puerta: no hace falta almacén nuevo. Si la
+   fila no se puede actualizar, el fichero subido se quita, para no dejar basura. */
+async function subirDeComponente(compId, file, que){
+  const c = (S.componentes || []).find(x => x.id === compId);
+  if (!c) return toast('Guarda primero el componente.');
+  const bucket = que === 'foto' ? 'fotos' : 'documentos';
+  try {
+    let blob = file, tipo = file.type || 'application/octet-stream';
+    let ext = ((file.name||'').split('.').pop() || 'bin').toLowerCase().slice(0,5);
+    if (que === 'foto'){
+      try { blob = await reducir(file); tipo = 'image/jpeg'; ext = 'jpg'; }
+      catch(_){ if (file.size > 25*1024*1024) throw new Error('La foto pesa demasiado.'); }
+    } else if (file.size > 20*1024*1024) throw new Error('El archivo pasa de 20 MB.');
+    const ruta = c.puerta_id+'/componentes/'+compId+'-'+Date.now()+'.'+ext;
+    const { error } = await sb.storage.from(bucket).upload(ruta, blob, { contentType: tipo });
+    if (error) throw error;
+    const campo = que === 'foto' ? { foto_ruta: ruta }
+                                 : { doc_ruta: ruta, doc_nombre: file.name || 'documento.pdf' };
+    const { error: eFila } = await sb.from('componentes')
+      .update(Object.assign({ actualizado: new Date().toISOString() }, campo)).eq('id', compId);
+    if (eFila){ await sb.storage.from(bucket).remove([ruta]); throw eFila; }
+    await cargar();
+    toast(que === 'foto' ? 'Foto del componente guardada.' : 'Papel del componente guardado.');
+  } catch(e){ fallo(e); }
+}
+
+/* Después de tocar los componentes, las casillas de «Seguridad instalada» de la
+   puerta se ponen al día solas. No se quita nada de lo que hubiera marcado a mano:
+   puede haber un elemento puesto que aún no tenga ficha de componente. */
+async function sincronizarSeguridad(puertaId){
+  const p = puertaDe(puertaId);
+  if (!p) return;
+  const nueva = seguridadSegunComponentes(p);
+  const antes = (p.seguridad || []).slice().sort().join('|');
+  if (nueva.slice().sort().join('|') === antes) return;
+  try {
+    await sb.from('puertas').update({ seguridad: nueva }).eq('id', puertaId);
+    /* También en memoria, para que la pantalla lo enseñe al momento sin tener que
+       recargarlo todo otra vez. OJO: esta función hay que llamarla DESPUÉS de
+       cargar(), porque mira los componentes que haya en memoria. */
+    p.seguridad = nueva;
+  } catch(_){}
+}
+
+/* Da de alta, en blanco, los componentes que la puerta debería llevar y no tiene.
+   En blanco a propósito: la aplicación no sabe de qué marca son, y rellenarlo por
+   su cuenta sería inventarse el inventario. */
+async function anadirComponentesMinimos(puertaId){
+  const p = puertaDe(puertaId);
+  if (!p) return;
+  const min = componentesMinimos(p);
+  if (!min.faltan.length) return toast('No falta ninguno.');
+  try {
+    const filas = min.faltan.map(x => ({ puerta_id: puertaId, clave: x.clave, nombre: x.nombre,
+                                         notas: null, activo: true, creado_por: yo() }));
+    const { error } = await sb.from('componentes').insert(filas);
+    if (error) throw error;
+    await cargar();
+    await sincronizarSeguridad(puertaId);
+    pintar();
+    toast(filas.length+(filas.length===1?' componente añadido. Rellénale marca y modelo.'
+                                        :' componentes añadidos. Rellénales marca y modelo.'));
+  } catch(e){ fallo(e); }
+}
+
 function dlgCliente(id, alGuardarExtra, pre){
   const c = id ? clienteDe(id) : null;
   const d = c || pre || {};
@@ -13070,6 +13502,34 @@ raiz.addEventListener('click', async e => {
     } catch(err){ fallo(err); b.disabled = false; b.textContent = 'Abrir las revisiones que tocan'; }
   }
   else if (a === 'puerta-nueva') dlgPuerta(null);
+  else if (a === 'exp-comp-traer'){
+    if (!armar(b, 'Confirmar')) return;
+    await expTraerComponentes(b.dataset.id);
+  }
+  else if (a === 'exp-comp-guardar'){
+    if (!armar(b, 'Confirmar')) return;
+    await expGuardarComponentes(b.dataset.id);
+  }
+  else if (a === 'comp-nuevo') dlgComponente(null, b.dataset.id);
+  else if (a === 'comp-editar') dlgComponente(b.dataset.id);
+  else if (a === 'comp-minimos'){
+    if (!armar(b, 'Confirmar')) return;
+    await anadirComponentesMinimos(b.dataset.id);
+  }
+  else if (a === 'comp-foto-ver' || a === 'comp-doc-ver'){
+    // enlace firmado de un rato, igual que las fotos y los documentos de la puerta
+    const c = (S.componentes||[]).find(x => x.id === b.dataset.id);
+    if (!c) return;
+    const esFoto = a === 'comp-foto-ver';
+    const ruta = esFoto ? c.foto_ruta : c.doc_ruta;
+    if (!ruta) return toast(esFoto ? 'Este componente no tiene foto.' : 'Este componente no tiene papel.');
+    try {
+      const { data, error } = await sb.storage.from(esFoto ? 'fotos' : 'documentos')
+        .createSignedUrl(ruta, 3600);
+      if (error) throw error;
+      window.open(data.signedUrl, '_blank', 'noopener');
+    } catch(err){ fallo(err); }
+  }
   else if (a === 'puerta-editar') dlgPuerta(b.dataset.id);
   else if (a === 'estado') dlgEstado(b.dataset.id);
   else if (a === 'aviso-nuevo') dlgAviso(b.dataset.id, null);
@@ -13369,6 +13829,12 @@ raiz.addEventListener('change', e => {
   if (e.target.dataset.act === 'guion-tipo'){ S.guionTipo = e.target.value; pintar(); return; }
   if (e.target.dataset.act === 'gestion-mes'){ S.mesGestion = e.target.value; pintar(); return; }
   if (e.target.dataset.act === 'subir-foto' && e.target.files.length){ subirFotos(e.target.dataset.id, Array.from(e.target.files)); e.target.value=''; }
+  if (e.target.dataset.act === 'comp-foto' && e.target.files.length){
+    subirDeComponente(e.target.dataset.id, e.target.files[0], 'foto'); e.target.value='';
+  }
+  if (e.target.dataset.act === 'comp-doc' && e.target.files.length){
+    subirDeComponente(e.target.dataset.id, e.target.files[0], 'doc'); e.target.value='';
+  }
   if (e.target.dataset.act === 'subir-doc' && e.target.files.length){
     const sel = document.getElementById('doc-tipo-'+e.target.dataset.id);
     const pub = document.getElementById('doc-pub-'+e.target.dataset.id);
@@ -13381,6 +13847,23 @@ dlgForm.addEventListener('click', async e => {
   if (a === 'mat-anadir'){
     const cont = document.getElementById('mats');
     if (cont) cont.insertAdjacentHTML('beforeend', filaMaterial());
+    return;
+  }
+  if (a === 'comp-borrar'){
+    /* Borrar de verdad es para lo que se metió por error. Lo que estuvo puesto y se
+       ha quitado se marca como retirado, que para eso está la casilla de arriba. */
+    if (!armar(b, 'Confirmar borrado')) return;
+    const c = (S.componentes||[]).find(x => x.id === b.dataset.id);
+    try {
+      for (const par of [['fotos', c && c.foto_ruta], ['documentos', c && c.doc_ruta]])
+        if (par[1]) await sb.storage.from(par[0]).remove([par[1]]);
+      const { error } = await sb.from('componentes').delete().eq('id', b.dataset.id);
+      if (error) throw error;
+      cerrarDlg(); await cargar();
+      if (c) await sincronizarSeguridad(c.puerta_id);
+      pintar();
+      toast('Componente borrado.');
+    } catch(err){ setErr(err.message); }
     return;
   }
   if (a === 'as-dia'){
