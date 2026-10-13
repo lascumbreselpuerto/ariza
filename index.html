@@ -5396,10 +5396,21 @@ function validarExpediente(e){
     }
   }
 
-  /* --- Ensayo de fuerzas --- */
+  /* --- Ensayo de fuerzas ---
+     Tres vías, y cada una exige lo suyo:
+       si          se mide, y entonces el ensayo tiene que estar completo
+       no_procede  la protección va por detección de presencia: hay que decir cuál
+       no          decisión del firmante: el motivo se recomienda, no se impone */
   const f = d.fuerzas || {};
   const motor = (d.puerta||{}).motorizada !== 'no';
-  if (motor && f.incluir !== 'no'){
+  if (motor && f.incluir === 'no_procede' && !(f.proteccion||'').trim())
+    B('Ensayo', 'Has puesto que el ensayo de fuerzas no procede porque la protección va por '+
+      'detección de presencia. Escribe con qué se protege la puerta: sin eso, el libro afirmaría '+
+      'una vía de cumplimiento que no sostiene.');
+  if (motor && f.incluir === 'no' && !(f.motivo||'').trim())
+    A('Ensayo', 'No se incluye el ensayo de fuerzas y no consta el motivo. El libro lo dirá igual, '+
+      'pero con el motivo escrito el documento te respalda mucho mejor.');
+  if (motor && f.incluir !== 'no' && f.incluir !== 'no_procede'){
     const perfil = perfilFuerza(e);
     const puntos = EXP_PUNTOS_FUERZA[e.familia] || [];
     const conMedida = puntos.filter((p, i) => { const m = f['m'+i]||{};
@@ -7182,20 +7193,50 @@ function expSecFuerzas(e){
   const lim = limitesFuerza();
   const perfil = perfilFuerza(e);   // decide si un valor dentro de límites puede llamarse «Pasa»
   const puntos = EXP_PUNTOS_FUERZA[e.familia] || EXP_PUNTOS_FUERZA.industrial;
-  const incluir = expVal('fuerzas.incluir', 'si') !== 'no';
+  /* Tres caminos, no dos. Medir no es la única forma de acreditar que la puerta no
+     hace daño: cuando la protección se resuelve con detección de presencia que
+     impide el contacto, la limitación de fuerza no es la vía, y el ensayo no es que
+     se omita, es que no procede. Y si el firmante decide no incluirlo, puede
+     hacerlo: es su firma y su responsabilidad. Lo que la aplicación no hace es
+     callárselo en el documento, porque un libro que no menciona el ensayo deja al
+     lector suponiendo que se hizo, y eso perjudica a quien firma. */
+  const via = expVal('fuerzas.incluir', 'si');
+  const incluir = via === 'si';
   let h = '<div class="panel-h"><h3>Ensayo de fuerzas</h3>'+
-    (incluir ? '<span class="chip ok sin">Va en el libro</span>'
-             : '<span class="chip gris sin">Fuera del libro</span>')+'</div>'+
+    (incluir ? '<span class="chip ok sin">Se mide y va en el libro</span>'
+     : via === 'no_procede' ? '<span class="chip gris sin">No procede</span>'
+     : '<span class="chip gris sin">No se incluye</span>')+'</div>'+
     '<div class="campos" style="margin:0 0 14px">'+
-    expSel('fuerzas.incluir', '¿Se incluye el ensayo en el libro?',
-      [['si','Sí, se imprime en el libro'], ['no','No, no se imprime']],
-      'Lo que midas se guarda igualmente aunque no se imprima')+
+    expSel('fuerzas.incluir', 'Cómo se acredita en esta puerta',
+      [['si','Se mide y se imprime en el libro'],
+       ['no_procede','No procede: la protección va por detección de presencia'],
+       ['no','No se incluye, por decisión del firmante']],
+      'Lo que midas se guarda igualmente, elijas lo que elijas')+
     '</div>'+
-    (!incluir
-      ? '<p class="nota-oficina" style="margin:0 0 14px">El ensayo no saldrá en el libro. '+
-        'Ten en cuenta que, en una puerta motorizada, las fuerzas de maniobra son una de las características '+
-        'que se declaran en la declaración de prestaciones, así que conviene tener el ensayo hecho aunque '+
-        'decidas no imprimirlo.</p>'
+    (via === 'no_procede'
+      ? '<div class="campos" style="margin:0 0 14px">'+
+        expArea('fuerzas.proteccion', 'Con qué se protege la puerta, entonces',
+          'Ej.: banda de seguridad en el canto de cierre y pareja de fotocélulas a 50 cm '+
+          'que cubren todo el hueco, de forma que la hoja se detiene e invierte antes del contacto', 2)+
+        '</div>'+
+        '<p class="nota-oficina" style="margin:0 0 14px">El libro dirá que la protección se acredita '+
+        'por detección de presencia y que por eso no se incluye ensayo de fuerzas. No lleva aviso '+
+        'de nada: es una vía de cumplimiento, no una carencia.</p>'
+      : '')+
+    (via === 'no'
+      ? '<div class="campos" style="margin:0 0 14px">'+
+        expArea('fuerzas.motivo', 'Por qué no se incluye (opcional, pero conviene)',
+          'Ej.: no se dispone de instrumento de medida calibrado en la fecha de la intervención', 2)+
+        '</div>'+
+        '<p class="nota-oficina" style="margin:0 0 14px">El libro llevará una nota sobria diciendo '+
+        'que, por decisión del firmante, no se incluye el ensayo, con el motivo si lo escribes. '+
+        'Si no escribes motivo, no aparece ese párrafo: solo consta que no se incluye. '+
+        'Sin alarmas ni rojos. Esa nota es lo que te respalda si algún día hay que explicar el '+
+        'documento: uno que no menciona el ensayo deja suponer que se hizo.</p>'+
+        '<p class="nota-oficina" style="margin:0 0 14px">Ten en cuenta que en una puerta motorizada '+
+        'las fuerzas de maniobra son una de las características que se declaran en la declaración de '+
+        'prestaciones. Si esta puerta se protege por detección de presencia, arriba tienes la opción '+
+        '«No procede», que deja el libro sin nota ninguna.</p>'
       : '')+
     '<p class="mini" style="margin:0 0 6px">Mide en cada punto y apunta lo que marque el instrumento. '+
     'La aplicación compara sola con los límites y te dice si pasa.</p>'+
@@ -9173,7 +9214,9 @@ async function libroExpediente(id){
   H += '</section>';
 
   /* ---------- 6. FUERZAS ---------- */
-  const conFuerzas = motor && ((d.fuerzas||{}).incluir !== 'no');
+  /* Solo se imprime el ensayo cuando de verdad se ha medido. Los expedientes
+     anteriores a las tres vías no tienen el dato, y ahí «medido» es lo que valía. */
+  const conFuerzas = motor && (((d.fuerzas||{}).incluir || 'si') === 'si');
   if (conFuerzas){
     const f = d.fuerzas || {};
     const tope = f.hueco === 'impacto' ? lim.fd_impacto_n : lim.fd_aplastamiento_n;
@@ -9220,6 +9263,34 @@ async function libroExpediente(id){
       (f.observaciones?'<p>'+esc(f.observaciones)+'</p>':'')+
       galeria('fuerzas:medida', 3)+
       '</section>';
+  }
+  /* Cuando no hay ensayo, el apartado NO desaparece. Un libro que no menciona las
+     fuerzas deja al lector suponiendo que se midieron, y eso perjudica a quien
+     firma el día que haya que explicar el documento. Se dice, en texto normal, sin
+     recuadros rojos ni avisos: es una decisión documentada, no una incidencia. */
+  else if (motor){
+    const f = d.fuerzas || {};
+    if (f.incluir === 'no_procede'){
+      H += abreSec('Ensayo de fuerzas')+
+        '<p>La seguridad frente a los riesgos de aplastamiento, cizallamiento y arrastre de esta '+
+        'puerta no se resuelve por limitación de la fuerza de maniobra, sino por detección de '+
+        'presencia que impide el contacto entre la hoja y las personas. Por ese motivo no procede '+
+        'el ensayo de fuerzas de maniobra, y la conformidad se sostiene en los dispositivos de '+
+        'detección descritos a continuación y en su comprobación de funcionamiento, recogida en el '+
+        'apartado de comprobaciones de cumplimiento.</p>'+
+        (f.proteccion ? '<p><b>Protección instalada.</b> '+esc(f.proteccion)+'</p>' : '')+
+        '</section>';
+    } else if (f.incluir === 'no'){
+      H += abreSec('Ensayo de fuerzas')+
+        '<p>Este documento no incluye ensayo de fuerzas de maniobra. Así lo ha decidido el firmante, '+
+        'bajo su responsabilidad, y se hace constar para que el titular de la puerta conozca el '+
+        'alcance exacto de lo que se certifica.</p>'+
+        (f.motivo ? '<p><b>Motivo.</b> '+esc(f.motivo)+'</p>' : '')+
+        '<p>Las comprobaciones de seguridad recogidas en el apartado correspondiente se han '+
+        'realizado igualmente. Lo que no se aporta son los valores medidos de fuerza dinámica, '+
+        'estática y residual en los puntos de medida.</p>'+
+        '</section>';
+    }
   }
 
   /* ---------- 7 y 8. PRESTACIONES Y DdP ----------
@@ -9376,7 +9447,16 @@ async function libroExpediente(id){
   H += '<h4>Limitaciones de este informe</h4><p>'+
     esc(r.limitaciones || 'El presente informe se refiere exclusivamente a lo que pudo comprobarse '+
     'visual y funcionalmente en la fecha de la intervención, sin desmontaje de elementos ni ensayos destructivos.')
-    .replace(/\n/g,'<br>')+'</p></section>';
+    .replace(/\n/g,'<br>')+'</p>'+
+    /* El alcance del ensayo de fuerzas se recoge también aquí, además de en su
+       apartado: es donde mira quien quiere saber hasta dónde llega el documento. */
+    (motor && (d.fuerzas||{}).incluir === 'no'
+      ? '<p>No se incluye ensayo de fuerzas de maniobra, por decisión del firmante'+
+        ((d.fuerzas||{}).motivo ? ': '+esc((d.fuerzas||{}).motivo) : '')+'.</p>' : '')+
+    (motor && (d.fuerzas||{}).incluir === 'no_procede'
+      ? '<p>No procede el ensayo de fuerzas de maniobra: la protección de esta puerta se '+
+        'resuelve por detección de presencia, según se detalla en su apartado.</p>' : '')+
+    '</section>';
 
   /* ---------- ANEXO: DOCUMENTACIÓN DE LOS FABRICANTES ---------- */
   const anexo = S.expDocs || [];
