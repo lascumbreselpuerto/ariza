@@ -72,6 +72,7 @@ function semilla(){
     movimientos: [],
     revisiones: [],
     componentes: [],
+    centros: [],
     partes: [],
     lineas_parte: [],
     historico: [],

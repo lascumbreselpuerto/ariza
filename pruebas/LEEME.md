@@ -46,6 +46,7 @@ El `index.html` de producción **no se toca nunca**. La copia de pruebas es
 | `humo.mjs` | Que la aplicación arranca contra el simulador y monta sus pestañas |
 | `fuerzas.mjs` | Las tres vías del ensayo de fuerzas: medido, no procede porque la protección va por detección de presencia, o no se incluye por decisión del firmante. Y que el libro nunca se calla que no hubo ensayo |
 | `componentes.mjs` | El inventario de lo que hay montado en cada puerta: qué componentes le tocan y de dónde sale cada uno, alta y retirada, marcado automático de la seguridad instalada, y el puente con el expediente en los dos sentidos |
+| `centros.mjs` | El sitio donde están las puertas: que el centro es opcional, que es de un cliente y una puerta no acaba en el sitio de otro, la herencia de la dirección sin pisar lo escrito a mano, los cuatro datos del sitio allí donde el técnico los lee antes de ir, y agrupar las puertas que ya comparten dirección |
 | `basico.mjs` | Los flujos de todos los días: buscador de clientes, enlace puerta-cliente, alta de puerta y de cliente, asistencia, asignación, cierre con firma y parte, contrato, etiquetas y búsquedas |
 | `regresion.mjs` | Lo esencial de las fases 1 a 5, reconstruido: horas facturables, hoja igual a puerta, qué acredita conformidad, marco legal por fecha, régimen de cada familia, perfiles de fuerza sin validar, prioridades, huecos, motor de intervención, conservación del expediente, mantenimiento, salida documental, validación, entregas, firma y estados. Más pantalla y documentos |
 | `fase6.mjs` | Apartados 12 a 15: árbol de modificación con segundo nivel, motorización deducida, puertas peatonales, puertas cortafuegos |
@@ -135,6 +136,35 @@ Dos cosas que conviene no olvidar:
   hizo, y eso perjudica a quien firma. Hay comprobaciones que fijan el texto en el
   apartado propio y en las limitaciones, y que la nota va en texto normal, sin
   recuadros de aviso.
+
+- **Un centro es el sitio, y es OPCIONAL.** Un particular con una puerta de
+  garaje no necesita ninguno y su puerta funciona exactamente igual que antes de
+  que los centros existieran. El centro hace falta cuando un cliente tiene varias
+  puertas en el mismo sitio, o cuando hay algo que recordar para entrar. Hay
+  comprobaciones de que sin centro no se pinta ningún recuadro del sitio y de que
+  la primera opción del desplegable es seguir sin centro.
+
+- **Un centro pertenece a un cliente, y eso se comprueba al guardar.** Una puerta
+  no puede acabar colocada en el sitio de otro cliente: si al guardar la puerta el
+  centro elegido no es del cliente que queda enlazado, el centro se suelta. Más
+  vale una puerta sin centro que una puerta en el sitio equivocado.
+
+- **La dirección del centro baja a la puerta, y lo escrito a mano no se pisa.**
+  Mismo criterio que el autorrelleno del cliente, con el mismo `data-auto`: lo que
+  puso la aplicación se cambia, lo que escribió el técnico se queda.
+
+- **Los cuatro datos del sitio no son decoración: son lo que el técnico lee antes
+  de salir.** Cómo se entra, el horario de acceso, la persona de contacto en el
+  sitio y los avisos de seguridad del sitio. Hay comprobaciones de que llegan a la
+  tarjeta de trabajo, a la ficha de la puerta y a la hoja de campo impresa, porque
+  en una nave puede no haber cobertura. Los avisos de seguridad van separados del
+  resto, porque no son un dato más de la lista.
+
+- **Lo que no está en `TABLAS_COPIA` no entra en la copia de seguridad.** Al meter
+  los centros se vio que los `componentes` llevaban desde su alta fuera de la
+  lista: se habrían perdido el día que hubiera que restaurar. El orden de esa
+  lista tampoco es decorativo: es el orden en que el SQL de restauración inserta,
+  y una fila no puede apuntar a otra que todavía no esté.
 
 - **El criterio del texto NO es la longitud, es el énfasis.** Los textos de ARIZA
   SAT son amplios y explicativos a propósito. Lo que no puede hacer el apartado del

@@ -277,6 +277,7 @@ const bajarCopia = async (pag, act) => {
     ]);
     return { crc, bytes: z.size, tipo: z.type,
              tablas: T.TABLAS_COPIA.length, buckets: T.BUCKETS_COPIA,
+             lista: T.TABLAS_COPIA.slice(),
              /* El escapado, caso a caso */
              sql: [T.sqlValor(null), T.sqlValor(12), T.sqlValor(true),
                    T.sqlValor("O'Brien"), T.sqlValor({a:1}), T.sqlValor('texto')] };
@@ -285,8 +286,23 @@ const bajarCopia = async (pag, act) => {
        R.crc === 0xCBF43926, String(R.crc));
   paso('el ZIP se construye y tiene tamaño', R.bytes > 100, String(R.bytes));
   paso('y se marca como application/zip', R.tipo === 'application/zip', R.tipo);
-  paso('se copian diecinueve tablas', R.tablas === 19, String(R.tablas));
+  paso('se copian veintiuna tablas', R.tablas === 21, String(R.tablas));
   paso('y las cinco carpetas de ficheros', R.buckets.length === 5, R.buckets.join(', '));
+  /* Lo que no está en esta lista no entra en la copia, y no se nota hasta el día
+     que haya que restaurar. Al meter los centros se vio que los componentes
+     llevaban fuera desde su alta. */
+  paso('los centros entran en la copia', R.lista.includes('centros'), R.lista.join(' '));
+  paso('y los componentes de cada puerta también', R.lista.includes('componentes'));
+  /* El orden es el orden en que el SQL de restauración inserta: una fila no puede
+     apuntar a otra que todavía no esté. */
+  paso('los centros van después de los clientes: el centro es de un cliente',
+       R.lista.indexOf('centros') > R.lista.indexOf('clientes'));
+  paso('y antes de las puertas: la puerta apunta a su centro',
+       R.lista.indexOf('centros') < R.lista.indexOf('puertas'));
+  paso('los componentes, después de las puertas: cuelgan de ellas',
+       R.lista.indexOf('componentes') > R.lista.indexOf('puertas'));
+  paso('sin ninguna tabla repetida',
+       new Set(R.lista).size === R.lista.length, R.lista.length - new Set(R.lista).size);
   paso('un nulo se escribe NULL', R.sql[0] === 'NULL', R.sql[0]);
   paso('un número, sin comillas', R.sql[1] === '12', R.sql[1]);
   paso('un sí o no, como true', R.sql[2] === 'true', R.sql[2]);

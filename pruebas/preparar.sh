@@ -94,6 +94,8 @@ sumaMesesDia sumaMeses sumaDias opts dondeAsistencia periodicidadDe contratoVivo
 iso deIso mesActual valoracionDe nombreCliente guardarCierre materialesDelForm
 subirFotos subirDocs cambiarVisibilidad pintarFotos pintarDocs
 correoDelParte enviarParte accionesAsis
+centroDe centrosDe centroDePuerta direccionCentro puertasDeCentro sitioPuerta
+datosCentro bloqueSitio dlgCentro pintarCentros pistaCentro centroElegido
 componentesDe componentesMinimos familiaDePuerta proteccionDePuerta
 seguridadSegunComponentes catalogoComponentes nombreComponente
 COMPONENTE_SEGURIDAD COMPONENTES_SIEMPRE COMPONENTES_POR_NIVEL COMPONENTES_POR_TIPO
@@ -104,7 +106,7 @@ guardarBorradorPuerta aplicarBorradorPuerta CAMPOS_PUERTA dlgPuerta dlgCliente
 libroExpediente informeSituacion propuestaActuaciones actaEntrega vidaPuerta
 hojaDeCampo libroMantenimiento etiquetaCE documentoDTE documentoCPF hojaParte
 hojaContrato hojaImprimible etiquetaTermica expDe puertaDe clienteDe cargar
-pintar peligrosDe
+pintar peligrosDe cerrarDlg
 S sb
 """.split()
 
