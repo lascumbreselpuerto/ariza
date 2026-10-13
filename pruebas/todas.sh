@@ -10,7 +10,7 @@ if ! curl -fsS -o /dev/null "http://127.0.0.1:8899/index.html"; then
   exit 1
 fi
 
-SUITES="${*:-humo basico regresion fase6 fase7 fase8 copias}"
+SUITES="${*:-humo basico componentes regresion fase6 fase7 fase8 copias}"
 RESUMEN="$AQUI/resultado.txt"
 : > "$RESUMEN"
 TOTAL=0; FALLOS=0

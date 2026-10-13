@@ -44,6 +44,7 @@ El `index.html` de producción **no se toca nunca**. La copia de pruebas es
 | Suite | Qué fija |
 |---|---|
 | `humo.mjs` | Que la aplicación arranca contra el simulador y monta sus pestañas |
+| `componentes.mjs` | El inventario de lo que hay montado en cada puerta: qué componentes le tocan y de dónde sale cada uno, alta y retirada, marcado automático de la seguridad instalada, y el puente con el expediente en los dos sentidos |
 | `basico.mjs` | Los flujos de todos los días: buscador de clientes, enlace puerta-cliente, alta de puerta y de cliente, asistencia, asignación, cierre con firma y parte, contrato, etiquetas y búsquedas |
 | `regresion.mjs` | Lo esencial de las fases 1 a 5, reconstruido: horas facturables, hoja igual a puerta, qué acredita conformidad, marco legal por fecha, régimen de cada familia, perfiles de fuerza sin validar, prioridades, huecos, motor de intervención, conservación del expediente, mantenimiento, salida documental, validación, entregas, firma y estados. Más pantalla y documentos |
 | `fase6.mjs` | Apartados 12 a 15: árbol de modificación con segundo nivel, motorización deducida, puertas peatonales, puertas cortafuegos |
@@ -113,6 +114,18 @@ Dos cosas que conviene no olvidar:
   cliente), que el botón solo aparece en visitas cerradas y no anuladas, y que no
   se manda un correo a un cliente de un solo toque. El simulador apunta cada
   envío pedido en `DB.__partes`.
+
+- **El inventario de componentes vive en la PUERTA, no en el expediente.** El
+  expediente ya pedía marca, modelo y número de serie de cada elemento, pero esos
+  datos se quedaban dentro de él: en el segundo expediente de la misma puerta
+  había que teclearlo todo otra vez. Ahora la puerta lleva su inventario y el
+  expediente lo trae cuando se le pide. Las dos direcciones del puente se prueban,
+  y las dos respetan lo que ya estuviera escrito a mano.
+
+- **`sincronizarSeguridad` se llama DESPUÉS de `cargar()`.** Mira los componentes
+  que hay en memoria, así que llamarla antes de recargar la dejaba trabajando con
+  la lista vieja y las casillas de seguridad no se marcaban. Hay comprobaciones que
+  lo fijan.
 
 - **Algunas pruebas provocan errores a propósito.** Sustituyen el `insert` de una
   tabla por uno que falla, para comprobar que la aplicación no dice que ha
