@@ -263,8 +263,13 @@ const abrirDoc = async (pag, sel) => {
        /Declaración CE de conformidad/.test(r.t));
   paso('22c · el ensayo de fuerzas con su instrumento',
        /Dinamómetro Sensor FM-200/.test(r.t));
-  paso('22c · y sin dictamen, porque el perfil no está contrastado',
-       /sin dictamen: el perfil de ensayo no está/.test(r.t.replace(/\s+/g,' ')));
+  /* CAMBIO DE CRITERIO DEL 14-10-2026: David aportó la EN 12453 leída de su
+     ejemplar, así que el perfil industrial pasó a contrastado y la vida de la
+     puerta ya puede dar dictamen, diciendo contra qué norma y apartado. */
+  paso('22c · con dictamen, porque el perfil ya está contrastado',
+       /según el perfil de ensayo aplicado, contrastado con/.test(r.t.replace(/\s+/g,' ')));
+  paso('22c · y dice contra qué norma y apartado se contrastó',
+       /A\.2\.1/.test(r.t.replace(/\s+/g,' ')));
   paso('22c · la entrega de documentación, con quién recibió y su DNI',
        /Entrega de documentación, acta 1/.test(r.t) &&
        /Manuel Pérez Ruiz/.test(r.t) && /31234567L/.test(r.t));

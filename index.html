@@ -151,6 +151,13 @@ img{max-width:100%}
 .g-punto{display:grid;gap:6px;padding:10px 12px;border-top:1px solid var(--line)}
 .g-punto .g-txt{font-size:14px;line-height:1.4}
 .g-punto .g-norma{font:600 11px var(--sans);color:var(--muted);letter-spacing:.02em}
+/* La guía de «cómo se comprueba». Va plegada para no estorbar al que ya lo sabe,
+   y tiene que leerse con una mano y a pleno sol: por eso no es gris clarito. */
+.g-ayuda{border-left:3px solid var(--amarillo);background:rgba(252,186,29,.07);
+  border-radius:0 6px 6px 0;padding:0 10px}
+.g-ayuda summary{cursor:pointer;padding:7px 0;font:600 13px var(--sans);color:var(--texto)}
+.g-ayuda p{margin:0 0 7px;font-size:13.5px;line-height:1.5}
+.g-ayuda p.g-ayuda-pie{color:var(--muted);font-size:11.5px;padding-bottom:4px}
 .g-resp{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .g-resp button{font:600 13px var(--sans);padding:7px 12px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--muted);cursor:pointer;min-width:56px}
 .g-resp button[aria-pressed="true"][data-r="ok"]{background:var(--ok-bg);color:var(--ok);border-color:var(--ok)}
@@ -2702,21 +2709,47 @@ function panelEmpresa(){
   }
 
   h += '<div class="panel"><div class="panel-h"><h3>Límites de fuerza</h3></div>'+
-    '<p class="nota-oficina" style="margin:0 0 10px">Estos valores los tomé de reproducciones sectoriales de la '+
-    'UNE-EN 12453, no del texto de la norma, que es de pago. <b>Contrástalos con tu ejemplar</b> y corrígelos aquí '+
-    'si no cuadran: son los que la aplicación usa para decir si una puerta pasa el ensayo.</p>'+
+    '<p class="nota-oficina" style="margin:0 0 10px"><b>Verificados el 14 de octubre de 2026.</b> '+
+    'David los leyó de su ejemplar de la '+esc(FUERZA_12453.norma)+', '+esc(FUERZA_12453.apartados)+'. '+
+    'Los seis valores coincidían con los que tenía la aplicación; lo que faltaba era saber cuándo se aplica '+
+    'cada uno, y eso es lo que ahora usa la guía del técnico: una puerta de movimiento vertical lleva 400 N '+
+    'en todo el recorrido, y los 1.400 N son el límite cuando la abertura pasa de 500 mm en una puerta de '+
+    'movimiento horizontal o que gira sobre eje perpendicular al suelo. Si los cambias aquí, cambias lo que '+
+    'la aplicación usa para decir si una puerta pasa el ensayo.</p>'+
     '<div class="campos" style="max-width:860px">'+
-    [['fd_aplastamiento_n','Fuerza de aplastamiento (N)'],
-     ['fd_impacto_n','Fuerza de impacto (N)'],
-     ['fs_estatica_n','Fuerza estática (N)'],
-     ['fs_tiempo_s','Tiempo de la fuerza estática (s)'],
+    [['fd_aplastamiento_n','Fuerza dinámica, abertura 50 a 500 mm (N)'],
+     ['fd_impacto_n','Fuerza dinámica, abertura mayor de 500 mm (N)'],
+     ['fs_estatica_n','Fuerza al terminar la fase dinámica (N)'],
+     ['fs_tiempo_s','Tiempo total Tt hasta bajar de la residual (s)'],
      ['fe_residual_n','Fuerza residual (N)'],
-     ['td_dinamico_s','Tiempo por encima de la estática (s)']]
+     ['td_dinamico_s','Duración de la fase dinámica Td (s)']]
     .map(([k, et]) => '<div class="campo"><label>'+esc(et)+'</label>'+
       '<input type="number" step="any" data-lim="'+k+'" value="'+esc(lim[k])+'"></div>').join('')+
     '</div>'+
     '<div class="fila" style="margin-top:12px"><span class="sp"></span>'+
     '<button class="btn" data-act="guardar-limites">Guardar límites</button></div></div>';
+
+  /* ---- Límites de obra ----
+     Nacen vacíos a propósito: estas distancias y velocidades no las tengo de
+     ninguna fuente que pueda citar. Mientras estén vacías, la guía del técnico
+     le da el método y le dice que el límite no está cargado, que es la verdad. */
+  const lo = limitesObra();
+  const sinCargar = LIM_OBRA_CAMPOS.filter(([k]) => lo[k] == null || lo[k] === '').length;
+  h += '<div class="panel"><div class="panel-h"><h3>Límites de obra</h3>'+
+    '<span class="mini">'+(LIM_OBRA_CAMPOS.length - sinCargar)+' de '+LIM_OBRA_CAMPOS.length+'</span></div>'+
+    '<p class="nota-oficina" style="margin:0 0 10px">Distancias, velocidades y tiempos. '+
+    '<b>Nacen vacíos a propósito.</b> Estos valores no los he sacado de ninguna fuente que pueda citar, '+
+    'y poner un milímetro inventado en la guía de un técnico es peor que dejarlo en blanco, porque se lo '+
+    'creería. Cárgalos tú con la norma delante. Mientras estén vacíos, el técnico recibe igualmente el '+
+    'método de medida y la aplicación le dice que el límite no está cargado.</p>'+
+    '<div class="campos" style="max-width:860px">'+
+    LIM_OBRA_CAMPOS.map(([k, et, u, n]) =>
+      '<div class="campo"><label>'+esc(et)+' ('+esc(u)+')</label>'+
+      '<input type="number" step="any" data-limobra="'+k+'" value="'+esc(lo[k] != null ? lo[k] : '')+'" placeholder="sin cargar">'+
+      (n ? '<span class="pista">'+esc(n)+'</span>' : '')+'</div>').join('')+
+    '</div>'+
+    '<div class="fila" style="margin-top:12px"><span class="sp"></span>'+
+    '<button class="btn" data-act="guardar-limobra">Guardar límites de obra</button></div></div>';
 
   h += panelReglasFecha();
   h += panelCopia();
@@ -3184,6 +3217,9 @@ function panelGuiones(){
       '<option value="ok">Bien / Mal / N/A</option><option value="num">Con un valor medido</option><option value="h">Es una cabecera de bloque</option></select></div>'+
     '<div class="campo"><label for="gn-uni">Unidad</label><input id="gn-uni" type="text" maxlength="8" placeholder="N, s, mm, V"></div>'+
     '<div class="campo"><label for="gn-norma">Norma</label><input id="gn-norma" type="text" maxlength="40" placeholder="UNE-EN 12453"></div>'+
+    '<div class="campo full"><label for="gn-ayuda">Cómo se comprueba (opcional)</label>'+
+      '<textarea id="gn-ayuda" rows="2" maxlength="600" placeholder="Qué se mira, dónde y con qué. Ej.: pinza amperimétrica en la fase del motor, con la puerta en ciclo completo; comparar con la intensidad de la placa."></textarea>'+
+      '<span class="pista">Le sale al técnico plegado dentro del punto, y también impreso en la hoja de campo</span></div>'+
     '<div class="campo" style="align-content:end"><button class="btn pri" data-act="guion-anadir">Añadir al guión</button></div>'+
     '</div>';
   h += '<p class="mini" style="margin:10px 0 0">Los guiones de fábrica siguen UNE-EN 13241, 12453, 12604 y 12978 y, en peatonales, UNE-EN 16005 y UNE 85121. '+
@@ -5649,6 +5685,16 @@ const EXP_PRESTACIONES = {
 
 /* Puntos donde la norma pide medir la fuerza. Para correderas y plegables son
    tres alturas; para abatibles, el centro y los extremos. */
+/* Los puntos del expediente siguen yendo por familia, porque el expediente se
+   abre por familia. Los verificados de la UNE-EN 12453 van por FORMA de puerta y
+   están en PUNTOS_12453: los usa la hoja de campo y la guía del técnico, que es
+   donde se mide de verdad. Cuando se conoce la forma, mandan los verificados. */
+function puntosFuerzaDe(e){
+  const pu = ((e||{}).datos||{}).puerta || {};
+  const v = puntosFuerza(formaDePuerta(pu.tipo), pu.alto_mm || pu.alto || null);
+  if (v) return v.puntos;
+  return EXP_PUNTOS_FUERZA[(e||{}).familia] || EXP_PUNTOS_FUERZA.industrial;
+}
 const EXP_PUNTOS_FUERZA = {
   industrial: ['Canto de cierre, a 50 mm del suelo', 'Canto de cierre, a 1,5 m', 'Canto de cierre, parte alta'],
   peatonal:   ['Canto principal de cierre', 'Canto secundario', 'Zona de arrastre lateral'],
@@ -5656,9 +5702,418 @@ const EXP_PUNTOS_FUERZA = {
   cortafuegos:['Canto de cierre, a 50 mm del suelo', 'Canto de cierre, a 1,5 m', 'Canto de cierre, parte alta'],
 };
 
+/* ===== Los límites de fuerza de la UNE-EN 12453 =====
+   VERIFICADOS EL 14 DE OCTUBRE DE 2026. David Ariza los leyó de su ejemplar de la
+   EN 12453:2017+A1:2021 y los aportó apartado por apartado. Hasta ese día la
+   aplicación trabajaba con una tabla plana, sacada de reproducciones del sector y
+   marcada como sin contrastar.
+
+   LO QUE CAMBIÓ NO SON LOS NÚMEROS, QUE YA COINCIDÍAN. Lo que cambió es que ahora
+   se sabe CUÁNDO se aplica cada uno, y eso es lo que de verdad decide si una
+   puerta pasa el ensayo:
+
+     · Los 1.400 N NO son «la fuerza de impacto» frente a «la de aplastamiento»,
+       que es como estaban nombrados aquí y era engañoso. Son el límite cuando la
+       abertura en el punto de medida pasa de 500 mm.
+     · Una puerta de MOVIMIENTO VERTICAL lleva 400 N en todo el recorrido, también
+       por encima de 500 mm. Antes la aplicación le habría dado los 1.400 N, que es
+       un error que deja pasar una puerta que no debería pasar.
+     · Una barrera lleva 400 N.
+     · Una plegable se trata como corredera en su borde principal y como batiente
+       frente a las partes rígidas: le valen los dos casos.
+
+   La norma de la que salen es la EN; la UNE-EN 12453:2018+A1:2022 que cita el resto
+   de la aplicación es su adopción española. Se dejan escritas las dos. */
+const FUERZA_12453 = {
+  norma: 'EN 12453:2017+A1:2021',
+  norma_une: 'UNE-EN 12453:2018+A1:2022',
+  apartados: 'anexo A.2.1 para la fuerza dinámica y anexo A.2.2 para la fuerza tras Td, '+
+             'la residual y el tiempo total',
+  fuente: 'ejemplar de la norma de la empresa, leído y aportado por David Ariza Arana',
+  verificado: '2026-10-14',
+  validado: true,
+  /* Eje de movimiento según la forma de la puerta: es lo que la norma mira para
+     decidir el límite, no el nombre comercial del tipo. */
+  eje: { corredera:'horizontal', batiente:'perpendicular', plegable:'mixto',
+         seccional:'vertical', enrollable:'vertical', basculante:'vertical',
+         guillotina:'vertical', rapida:'vertical', barrera:'paralelo' },
+  nombreEje: { horizontal:'movimiento horizontal',
+               perpendicular:'giro sobre eje perpendicular al suelo',
+               vertical:'movimiento vertical',
+               paralelo:'eje paralelo al suelo (barreras)',
+               mixto:'borde principal como corredera y partes rígidas como batiente' },
+  /* Fuerza dinámica máxima, por eje de movimiento y abertura en el punto de medida */
+  dinamica: {
+    horizontal:  [{ de:50, a:500, n:400 }, { de:500, a:null, n:1400 }],
+    perpendicular:[{ de:50, a:500, n:400 }, { de:500, a:null, n:1400 }],
+    vertical:    [{ de:50, a:null, n:400 }],
+    paralelo:    [{ de:50, a:null, n:400 }],
+  },
+  superficie: { n:1400,
+    texto:'Sobre superficies planas de más de 0,1 m² en las que ninguna dimensión lateral '+
+          'baje de 100 mm, el límite de la fuerza dinámica es de 1.400 N' },
+  td_s: 0.75,          // duración máxima de la fase dinámica
+  tras_td_n: 150,      // fuerza admisible una vez terminada la fase dinámica
+  residual_n: 25,      // fuerza residual, por debajo de la cual hay que estar
+  tt_s: 5,             // tiempo total máximo hasta bajar de la residual
+};
+/* Qué límite dinámico le toca a una puerta. Devuelve la lista de tramos con su
+   abertura, porque el técnico mide en varias y el límite cambia con ella. Si la
+   forma no determina el eje (una cortafuegos puede ser corredera o enrollable),
+   devuelve null y quien lo pinte pregunta en vez de inventar. */
+function limiteDinamico(forma){
+  const eje = FUERZA_12453.eje[forma];
+  if (!eje) return null;
+  if (eje === 'mixto')
+    return { eje, nombre: FUERZA_12453.nombreEje.mixto,
+             tramos: FUERZA_12453.dinamica.horizontal, mixto:true };
+  return { eje, nombre: FUERZA_12453.nombreEje[eje], tramos: FUERZA_12453.dinamica[eje] };
+}
+/* Cómo se lee ese límite en una línea, para la guía del técnico y para el papel. */
+function textoLimiteDinamico(forma){
+  const L = limiteDinamico(forma);
+  if (!L) return 'Depende de cómo se mueva la hoja: 400 N de 50 a 500 mm de abertura y '+
+                 '1.400 N por encima de 500 mm si el movimiento es horizontal o la hoja gira sobre eje '+
+                 'perpendicular al suelo; 400 N en todo el recorrido si el movimiento es vertical.';
+  const t = L.tramos.map(x => x.a
+    ? x.n+' N con abertura de '+x.de+' a '+x.a+' mm'
+    : x.n+' N con abertura desde '+x.de+' mm en adelante').join('; ');
+  return t + ' (' + L.nombre + ')' +
+    (L.mixto ? '. Frente a las partes rígidas se trata como batiente, con los mismos tramos.' : '');
+}
+
+/* ===== Fuerza de maniobra manual =====
+   Tabla aportada por David el 14-10-2026 desde su ejemplar. PENDIENTE: anotar el
+   apartado exacto del que sale, que no me lo dio. Los valores sí son suyos. */
+const FUERZA_MANUAL = {
+  verificado: '2026-10-14', validado: true,
+  apartado: 'pendiente de anotar',
+  casos: [
+    { clave:'garaje',     nombre:'Garaje en área privada', normal_n:150, emergencia_n:225 },
+    { clave:'industrial', nombre:'Industrial o comercial', normal_n:260, emergencia_n:390,
+      por_persona:true },
+  ],
+};
+const textoFuerzaManual = () => FUERZA_MANUAL.casos.map(c =>
+  c.nombre+': '+c.normal_n+' N en maniobra normal y '+c.emergencia_n+' N en maniobra manual de '+
+  'emergencia'+(c.por_persona ? ', por persona' : '')).join('. ') + '.';
+
+/* ===== Dónde se mide y con qué aberturas =====
+   También verificado el 14-10-2026 con el ejemplar de David. Antes la aplicación
+   daba tres puntos genéricos iguales para todas las puertas; ahora da los puntos
+   de cada forma, sus aberturas de ensayo y el número mínimo de lecturas, y
+   distingue las puertas de más de 2.800 mm, que se miden en otros puntos. */
+const PUNTOS_12453 = {
+  corredera: {
+    puntos:  ['50 mm sobre el borde inferior de la hoja',
+              'Centro de la altura de la hoja',
+              '300 mm bajo el borde superior de la hoja'],
+    altas:   ['50 mm sobre el borde inferior de la hoja',
+              '1.500 mm sobre el suelo',
+              '2.500 mm sobre el suelo'],
+    aberturas:'50 mm y 500 mm, y además 1.500 mm en el punto central',
+    lecturas: 3,
+  },
+  batiente: {
+    puntos:  ['50 mm sobre el borde inferior de la hoja',
+              'Centro de la altura de la hoja',
+              '300 mm bajo el borde superior de la hoja'],
+    altas:   ['50 mm sobre el borde inferior de la hoja',
+              '1.500 mm sobre el suelo',
+              '2.500 mm sobre el suelo'],
+    aberturas:'50 mm, 500 mm y 1.500 mm',
+    lecturas: 3,
+  },
+  plegable: {
+    puntos:  ['Borde principal: como en una corredera',
+              'Frente a las partes rígidas: como en una batiente'],
+    aberturas:'las del caso que corresponda en cada punto',
+    lecturas: 3,
+    nota:'Se trata como corredera en el borde principal y como batiente frente a las partes rígidas.',
+  },
+  vertical: {
+    puntos:  ['A 200 mm del lateral izquierdo del hueco',
+              'En el centro del hueco',
+              'A 200 mm del lateral derecho del hueco'],
+    aberturas:'50 mm, 300 mm y 2.500 mm',
+    aberturas_bajas:'50 mm, 300 mm y 300 mm por debajo de la apertura completa',
+    lecturas: 3,
+  },
+  barrera: {
+    puntos:  ['A 200 mm del extremo de la barra'],
+    aberturas:'según la posición de la barra; si el hueco baja de 300 mm, comprobar en 300 mm '+
+              'y, si procede, en 50 mm',
+    lecturas: 3,
+  },
+};
+/* Los puntos que le tocan a una puerta, con su altura si se conoce. La altura
+   cambia los puntos en correderas y batientes a partir de 2.800 mm, y cambia las
+   aberturas en las de movimiento vertical por debajo de ese hueco. */
+function puntosFuerza(forma, alturaMm){
+  const eje = FUERZA_12453.eje[forma];
+  const clave = forma === 'plegable' ? 'plegable'
+    : eje === 'vertical' ? 'vertical'
+    : eje === 'paralelo' ? 'barrera'
+    : (forma === 'corredera' || forma === 'batiente') ? forma : null;
+  const base = clave ? PUNTOS_12453[clave] : null;
+  if (!base) return null;
+  const alta = alturaMm != null && +alturaMm > 2800;
+  const baja = alturaMm != null && +alturaMm < 2800;
+  return {
+    clave,
+    puntos: (alta && base.altas) ? base.altas : base.puntos,
+    aberturas: (clave === 'vertical' && baja && base.aberturas_bajas)
+      ? base.aberturas_bajas : base.aberturas,
+    lecturas: base.lecturas,
+    nota: base.nota || '',
+    porAltura: alta ? 'Puerta de más de 2.800 mm: los puntos se toman sobre el suelo.'
+      : (clave === 'vertical' && baja ? 'Hueco menor de 2.800 mm: cambia la tercera abertura.' : ''),
+  };
+}
+
 const LIM_FUERZA_FABRICA = { fd_aplastamiento_n:400, fd_impacto_n:1400, fs_estatica_n:150,
                              fs_tiempo_s:5, fe_residual_n:25, td_dinamico_s:0.75 };
 const limitesFuerza = () => Object.assign({}, LIM_FUERZA_FABRICA, S.ajustes.limites_fuerza || {});
+
+/* ===== Límites de obra: distancias, velocidades y tiempos =====
+   NACEN VACÍOS A PROPÓSITO. Las fuerzas sí tienen valores de fábrica porque son
+   los que la empresa aportó en su documento de trabajo; estos no los tengo de
+   ninguna fuente que pueda citar, y escribir un milímetro inventado en la guía
+   de un técnico es peor que dejarlo en blanco: se lo creería.
+
+   Mientras un campo esté vacío, la aplicación dice «límite no cargado» y explica
+   dónde se carga. Lo que sí da desde el primer día es el MÉTODO: qué se mide,
+   dónde, con qué y cómo, que es lo que evita hacerlo mal. */
+const LIM_OBRA_CAMPOS = [
+  ['separacion_mm',      'Separación segura entre hoja y elementos fijos', 'mm',   'UNE-EN 12604'],
+  ['dedos_mm',           'Separación admisible entre paneles (dedos)',     'mm',   'UNE-EN 12604'],
+  ['velocidad_cierre_ms','Velocidad máxima de cierre',                     'm/s',  'UNE-EN 12453'],
+  ['fuerza_peatonal_n',  'Fuerza dinámica máxima en puerta peatonal',      'N',    'UNE-EN 16005'],
+  ['abierto_peatonal_s', 'Tiempo mínimo de mantenimiento en abierto',      's',    'UNE-EN 16005'],
+  ['cierre_cf_s',        'Tiempo máximo hasta cierre completo (cortafuegos)','s',  ''],
+];
+const limitesObra = () => Object.assign({}, S.ajustes.limites_obra || {});
+/* Texto del límite de un campo, venga de la tabla que venga. Devuelve null si no
+   hay valor cargado: quien lo pinte decide qué decir en ese caso. */
+function limiteDe(ref, forma){
+  if (!ref) return null;
+  /* ---- Los que vienen de la UNE-EN 12453, verificados con el ejemplar ---- */
+  if (ref.tabla === '12453'){
+    if (ref.campo === 'dinamica')
+      return { valor: textoLimiteDinamico(forma), validado: true,
+               fuente: FUERZA_12453.norma_une + ', ' + FUERZA_12453.apartados };
+    const v = FUERZA_12453[ref.campo];
+    if (v == null) return null;
+    const extra = ref.campo === 'residual_n'
+      ? ' (y '+FUERZA_12453.tras_td_n+' N al terminar la fase dinámica, bajando de '+
+        FUERZA_12453.residual_n+' N antes de '+String(FUERZA_12453.tt_s).replace('.', ',')+' s en total)'
+      : '';
+    return { valor: String(v).replace('.', ',') + ' ' + (ref.u || '') + extra, validado: true,
+             fuente: FUERZA_12453.norma_une + ', ' + FUERZA_12453.apartados };
+  }
+  if (ref.tabla === 'manual')
+    return { valor: textoFuerzaManual(), validado: true,
+             fuente: 'tabla de maniobra manual aportada por la empresa' };
+  if (ref.tabla === 'fuerza'){
+    const v = limitesFuerza()[ref.campo];
+    if (v == null || v === '') return null;
+    return { valor: String(v).replace('.', ',') + ' ' + (ref.u || ''), validado: false,
+             fuente: 'tabla de límites de fuerza de la empresa, sin contrastar con el texto de la norma' };
+  }
+  const v = limitesObra()[ref.campo];
+  if (v == null || v === '') return null;
+  return { valor: String(v).replace('.', ',') + ' ' + (ref.u || ''), validado: true,
+           fuente: 'cargado por la empresa en Equipo → Límites de obra' };
+}
+
+/* ===== Cómo se comprueba cada punto =====
+   Lo pidió David el 14-10-2026: «que salga una pequeña explicación de lo que hay
+   que revisar o hacer, sobre todo cuando se hace referencia a una norma y cuando
+   hay que medir, qué hay que medir y cuáles serían las tolerancias». Para que el
+   técnico no tenga que pensar ni recurrir a apuntes, y sobre todo para que no
+   haga las cosas mal.
+
+   Va SOLO en los puntos que citan norma o que piden una medida, que es lo que él
+   pidió: llenar de ayudas los cuarenta puntos convertiría la ayuda en ruido.
+
+   QUÉ ES ESTO Y QUÉ NO ES. Es la guía de trabajo de la empresa para hacer la
+   comprobación: qué se mira, dónde y con qué. NO reproduce el texto de ninguna
+   norma, y así se dice en pantalla y en el papel. Los valores límite no se
+   escriben aquí nunca: se leen de las tablas de la empresa, y si no están
+   cargados se dice que no lo están en vez de poner un número cualquiera. */
+const AYUDA_PUNTO = {
+  // ---- Documentación ----
+  'placa de caracteristicas y marcado ce legibles': {
+    que:'Que la puerta lleva su placa y su marcado, y que se pueden leer sin herramientas.',
+    como:'Mirar la placa en la hoja o en el marco. Comprobar que se distinguen fabricante, modelo, número de serie y año, y que el marcado no está tapado por pintura, pegatinas ni óxido. Fotografiarla.' },
+  'instrucciones de uso y de desbloqueo visibles para el usuario': {
+    que:'Que quien usa la puerta tiene a la vista cómo usarla y cómo desbloquearla.',
+    como:'Buscar el cartel o la pegatina junto al cuadro o al punto de mando. Si no está o está ilegible, es deficiencia: no basta con que el manual esté en un cajón.' },
+  'registro de mantenimiento disponible en la instalacion': {
+    que:'Que el libro o registro de mantenimiento está en la instalación, no en la oficina.',
+    como:'Pedirlo a quien atiende en el sitio. Comprobar que recoge las revisiones anteriores con su fecha y su firma.' },
+  // ---- Seguridad: lo que se mide ----
+  'fuerza dinamica maxima medida': {
+    que:'La fuerza máxima que hace el canto de cierre al chocar con un obstáculo.',
+    como:'Dinamómetro calibrado apoyado en el canto principal de cierre, en los puntos y con las aberturas de ensayo que le tocan a esta puerta, que salen más abajo. La puerta en su configuración normal de trabajo y a su velocidad normal. Tres lecturas en cada punto; se anota la mayor.',
+    lim:{ tabla:'12453', campo:'dinamica', u:'N' } },
+  'duracion de la fuerza dinamica': {
+    que:'Cuánto dura la fase dinámica del impacto, el periodo Td.',
+    como:'Lo da el propio instrumento junto con la fuerza de pico, en la misma medición. Se anota el mayor de las tres lecturas.',
+    lim:{ tabla:'12453', campo:'td_s', u:'s' } },
+  'fuerza estatica residual': {
+    que:'La fuerza que queda sobre el obstáculo después del impacto: primero al terminar la fase dinámica y después la residual.',
+    como:'Con el obstáculo puesto y la puerta detenida contra él, leer la fuerza al acabar Td y seguir leyendo hasta que baje de la residual, cronometrando el tiempo total Tt desde el contacto.',
+    lim:{ tabla:'12453', campo:'residual_n', u:'N' } },
+  'la puerta para e invierte ante un obstaculo en todo el recorrido': {
+    que:'Que la puerta detecta el obstáculo y retrocede, no solo que se para.',
+    como:'Probar con un obstáculo en el suelo, a media altura y en la parte alta del recorrido, y en los dos sentidos si la puerta protege los dos. Un punto del recorrido en el que no reaccione ya es un «no conforme».' },
+  'fotocelulas alineadas, limpias y con corte efectivo': {
+    que:'Que el haz corta de verdad donde tiene que cortar.',
+    como:'Limpiar lentes. Cortar el haz con un objeto opaco en los dos extremos y en el centro del hueco, a la altura a la que están puestas, y comprobar que la puerta reacciona siempre. Mirar también que no haya reflejos que las engañen.' },
+  'banda de seguridad responde y su autocontrol funciona': {
+    que:'Que la banda actúa y que el sistema se entera si la banda deja de funcionar.',
+    como:'Presionar la banda en varios puntos de su longitud, no solo en el centro. Después desconectarla: la puerta tiene que quedarse sin maniobrar o avisar. Si al desconectarla sigue funcionando como si nada, el autocontrol no está.' },
+  'zonas de aplastamiento, cizallamiento y arrastre protegidas': {
+    que:'Que los puntos donde una persona puede quedar atrapada están resueltos.',
+    como:'Recorrer la puerta en movimiento buscando huecos que se cierran: canto de cierre, borde posterior, jambas, articulaciones y zona de recogida. Cada punto se resuelve con distancia suficiente, con resguardo o con detección: anotar cuál de los tres.',
+    lim:{ tabla:'obra', campo:'separacion_mm', u:'mm' } },
+  'separacion entre hoja y elementos fijos, o proteccion equivalente': {
+    que:'El hueco que queda entre la hoja en movimiento y lo que tiene al lado.',
+    como:'Medir con calibre o galgas en el punto más estrecho del recorrido, con la puerta en movimiento parada en ese punto. Si no se alcanza la separación segura, tiene que haber resguardo o detección, y entonces se anota eso.',
+    lim:{ tabla:'obra', campo:'separacion_mm', u:'mm' } },
+  'separacion entre hoja y guias, o proteccion equivalente': {
+    que:'El hueco entre la hoja y las guías laterales, donde entra la mano.',
+    como:'Medir con calibre en el punto más estrecho a lo largo de la guía, a la altura a la que llega la mano. Si no se alcanza, resguardo o detección.',
+    lim:{ tabla:'obra', campo:'separacion_mm', u:'mm' } },
+  'proteccion contra atrapamiento de dedos entre paneles': {
+    que:'Que al plegarse los paneles no se puede pillar un dedo entre ellos.',
+    como:'Con la puerta a media altura, mirar el perfil de la junta entre paneles por los dos lados. Medir el hueco en la zona de articulación con la puerta moviéndose despacio.',
+    lim:{ tabla:'obra', campo:'dedos_mm', u:'mm' } },
+  'zona de aplastamiento junto a la bisagra protegida': {
+    que:'El punto donde la hoja se acerca al marco por el lado de la bisagra.',
+    como:'Medir el hueco mínimo en ese lado durante la apertura. Es el punto que más se olvida porque está detrás de la hoja.',
+    lim:{ tabla:'obra', campo:'separacion_mm', u:'mm' } },
+  'desbloqueo manual accesible, senalizado y operativo': {
+    que:'Que se puede abrir a mano sin corriente, y que cualquiera sabe cómo.',
+    como:'Quitar tensión y hacerlo de verdad, no solo mirar que está la llave. Comprobar que el cartel explica el gesto y que se llega al desbloqueo desde donde se queda la gente atrapada. Medir con dinamómetro la fuerza que hace falta para mover la hoja.',
+    lim:{ tabla:'manual', campo:'casos', u:'N' } },
+  // ---- Medidas eléctricas y de funcionamiento ----
+  'consumo del motor en marcha': {
+    que:'La corriente que pide el motor trabajando, que delata un motor forzado.',
+    como:'Pinza amperimétrica en la fase de alimentación del motor, con la puerta en ciclo completo. Comparar con la intensidad nominal de la placa del motor: bastante por encima significa roces, desequilibrio o muelles cansados.' },
+  'tension de alimentacion medida': {
+    que:'La tensión que le llega de verdad al cuadro.',
+    como:'Multímetro en la entrada del cuadro, con la puerta parada y repitiendo con la puerta en marcha. La caída al arrancar dice si la línea está justa. Comparar con la tensión nominal del equipo.' },
+  'puesta a tierra y continuidad comprobadas': {
+    que:'Que las partes metálicas están unidas a tierra y la unión es buena.',
+    como:'Comprobar continuidad entre la estructura, el motor, el cuadro y el borne de tierra. Mirar el estado del conductor y del terminal, no solo que el cable esté puesto.' },
+  'proteccion diferencial y magnetotermica correctas': {
+    que:'Que existen las protecciones y que el diferencial dispara.',
+    como:'Pulsar el botón de prueba del diferencial. Mirar que el calibre del magnetotérmico es coherente con la sección del cable y con el consumo medido del motor.' },
+  'cuadro cerrado, con tapas y grado de proteccion adecuado': {
+    que:'Que el cuadro está cerrado y protegido de agua y polvo.',
+    como:'Comprobar tapas, prensaestopas, juntas y que no haya entradas abiertas ni cables colgando. En exterior o en zona de lavado, mirarlo con más detalle.' },
+  'tiempo de apertura': {
+    que:'Lo que tarda la puerta en abrir del todo.',
+    como:'Cronometrar desde la orden hasta el final de recorrido, tres veces, y anotar la media. Sirve para comparar con revisiones anteriores: si se alarga, algo está rozando.' },
+  'tiempo de cierre': {
+    que:'Lo que tarda la puerta en cerrar del todo.',
+    como:'Igual que la apertura, tres veces y media. Un cierre que se acorta entre revisiones suele ser un muelle o un contrapeso descompensado.' },
+  'velocidad de cierre medida': {
+    que:'A qué velocidad baja el borde inferior de la lona.',
+    como:'Medir el recorrido y cronometrar el tramo de velocidad constante, sin contar la rampa de frenado. Repetir tres veces.',
+    lim:{ tabla:'obra', campo:'velocidad_cierre_ms', u:'m/s' } },
+  // ---- Peatonales ----
+  'sensores de apertura: cobertura y ajuste': {
+    que:'Que la puerta abre cuando alguien se acerca, desde los dos lados.',
+    como:'Acercarse andando despacio por el eje y por los extremos del hueco, por los dos lados. Marcar en el suelo dónde empieza a detectar. Repetir con ropa oscura, que es donde fallan.' },
+  'sensores de presencia: detectan persona parada en la linea de cierre': {
+    que:'Que la puerta no cierra sobre alguien que se ha quedado quieto en el paso.',
+    como:'Colocarse quieto en la línea de cierre y esperar a que se agote el tiempo de apertura. La puerta no puede cerrar. Probar también agachado, que es como pasa un niño.' },
+  'fuerza dinamica en la hoja': {
+    que:'La fuerza de la hoja peatonal contra un obstáculo.',
+    como:'Dinamómetro en el canto principal y en el secundario, a la altura que indique el método. Tres medidas por punto.',
+    lim:{ tabla:'obra', campo:'fuerza_peatonal_n', u:'N' } },
+  'tiempo de mantenimiento en abierto': {
+    que:'Cuánto se queda abierta antes de empezar a cerrar.',
+    como:'Cronometrar desde que la puerta termina de abrir hasta que arranca el cierre, sin nadie en la zona de detección.',
+    lim:{ tabla:'obra', campo:'abierto_peatonal_s', u:'s' } },
+  'zonas de atrapamiento entre hoja y jamba protegidas': {
+    que:'El hueco entre la hoja y la jamba por el que se mete la mano.',
+    como:'Medir el hueco en el punto más estrecho del recorrido. Si no se alcanza la separación segura, tiene que haber protección y se anota cuál.',
+    lim:{ tabla:'obra', campo:'separacion_mm', u:'mm' } },
+  'senalizacion de los vidrios y estado del acristalamiento': {
+    que:'Que el vidrio se ve a la altura de la vista y que es seguro.',
+    como:'Comprobar la banda o el vinilo a la altura de los ojos de un adulto y de un niño. Mirar el marcado del vidrio y buscar roturas, saltos y holguras en el calzo.' },
+  'apertura manual ante fallo de tension con la fuerza admisible': {
+    que:'Que sin corriente se abre a mano, y con una fuerza que pueda hacer cualquiera.',
+    como:'Quitar tensión y abrir empujando con el dinamómetro, midiendo la fuerza necesaria. Anotar si se mide como maniobra normal o como maniobra manual de emergencia, porque el límite no es el mismo.',
+    lim:{ tabla:'manual', campo:'casos', u:'N' } },
+
+  'si esta en recorrido de evacuacion: apertura garantizada y pulsador de emergencia': {
+    que:'Que la puerta no corta la salida en una emergencia.',
+    como:'Comprobar que abre al faltar la tensión, que el pulsador está a la vista y señalizado, y que funciona. Dejar anotado si la puerta está o no en recorrido de evacuación: cambia todo lo demás.' },
+  'modo de baja energia, si esta configurado': {
+    que:'Si la puerta funciona en modo lento por estar en zona con personas vulnerables.',
+    como:'Comprobar en el cuadro si el modo está activo y medir con él puesto, no sin él. Anotar en qué modo se ha medido.' },
+  // ---- Elementos de seguridad propios ----
+  'paracaidas o dispositivo anticaida: prueba de actuacion': {
+    que:'Que el dispositivo agarra la hoja si se rompe la suspensión.',
+    como:'Hacer la prueba que indique el fabricante, con la hoja asegurada y nadie debajo. Si no se puede probar sin riesgo, anotarlo así y dejarlo como no comprobado, nunca como conforme.' },
+  'proteccion de las articulaciones accesibles': {
+    que:'Que no se pilla la mano entre hojas al plegarse.',
+    como:'Seguir el movimiento de plegado despacio y medir el hueco en cada articulación a la que llega la mano.',
+    lim:{ tabla:'obra', campo:'dedos_mm', u:'mm' } },
+  'bordes sensibles en los puntos de cizallamiento': {
+    que:'Que los puntos donde se cruzan las hojas llevan borde sensible y funciona.',
+    como:'Presionar el borde en varios puntos y comprobar que la puerta reacciona. Desconectarlo después para ver si el sistema lo detecta.' },
+  'barrera optica o cortina que cubre todo el hueco': {
+    que:'Que la protección cubre el hueco entero, no solo una altura.',
+    como:'Cortar el haz a ras de suelo, a media altura y arriba, y en los dos extremos del hueco. Un tramo sin cubrir es por donde entra el niño.' },
+  'prueba de cierre por disparo de alarma: tiempo hasta cierre completo': {
+    que:'Que la puerta cierra sola al saltar la alarma, y cuánto tarda.',
+    como:'Avisar antes a quien corresponda y despejar el recorrido. Disparar la señal desde la central y cronometrar hasta cierre completo. Comprobar que nadie ni nada queda dentro del recorrido.',
+    lim:{ tabla:'obra', campo:'cierre_cf_s', u:'s' } },
+};
+/* Las claves de arriba están escritas como se lee el punto, con sus comas y sus
+   dos puntos, para que se puedan leer. Pero la búsqueda va por texto normalizado,
+   así que se normalizan AL VUELO y se guarda el resultado. Escribirlas ya
+   normalizadas a mano era la forma segura de que alguna no casara y nadie se
+   enterara: la ayuda simplemente no saldría. */
+let _ayudaNorm = null;
+function ayudaIndice(){
+  if (!_ayudaNorm){
+    _ayudaNorm = {};
+    Object.entries(AYUDA_PUNTO).forEach(([k, v]) => { _ayudaNorm[normTxt(k)] = v; });
+  }
+  return _ayudaNorm;
+}
+/* La ayuda de un punto. Si quien lo escribió puso la suya, manda la suya. */
+function ayudaDePunto(x, forma){
+  if (!x) return null;
+  if (x.a && String(x.a).trim()) return { que:'', como:String(x.a).trim(), propia:true };
+  const base = ayudaIndice()[normTxt(x.t || '')];
+  if (!base) return null;
+  const lim = limiteDe(base.lim, forma);
+  return Object.assign({}, base, { limite: lim, pideLimite: !!base.lim });
+}
+/* Cómo se lee en pantalla y cómo se lee en el papel: el mismo contenido. */
+function lineasAyuda(x, forma){
+  const a = ayudaDePunto(x, forma);
+  if (!a) return null;
+  const l = [];
+  if (a.que)  l.push(['Qué se comprueba', a.que]);
+  if (a.como) l.push(['Cómo', a.como]);
+  if (a.pideLimite)
+    l.push(['Límite', a.limite
+      ? a.limite.valor + (a.limite.validado
+          ? (a.limite.fuente ? ' · ' + a.limite.fuente : '')
+          : ' · valor de la empresa, sin contrastar con la norma')
+      : 'no cargado. Lo carga la oficina en Equipo → Límites de obra, con la norma delante. '+
+        'Mide y anota el valor igualmente: el dato sirve aunque el límite no esté puesto.']);
+  return l;
+}
 
 /* ===== Perfiles de ensayo de fuerzas =====
    Una puerta industrial, una peatonal y una barrera no se ensayan igual: cambian la
@@ -5674,12 +6129,17 @@ const limitesFuerza = () => Object.assign({}, LIM_FUERZA_FABRICA, S.ajustes.limi
 const PERFILES_FUERZA = {
   industrial: {
     nombre: 'Puertas industriales, comerciales y de garaje',
-    norma: 'UNE-EN 12453:2018+A1:2022', apartado: 'pendiente de concretar',
+    norma: 'UNE-EN 12453:2018+A1:2022 (EN 12453:2017+A1:2021)',
+    apartado: 'anexo A.2.1 y anexo A.2.2',
     magnitudes: 'Fd fuerza dinámica máxima (N), Fs fuerza estática (N), '+
                 'Fe fuerza residual (N), td tiempo por encima de la fuerza estática (s)',
-    validado: false,
+    /* VALIDADO el 14-10-2026: David leyó los límites y sus apartados de su
+       ejemplar de la norma. Ver FUERZA_12453. */
+    validado: true, verificado: '2026-10-14',
   },
   peatonal: {
+    /* SIGUE SIN VALIDAR a propósito: lo que David aportó el 14-10-2026 es la
+       EN 12453, no la EN 16005, que es la que rige estas puertas. */
     nombre: 'Puertas peatonales automáticas',
     norma: 'UNE-EN 16005+A1:2024', apartado: 'pendiente de concretar',
     magnitudes: 'Fd fuerza dinámica máxima (N), Fs fuerza estática (N), '+
@@ -5688,10 +6148,12 @@ const PERFILES_FUERZA = {
   },
   barrera: {
     nombre: 'Barreras de vehículos',
-    norma: 'UNE-EN 12453:2018+A1:2022', apartado: 'pendiente de concretar',
+    norma: 'UNE-EN 12453:2018+A1:2022 (EN 12453:2017+A1:2021)',
+    apartado: 'anexo A.2.1 y anexo A.2.2',
     magnitudes: 'Fd fuerza dinámica máxima (N), Fs fuerza estática (N), '+
                 'Fe fuerza residual (N), td tiempo por encima de la fuerza estática (s)',
-    validado: false,
+    nota: 'Eje paralelo al suelo: 400 N, sin el tramo de 1.400 N.',
+    validado: true, verificado: '2026-10-14',
   },
   cortafuegos: {
     nombre: 'Puertas con función de resistencia al fuego',
@@ -5700,8 +6162,9 @@ const PERFILES_FUERZA = {
     magnitudes: 'Fd fuerza dinámica máxima (N), Fs fuerza estática (N), '+
                 'Fe fuerza residual (N), td tiempo por encima de la fuerza estática (s)',
     nota: 'El cierre en caso de incendio se rige por el diseño del conjunto certificado '+
-          'y no se evalúa con este perfil.',
-    validado: false,
+          'y no se evalúa con este perfil. El eje de movimiento depende de si la puerta es '+
+          'corredera o enrollable: el límite dinámico se elige por ahí.',
+    validado: true, verificado: '2026-10-14',
   },
 };
 /* El perfil que toca, con lo que el usuario haya guardado en ajustes encima. */
@@ -5920,7 +6383,7 @@ function validarExpediente(e){
       'pero con el motivo escrito el documento te respalda mucho mejor.');
   if (motor && f.incluir !== 'no' && f.incluir !== 'no_procede'){
     const perfil = perfilFuerza(e);
-    const puntos = EXP_PUNTOS_FUERZA[e.familia] || [];
+    const puntos = puntosFuerzaDe(e);
     const conMedida = puntos.filter((p, i) => { const m = f['m'+i]||{};
       return (+m.fd||0)||(+m.fs||0)||(+m.fe||0)||(+m.td||0); });
     if (!conMedida.length)
@@ -7730,7 +8193,10 @@ function expSecCumplimiento(e){
 function expSecFuerzas(e){
   const lim = limitesFuerza();
   const perfil = perfilFuerza(e);   // decide si un valor dentro de límites puede llamarse «Pasa»
-  const puntos = EXP_PUNTOS_FUERZA[e.familia] || EXP_PUNTOS_FUERZA.industrial;
+  const puntos = puntosFuerzaDe(e);
+  // La forma de moverse de la hoja: es lo que decide el límite dinámico
+  const formaFuerza = formaDePuerta(((e.datos||{}).puerta||{}).tipo
+                        || ((e.puerta_id ? puertaDe(e.puerta_id) : null) || {}).tipo);
   /* Tres caminos, no dos. Medir no es la única forma de acreditar que la puerta no
      hace daño: cuando la protección se resuelve con detección de presencia que
      impide el contacto, la limitación de fuerza no es la vía, y el ensayo no es que
@@ -7778,15 +8244,25 @@ function expSecFuerzas(e){
       : '')+
     '<p class="mini" style="margin:0 0 6px">Mide en cada punto y apunta lo que marque el instrumento. '+
     'La aplicación compara sola con los límites y te dice si pasa.</p>'+
-    '<p class="nota-oficina" style="margin:0 0 14px">Los límites de abajo proceden de reproducciones '+
-    'sectoriales de la UNE-EN 12453, no del texto de la norma, que es de pago. '+
-    'Contrástalos con tu ejemplar antes de certificar con ellos. Se cambian en Equipo.</p>'+
+    /* ---- El límite dinámico ya NO lo elige el técnico ----
+       Hasta el 14-10-2026 esto preguntaba «¿puede aplastar o no?» y de ahí salían
+       los 400 o los 1.400 N. Ese no es el criterio de la norma, y el error iba en
+       la dirección mala: una seccional marcada «sin riesgo de aplastamiento»
+       recibía 1.400 N cuando a una puerta de movimiento vertical le tocan 400 en
+       todo el recorrido. Lo que manda es el EJE DE MOVIMIENTO y la ABERTURA, y
+       las dos las sabe la aplicación. Queda una sola casilla a mano, la del
+       apartado A.2.1 sobre superficies planas grandes, que sí es un caso real. */
+    '<p class="nota-oficina" style="margin:0 0 14px"><b>Límites verificados.</b> '+
+    esc(FUERZA_12453.norma)+', '+esc(FUERZA_12453.apartados)+
+    ', leídos del ejemplar de la empresa el 14 de octubre de 2026. '+
+    'El límite dinámico de esta puerta lo pone la aplicación por su forma de moverse: '+
+    esc(textoLimiteDinamico(formaFuerza)) + '.</p>'+
     '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Límite</th><th>Valor</th></tr></thead><tbody>'+
-    '<tr><td>Fuerza de aplastamiento (huecos reducidos)</td><td class="num">'+lim.fd_aplastamiento_n+' N</td></tr>'+
-    '<tr><td>Fuerza de impacto (sin riesgo de aplastamiento)</td><td class="num">'+lim.fd_impacto_n+' N</td></tr>'+
-    '<tr><td>Fuerza estática, máximo '+lim.fs_tiempo_s+' s</td><td class="num">'+lim.fs_estatica_n+' N</td></tr>'+
-    '<tr><td>Fuerza residual, tiempo ilimitado</td><td class="num">'+lim.fe_residual_n+' N</td></tr>'+
-    '<tr><td>Tiempo por encima de la fuerza estática</td><td class="num">'+lim.td_dinamico_s+' s</td></tr>'+
+    '<tr><td>Fuerza dinámica de esta puerta</td><td class="num">'+esc(textoLimiteDinamico(formaFuerza))+'</td></tr>'+
+    '<tr><td>Fuerza al terminar la fase dinámica</td><td class="num">'+lim.fs_estatica_n+' N</td></tr>'+
+    '<tr><td>Fuerza residual</td><td class="num">menos de '+lim.fe_residual_n+' N</td></tr>'+
+    '<tr><td>Duración de la fase dinámica Td</td><td class="num">'+lim.td_dinamico_s+' s</td></tr>'+
+    '<tr><td>Tiempo total Tt hasta bajar de la residual</td><td class="num">'+lim.fs_tiempo_s+' s</td></tr>'+
     '</tbody></table></div>';
 
   h += '<div class="campos" style="margin-top:14px">'+
@@ -7794,12 +8270,36 @@ function expSecFuerzas(e){
     expTxt('fuerzas.calibracion', 'Calibración', 'Fecha o referencia del certificado de calibración')+
     '<div class="campo"><label>Fecha del ensayo</label>'+
       '<input type="date" data-exp="fuerzas.fecha" value="'+esc(expVal('fuerzas.fecha',''))+'"></div>'+
-    expSel('fuerzas.hueco', 'Tipo de hueco en el canto de cierre',
-      [['', 'Sin contestar'], ['aplastamiento','Puede aplastar: límite '+lim.fd_aplastamiento_n+' N'],
-       ['impacto','Sin riesgo de aplastamiento: límite '+lim.fd_impacto_n+' N']])+
-    '</div>';
+    /* El único caso en que el límite dinámico sube a 1.400 N sin depender de la
+       abertura: el apartado A.2.1 sobre superficies planas grandes. Se pregunta
+       porque hay que mirarlo con la puerta delante, y por defecto NO se aplica. */
+    expSel('fuerzas.superficie', 'Punto de medida sobre superficie plana grande',
+      [['', 'No, es un canto o un perfil'],
+       ['si','Sí: superficie de más de 0,1 m² y sin ninguna dimensión lateral menor de 100 mm']])+
+    expSel('fuerzas.abertura', 'Abertura en el punto de medida',
+      [['', 'Sin contestar'],
+       ['50_500','De 50 a 500 mm'],
+       ['mas_500','Más de 500 mm']])+
+    '</div>'+
+    (formaFuerza ? '' : '<p class="aviso-caja" style="margin:0 0 10px">No consta de qué forma se mueve '+
+      'esta puerta, así que se aplica el límite más exigente, 400 N. Dilo en el paso «La puerta» '+
+      'para que la aplicación use el que le toca.</p>');
 
-  const tope = expVal('fuerzas.hueco','') === 'impacto' ? lim.fd_impacto_n : lim.fd_aplastamiento_n;
+  /* El tope dinámico: el de la forma de la puerta y la abertura declarada. Si no
+     se sabe la abertura, manda el tramo más exigente, que es lo prudente. Si el
+     punto de medida es una superficie plana grande, el apartado A.2.1 da 1.400 N. */
+  const tope = (() => {
+    if (expVal('fuerzas.superficie','') === 'si') return FUERZA_12453.superficie.n;
+    const L = limiteDinamico(formaFuerza);
+    if (!L) return FUERZA_12453.dinamica.vertical[0].n;         // el más exigente
+    const ab = expVal('fuerzas.abertura','');
+    if (ab === 'mas_500'){
+      const t = L.tramos.find(x => x.a === null && x.de >= 500) ||
+                L.tramos.find(x => x.a === null) || L.tramos[L.tramos.length-1];
+      return t.n;
+    }
+    return Math.min.apply(null, L.tramos.map(x => x.n));
+  })();
   h += '<div class="tabla-wrap" style="margin-top:14px"><table class="tabla"><thead><tr>'+
     '<th>Punto de medida</th><th>Fd (N)</th><th>Fs (N)</th><th>Fe (N)</th><th>td (s)</th><th>Resultado</th>'+
     '</tr></thead><tbody>';
@@ -9198,12 +9698,63 @@ function hojaDeCampo(expId){
       '<b>Nº serie</b> ____________  <b>Calibración</b> ____________</td></tr></table>'+
     '<table><thead><tr><th>Punto de medida</th><th class="cas">Fd (N)</th><th class="cas">Fs (N)</th>'+
     '<th class="cas">Fe (N)</th><th class="obs">td (s) y observaciones</th></tr></thead><tbody>'+
-    (EXP_PUNTOS_FUERZA[e.familia] || EXP_PUNTOS_FUERZA.industrial)
+    puntosFuerzaDe(e)
       .map(pt => '<tr><td>'+esc(pt)+'</td><td class="cas"></td><td class="cas"></td>'+
                  '<td class="cas"></td><td class="obs"></td></tr>').join('')+
     '</tbody></table>'+
+    /* ---- Método de ensayo verificado ----
+       Puntos, aberturas y número de lecturas de la UNE-EN 12453, leídos del
+       ejemplar de la empresa el 14-10-2026. Va impreso justo encima de la tabla
+       de anotación, para que el técnico no tenga que acordarse de nada. */
+    (() => {
+      const pu = d.puerta || {};
+      const pf = puntosFuerza(formaDePuerta(pu.tipo || p.tipo), pu.alto_mm || p.alto_mm || null);
+      if (!pf) return '<div class="aviso">No consta de qué forma se mueve esta puerta, así que no se '+
+        'pueden dar sus puntos de medida. Anótalo en «La puerta» y vuelve a sacar la hoja.</div>';
+      return '<table class="datos">'+
+        '<tr><th>Puntos de medida</th><td>'+pf.puntos.map(esc).join(' · ')+'</td></tr>'+
+        '<tr><th>Aberturas de ensayo</th><td>'+esc(pf.aberturas)+'</td></tr>'+
+        '<tr><th>Lecturas</th><td>'+pf.lecturas+' por cada punto; se anota la mayor</td></tr>'+
+        '<tr><th>Límite dinámico</th><td>'+esc(textoLimiteDinamico(formaDePuerta(pu.tipo || p.tipo)))+'</td></tr>'+
+        '<tr><th>Tras la fase dinámica</th><td>'+FUERZA_12453.tras_td_n+' N, bajando de '+
+          FUERZA_12453.residual_n+' N antes de '+String(FUERZA_12453.tt_s).replace('.', ',')+
+          ' s en total. Td máximo '+String(FUERZA_12453.td_s).replace('.', ',')+' s</td></tr>'+
+        (pf.porAltura ? '<tr><th>Por la altura</th><td>'+esc(pf.porAltura)+'</td></tr>' : '')+
+        (pf.nota ? '<tr><th>Nota</th><td>'+esc(pf.nota)+'</td></tr>' : '')+
+        '</table>'+
+        '<p style="font-size:9px;color:#6B6560;margin:0 0 6px">'+esc(FUERZA_12453.norma_une)+
+        ', '+esc(FUERZA_12453.apartados)+'. '+esc(FUERZA_12453.superficie.texto)+'.</p>';
+    })()+
     '<div class="aviso">Anotar también la configuración de la puerta durante el ensayo, la dirección '+
     'de medida y las repeticiones que pida el método. Los valores se pasan a la aplicación al volver.</div>'+
+
+    /* ---- Cómo se mide y hasta dónde ----
+       Lo pidió David: que el técnico no tenga que pensar ni tirar de apuntes. Los
+       límites se leen de las tablas de la empresa, nunca se escriben aquí, y lo
+       que no esté cargado sale como no cargado. En una nave puede no haber
+       cobertura, así que esto va impreso. */
+    (() => {
+      const tipoP = p.tipo || ((d.puerta||{}).tipo) || 'Otro';
+      const fp = formaDePuerta(tipoP);
+      const g = guionDe(tipoP);
+      const filas = g.filter(x => x.t && lineasAyuda(x, fp));
+      if (!filas.length) return '';
+      return '<h2>Cómo se comprueba y hasta dónde</h2>'+
+        '<table><thead><tr><th style="width:30%">Punto</th><th>Qué se comprueba y cómo</th>'+
+        '<th style="width:22%">Límite</th></tr></thead><tbody>'+
+        filas.map(x => {
+          const L = lineasAyuda(x, fp);
+          const lim = (L.find(y => y[0] === 'Límite') || [,''])[1];
+          const txt = L.filter(y => y[0] !== 'Límite').map(y => y[1]).join(' ');
+          return '<tr><td>'+esc(x.t)+(x.n ? '<br><i>'+esc(x.n)+'</i>' : '')+'</td>'+
+                 '<td>'+esc(txt)+'</td>'+
+                 '<td>'+(lim ? esc(lim) : '—')+'</td></tr>';
+        }).join('')+
+        '</tbody></table>'+
+        '<p style="font-size:9px;color:#6B6560;margin:0 0 8px">Guía de trabajo de ARIZA para hacer la '+
+        'comprobación. No reproduce el texto de ninguna norma. Los límites son los cargados por la empresa; '+
+        'donde pone que no están cargados, hay que medir y anotar igualmente.</p>';
+    })()+
 
     '<h2>Notas</h2><div style="border:1px solid #d8d4d0;height:60px"></div>'+
     '<div class="firma"><div>Técnico que ha ejecutado la intervención</div>'+
@@ -9792,9 +10343,24 @@ async function libroExpediente(id){
   const conFuerzas = motor && (((d.fuerzas||{}).incluir || 'si') === 'si');
   if (conFuerzas){
     const f = d.fuerzas || {};
-    const tope = f.hueco === 'impacto' ? lim.fd_impacto_n : lim.fd_aplastamiento_n;
-    const puntos = EXP_PUNTOS_FUERZA[e.familia] || EXP_PUNTOS_FUERZA.industrial;
+    const puntos = puntosFuerzaDe(e);
     const perfil = perfilFuerza(e);
+    /* El mismo criterio que la pantalla, y por el mismo motivo: lo que decide el
+       límite dinámico es el eje de movimiento y la abertura, no una apreciación
+       sobre si la puerta puede aplastar. Si la pantalla y el libro no aplicaran
+       el mismo tope, el documento firmado diría una cosa y la medida sería otra. */
+    const formaFuerza = formaDePuerta((d.puerta||{}).tipo || p.tipo);
+    const tope = (() => {
+      if (f.superficie === 'si') return FUERZA_12453.superficie.n;
+      const L = limiteDinamico(formaFuerza);
+      if (!L) return FUERZA_12453.dinamica.vertical[0].n;
+      if (f.abertura === 'mas_500'){
+        const t = L.tramos.find(x => x.a === null && x.de >= 500) ||
+                  L.tramos.find(x => x.a === null) || L.tramos[L.tramos.length-1];
+        return t.n;
+      }
+      return Math.min.apply(null, L.tramos.map(x => x.n));
+    })();
     H += abreSec('Ensayo de fuerzas')+
       '<table class="datos">'+
         campo('Perfil de ensayo aplicado', perfil.nombre)+
@@ -9805,9 +10371,14 @@ async function libroExpediente(id){
         campo('Instrumento de medida', f.instrumento)+
         campo('Calibración', f.calibracion)+
         campo('Fecha del ensayo', f.fecha ? fechaCorta(f.fecha) : '')+
-        campo('Tipo de hueco', f.hueco === 'impacto' ? 'Sin riesgo de aplastamiento' :
-              (f.hueco === 'aplastamiento' ? 'Con riesgo de aplastamiento' : ''))+
+        campo('Forma de movimiento de la hoja', limiteDinamico(formaFuerza)
+              ? limiteDinamico(formaFuerza).nombre : 'no consta')+
+        campo('Abertura en el punto de medida', f.abertura === 'mas_500' ? 'más de 500 mm'
+              : (f.abertura === '50_500' ? 'de 50 a 500 mm' : 'no consta'))+
+        campo('Punto sobre superficie plana grande', f.superficie === 'si'
+              ? 'sí, apartado A.2.1 sobre superficies de más de 0,1 m²' : '')+
         campo('Límite de fuerza dinámica aplicado', tope + ' N')+
+        campo('Régimen completo de esta puerta', textoLimiteDinamico(formaFuerza))+
       '</table>'+
       (perfil.nota ? '<p class="min">'+esc(perfil.nota)+'</p>' : '')+
       (!perfil.validado
@@ -11285,7 +11856,8 @@ async function vidaPuerta(puertaId, modo){
         '<td>'+esc((x.fuerzas||{}).instrumento || HUECO.no_identificado)+'</td>'+
         '<td>'+esc((x.fuerzas||{}).calibracion || HUECO.no_aportado)+'</td>'+
         '<td class="min">'+((x.perfil||{}).validado
-          ? 'según el perfil de ensayo aplicado'
+          ? 'según el perfil de ensayo aplicado, contrastado con '+
+            esc(((x.perfil||{}).norma || '') + ((x.perfil||{}).apartado ? ', ' + x.perfil.apartado : ''))
           : 'las medidas quedan registradas, sin dictamen: el perfil de ensayo no está '+
             'contrastado con el texto de la norma')+'</td></tr>').join('')+
       '</tbody></table>';
@@ -13466,9 +14038,17 @@ function bloqueGuion(a, p){
   g.forEach((x, i) => {
     if (x.h){ h += cerrarBloque(); abierto = true; nb++; titulo = x.h; cuerpo = ''; ini = i; return; }
     if (!abierto){ abierto = true; nb++; titulo = 'Comprobaciones'; cuerpo = ''; ini = i; }
+    /* La guía de cómo se comprueba el punto. Va plegada: el técnico que ya lo
+       sabe no la ve, y el que duda la abre sin salir del chequeo ni buscar
+       apuntes. Solo aparece en los puntos que citan norma o piden una medida. */
+    const ay = lineasAyuda(x, formaDePuerta(tipo));
     cuerpo += '<div class="g-punto" data-i="'+i+'" data-b="'+nb+'" data-t="'+esc(x.t)+'">'+
       '<span class="g-txt">'+esc(x.t)+'</span>'+
       (x.n ? '<span class="g-norma">'+esc(x.n)+'</span>' : '')+
+      (ay ? '<details class="g-ayuda"><summary>Cómo se comprueba</summary>'+
+        ay.map(([et, t]) => '<p><b>'+esc(et)+':</b> '+esc(t)+'</p>').join('')+
+        '<p class="g-ayuda-pie">Guía de trabajo de ARIZA. No reproduce el texto de la norma.</p>'+
+        '</details>' : '')+
       '<div class="g-resp">'+
         ['ok','mal','na'].map(r => '<button type="button" data-act="g-r" data-i="'+i+'" data-r="'+r+'" aria-pressed="false">'+RESP[r]+'</button>').join('')+
         (x.m === 'num' ? '<input class="g-val" data-i="'+i+'" type="number" step="any" inputmode="decimal" placeholder="valor"><span class="g-uni">'+esc(x.u||'')+'</span>' : '')+
@@ -14515,11 +15095,13 @@ raiz.addEventListener('click', async e => {
       const uni = ((document.getElementById('gn-uni')||{}).value || '').trim();
       const norma = ((document.getElementById('gn-norma')||{}).value || '').trim();
       if (!t.trim()) { toast('Escribe el texto del punto.'); return; }
+      const ayuda = ((document.getElementById('gn-ayuda')||{}).value || '').trim();
       if (modo === 'h') arr.push({ h: t.trim() });
       else {
         const p = { t: t.trim() };
         if (modo === 'num'){ p.m = 'num'; if (uni) p.u = uni; }
         if (norma) p.n = norma;
+        if (ayuda) p.a = ayuda;      // la guía que escribe la oficina para ese punto
         arr.push(p);
       }
     } else {
@@ -14581,6 +15163,22 @@ raiz.addEventListener('click', async e => {
       S.ajustes.proteccion = o;
       toast(Object.keys(o).length + ' combinaciones guardadas.');
       pintar();
+    } catch(err){ fallo(err); }
+  }
+  else if (a === 'guardar-limobra'){
+    /* Un campo vacío se queda vacío: no se rellena con nada. «Sin cargar» es un
+       estado legítimo y la aplicación sabe decirlo. */
+    const o = {};
+    document.querySelectorAll('[data-limobra]').forEach(x => {
+      const v = x.value.trim();
+      if (v !== '') o[x.dataset.limobra] = +v;
+    });
+    try {
+      const { error } = await sb.from('ajustes').upsert({ clave:'limites_obra', valor:o }, { onConflict:'clave' });
+      if (error) throw error;
+      S.ajustes.limites_obra = o; pintar();
+      const n = Object.keys(o).length;
+      toast(n ? n+' límite'+(n===1?'':'s')+' de obra guardado'+(n===1?'':'s')+'.' : 'Límites de obra vaciados.');
     } catch(err){ fallo(err); }
   }
   else if (a === 'guardar-empresa' || a === 'guardar-limites'){

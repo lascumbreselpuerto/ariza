@@ -145,6 +145,7 @@ const abrirDoc = async (pag, act) => {
 
     /* ---- 6. Ningún perfil de fuerza está validado: no se dictamina ---- */
     salida.perfilesValidados = Object.values(T.PERFILES_FUERZA).filter(p => p.validado).length;
+    salida.perfilPeatonalValidado = !!T.PERFILES_FUERZA.peatonal.validado;
     salida.limites = T.LIM_FUERZA_FABRICA;
 
     /* ---- 7. Prioridades, con las antiguas traducidas ---- */
@@ -362,8 +363,16 @@ const abrirDoc = async (pag, act) => {
   igual('A5 · la matriz de la 12453 no se aplica a las peatonales',
         R.matrizNoAplica, ['peatonal']);
 
-  paso('A6 · ningún perfil de fuerza está validado, así que no se dictamina',
-       R.perfilesValidados === 0, String(R.perfilesValidados));
+  /* CAMBIO DE CRITERIO DEL 14-10-2026. Hasta ese día NINGÚN perfil estaba
+     validado y la aplicación no dictaminaba. David aportó la EN 12453:2017+A1:2021
+     leída de su ejemplar, con sus apartados, así que los perfiles que se rigen por
+     esa norma (industrial, barrera y cortafuegos en su funcionamiento ordinario)
+     pasaron a validados y la aplicación ya puede decir si una puerta pasa. El de
+     peatonales NO, porque su norma es la EN 16005 y esa sigue sin verse. */
+  paso('A6 · los perfiles de la 12453 están validados desde que se aportó la norma',
+       R.perfilesValidados === 3, String(R.perfilesValidados));
+  paso('A6 · y el de peatonales sigue sin validar: su norma es la 16005',
+       R.perfilPeatonalValidado === false, String(R.perfilPeatonalValidado));
   igual('A6 · los límites de fábrica siguen siendo los de siempre', R.limites,
         { fd_aplastamiento_n:400, fd_impacto_n:1400, fs_estatica_n:150,
           fs_tiempo_s:5, fe_residual_n:25, td_dinamico_s:0.75 });
@@ -561,12 +570,19 @@ const abrirDoc = async (pag, act) => {
     await pag.locator('#vista').click({ position:{ x:5, y:5 } });
     await pag.waitForTimeout(900);
     const t = await pag.textContent('#vista');
-    paso('B3b · con una medición dentro de límites NO dice «Pasa»',
-         !/\bPasa\b/.test(t), (t.match(/.{0,40}Pasa.{0,40}/)||[''])[0]);
-    paso('B3b · dice «Pendiente de evaluación»', /Pendiente de evaluación/.test(t),
-         ruta);
-    paso('B3b · y explica que los límites no vienen del texto de la norma',
-         /no del texto de la norma/.test(t));
+    /* CAMBIO DE CRITERIO DEL 14-10-2026, mismo motivo que A6: con la norma
+       aportada, una medición dentro de límites en una industrial SÍ se puede
+       llamar «Pasa». Antes se quedaba en «Pendiente de evaluación» porque el
+       perfil no estaba contrastado. */
+    /* Ojo con el \b: textContent pega las celdas sin espacios («sueloPasaCanto»),
+       así que el límite de palabra no existe. Se mira que diga Pasa y que no sea
+       un «No pasa». */
+    paso('B3b · con una medición dentro de límites ya SÍ dice «Pasa»',
+         /Pasa/.test(t) && !/No pasa/.test(t), (t.match(/.{0,30}Pasa.{0,20}/)||[''])[0] || ruta);
+    paso('B3b · ya no se queda en «Pendiente de evaluación»',
+         !/Pendiente de evaluación/.test(t), ruta);
+    paso('B3b · y la pantalla cita la norma verificada con su apartado',
+         /A\.2\.1/.test(t) && /Límites verificados/.test(t));
   } else {
     paso('B3b · el paso de fuerzas tiene campos de medición', false, 'no hay fuerzas.m0.*');
   }

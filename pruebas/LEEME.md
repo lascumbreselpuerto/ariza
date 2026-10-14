@@ -46,6 +46,7 @@ El `index.html` de producción **no se toca nunca**. La copia de pruebas es
 | `humo.mjs` | Que la aplicación arranca contra el simulador y monta sus pestañas |
 | `fuerzas.mjs` | Las tres vías del ensayo de fuerzas: medido, no procede porque la protección va por detección de presencia, o no se incluye por decisión del firmante. Y que el libro nunca se calla que no hubo ensayo |
 | `componentes.mjs` | El inventario de lo que hay montado en cada puerta: qué componentes le tocan y de dónde sale cada uno, alta y retirada, marcado automático de la seguridad instalada, y el puente con el expediente en los dos sentidos |
+| `ayudas.mjs` | Qué hay que comprobar, cómo y hasta dónde: la guía que lee el técnico en los puntos que citan norma o piden medir. Vigila sobre todo que el método se escriba y los límites NO: los de fuerza se leen de la tabla de la empresa y los de distancia y velocidad nacen vacíos |
 | `tipos.mjs` | Qué forma tiene la puerta: el desplegable afinado, el reconocimiento del tipo escrito a mano y su orden, los peligros, componentes y familia que recibe cada forma, y que un tipo que no se reconoce se diga en vez de callarse |
 | `centros.mjs` | El sitio donde están las puertas: que el centro es opcional, que es de un cliente y una puerta no acaba en el sitio de otro, la herencia de la dirección sin pisar lo escrito a mano, los cuatro datos del sitio allí donde el técnico los lee antes de ir, y agrupar las puertas que ya comparten dirección |
 | `basico.mjs` | Los flujos de todos los días: buscador de clientes, enlace puerta-cliente, alta de puerta y de cliente, asistencia, asignación, cierre con firma y parte, contrato, etiquetas y búsquedas |
@@ -166,6 +167,44 @@ Dos cosas que conviene no olvidar:
   lista: se habrían perdido el día que hubiera que restaurar. El orden de esa
   lista tampoco es decorativo: es el orden en que el SQL de restauración inserta,
   y una fila no puede apuntar a otra que todavía no esté.
+
+- **14-10-2026: los límites de la UNE-EN 12453 dejaron de ser una referencia sin
+  contrastar.** David los leyó de su ejemplar de la EN 12453:2017+A1:2021, anexos
+  A.2.1 y A.2.2, con los puntos de medida y las aberturas de ensayo. **Los seis
+  números ya coincidían**; lo que faltaba era saber cuándo se aplica cada uno.
+
+- **Y eso destapó un fallo que daba un veredicto equivocado.** La aplicación
+  preguntaba al técnico «¿puede aplastar o no?» y de ahí sacaba 400 o 1.400 N. Ese
+  no es el criterio: lo que manda es el **eje de movimiento** y la **abertura en el
+  punto de medida**. Una puerta de movimiento vertical lleva 400 N en todo el
+  recorrido, así que una seccional marcada «sin riesgo de aplastamiento» recibía
+  1.400 N y **una medida de 900 N pasaba el ensayo y se firmaba como conforme**. El
+  bloque 9 de `ayudas.mjs` existe para que eso no vuelva: comprueba la seccional de
+  900 N, que el campo viejo ya no suba el tope, que sin declarar la abertura se
+  aplique el tramo más exigente, y que **la pantalla y el libro usen el mismo
+  tope**, porque si no el técnico ve una cosa y el documento firmado dice otra.
+
+- **Lo de la EN 16005 sigue sin validar, a propósito.** Lo aportado es la 12453.
+  El perfil de las peatonales sigue en `validado:false` y hay una comprobación que
+  lo fija: dar por validado lo que no se ha visto es justo lo que no se hace aquí.
+
+- **El MÉTODO se escribe; los LÍMITES no se inventan.** Es la regla de la guía de
+  comprobación que pidió David el 14-10-2026. Cómo se mide es la forma de trabajar
+  de la empresa y se puede escribir. El valor límite no: los de fuerza se leen de
+  la tabla de Equipo (y salen diciendo que están sin contrastar con la norma) y
+  los de distancia, velocidad y tiempo **nacen vacíos a propósito**, porque no
+  salen de ninguna fuente citable. Mientras estén vacíos, la aplicación dice que
+  no están cargados, dice dónde se cargan y **manda medir igualmente**. Hay una
+  comprobación que recorre todas las ayudas buscando un número con unidad en su
+  texto: si alguien escribe «máximo 8 mm» dentro de una ayuda, el banco se pone
+  en rojo.
+
+- **Las claves de las ayudas se normalizan al vuelo.** Se escriben legibles, con
+  sus comas y sus dos puntos, y se normalizan al buscarlas. Escribirlas ya
+  normalizadas a mano era la forma segura de que alguna no casara y la ayuda no
+  saliera sin que nadie se enterara: pasó con las fotocélulas al escribir la
+  suite. Hay una comprobación que recorre TODAS las claves y falla si alguna no
+  corresponde a un punto real de algún guión.
 
 - **Quien decide qué le toca a una puerta NO es la lista de tipos, es
   `formaDePuerta()`.** La lista del desplegable el administrador la cambia en
