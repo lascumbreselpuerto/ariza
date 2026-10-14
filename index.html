@@ -3196,18 +3196,41 @@ function panelGuiones(){
     '<select id="guion-tipo" data-act="guion-tipo" style="padding:6px 9px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:14px">'+
     tipos.map(t => '<option'+(t===sel?' selected':'')+'>'+esc(t)+'</option>').join('')+'</select></div>';
   h += '<p class="mini" style="margin:0 0 10px">Lo que el técnico va marcando cuando hace la revisión de una puerta '+esc(sel.toLowerCase())+'. '+
-       'Las cabeceras agrupan los puntos en bloques.</p>';
+       'Las cabeceras agrupan los puntos en bloques. Los puntos marcados <b>con guía</b> le enseñan al técnico '+
+       'qué comprobar, cómo y hasta dónde: ábrelos aquí para ver exactamente lo que lee él.</p>'+
+       (() => {
+         const f = formaDePuerta(sel);
+         const n = g.filter(x => x.t && lineasAyuda(x, f)).length;
+         const m = g.filter(x => x.t).length;
+         return n ? '<p class="mini" style="margin:0 0 10px">'+n+' de los '+m+' puntos llevan guía. '+
+           'La llevan los que citan una norma o piden una medida, que es donde hace falta.</p>' : '';
+       })();
   if (!g.length) h += '<p class="muted" style="margin:0">Este tipo no tiene guión todavía. Añade puntos abajo.</p>';
   else {
     h += '<div class="lista-simple">';
+    /* La guía de cada punto también se ve AQUÍ. Antes solo salía en el chequeo del
+       técnico y en la hoja de campo, y eso dejaba a la oficina sin poder revisar
+       lo que le llega al técnico sin tener que simular una visita. */
+    const forma = formaDePuerta(sel);
     g.forEach((x, i) => {
-      h += '<div class="fila" style="padding:6px 0;border-bottom:1px solid var(--line)">'+
+      const L = x.h ? null : lineasAyuda(x, forma);
+      h += '<div style="padding:6px 0;border-bottom:1px solid var(--line)">'+
+        '<div class="fila">'+
         '<span class="sp">'+(x.h ? '<b>'+esc(x.h)+'</b>' : esc(x.t)+
           (x.m==='num'?' <span class="mini">(valor en '+esc(x.u||'')+')</span>':'')+
-          (x.n?' <span class="g-norma">'+esc(x.n)+'</span>':''))+'</span>'+
+          (x.n?' <span class="g-norma">'+esc(x.n)+'</span>':'')+
+          (L ? ' <span class="chip ok sin" style="font-size:11px">con guía</span>' : ''))+'</span>'+
         '<button class="btn sm plana" data-act="guion-subir" data-i="'+i+'"'+(i===0?' disabled':'')+'>↑</button>'+
         '<button class="btn sm plana" data-act="guion-bajar" data-i="'+i+'"'+(i===g.length-1?' disabled':'')+'>↓</button>'+
-        '<button class="btn sm" data-act="guion-quitar" data-i="'+i+'">Quitar</button></div>';
+        '<button class="btn sm" data-act="guion-quitar" data-i="'+i+'">Quitar</button></div>'+
+        (L ? '<details class="g-ayuda" style="margin-top:6px">'+
+              '<summary>Lo que lee el técnico en este punto</summary>'+
+              L.map(([et, t]) => '<p><b>'+esc(et)+':</b> '+esc(t)+'</p>').join('')+
+              '<p class="g-ayuda-pie">'+(x.a
+                ? 'Guía escrita por la oficina para este punto.'
+                : 'Guía de trabajo de ARIZA. No reproduce el texto de la norma.')+'</p>'+
+             '</details>' : '')+
+        '</div>';
     });
     h += '</div>';
   }

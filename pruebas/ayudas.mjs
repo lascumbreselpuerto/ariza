@@ -269,6 +269,31 @@ paso('y dentro está el método', /dinamómetro calibrado/i.test(enChequeo.texto
 paso('dice que es guía de la empresa, no el texto de la norma',
   /No reproduce el texto de la norma/.test(enChequeo.texto));
 
+/* David, 14-10-2026: «en guiones de revisión no se ve la explicación». Tenía
+   razón: la guía salía en el chequeo del técnico y en la hoja de campo, pero no
+   en el editor de Equipo, que es donde la oficina la revisa. Sin eso, para ver
+   lo que le llega al técnico había que simular una visita entera. */
+const enEditor = await T(() => {
+  const g = window.__T;
+  g.S.guionTipo = 'Corredera autoportante';
+  const d = document.createElement('div'); d.innerHTML = g.panelGuiones();
+  const det = Array.from(d.querySelectorAll('details.g-ayuda'));
+  return { n: det.length, abiertas: det.filter(x => x.open).length,
+           texto: d.textContent, chips: d.querySelectorAll('.chip.ok.sin').length };
+});
+paso('el editor de Equipo enseña la guía de cada punto, que antes no enseñaba',
+  enEditor.n >= 10, enEditor.n + ' puntos con guía desplegable');
+paso('con el método dentro, para poder revisarlo sin simular una visita',
+  /Dinamómetro calibrado/i.test(enEditor.texto));
+paso('plegada, para no convertir el editor en una pared de texto',
+  enEditor.abiertas === 0);
+paso('cada punto con guía va marcado en la lista', enEditor.chips >= 10, enEditor.chips);
+paso('y el panel dice cuántos de los puntos la llevan',
+  /de los \d+ puntos llevan guía/.test(enEditor.texto),
+  (enEditor.texto.match(/\d+ de los \d+ puntos llevan guía/)||[''])[0]);
+paso('diciendo también lo que el técnico lee de verdad, no un resumen',
+  /Lo que lee el técnico en este punto/.test(enEditor.texto));
+
 const enHoja = await T(async () => {
   const g = window.__T, S = g.S;
   const p = g.S.puertas.find(x => x.codigo === 'AR-0001');
