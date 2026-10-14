@@ -46,6 +46,7 @@ El `index.html` de producción **no se toca nunca**. La copia de pruebas es
 | `humo.mjs` | Que la aplicación arranca contra el simulador y monta sus pestañas |
 | `fuerzas.mjs` | Las tres vías del ensayo de fuerzas: medido, no procede porque la protección va por detección de presencia, o no se incluye por decisión del firmante. Y que el libro nunca se calla que no hubo ensayo |
 | `componentes.mjs` | El inventario de lo que hay montado en cada puerta: qué componentes le tocan y de dónde sale cada uno, alta y retirada, marcado automático de la seguridad instalada, y el puente con el expediente en los dos sentidos |
+| `tipos.mjs` | Qué forma tiene la puerta: el desplegable afinado, el reconocimiento del tipo escrito a mano y su orden, los peligros, componentes y familia que recibe cada forma, y que un tipo que no se reconoce se diga en vez de callarse |
 | `centros.mjs` | El sitio donde están las puertas: que el centro es opcional, que es de un cliente y una puerta no acaba en el sitio de otro, la herencia de la dirección sin pisar lo escrito a mano, los cuatro datos del sitio allí donde el técnico los lee antes de ir, y agrupar las puertas que ya comparten dirección |
 | `basico.mjs` | Los flujos de todos los días: buscador de clientes, enlace puerta-cliente, alta de puerta y de cliente, asistencia, asignación, cierre con firma y parte, contrato, etiquetas y búsquedas |
 | `regresion.mjs` | Lo esencial de las fases 1 a 5, reconstruido: horas facturables, hoja igual a puerta, qué acredita conformidad, marco legal por fecha, régimen de cada familia, perfiles de fuerza sin validar, prioridades, huecos, motor de intervención, conservación del expediente, mantenimiento, salida documental, validación, entregas, firma y estados. Más pantalla y documentos |
@@ -165,6 +166,27 @@ Dos cosas que conviene no olvidar:
   lista: se habrían perdido el día que hubiera que restaurar. El orden de esa
   lista tampoco es decorativo: es el orden en que el SQL de restauración inserta,
   y una fila no puede apuntar a otra que todavía no esté.
+
+- **Quien decide qué le toca a una puerta NO es la lista de tipos, es
+  `formaDePuerta()`.** La lista del desplegable el administrador la cambia en
+  Ajustes, y el técnico puede escribir el tipo a mano en obra. Si lo que decide
+  los peligros fuera una comparación exacta con la lista, bastaría escribir
+  «seccional rápida de lona» para que la puerta se quedara sin peligros. El
+  reconocedor es una LISTA ORDENADA, no un objeto, y el orden es lo que hace que
+  funcione: «peatonal automática corredera» lleva dentro la palabra «corredera» y
+  tiene que reconocerse como peatonal. Si alguien reordena `FORMAS_PUERTA`,
+  `tipos.mjs` se pone en rojo.
+
+- **El fallo que destapó esto:** el motor ya sabía tratar rápidas, plegables y
+  guillotinas, pero el desplegable no las ofrecía y nadie podía escribirlas de
+  forma que se reconocieran. Una puerta rápida se quedaba sin sus peligros
+  propios y una guillotina sin su paracaídas, **sin que nada lo dijera**. Ahora,
+  cuando un tipo no se reconoce, se dice en pantalla y en el validador.
+
+- **Una peatonal sin lista de peligros NO es un fallo.** Sus peligros están en
+  sus comprobaciones de la UNE-EN 16005. Antes caía en la misma rama que el tipo
+  desconocido y generaba un aviso falso. Hay una comprobación de que ese aviso no
+  sale: un aviso falso enseña a ignorar los avisos de verdad.
 
 - **El informe del Ministerio se cita SIEMPRE con versión y fecha.** Hay nueve
   versiones circulando y la número 8, de septiembre de 2019, sigue apareciendo en

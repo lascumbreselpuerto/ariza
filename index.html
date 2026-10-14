@@ -423,7 +423,30 @@ const ADMIN    = 'arizapuertasautomaticas@gmail.com';
 const sb = createClient(SUPA_URL, SUPA_KEY);
 
 /* ================= Catálogos ================= */
-const TIPOS = ['Corredera','Batiente','Seccional','Enrollable','Basculante','Peatonal automática','Barrera','Otro'];
+/* Tipos de puerta de fábrica. Es solo el desplegable: el administrador puede
+   cambiar la lista en Ajustes, y una puerta que ya tenga guardado un tipo que no
+   esté en la lista lo conserva y se sigue viendo (lo hace la función opts).
+
+   La lista se afinó el 13-10-2026. Antes tenía ocho entradas y la aplicación ya
+   sabía tratar por dentro tipos que no se podían elegir: una puerta rápida o una
+   plegable se quedaban sin sus peligros propios, y una guillotina sin su
+   paracaídas, porque nadie podía escribir ese tipo desde el desplegable. Quien
+   decide qué peligros y qué componentes le tocan a una puerta NO es esta lista,
+   sino formaDePuerta(), que reconoce también lo que se escriba a mano. */
+const TIPOS = [
+  // De vehículos, industriales, comerciales y de garaje
+  'Corredera autoportante', 'Corredera con guía en el suelo',
+  'Batiente', 'Plegable',
+  'Seccional', 'Basculante',
+  'Enrollable industrial', 'Cierre enrollable de local',
+  'Rápida de lona', 'Guillotina o vertical',
+  'Cortafuegos',
+  // Peatonales automáticas
+  'Peatonal automática corredera', 'Peatonal automática batiente',
+  'Peatonal automática giratoria', 'Peatonal automática curva',
+  // Vehículos
+  'Barrera',
+  'Otro'];
 const USOS = ['Residencial','Industrial','Retail'];
 const CLIENTES = ['Particular','Comunidad','Empresa de servicios','Industria','Administración'];
 const SEGURIDAD = ['Fotocélulas','Banda de seguridad','Semáforo','Baliza','Desbloqueo manual','Pulsador de emergencia','Protección de dedos','Limitador de fuerza'];
@@ -4893,23 +4916,67 @@ const PELIGROS_POR_TIPO = {
     ['bar_senal',   'Mástil poco visible',
                     'Señalización reflectante del mástil'],
   ],
+  /* Hoja rígida que sube y baja entera, colgada de cables o cadena, con guías
+     laterales y contrapeso o muelle. Los peligros son los de todo movimiento
+     vertical, más los de la propia suspensión. */
+  guillotina: [
+    ['gui_borde',   'Aplastamiento bajo el borde inferior al bajar la hoja',
+                    'Limitación de fuerzas, borde sensible o detección de presencia en el hueco'],
+    ['gui_caida',   'Caída de la hoja por fallo de cable, cadena, muelle o contrapeso',
+                    'Paracaídas, doble suspensión o dispositivo anticaída'],
+    ['gui_guias',   'Atrapamiento de manos entre la hoja y las guías laterales',
+                    'Separaciones seguras o protección de las guías'],
+    ['gui_dintel',  'Cizallamiento entre la hoja y el dintel al final del recorrido de subida',
+                    'Distancias de seguridad o resguardo en la zona alta'],
+    ['gui_contrapeso','Atrapamiento en el recorrido del contrapeso, si está accesible',
+                    'Encerramiento del contrapeso o resguardo fijo'],
+  ],
+  /* Una puerta cortafuegos tiene un peligro que no tiene ninguna otra: cierra sola
+     cuando salta la alarma o se va la corriente, y tiene que terminar de cerrar.
+     Por eso su protección NO puede ser un dispositivo que impida el cierre. */
+  cortafuegos: [
+    ['cf_cierre',   'Cierre automático imprevisto al dispararse la alarma o al faltar corriente',
+                    'Aviso acústico y luminoso antes y durante el cierre, velocidad de cierre controlada '+
+                    'y recorrido de la hoja despejado y señalizado en el suelo'],
+    ['cf_borde',    'Aplastamiento o impacto en el borde de cierre durante ese cierre',
+                    'Velocidad y fuerza de cierre limitadas; los dispositivos que se instalen no pueden '+
+                    'impedir que la puerta termine de cerrar'],
+    ['cf_evacua',   'Bloqueo del recorrido de evacuación por la hoja cerrada',
+                    'Paso alternativo, puerta peatonal en la hoja o apertura manual desde el lado de evacuación'],
+    ['cf_guias',    'Atrapamiento lateral en guías o en la zona de recogida',
+                    'Protección de las guías y de la zona de recogida'],
+  ],
 };
 
 /* Qué grupo toca según el tipo de puerta. Si el tipo no se reconoce no se inventa
    ninguno: el expediente avisará de que hay que valorarlo a mano. */
 function peligrosDe(e){
   const t = (((e||{}).datos||{}).puerta||{}).tipo || '';
-  if (!t) return null;
-  const cual =
-      /corredera/i.test(t)  ? 'corredera'
-    : /batiente/i.test(t)   ? 'batiente'
-    : /seccional/i.test(t)  ? 'seccional'
-    : /basculante/i.test(t) ? 'basculante'
-    : /r[áa]pida/i.test(t)  ? 'rapida'
-    : /enrollable/i.test(t) ? 'enrollable'
-    : /plegable/i.test(t)   ? 'plegable'
-    : /barrera/i.test(t)    ? 'barrera' : null;
-  return cual ? { clave: cual, lista: PELIGROS_POR_TIPO[cual] } : null;
+  const cual = formaDePuerta(t);
+  return (cual && PELIGROS_POR_TIPO[cual])
+    ? { clave: cual, lista: PELIGROS_POR_TIPO[cual] } : null;
+}
+/* Por qué una puerta no tiene lista de peligros propios. Son dos cosas muy
+   distintas y antes las dos se quedaban calladas por igual:
+     · 'peatonal'      sus peligros están en las comprobaciones de la EN 16005,
+                       que esta familia sí tiene cargadas. No falta nada.
+     · 'sin_tipo'      no se ha dicho de qué tipo es la puerta.
+     · 'sin_reconocer' se ha escrito un tipo que la aplicación no sabe colocar.
+                       Esto sí hay que verlo: la puerta se queda sin sus peligros. */
+function porQueSinPeligros(e){
+  const t = (((e||{}).datos||{}).puerta||{}).tipo || '';
+  if (peligrosDe(e)) return null;
+  if (!t.trim()) return { clave:'sin_tipo',
+    texto:'No se ha dicho de qué tipo es la puerta, así que no se pueden ofrecer sus peligros propios.' };
+  const f = formaDePuerta(t);
+  if (f === 'peatonal') return { clave:'peatonal',
+    texto:'Los peligros de una puerta peatonal automática se valoran en las comprobaciones de la '+
+          'UNE-EN 16005 de esta familia, no en una lista aparte.' };
+  return { clave:'sin_reconocer',
+    texto:'El tipo «'+t+'» no se reconoce, así que esta puerta se queda sin su lista de peligros propios. '+
+          'Hay que valorarlos a mano y dejarlos escritos en los riesgos residuales, o escribir el tipo '+
+          'con una palabra que la aplicación reconozca (corredera, batiente, seccional, basculante, '+
+          'enrollable, plegable, rápida, guillotina, barrera, cortafuegos o peatonal).' };
 }
 
 /* ===== Niveles de protección de la UNE-EN 12453 =====
@@ -5101,14 +5168,59 @@ const COMPONENTES_POR_NIVEL = {
 };
 
 /* Puertas que, además, no pueden caerse encima de nadie */
-const COMPONENTES_POR_TIPO = {
-  'Seccional':   ['paracaidas'],
-  'Enrollable':  ['paracaidas'],
-  'Basculante':  ['paracaidas'],
-  'Guillotina':  ['paracaidas'],
+/* ===== Qué forma tiene la puerta =====
+   El tipo es un texto: viene de un desplegable que el administrador puede cambiar,
+   o escrito a mano por el técnico en obra, donde aparecen cosas como «seccional
+   rápida de lona» o «corredera autoportante de dos hojas». Lo que decide qué
+   peligros, qué componentes y qué familia le tocan no puede ser una comparación
+   exacta con una lista cerrada: tiene que ser el reconocimiento del texto.
+
+   EL ORDEN IMPORTA, y por eso esto es una lista y no un objeto. «Peatonal
+   automática corredera» lleva dentro la palabra «corredera», y hay que reconocerla
+   como peatonal, no como corredera de garaje. Lo mismo con «seccional rápida»:
+   manda rápida, porque sus peligros son los de la rápida.
+
+   Si no reconoce nada devuelve cadena vacía, y entonces la aplicación lo DICE:
+   una puerta cuyo tipo no se reconoce se queda sin sus peligros propios, y eso
+   tiene que verse, no quedarse callado. */
+const FORMAS_PUERTA = [
+  ['peatonal',    'Peatonal automática',  /peatonal|autom[áa]tica de paso|giratoria|curva/i],
+  ['barrera',     'Barrera',              /barrera|m[áa]stil|talanquera/i],
+  ['cortafuegos', 'Cortafuegos',          /cortafuego|corta ?fuego|resistente al fuego|sectorizaci[óo]n/i],
+  ['rapida',      'Rápida',               /r[áa]pid/i],
+  ['guillotina',  'Guillotina o vertical',/guillotina/i],
+  ['seccional',   'Seccional',            /seccional/i],
+  ['enrollable',  'Enrollable',           /enrollable|persiana|cierre met[áa]lico|ballesta/i],
+  ['basculante',  'Basculante',           /basculante|contrapes/i],
+  ['plegable',    'Plegable',             /plegable|acorde[óo]n|libro/i],
+  ['corredera',   'Corredera',            /corredera|corrediza|deslizante|autoportante|cantilever/i],
+  ['batiente',    'Batiente',             /batiente|abatible|hoja[s]? abatible/i],
+];
+const formaDePuerta = t => {
+  const s = (t == null ? '' : String(t));
+  if (!s.trim()) return '';
+  const f = FORMAS_PUERTA.find(([, , re]) => re.test(s));
+  return f ? f[0] : '';
+};
+const nombreForma = clave => (FORMAS_PUERTA.find(x => x[0] === clave) || [,''])[1];
+/* Una corredera puede ir sobre guía en el suelo o en voladizo. No se deduce de la
+   nada: solo se afirma cuando el tipo lo dice. null = no consta. */
+const correderaGuiada = t => {
+  const s = (t == null ? '' : String(t));
+  if (formaDePuerta(s) !== 'corredera') return null;
+  if (/autoportante|cantilever|voladizo|sin gu[íi]a/i.test(s)) return false;
+  if (/gu[íi]a|carril|ra[íi]l/i.test(s)) return true;
+  return null;
 };
 
-const FAMILIA_POR_TIPO = { 'Peatonal automática':'peatonal', 'Barrera':'barrera' };
+const COMPONENTES_POR_TIPO = {
+  seccional:  ['paracaidas'],
+  enrollable: ['paracaidas'],
+  basculante: ['paracaidas'],
+  guillotina: ['paracaidas'],
+};
+
+const FAMILIA_POR_TIPO = { peatonal:'peatonal', barrera:'barrera', cortafuegos:'cortafuegos' };
 
 /* La familia de una puerta. Si ya tiene expediente, manda la que eligió el técnico
    allí, que la miró de cerca; si no, se deduce del tipo. */
@@ -5117,7 +5229,7 @@ function familiaDePuerta(p){
   const xs = (S.expedientes || []).filter(x => x.puerta_id === p.id && x.familia)
     .sort((a,b) => (a.creado||'') < (b.creado||'') ? 1 : -1);
   if (xs.length) return xs[0].familia;
-  return FAMILIA_POR_TIPO[p.tipo] || 'industrial';
+  return FAMILIA_POR_TIPO[formaDePuerta(p.tipo)] || 'industrial';
 }
 
 /* El modo de accionamiento y el tipo de usuario no se preguntan en la ficha de la
@@ -5159,7 +5271,7 @@ function componentesMinimos(p){
 
   (COMPONENTES_SIEMPRE[familia] || []).forEach(c =>
     mete(c, 'Lo lleva cualquier puerta de esta familia'));
-  (COMPONENTES_POR_TIPO[p && p.tipo] || []).forEach(c =>
+  (COMPONENTES_POR_TIPO[formaDePuerta(p && p.tipo)] || []).forEach(c =>
     mete(c, 'Por ser una puerta de maniobra vertical, que puede caer'));
 
   const prot = proteccionDePuerta(p);
@@ -5215,15 +5327,18 @@ function seguridadSegunComponentes(p){
 
    Cada regla devuelve true (procede), false (no procede, con su motivo) o null
    (no se sabe todavía, porque falta el dato de configuración: entonces se pregunta). */
+/* Estas reglas miraban el texto del tipo con expresiones sueltas, cada una la
+   suya. Ahora todas preguntan a formaDePuerta, que es quien sabe de formas: así
+   «peatonal automática corredera» deja de contar como corredera de garaje. */
 const APLICA_COMPROBACION = {
   descarrile: (pu) => !pu.tipo ? null
-    : /corredera/i.test(pu.tipo) ? true
+    : formaDePuerta(pu.tipo) === 'corredera' ? true
     : { no:'La puerta no es corredera: no tiene guías de las que descarrilar.' },
   secuencia: (pu) => !pu.hojas ? null
     : (+pu.hojas >= 2) ? true
     : { no:'La puerta tiene una sola hoja: no hay secuencia de cierre que ordenar.' },
   caida: (pu) => !pu.tipo ? null
-    : /corredera|barrera/i.test(pu.tipo)
+    : ['corredera','batiente','plegable','barrera','peatonal'].includes(formaDePuerta(pu.tipo))
       ? { no:'La hoja no se sostiene por muelle ni cable sobre el hueco de paso.' }
       : true,
 };
@@ -5233,7 +5348,7 @@ const APLICA_COMPONENTE = {
     : (+pu.hojas >= 2) ? true
     : { no:'Puerta de una sola hoja.' },
   paracaidas: (pu) => !pu.tipo ? null
-    : /corredera|barrera/i.test(pu.tipo)
+    : ['corredera','batiente','plegable','barrera','peatonal'].includes(formaDePuerta(pu.tipo))
       ? { no:'La hoja no cuelga de muelle ni cable sobre el hueco de paso.' }
       : true,
 };
@@ -5820,9 +5935,14 @@ function validarExpediente(e){
       });
       if (sinComprobar.length) A('Peligros', sinComprobar.length+' medida(s) de protección sin '+
         'decir cómo se comprobó que funcionan.');
-    } else if ((d.puerta||{}).tipo) {
-      A('Peligros', 'El tipo de puerta no corresponde a ninguno de los grupos de peligros '+
-        'previstos: hay que valorarlos a mano.');
+    } else {
+      /* Ojo: una peatonal también llega aquí sin lista, y NO es un aviso: sus
+         peligros están en sus propias comprobaciones de la UNE-EN 16005. Avisar
+         de ella sería un aviso falso, y los avisos falsos enseñan a ignorarlos. */
+      const sp = porQueSinPeligros(e);
+      if (sp && sp.clave === 'sin_reconocer')
+        A('Peligros', 'El tipo de puerta escrito no corresponde a ninguno de los grupos de '+
+          'peligros previstos: hay que valorarlos a mano.');
     }
   }
 
@@ -6615,6 +6735,14 @@ function expPendientes(e){
       });
       if (sinPor.length) falta.push('el motivo de ' + sinPor.length +
         ' peligros marcados como no resueltos, no aplicables o no comprobados');
+    } else {
+      /* Un tipo que no se reconoce deja la puerta sin peligros propios, y eso es un
+         hueco del expediente, no una puerta sin peligros. Se cuenta como lo que es.
+         Una peatonal no entra aquí: los suyos están en sus comprobaciones. */
+      const sp = porQueSinPeligros(e);
+      if (sp && sp.clave === 'sin_reconocer')
+        falta.push('los peligros propios de esta puerta: el tipo escrito no se reconoce, '+
+                   'así que hay que valorarlos a mano');
     }
   }
 
@@ -7435,6 +7563,18 @@ function expSecCumplimiento(e){
         '</div>';
     });
     h += '<div class="panel-h" style="margin-top:18px"><h3>Comprobaciones de normativa</h3></div>';
+  } else {
+    /* Sin lista de peligros propios. Antes esto no se decía: la pantalla pasaba
+       directamente a las comprobaciones generales y parecía que esa puerta no
+       tenía peligros de su tipo. Ahora se dice, y se dice POR QUÉ, porque no es
+       lo mismo una peatonal (sus peligros están en sus comprobaciones) que un
+       tipo escrito que la aplicación no sabe colocar. */
+    const sp = porQueSinPeligros(e);
+    if (sp)
+      h += '<div class="'+(sp.clave === 'sin_reconocer' ? 'aviso-caja' : 'nota-oficina')+
+        '" style="margin:0 0 14px">'+
+        (sp.clave === 'sin_reconocer' ? '<b>Esta puerta no tiene lista de peligros propios.</b><br>' : '')+
+        esc(sp.texto)+'</div>';
   }
 
   chk.forEach(([k, texto, norma, pideFoto, critico]) => {
