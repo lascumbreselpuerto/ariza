@@ -183,6 +183,23 @@ Dos cosas que conviene no olvidar:
   propios y una guillotina sin su paracaídas, **sin que nada lo dijera**. Ahora,
   cuando un tipo no se reconoce, se dice en pantalla y en el validador.
 
+- **El guión de revisión se busca por FORMA, no por el nombre del tipo.** Este es
+  el fallo que encontró David usando la aplicación, y era el grave de los dos que
+  trajo afinar los tipos: los guiones de fábrica están guardados con el nombre
+  exacto, así que «Corredera autoportante» dejó de coincidir con la clave
+  «Corredera» y una corredera dada de alta con el nombre nuevo se habría quedado
+  con el guión genérico, sin cremallera, sin rodillos y sin antidescarrilamiento.
+  Un guión más pobre no se nota hasta que hay un informe malo en la mano. El
+  bloque 7 de `tipos.mjs` lo fija, incluido que un guión editado a mano manda
+  sobre el de fábrica.
+
+- **Una lista guardada en Ajustes TAPA la de fábrica, y eso es lo correcto**: si
+  el administrador la ha cambiado, manda él. Lo que no puede pasar es que crezca
+  la de fábrica y no haya forma de enterarse. Ahora el panel dice qué falta, lo
+  nombra y lo añade de un clic, sin reordenar ni quitar nada. Hay comprobaciones
+  de que lo propio no se pierde, de que no se duplica y de que a quien nunca ha
+  tocado la lista no se le da la lata con el aviso.
+
 - **Una peatonal sin lista de peligros NO es un fallo.** Sus peligros están en
   sus comprobaciones de la UNE-EN 16005. Antes caía en la misma rama que el tipo
   desconocido y generaba un aviso falso. Hay una comprobación de que ese aviso no

@@ -641,10 +641,90 @@ const nombreMesAnio = d => capital(d.toLocaleDateString('es-ES', { month:'long',
 const diaLargo = d => d.toLocaleDateString('es-ES', { weekday:'long', day:'numeric', month:'long' });
 /* Clave del guión de revisión de un tipo de puerta: "Peatonal automática" -> checklist_peatonal_automatica */
 const claveGuion = t => 'checklist_' + String(t||'Otro').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
+/* ===== De qué guión de fábrica tira cada forma de puerta =====
+   Los guiones de fábrica están guardados con el nombre exacto del tipo, y eso se
+   rompió solo al afinar la lista de tipos el 13-10-2026: «Corredera autoportante»
+   no es la clave «Corredera», así que una corredera dada de alta con el nombre
+   nuevo se quedaba con el guión genérico de «Otro», sin cremallera, sin rodillos
+   y sin antidescarrilamiento. Un guión de revisión más pobre no se nota hasta que
+   hay un informe malo en la mano, así que esto se busca por FORMA, no por nombre. */
+const GUION_POR_FORMA = {
+  corredera:'Corredera', batiente:'Batiente', seccional:'Seccional',
+  enrollable:'Enrollable', basculante:'Basculante',
+  peatonal:'Peatonal automática', barrera:'Barrera',
+};
+/* Las formas que no tienen guión de fábrica propio: se les monta uno sobre los
+   bloques generales, que son los mismos para todas las puertas, cambiando el
+   bloque de lo suyo. Así no se repiten cuarenta líneas iguales cuatro veces.
+   REVISAR: estos cuatro bloques son nuevos y hay que contrastarlos en obra. */
+const GUION_PROPIO = {
+  rapida: ['Propio de rápida', [
+    { t:'Lona: estado, costuras, ventanas y zonas de roce' },
+    { t:'Sistema de reenganche de la lona tras un impacto' },
+    { t:'Eje, correa o cadena de arrastre y su tensión' },
+    { t:'Barra o faldón inferior: estado y fijación' },
+    { t:'Guías laterales sin roces ni deformaciones' },
+    { t:'Barrera óptica o cortina que cubre todo el hueco', n:'UNE-EN 12978' },
+    { t:'Velocidad de cierre medida', m:'num', u:'m/s' },
+    { t:'Variador o cuadro: parámetros de velocidad y rampa de frenado' },
+    { t:'Encoder o sistema de posición: el punto de cierre se repite' },
+  ]],
+  plegable: ['Propio de plegable', [
+    { t:'Articulaciones y bisagras entre hojas: holguras y engrase' },
+    { t:'Carros superiores y guía de rodadura' },
+    { t:'Protección de las articulaciones accesibles', n:'UNE-EN 12604' },
+    { t:'Topes de final de plegado y de apertura' },
+    { t:'Secuencia de plegado correcta, sin forzar ninguna hoja' },
+    { t:'Bordes sensibles en los puntos de cizallamiento', n:'UNE-EN 12978' },
+  ]],
+  guillotina: ['Propio de guillotina o puerta vertical', [
+    { t:'Cables, cadena o correa de suspensión y sus fijaciones' },
+    { t:'Contrapeso o muelle: estado, recorrido y encerramiento' },
+    { t:'Paracaídas o dispositivo anticaída: prueba de actuación', n:'UNE-EN 12604' },
+    { t:'Guías laterales: limpieza, engrase y ausencia de roces' },
+    { t:'Equilibrado: la hoja se mantiene sola a media altura' },
+    { t:'Topes mecánicos superior e inferior' },
+    { t:'Separación entre hoja y guías, o protección equivalente', m:'num', u:'mm', n:'UNE-EN 12604' },
+  ]],
+  cortafuegos: ['Propio de puerta cortafuegos', [
+    { t:'Dispositivo de retención (electroimán o fusible térmico): sujeción y liberación' },
+    { t:'Prueba de cierre por disparo de alarma: tiempo hasta cierre completo', m:'num', u:'s' },
+    { t:'Prueba de cierre por fallo de alimentación' },
+    { t:'Conexión con la central de incendios y señal de retorno' },
+    { t:'Recorrido de la hoja despejado y señalizado en el suelo' },
+    { t:'Aviso acústico y luminoso antes y durante el cierre' },
+    { t:'Juntas intumescentes, sellado perimetral y burletes' },
+    { t:'Paso alternativo de evacuación o puerta peatonal en la hoja' },
+    { t:'NINGÚN dispositivo instalado impide que la puerta termine de cerrar' },
+  ]],
+};
+/* Monta el guión de una forma sin guión propio: coge el genérico y le cambia el
+   bloque de «lo suyo». Si no se puede, devuelve null y se usa el genérico tal cual. */
+function guionDeForma(f){
+  const esp = GUION_PROPIO[f];
+  const base = S.ajustes.checklist_otro || GUIONES_FABRICA['Otro'] || [];
+  if (!esp || !base.length) return null;
+  const i = base.findIndex(x => x && x.h && /^Propio de/i.test(x.h));
+  if (i < 0) return null;
+  let j = i + 1;
+  while (j < base.length && !(base[j] && base[j].h)) j++;   // hasta el siguiente encabezado
+  return base.slice(0, i)
+    .concat([{ h: esp[0] }], esp[1])
+    .concat(base.slice(j));
+}
 const guionDe = t => {
   const g = S.ajustes[claveGuion(t)];
-  if (Array.isArray(g)) return g;
-  if (GUIONES_FABRICA[t]) return GUIONES_FABRICA[t];
+  if (Array.isArray(g)) return g;                       // el que se haya editado a mano
+  if (GUIONES_FABRICA[t]) return GUIONES_FABRICA[t];    // el de fábrica con ese nombre exacto
+  const f = formaDePuerta(t);
+  const eq = GUION_POR_FORMA[f];
+  if (eq){
+    const g2 = S.ajustes[claveGuion(eq)];               // el de su forma, editado a mano
+    if (Array.isArray(g2)) return g2;
+    if (GUIONES_FABRICA[eq]) return GUIONES_FABRICA[eq];
+  }
+  const propio = guionDeForma(f);                       // montado sobre el genérico
+  if (propio) return propio;
   return S.ajustes.checklist_otro || GUIONES_FABRICA['Otro'] || [];
 };
 const clienteDe = id => S.clientes.find(c => c.id === id);
@@ -3115,6 +3195,19 @@ function panelGuiones(){
 function panelLista(clave, titulo, defecto, ayuda){
   const arr = lista(clave, defecto);
   let h = '<div class="panel"><div class="panel-h"><h3>'+esc(titulo)+'</h3><span class="mini">'+arr.length+'</span></div>';
+  /* Una lista guardada TAPA la de fábrica, y es lo correcto: si la has cambiado,
+     mandas tú. El problema es cuando la de fábrica crece: los elementos nuevos no
+     aparecen nunca y no hay forma de enterarse. Aquí se dice cuáles faltan y se
+     pueden añadir de un clic, sin tocar ni el orden ni lo que hayas puesto tú. */
+  const faltan = defecto.filter(x => !arr.some(y =>
+    String(y).trim().toLowerCase() === String(x).trim().toLowerCase()));
+  if (faltan.length && Array.isArray(S.ajustes[clave]))
+    h += '<div class="sin-ficha" style="margin-bottom:10px">'+
+      'Tu lista guardada no tiene '+faltan.length+' elemento'+(faltan.length===1?'':'s')+
+      ' que sí trae la aplicación: '+esc(faltan.join(', '))+'.'+
+      '<div class="fila" style="margin-top:8px">'+
+      '<button class="btn sm pri" data-act="lista-faltan" data-clave="'+clave+'">Añadir los que faltan</button>'+
+      '<span class="mini">No se toca el orden ni lo que hayas añadido tú</span></div></div>';
   h += '<div class="lista-simple">';
   arr.forEach((s, i) => {
     h += '<div class="fila" style="padding:6px 0;border-bottom:1px solid var(--line)">'+
@@ -14442,6 +14535,20 @@ raiz.addEventListener('click', async e => {
       S.ajustes[clave] = arr;
       pintar(); toast('Guión guardado.');
     } catch(err){ fallo(err); }
+  }
+  else if (a === 'lista-faltan'){
+    /* Añade al final los elementos de fábrica que la lista guardada no tiene. No
+       reordena nada ni quita nada: lo que hayas puesto tú se queda donde estaba. */
+    const clave = b.dataset.clave;
+    const base = { seguridad:SEGURIDAD, tipos_doc:TIPOS_DOC, tipos:TIPOS, usos:USOS, clientes:CLIENTES }[clave] || [];
+    const arr = lista(clave, base).slice();
+    const faltan = base.filter(x => !arr.some(y =>
+      String(y).trim().toLowerCase() === String(x).trim().toLowerCase()));
+    if (!faltan.length) return toast('No falta ninguno.');
+    if (!armar(b, 'Añadir los '+faltan.length)) return;
+    try { await guardarLista(clave, arr.concat(faltan)); pintar();
+          toast(faltan.length+' añadido'+(faltan.length===1?'':'s')+' a la lista.'); }
+    catch(err){ fallo(err); }
   }
   else if (a === 'lista-anadir' || a === 'lista-quitar' || a === 'lista-subir' || a === 'lista-bajar'){
     const clave = b.dataset.clave;

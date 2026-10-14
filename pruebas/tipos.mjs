@@ -315,6 +315,137 @@ paso('y al poner un tipo que sí se reconoce, aparecen sus peligros',
   /borde inferior al bajar la hoja/i.test(pantalla.guillo));
 paso('y desaparece el aviso', !/no tiene lista de peligros propios/i.test(pantalla.guillo));
 
+/* ================================================================
+   7. El guión de revisión de cada tipo.
+
+   ESTE ES EL FALLO QUE ENCONTRÓ DAVID USANDO LA APLICACIÓN, y era el
+   grave de los dos. Los guiones de fábrica están guardados con el
+   NOMBRE EXACTO del tipo. Al afinar la lista, «Corredera autoportante»
+   dejó de coincidir con la clave «Corredera», así que una corredera
+   dada de alta con el nombre nuevo se habría quedado con el guión
+   genérico: sin cremallera, sin rodillos y sin antidescarrilamiento.
+   Un guión de revisión más pobre no se nota hasta que hay un informe
+   malo en la mano.
+   ================================================================ */
+bloque('7. El guión de revisión de cada tipo');
+
+const gu = await T(() => {
+  const g = window.__T;
+  const txt = t => g.guionDe(t).map(x => x.h || x.t).join(' ~ ');
+  return {
+    autoportante: txt('Corredera autoportante'),
+    guiada:       txt('Corredera con guía en el suelo'),
+    vieja:        txt('Corredera'),
+    generico:     txt('Otro'),
+    peatCurva:    txt('Peatonal automática curva'),
+    rapida:       txt('Rápida de lona'),
+    plegable:     txt('Plegable'),
+    guillotina:   txt('Guillotina o vertical'),
+    cortafuegos:  txt('Cortafuegos'),
+    nAuto:        g.guionDe('Corredera autoportante').length,
+    nGenerico:    g.guionDe('Otro').length,
+  };
+});
+paso('UNA CORREDERA AUTOPORTANTE RECIBE EL GUIÓN DE CORREDERA, no el genérico',
+  /Cremallera/.test(gu.autoportante), gu.autoportante.slice(0,0) || (gu.autoportante.match(/Propio de [^~]*/)||[''])[0]);
+paso('con el antidescarrilamiento, que es lo que se pierde al caer en el genérico',
+  /antidescarrilamiento|antivuelco/i.test(gu.autoportante));
+paso('y es el mismo guión que el de la corredera guiada',
+  gu.autoportante === gu.guiada);
+paso('y el mismo que el del nombre antiguo «Corredera»',
+  gu.autoportante === gu.vieja);
+paso('que NO es el genérico', gu.autoportante !== gu.generico && gu.nAuto > 10,
+  gu.nAuto + ' puntos frente a ' + gu.nGenerico);
+paso('una peatonal curva recibe el guión de peatonal automática',
+  /Sensores de presencia/.test(gu.peatCurva), (gu.peatCurva.match(/Propio de [^~]*/)||[''])[0]);
+
+/* Las cuatro formas que no tenían guión de fábrica se montan sobre el genérico */
+paso('una rápida tiene bloque propio, que antes no tenía',
+  /Propio de rápida/.test(gu.rapida) && /reenganche de la lona/i.test(gu.rapida));
+paso('con la velocidad de cierre medida, que es lo suyo',
+  /Velocidad de cierre medida/.test(gu.rapida));
+paso('una plegable, el suyo', /Propio de plegable/.test(gu.plegable) &&
+  /Articulaciones y bisagras/.test(gu.plegable));
+paso('una guillotina, el suyo', /Propio de guillotina/.test(gu.guillotina) &&
+  /anticaída/i.test(gu.guillotina));
+paso('una cortafuegos, el suyo', /Propio de puerta cortafuegos/.test(gu.cortafuegos));
+paso('con la prueba de cierre por alarma cronometrada',
+  /tiempo hasta cierre completo/i.test(gu.cortafuegos));
+paso('Y CON EL PUNTO QUE NO PUEDE FALTAR: que nada impida terminar de cerrar',
+  /NINGÚN dispositivo instalado impide que la puerta termine de cerrar/.test(gu.cortafuegos));
+paso('los cuatro conservan los bloques generales: seguridad y eléctrica',
+  [gu.rapida, gu.plegable, gu.guillotina, gu.cortafuegos].every(x =>
+    /Seguridad \(bloque crítico\)/.test(x) && /Instalación eléctrica/.test(x)));
+paso('y NO arrastran el punto vacío del genérico',
+  ![gu.rapida, gu.plegable, gu.guillotina, gu.cortafuegos].some(x =>
+    /Propio de esta puerta/.test(x)));
+
+const editado = await T(async () => {
+  const g = window.__T;
+  /* Si el guión de corredera se edita a mano, la autoportante tiene que recibir
+     el editado, no el de fábrica: lo contrario sería ignorar el trabajo hecho. */
+  const arr = g.guionDe('Corredera').slice();
+  arr.push({ t:'Punto añadido a mano por la oficina' });
+  await g.guardarLista(g.claveGuion('Corredera'), arr);
+  return g.guionDe('Corredera autoportante').map(x => x.h || x.t).join(' ~ ');
+});
+paso('si editas el guión de corredera, la autoportante recibe TU versión',
+  /Punto añadido a mano por la oficina/.test(editado));
+
+/* ================================================================
+   8. La lista guardada en Ajustes tapaba la de fábrica
+   ================================================================ */
+bloque('8. La lista guardada en Ajustes');
+
+const tapada = await T(async () => {
+  const g = window.__T;
+  /* La situación real de David: una lista de tipos guardada hace meses, con los
+     ocho de entonces. La aplicación usa esa y la de fábrica no se ve nunca. */
+  const antiguos = ['Corredera','Batiente','Seccional','Enrollable','Basculante',
+                    'Peatonal automática','Barrera','Un tipo mío','Otro'];
+  await g.guardarLista('tipos', antiguos);
+  return { enUso: g.lista('tipos', g.TIPOS), panel: g.panelLista('tipos','Tipos de puerta',g.TIPOS,'') };
+});
+paso('con una lista guardada, la aplicación usa la guardada: mandas tú',
+  tapada.enUso.includes('Un tipo mío') && !tapada.enUso.includes('Rápida de lona'),
+  tapada.enUso.length + ' tipos');
+paso('PERO LO DICE: el panel avisa de los que trae la aplicación y tú no tienes',
+  /no tiene \d+ elementos? que sí trae la aplicación/.test(tapada.panel));
+paso('nombrándolos, para que se vea qué te estás perdiendo',
+  /Rápida de lona/.test(tapada.panel) && /Guillotina o vertical/.test(tapada.panel));
+paso('y ofrece añadirlos de un clic', /data-act="lista-faltan"/.test(tapada.panel));
+
+const anadidos = await T(async () => {
+  const g = window.__T;
+  const antes = g.lista('tipos', g.TIPOS).slice();
+  const base = g.TIPOS;
+  const faltan = base.filter(x => !antes.some(y => y.toLowerCase() === x.toLowerCase()));
+  await g.guardarLista('tipos', antes.concat(faltan));
+  const despues = g.lista('tipos', g.TIPOS);
+  return { antes, despues, panel: g.panelLista('tipos','Tipos de puerta',g.TIPOS,'') };
+});
+paso('al añadirlos, están todos los de fábrica',
+  anadidos.despues.includes('Rápida de lona') && anadidos.despues.includes('Cortafuegos'));
+paso('LO TUYO NO SE PIERDE: «Un tipo mío» sigue ahí',
+  anadidos.despues.includes('Un tipo mío'));
+paso('y en el mismo sitio en que estaba: no se reordena nada',
+  anadidos.despues.slice(0, anadidos.antes.length).join('|') === anadidos.antes.join('|'));
+paso('sin duplicar ninguno',
+  new Set(anadidos.despues.map(x => x.toLowerCase())).size === anadidos.despues.length);
+paso('y el aviso desaparece, porque ya no falta nada',
+  !/no tiene \d+ elementos? que sí trae/.test(anadidos.panel));
+
+const sinGuardar = await T(() => {
+  const g = window.__T;
+  const copia = g.S.ajustes.tipos;
+  delete g.S.ajustes.tipos;                       // como quien nunca ha tocado la lista
+  const p = g.panelLista('tipos','Tipos de puerta',g.TIPOS,'');
+  g.S.ajustes.tipos = copia;
+  return p;
+});
+paso('a quien nunca ha tocado la lista no se le da la lata con el aviso',
+  !/no tiene \d+ elementos? que sí trae/.test(sinGuardar));
+
 console.log('\n'+ok+' bien, '+mal+' mal.');
 const graves = errores.filter(x => !/fonts\.googleapis|ERR_TUNNEL|ERR_NAME|net::ERR|provocado por la prueba/.test(x));
 if (graves.length) console.log('Errores de JavaScript:\n'+graves.join('\n'));
