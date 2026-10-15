@@ -3,10 +3,13 @@
 **Para el equipo de Ariza Puertas y Automatismos.**
 Esto no explica el oficio: explica la aplicación. Da por hecho que sabes de puertas.
 
-> **Versión de la aplicación que describe este manual: 2026.10.15-2**
-> Mira la tuya en Equipo, o pregúntasela a la oficina. Si no coincide, puede que
-> algo esté en otro sitio. Cuando salga la barra amarilla diciendo que hay una
-> versión nueva, dale a **Recargar ahora**.
+Lo tienes siempre a mano en la pestaña **Manual** de la propia aplicación, también
+sin cobertura una vez que lo has abierto la primera vez.
+
+> **Versión de la aplicación que describe este manual: 2026.10.15-3**
+> La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
+> aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
+> amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
 
 ---
 
@@ -125,10 +128,10 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ## 6. Si algo no cuadra
 
-1. Mira la versión en **Equipo**, o pregunta a la oficina cuál es la buena.
+1. Mira la versión arriba de esta pantalla, en la pestaña **Manual**.
 2. Recarga a fondo: en el móvil, cierra la aplicación del todo y vuelve a abrirla.
 3. Si sigue sin cuadrar, dilo **con el número de versión delante**. Sin eso se pierde el doble de tiempo.
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.10.15-2 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.10.15-3 de ARIZA SAT*

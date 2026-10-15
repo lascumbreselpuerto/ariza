@@ -65,7 +65,7 @@ bloque('2. Las pestañas');
 
 const pestanas = await T(() => Array.from(document.querySelectorAll('#tabs button'))
   .map(b => b.textContent.trim()));
-const nombradas = ['Mi trabajo', 'Equipo'];
+const nombradas = ['Mi trabajo', 'Manual'];
 nombradas.forEach(n => paso('el manual manda a «'+n+'», y esa pestaña existe',
   M.includes(n) && pestanas.includes(n), pestanas.join(' | ')));
 
@@ -190,6 +190,101 @@ paso('dice que un límite puede salir «no cargado», y la aplicación lo dice a
 paso('y manda medir igual, que es lo que dice la aplicación',
   /mide y anota el valor igualmente/i.test(lim.sinCargar) &&
   /mide y anota igual/i.test(M));
+
+/* ================================================================
+   8. El manual, dentro de la aplicación.
+
+   David, 15-10-2026: «¿dónde lo puede ver el técnico, en la misma
+   aplicación o en un archivo aparte?». Dentro: el técnico lleva la
+   aplicación en el bolsillo, se lee sin cobertura, y sobre todo el
+   manual que ve es el de la versión que tiene instalada.
+
+   Lo que más vigila este bloque: que NO haya dos copias del manual.
+   La pantalla lee el mismo fichero del repositorio que comprueban los
+   bloques de arriba. Si alguien copiara el texto dentro de la
+   aplicación, las dos copias se separarían y una mentiría.
+   ================================================================ */
+bloque('8. El manual dentro de la aplicación');
+
+const dentro = await T(async () => {
+  const g = window.__T;
+  g.S.tab = 'manual'; g.S.exp = null; g.S.ficha = null; g.S.fichaCliente = null;
+  g.pintar();
+  await new Promise(r => setTimeout(r, 1200));
+  const v = document.getElementById('vista');
+  return { texto: v.innerText, html: v.innerHTML,
+           pestana: !!document.querySelector('#tabs button[data-tab="manual"]'),
+           oculta: (document.querySelector('#tabs button[data-tab="manual"]')||{}).hidden,
+           tablas: v.querySelectorAll('table').length,
+           titulos: v.querySelectorAll('.manual h3').length,
+           titulo: v.querySelectorAll('.manual h2').length };
+});
+paso('hay una pestaña «Manual»', dentro.pestana);
+paso('Y LA VE EL TÉCNICO: no está escondida como Equipo o Gestión',
+  dentro.oculta === false, 'oculta: '+dentro.oculta);
+paso('el manual se abre dentro de la aplicación',
+  /Manual del técnico/.test(dentro.texto));
+paso('con su contenido, no un enlace a otro sitio',
+  /Cerrar visita/.test(dentro.texto) && dentro.titulos >= 5,
+  dentro.titulos + ' apartados y ' + dentro.titulo + ' título');
+paso('las tablas del manual se ven como tablas', dentro.tablas >= 2, dentro.tablas);
+
+/* Una sola copia: lo que se ve en pantalla sale del fichero del repositorio */
+const frases = ['Llamar al sitio', 'Guardar sin cerrar', 'Cómo se comprueba'];
+frases.forEach(f => paso('«'+f+'» está en el fichero y se ve en la pantalla: una sola copia',
+  M.includes(f) && dentro.texto.indexOf(f) >= 0));
+paso('y el texto del manual NO está copiado dentro del index.html',
+  await T(() => !document.documentElement.innerHTML.includes('Lo que haces el 90')
+                || document.getElementById('vista').innerHTML.includes('Lo que haces el 90')),
+  'si estuviera copiado, habría dos manuales que se separarían');
+
+/* La versión, arriba, que es lo que faltaba el día que se perdieron dos ratos */
+const vApp = await T(() => window.__T.ARIZA_VERSION);
+paso('la pantalla enseña la versión que tienes cargada',
+  dentro.texto.indexOf(vApp) >= 0, vApp);
+paso('y el manual describe ESA versión, sin avisos de descuadre',
+  !/Este manual describe la versión/.test(dentro.texto),
+  (dentro.texto.match(/Este manual describe[^.]*/)||[''])[0] || 'cuadran');
+
+const descuadre = await T(async () => {
+  const g = window.__T;
+  const real = g.S.manuales.tecnico;
+  g.S.manuales.tecnico = real.replace(/\d{4}\.\d{2}\.\d{2}-\d+/g, '2019.01.01-1');
+  g.pintar();
+  await new Promise(r => setTimeout(r, 500));
+  const t = document.getElementById('vista').innerText;
+  g.S.manuales.tecnico = real; g.pintar();
+  return t;
+});
+paso('SI EL MANUAL DESCRIBE OTRA VERSIÓN, la pantalla lo dice en vez de callarlo',
+  /Este manual describe la versión/.test(descuadre) && /2019\.01\.01-1/.test(descuadre));
+paso('y dice qué hacer: avisar a la oficina', /Avisa a la oficina/.test(descuadre));
+
+/* Sin cobertura y sin haberlo abierto nunca: se dice, no se queda en blanco */
+const sinRed = await T(async () => {
+  const g = window.__T;
+  const guardado = g.S.manuales;
+  g.S.manuales = {};
+  const real = window.fetch;
+  window.fetch = async (u, o) => {
+    if (String(u).indexOf('manuales/') >= 0) throw new Error('sin red, provocado por la prueba');
+    return real(u, o);
+  };
+  await g.cargarManual('tecnico');
+  window.fetch = real;
+  await new Promise(r => setTimeout(r, 400));
+  const t = document.getElementById('vista').innerText;
+  g.S.manuales = guardado; g.pintar();
+  return t;
+});
+paso('sin cobertura y sin haberlo abierto nunca, lo dice',
+  /No se ha podido abrir el manual/.test(sinRed));
+paso('y explica que abriéndolo una vez con conexión se queda guardado',
+  /se queda guardado/.test(sinRed));
+
+/* El manual ya no manda a una pestaña que el técnico no tiene */
+paso('EL MANUAL NO MANDA A «EQUIPO», que el técnico no ve',
+  !/\bEquipo\b/.test(M), (M.match(/.{0,40}Equipo.{0,40}/)||[''])[0] || 'no lo nombra');
 
 console.log('\n'+ok+' bien, '+mal+' mal.');
 const graves = errores.filter(x => !/fonts\.googleapis|ERR_TUNNEL|ERR_NAME|net::ERR|provocado por la prueba/.test(x));

@@ -290,6 +290,22 @@ dialog::backdrop{background:rgba(20,18,17,.55)}
 #barra-version{display:flex;flex-wrap:wrap;gap:8px;align-items:center;
   padding:9px 14px;background:var(--amarillo);color:#1C1817;font-size:14px;font-weight:600}
 #barra-version span{flex:1 1 220px}
+/* El manual leído dentro de la aplicación. Se lee en un móvil, a veces con una
+   mano y de pie: línea algo más alta y títulos que se distinguen de un vistazo. */
+.manual h2{font-size:19px;margin:22px 0 8px;padding-bottom:6px;border-bottom:2px solid var(--amarillo)}
+.manual h2:first-child{margin-top:0}
+.manual h3{font-size:16px;margin:18px 0 6px}
+.manual h4{font-size:14px;margin:14px 0 4px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.manual p{margin:0 0 10px;line-height:1.6;font-size:15px}
+.manual ul{margin:0 0 12px;padding-left:20px}
+.manual li{margin:0 0 6px;line-height:1.55;font-size:15px}
+.manual blockquote{margin:0 0 12px;padding:10px 12px;border-left:3px solid var(--amarillo);
+  background:rgba(252,186,29,.09);border-radius:0 6px 6px 0}
+.manual blockquote p{margin:0;font-size:14.5px}
+.manual hr{border:0;border-top:1px solid var(--line);margin:18px 0}
+.manual code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;
+  background:rgba(0,0,0,.06);padding:1px 5px;border-radius:4px}
+.manual table{font-size:14px}
 .bloque-hoy{border-color:var(--amarillo);box-shadow:inset 0 0 0 1px var(--amarillo)}
 .bloque-mal .panel-h h2{color:var(--mal)}
 .bloque-sin .panel-h h2{color:var(--muted)}
@@ -409,6 +425,7 @@ dialog::backdrop{background:rgba(20,18,17,.55)}
     <button data-tab="etiquetas" role="tab">Etiquetas</button>
     <button data-tab="gestion" role="tab" hidden>Gestión</button>
     <button data-tab="equipo" role="tab" hidden>Equipo</button>
+    <button data-tab="manual" role="tab">Manual</button>
   </div></nav>
   <main class="wrap" id="vista"></main>
 </div>
@@ -575,7 +592,8 @@ const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etique
             calVista:'mes', calAncla:null, calTec:'', buscaCon:'', conFiltro:'activos', borradorPuerta:null,
             expedientes:[], expFotos:[], expDocs:[], exp:null, expPaso:'obra', expSucio:false,
             fotosEquipo:{}, histBusca:'', histTec:'', histTipo:'', histDesde:'', histHasta:'', histArchivadas:false,
-            cliArchivados:false, centros:[], sinCentros:false, versionNueva:null, versionAvisada:null };
+            cliArchivados:false, centros:[], sinCentros:false, versionNueva:null, versionAvisada:null,
+            manual:null, manuales:null };
 /* Importes: solo existen para el administrador. Si no hay tarifas cargadas, no se enseña nada. */
 const valoracionDe = id => S.valoraciones[id] || null;
 const eur = n => (n == null || isNaN(n)) ? '—' :
@@ -1101,7 +1119,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.10.15-2';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.10.15-3';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -1204,6 +1222,7 @@ function render(){
   else if (S.tab === 'etiquetas') h = vistaEtiquetas();
   else if (S.tab === 'gestion') h = esGestion() ? vistaGestion() : vistaPuertas();
   else if (S.tab === 'equipo') h = vistaEquipo();
+  else if (S.tab === 'manual') h = vistaManual();
   else h = vistaPuertas();
   raiz.innerHTML = h;
   if (keep){ const el = document.getElementById(keep.id); if (el){ if(keep.txt) el.value = keep.v; el.focus(); if(keep.txt){ try{ el.setSelectionRange(keep.s,keep.e); }catch(_){} } } }
@@ -2442,6 +2461,130 @@ function vistaFichaCliente(id){
   else h += '<div class="avisos">'+asis.slice(0,30).map(tarjetaAviso).join('')+'</div>';
   h += '</div></div>';
   return h;
+}
+
+/* ===== Los manuales, dentro de la aplicación =====
+   El técnico lleva la aplicación en el bolsillo; un fichero suelto acaba perdido
+   en un WhatsApp. Dentro se lee sin cobertura, y sobre todo el manual que ve es
+   SIEMPRE el de la versión que tiene instalada.
+
+   No se copia el texto aquí: se lee del mismo fichero del repositorio que revisa
+   el banco de pruebas. Dos copias del mismo manual se separan solas, y entonces
+   una de las dos miente. */
+const MANUALES = [
+  { clave:'tecnico', nombre:'Manual del técnico', fichero:'./manuales/tecnico.md',
+    resumen:'Lo que hace falta para salir a la calle y cerrar una visita.' },
+];
+const manualDisponible = () => MANUALES;
+
+/* Un convertidor de Markdown pequeño, el justo para estos manuales: títulos,
+   negritas, listas, tablas, citas, separadores y código. SE ESCAPA PRIMERO EL
+   HTML y después se aplican las marcas: así un manual no puede meter etiquetas
+   por la puerta de atrás aunque alguien lo edite. */
+function mdAHtml(src){
+  const esc2 = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const linea = s => esc2(s)
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/(^|\s)(https?:\/\/[^\s<]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+  const out = [];
+  const filas = String(src || '').replace(/\r/g, '').split('\n');
+  let lista = false, cita = false, tabla = null;
+  const cerrar = () => {
+    if (lista){ out.push('</ul>'); lista = false; }
+    if (cita){ out.push('</blockquote>'); cita = false; }
+    if (tabla){ out.push('</tbody></table></div>'); tabla = null; }
+  };
+  for (let i = 0; i < filas.length; i++){
+    const f = filas[i], t = f.trim();
+    // tabla: la fila de guiones de debajo de la cabecera es lo que la delata
+    if (/^\|/.test(t) && !tabla && /^\|[\s:|-]+\|$/.test((filas[i+1]||'').trim())){
+      const cab = t.split('|').slice(1, -1).map(x => x.trim());
+      out.push('<div class="tabla-wrap"><table class="tabla"><thead><tr>'+
+        cab.map(x => '<th>'+linea(x)+'</th>').join('')+'</tr></thead><tbody>');
+      tabla = true; i++; continue;
+    }
+    if (tabla && /^\|/.test(t)){
+      out.push('<tr>'+t.split('|').slice(1, -1)
+        .map(x => '<td>'+linea(x.trim())+'</td>').join('')+'</tr>');
+      continue;
+    }
+    if (tabla && !/^\|/.test(t)){ out.push('</tbody></table></div>'); tabla = null; }
+    if (!t){ cerrar(); continue; }
+    if (/^---+$/.test(t)){ cerrar(); out.push('<hr>'); continue; }
+    const h = /^(#{1,4})\s+(.*)$/.exec(t);
+    if (h){ cerrar(); const n = Math.min(h[1].length + 1, 4);
+            out.push('<h'+n+'>'+linea(h[2])+'</h'+n+'>'); continue; }
+    if (/^>\s?/.test(t)){
+      if (!cita){ cerrar(); out.push('<blockquote>'); cita = true; }
+      out.push('<p>'+linea(t.replace(/^>\s?/, ''))+'</p>'); continue;
+    }
+    const li = /^(?:[-*]|\d+\.)\s+(.*)$/.exec(t);
+    if (li){
+      if (!lista){ if (cita){ out.push('</blockquote>'); cita = false; } out.push('<ul>'); lista = true; }
+      out.push('<li>'+linea(li[1])+'</li>'); continue;
+    }
+    if (lista){ out.push('</ul>'); lista = false; }
+    out.push('<p>'+linea(t)+'</p>');
+  }
+  cerrar();
+  return out.join('');
+}
+
+/* Trae el manual. Queda guardado en memoria para no pedirlo en cada pintado, y
+   el service worker lo guarda para que se pueda leer sin cobertura. */
+async function cargarManual(clave){
+  const m = MANUALES.find(x => x.clave === clave);
+  if (!m) return;
+  S.manuales = S.manuales || {};
+  if (S.manuales[clave] !== undefined) return;
+  try {
+    const r = await fetch(m.fichero);
+    S.manuales[clave] = r.ok ? await r.text() : null;
+  } catch(_){ S.manuales[clave] = null; }
+  pintar();
+}
+
+function vistaManual(){
+  const lista = manualDisponible();
+  const clave = S.manual || lista[0].clave;
+  const m = lista.find(x => x.clave === clave) || lista[0];
+  S.manuales = S.manuales || {};
+  const txt = S.manuales[clave];
+  if (txt === undefined){ setTimeout(() => cargarManual(clave), 0); }
+
+  let h = '<div class="stack">';
+  if (lista.length > 1)
+    h += '<div class="fila" style="gap:6px;flex-wrap:wrap">'+
+      lista.map(x => '<button class="btn sm'+(x.clave===clave?' pri':' plana')+'" '+
+        'data-act="manual-ver" data-v="'+x.clave+'">'+esc(x.nombre)+'</button>').join('')+'</div>';
+
+  /* La versión, arriba del manual. El manual dice qué versión describe; si no es
+     la que tienes cargada, lo que leas puede no estar en tu aplicación. Esto es
+     lo que faltaba el 15-10-2026 y costó dos ratos. */
+  const dice = txt ? (txt.match(/\d{4}\.\d{2}\.\d{2}-\d+/) || [])[0] : null;
+  const cuadra = dice && dice === ARIZA_VERSION;
+  h += '<div class="panel"><div class="panel-h"><h2>'+esc(m.nombre)+'</h2>'+
+    '<span class="sp"></span><span class="mini">'+esc(ARIZA_VERSION)+'</span></div>'+
+    '<p class="mini" style="margin:0">'+esc(m.resumen)+'</p>'+
+    (dice && !cuadra
+      ? '<div class="sin-ficha" style="margin-top:10px">Este manual describe la versión <b>'+
+        esc(dice)+'</b> y tú tienes la <b>'+esc(ARIZA_VERSION)+'</b>. Puede que algo esté en otro '+
+        'sitio o todavía no exista. Avisa a la oficina.</div>'
+      : '')+
+    '</div>';
+
+  if (txt === undefined)
+    h += '<div class="panel"><p class="cargando" style="margin:0">Abriendo el manual…</p></div>';
+  else if (txt === null)
+    h += '<div class="panel"><p class="muted" style="margin:0">No se ha podido abrir el manual. '+
+      'Si estás sin cobertura, ábrelo una vez con conexión y a partir de ahí se queda guardado '+
+      'en el aparato.</p></div>';
+  else
+    h += '<div class="panel manual">'+mdAHtml(txt)+'</div>';
+
+  return h + '</div>';
 }
 
 /* ---- Etiquetas ---- */
@@ -15269,6 +15412,7 @@ raiz.addEventListener('click', async e => {
       pintar();
     } catch(err){ fallo(err); }
   }
+  else if (a === 'manual-ver'){ S.manual = b.dataset.v; pintar(); window.scrollTo({top:0}); }
   else if (a === 'version-comprobar'){
     b.disabled = true;
     const v = await versionPublicada();

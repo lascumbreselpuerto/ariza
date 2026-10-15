@@ -515,8 +515,10 @@ const abrirDoc = async (pag, act) => {
   paso('B1 · la aplicación arranca y no pide contraseña',
        await pag.locator('#login').count() === 0 ||
        !(await pag.locator('#login').isVisible()));
-  paso('B1 · con sus diez pestañas',
-       await pag.locator('#tabs button').count() === 10,
+  /* Once desde el 15-10-2026: se añadió «Manual», para que el técnico lleve el
+     manual dentro de la aplicación y pueda leerlo sin cobertura. */
+  paso('B1 · con sus once pestañas',
+       await pag.locator('#tabs button').count() === 11,
        String(await pag.locator('#tabs button').count()));
   const t = await pag.textContent('body');
   paso('B1 · y reconoce al usuario', /David Ariza Arana/.test(t));

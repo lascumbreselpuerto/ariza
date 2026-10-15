@@ -170,6 +170,19 @@ Dos cosas que conviene no olvidar:
   lista tampoco es decorativo: es el orden en que el SQL de restauración inserta,
   y una fila no puede apuntar a otra que todavía no esté.
 
+- **Los manuales se leen DENTRO de la aplicación, y hay una sola copia.** La
+  pestaña «Manual» lee el mismo fichero de `manuales/` que comprueba el banco. No
+  se copia el texto dentro del `index.html`: dos copias del mismo manual se
+  separan solas y entonces una de las dos miente. Hay una comprobación de que el
+  texto NO está duplicado en el index.
+  `preparar.sh` **enlaza** `../manuales` dentro de `pruebas/` (no lo copia) para
+  que el banco pruebe el manual de verdad; el enlace está en el `.gitignore`.
+
+- **La pantalla del manual enseña la versión que tienes y la que el manual
+  describe.** Si no coinciden, lo dice. Es lo que faltaba el 15-10-2026, cuando se
+  perdieron dos ratos buscando en la aplicación cosas que estaban publicadas pero
+  que el aparato no tenía cargadas.
+
 - **La versión se cambia EN CADA ENTREGA, y el banco lo vigila.** La línea es
   `const ARIZA_VERSION` en `index.html`. `version.mjs` falla si tiene más de 30
   días, si está puesta en el futuro, o si no se puede leer del fichero publicado

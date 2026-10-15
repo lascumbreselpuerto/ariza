@@ -114,6 +114,7 @@ FUERZA_12453 FUERZA_MANUAL PUNTOS_12453 limiteDinamico textoLimiteDinamico
 textoFuerzaManual puntosFuerza puntosFuerzaDe perfilFuerza PERFILES_FUERZA
 ARIZA_VERSION ARIZA_VERSION_RE versionPublicada comprobarVersion vigilarVersion
 tarjetaTrabajo dlgCierre vistaMiTrabajo
+vistaManual cargarManual mdAHtml MANUALES
 guardarBorradorPuerta aplicarBorradorPuerta CAMPOS_PUERTA dlgPuerta dlgCliente
 libroExpediente informeSituacion propuestaActuaciones actaEntrega vidaPuerta
 hojaDeCampo libroMantenimiento etiquetaCE documentoDTE documentoCPF hojaParte
@@ -137,6 +138,18 @@ s = s.replace(marca, GANCHO + marca)
 io.open(ruta, 'w', encoding='utf-8').write(s)
 print('index.html de pruebas preparado: %d bytes' % len(s.encode('utf-8')))
 PY
+
+# Los manuales. La aplicación los lee con una ruta relativa a la página, así que
+# en el banco tienen que estar al lado de la copia de pruebas del index.html. Se
+# enlazan, no se copian: así lo que prueba el banco es el manual de verdad y no
+# una copia que se quedaría vieja.
+rm -rf "$AQUI/manuales"
+if [ -d "../manuales" ]; then
+  ln -s "$(cd .. && pwd)/manuales" "$AQUI/manuales"
+  echo "manuales enlazados: $(ls ../manuales | tr '\n' ' ')"
+else
+  echo "AVISO: no hay carpeta ../manuales. La suite de manuales fallará."
+fi
 
 # Playwright. Las suites son módulos ES, y ahí no vale NODE_PATH: hace falta un
 # node_modules en esta carpeta. Si está instalado globalmente, se enlaza.

@@ -34,7 +34,9 @@ const paso = (t, bien, extra='') => { bien ? ok++ : mal++;
 
 paso('la aplicación arranca sin pedir contraseña', await pag.locator('#login').isHidden());
 const nPest = await pag.locator('#tabs button').count();
-paso('monta sus diez pestañas', nPest === 10, String(nPest));
+/* Once desde el 15-10-2026: se añadió «Manual», para que el técnico lleve el
+   manual dentro de la aplicación y pueda leerlo sin cobertura. */
+paso('monta sus once pestañas', nPest === 11, String(nPest));
 paso('y reconoce al usuario', /David Ariza Arana/.test(await pag.textContent('#quien')));
 
 await pag.click('#tabs button[data-tab="puertas"]'); await pag.waitForTimeout(400);
