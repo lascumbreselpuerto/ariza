@@ -1119,7 +1119,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.10.15-3';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.10.15-4';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -2474,6 +2474,8 @@ function vistaFichaCliente(id){
 const MANUALES = [
   { clave:'tecnico', nombre:'Manual del técnico', fichero:'./manuales/tecnico.md',
     resumen:'Lo que hace falta para salir a la calle y cerrar una visita.' },
+  { clave:'formacion', nombre:'Manual de formación', fichero:'./manuales/formacion.md',
+    resumen:'El oficio y el porqué: normas, peligros, ensayo de fuerzas y qué se documenta.' },
 ];
 const manualDisponible = () => MANUALES;
 

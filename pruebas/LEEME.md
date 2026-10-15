@@ -170,6 +170,18 @@ Dos cosas que conviene no olvidar:
   lista tampoco es decorativo: es el orden en que el SQL de restauración inserta,
   y una fila no puede apuntar a otra que todavía no esté.
 
+- **Los números del manual de formación se comparan UNO A UNO con los de la
+  aplicación.** Es material que enseña el oficio a quien todavía no sabe
+  distinguir un límite bueno de uno malo, así que lleva dentro valores
+  normativos. `manuales.mjs` comprueba que Td, la fuerza tras Td, la residual, el
+  tiempo total, los 400 y los 1.400 N, el caso de la superficie plana, las
+  fuerzas de maniobra manual y los puntos de medida de cada forma sean
+  exactamente los que tiene cargados la aplicación. Si alguien cambia uno de los
+  dos lados, el banco se pone en rojo.
+  También comprueba que el manual siga enseñando lo que no está cargado y que la
+  matriz de protección se siga diciendo sin contrastar: un manual de formación
+  que se calle los huecos enseña a no verlos.
+
 - **Los manuales se leen DENTRO de la aplicación, y hay una sola copia.** La
   pestaña «Manual» lee el mismo fichero de `manuales/` que comprueba el banco. No
   se copia el texto dentro del `index.html`: dos copias del mismo manual se

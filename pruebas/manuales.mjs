@@ -20,6 +20,7 @@ import { dirname, join } from 'path';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const URL_APP = process.env.ARIZA_URL || 'http://127.0.0.1:8899/index.html';
 const RUTA = join(AQUI, '..', 'manuales', 'tecnico.md');
+const RUTA_FORM = join(AQUI, '..', 'manuales', 'formacion.md');
 
 const ajustes = JSON.parse(readFileSync(join(AQUI,'ajustes.json'),'utf8'));
 const ENV = { ...process.env, LANG:'es_ES.UTF-8', LANGUAGE:'es_ES:es', LC_ALL:'es_ES.UTF-8' };
@@ -285,6 +286,119 @@ paso('y explica que abriéndolo una vez con conexión se queda guardado',
 /* El manual ya no manda a una pestaña que el técnico no tiene */
 paso('EL MANUAL NO MANDA A «EQUIPO», que el técnico no ve',
   !/\bEquipo\b/.test(M), (M.match(/.{0,40}Equipo.{0,40}/)||[''])[0] || 'no lo nombra');
+
+/* ================================================================
+   9. El manual de formación.
+
+   Es el hermano largo del del técnico: enseña el oficio, no solo la
+   aplicación. Por eso lleva dentro NÚMEROS NORMATIVOS, y ahí está el
+   peligro: un manual de formación con un límite equivocado enseña mal
+   a quien todavía no sabe distinguirlo.
+
+   Lo que más vigila este bloque: que los límites del manual sean
+   EXACTAMENTE los que la aplicación tiene cargados de la norma. Si
+   alguien cambia uno de los dos, esto se pone en rojo.
+   ================================================================ */
+bloque('9. El manual de formación');
+
+paso('el manual de formación está en el repositorio', existsSync(RUTA_FORM));
+const F = existsSync(RUTA_FORM) ? readFileSync(RUTA_FORM, 'utf8') : '';
+paso('y tiene cuerpo de material formativo, no un resumen',
+  F.length > 8000, F.length + ' caracteres');
+paso('dice qué versión describe, y es la actual',
+  (F.match(/\d{4}\.\d{2}\.\d{2}-\d+/g) || []).every(x => x === v) &&
+  F.indexOf(v) >= 0, [...new Set(F.match(/\d{4}\.\d{2}\.\d{2}-\d+/g) || [])].join(','));
+
+const norma = await T(() => {
+  const g = window.__T, Fz = g.FUERZA_12453;
+  return { td: Fz.td_s, trasTd: Fz.tras_td_n, residual: Fz.residual_n, tt: Fz.tt_s,
+           sup: Fz.superficie.n,
+           horizontal: Fz.dinamica.horizontal.map(x => x.n),
+           vertical: Fz.dinamica.vertical.map(x => x.n),
+           paralelo: Fz.dinamica.paralelo.map(x => x.n),
+           manual: g.FUERZA_MANUAL.casos.map(c => [c.normal_n, c.emergencia_n]),
+           puntos: g.PUNTOS_12453 };
+});
+/* Los límites, uno a uno, contra lo que tiene cargado la aplicación */
+paso('Td del manual = Td de la aplicación',
+  F.includes(String(norma.td).replace('.', ',') + ' s'), norma.td);
+paso('la fuerza tras Td coincide', F.includes(norma.trasTd + ' N'), norma.trasTd);
+paso('la fuerza residual coincide', F.includes(norma.residual + ' N'), norma.residual);
+paso('el tiempo total Tt coincide', F.includes(norma.tt + ' s'), norma.tt);
+paso('los 400 N y los 1.400 N son los de la aplicación',
+  norma.horizontal.join(',') === '400,1400' &&
+  F.includes('400 N') && F.includes('1.400 N'), norma.horizontal.join(','));
+paso('Y EL MANUAL ENSEÑA QUE EN VERTICAL SON 400 N EN TODO EL RECORRIDO',
+  norma.vertical.join(',') === '400' &&
+  /\*\*Vertical[^|]*\*\*[^|]*\|[^|]*400 N[^|]*\|[^|]*400 N/.test(F),
+  'aplicación: ' + norma.vertical.join(','));
+paso('y lo marca como el error que hay que grabarse',
+  /movimiento vertical lleva 400 N en todo el recorrido/.test(F));
+/* Ojo: toLocaleString en Node no da el punto de los miles, así que se compara
+   contra el número tal como se escribe en español, que es lo que lleva el manual. */
+const conMiles = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+paso('la superficie plana grande, con su límite',
+  F.includes('0,1 m²') && F.includes(conMiles(norma.sup) + ' N'),
+  conMiles(norma.sup) + ' N');
+
+/* Las fuerzas de maniobra manual */
+norma.manual.forEach(([n, e]) => {
+  paso('la maniobra manual de '+n+' N y '+e+' N está en el manual',
+    F.includes(n + ' N') && F.includes(e + ' N'));
+});
+
+/* Los puntos de medida: lo que enseña tiene que ser lo que la aplicación aplica */
+/* El manual los escribe en una tabla, más apretados («300 mm bajo el borde
+   superior» en vez de «...de la hoja»). Lo que tiene que coincidir es la MEDIDA
+   y la referencia, no la frase entera: se compara normalizando. */
+const norm = x => x.toLowerCase().replace(/ de la hoja/g, '')
+  .replace(/[^a-z0-9áéíóúñ ]/g, '').replace(/\s+/g, ' ').trim();
+const Fn = norm(F);
+const faltan = norma.puntos.corredera.puntos.filter(p => Fn.indexOf(norm(p)) < 0);
+paso('los puntos de la corredera coinciden con los de la aplicación',
+  faltan.length === 0, faltan.join(' | ') || 'los tres');
+const faltanV = norma.puntos.vertical.puntos.filter(p => Fn.indexOf(norm(p)) < 0);
+paso('y los de una puerta de movimiento vertical también',
+  faltanV.length === 0, faltanV.join(' | ') || 'los tres');
+paso('el caso de más de 2.800 mm está enseñado',
+  F.includes('2.800 mm') && F.includes('2.500 mm sobre el suelo'));
+paso('y las tres lecturas por punto',
+  norma.puntos.corredera.lecturas === 3 && /tres lecturas por punto/i.test(F));
+
+/* La parte honrada: lo que NO está cargado tiene que decirse también aquí */
+const sinCargar = await T(() => window.__T.LIM_OBRA_CAMPOS.map(x => x[1]));
+paso('el manual dedica un apartado a lo que todavía no está cargado',
+  /no está cargado|no tiene cargados/i.test(F));
+paso('nombrando los valores que faltan, no en abstracto',
+  sinCargar.filter(n => F.indexOf(n.split(' (')[0].slice(0, 28)) >= 0).length >= 3,
+  sinCargar.join(' | '));
+paso('y diciendo que se mida igualmente',
+  /[Mm]ide y anota igualmente/.test(F));
+paso('la matriz de protección sigue dicha como no contrastada',
+  /sin contrastar con el texto de la norma/.test(F));
+
+/* Que no enseñe la 12453 donde no toca */
+paso('enseña que a las peatonales NO se les aplica la matriz de la 12453',
+  /no se les aplica/.test(F) && /16005/.test(F));
+
+/* Y que esté dentro de la aplicación, como el otro */
+const dosManuales = await T(async () => {
+  const g = window.__T;
+  g.S.tab = 'manual'; g.S.manual = 'formacion'; g.pintar();
+  await new Promise(r => setTimeout(r, 1400));
+  const v2 = document.getElementById('vista');
+  const r = { n: g.MANUALES.length, texto: v2.innerText,
+              botones: Array.from(v2.querySelectorAll('[data-act="manual-ver"]')).map(x=>x.textContent.trim()) };
+  g.S.manual = null; g.pintar();
+  return r;
+});
+paso('hay dos manuales en la aplicación', dosManuales.n === 2, dosManuales.n);
+paso('con botones para pasar de uno a otro',
+  dosManuales.botones.length === 2, dosManuales.botones.join(' | '));
+paso('y el de formación se abre y se lee',
+  /Una puerta automática es una máquina/.test(dosManuales.texto));
+paso('con sus tablas de límites dentro',
+  /1\.400 N/.test(dosManuales.texto) && /Td/.test(dosManuales.texto));
 
 console.log('\n'+ok+' bien, '+mal+' mal.');
 const graves = errores.filter(x => !/fonts\.googleapis|ERR_TUNNEL|ERR_NAME|net::ERR|provocado por la prueba/.test(x));
