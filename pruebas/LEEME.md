@@ -47,6 +47,8 @@ El `index.html` de producción **no se toca nunca**. La copia de pruebas es
 | `fuerzas.mjs` | Las tres vías del ensayo de fuerzas: medido, no procede porque la protección va por detección de presencia, o no se incluye por decisión del firmante. Y que el libro nunca se calla que no hubo ensayo |
 | `componentes.mjs` | El inventario de lo que hay montado en cada puerta: qué componentes le tocan y de dónde sale cada uno, alta y retirada, marcado automático de la seguridad instalada, y el puente con el expediente en los dos sentidos |
 | `ayudas.mjs` | Qué hay que comprobar, cómo y hasta dónde: la guía que lee el técnico en los puntos que citan norma o piden medir. Vigila sobre todo que el método se escriba y los límites NO: los de fuerza se leen de la tabla de la empresa y los de distancia y velocidad nacen vacíos |
+| `version.mjs` | Saber qué versión se está usando: que exista, que no se quede vieja, que se pueda leer del fichero publicado, que avise cuando hay una nueva y que «Luego» no sea «nunca más». También fija el orden de los paneles de Equipo |
+| `manuales.mjs` | Que los manuales no mientan: compara los nombres de pestañas, botones, apartados y campos que el manual promete con los que tiene la aplicación de verdad, y que la versión que dice describir sea la actual |
 | `tipos.mjs` | Qué forma tiene la puerta: el desplegable afinado, el reconocimiento del tipo escrito a mano y su orden, los peligros, componentes y familia que recibe cada forma, y que un tipo que no se reconoce se diga en vez de callarse |
 | `centros.mjs` | El sitio donde están las puertas: que el centro es opcional, que es de un cliente y una puerta no acaba en el sitio de otro, la herencia de la dirección sin pisar lo escrito a mano, los cuatro datos del sitio allí donde el técnico los lee antes de ir, y agrupar las puertas que ya comparten dirección |
 | `basico.mjs` | Los flujos de todos los días: buscador de clientes, enlace puerta-cliente, alta de puerta y de cliente, asistencia, asignación, cierre con firma y parte, contrato, etiquetas y búsquedas |
@@ -167,6 +169,24 @@ Dos cosas que conviene no olvidar:
   lista: se habrían perdido el día que hubiera que restaurar. El orden de esa
   lista tampoco es decorativo: es el orden en que el SQL de restauración inserta,
   y una fila no puede apuntar a otra que todavía no esté.
+
+- **La versión se cambia EN CADA ENTREGA, y el banco lo vigila.** La línea es
+  `const ARIZA_VERSION` en `index.html`. `version.mjs` falla si tiene más de 30
+  días, si está puesta en el futuro, o si no se puede leer del fichero publicado
+  con la misma expresión que usa la aplicación. Nació el 15-10-2026 después de un
+  rato perdido: David buscaba un panel que estaba escrito y publicado pero que su
+  navegador no tenía cargado, y ninguno de los dos podía saber qué versión estaba
+  usando. **Una versión vieja da respuestas viejas.**
+
+- **Los manuales viven en `manuales/` y el banco comprueba lo que cargan peso.**
+  No la redacción, que es de quien escribe: los nombres de las pestañas, de los
+  botones, de los apartados del parte y de los campos, el orden en que salen, y
+  que la versión que el manual dice describir sea la actual. En su primera pasada
+  cazó tres errores: el manual ponía «Cobro en obra» antes que «Cómo queda»
+  cuando la aplicación los pone al revés, escribía un campo en minúscula, y la
+  propia comprobación llevaba el orden escrito a mano. **El orden no se escribe a
+  mano en la prueba: se saca de la aplicación y se comprueba que el manual lo
+  siga.**
 
 - **14-10-2026: los límites de la UNE-EN 12453 dejaron de ser una referencia sin
   contrastar.** David los leyó de su ejemplar de la EN 12453:2017+A1:2021, anexos

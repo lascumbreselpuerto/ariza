@@ -284,6 +284,12 @@ dialog::backdrop{background:rgba(20,18,17,.55)}
 .sitio .seg i{color:var(--mal)}
 .trab-btns{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px}
 .trab-btns a.btn{text-decoration:none}
+/* Aviso de versión nueva. Va arriba del todo y se queda hasta que se recarga o
+   se aparta: una versión vieja da respuestas viejas, y eso cuesta ratos enteros
+   buscando en la aplicación algo que todavía no está instalado. */
+#barra-version{display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+  padding:9px 14px;background:var(--amarillo);color:#1C1817;font-size:14px;font-weight:600}
+#barra-version span{flex:1 1 220px}
 .bloque-hoy{border-color:var(--amarillo);box-shadow:inset 0 0 0 1px var(--amarillo)}
 .bloque-mal .panel-h h2{color:var(--mal)}
 .bloque-sin .panel-h h2{color:var(--muted)}
@@ -378,6 +384,12 @@ dialog::backdrop{background:rgba(20,18,17,.55)}
 
 <!-- App -->
 <div id="app-root" hidden>
+  <!-- Aviso de versión nueva. Oculto hasta que la hay. -->
+  <div id="barra-version" hidden>
+    <span id="barra-version-txt"></span>
+    <button class="btn sm pri" id="btn-recargar">Recargar ahora</button>
+    <button class="btn sm plana" id="btn-version-luego">Luego</button>
+  </div>
   <header class="top">
     <div class="top-in">
       <span class="marca"><i></i>ARIZA <b>SAT</b></span>
@@ -563,7 +575,7 @@ const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etique
             calVista:'mes', calAncla:null, calTec:'', buscaCon:'', conFiltro:'activos', borradorPuerta:null,
             expedientes:[], expFotos:[], expDocs:[], exp:null, expPaso:'obra', expSucio:false,
             fotosEquipo:{}, histBusca:'', histTec:'', histTipo:'', histDesde:'', histHasta:'', histArchivadas:false,
-            cliArchivados:false, centros:[], sinCentros:false };
+            cliArchivados:false, centros:[], sinCentros:false, versionNueva:null, versionAvisada:null };
 /* Importes: solo existen para el administrador. Si no hay tarifas cargadas, no se enseña nada. */
 const valoracionDe = id => S.valoraciones[id] || null;
 const eur = n => (n == null || isNaN(n)) ? '—' :
@@ -1079,6 +1091,64 @@ const avisosDe = id => S.avisos.filter(x => x.puerta_id === id);
 const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comercial');
 
 /* ================= Arranque y sesión ================= */
+/* ===== Versión de la aplicación =====
+   Nació el 15-10-2026 después de un rato perdido: David buscaba en Equipo un
+   panel que yo había escrito pero que su navegador todavía no tenía cargado, y
+   ni él ni yo teníamos forma de saber qué versión estaba usando. Una versión
+   vieja da respuestas viejas y las dos partes se vuelven locas.
+
+   La línea de abajo es la que se cambia EN CADA ENTREGA. El banco de pruebas
+   comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
+   no se quede olvidada. La marca del comentario es por la que se busca al leer el
+   fichero publicado: no se toque. */
+const ARIZA_VERSION = '2026.10.15-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
+
+/* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
+   el service worker tiene orden de no guardar en caché esa dirección, así que lo
+   que vuelve es siempre lo que hay de verdad en el servidor. */
+async function versionPublicada(){
+  try {
+    const r = await fetch('./index.html?v=' + Date.now(), { cache:'no-store' });
+    if (!r.ok) return null;
+    const m = ARIZA_VERSION_RE.exec(await r.text());
+    return m ? m[1] : null;
+  } catch(_){ return null; }   // sin cobertura no se avisa de nada: no es un error
+}
+async function comprobarVersion(){
+  const v = await versionPublicada();
+  if (!v || v === ARIZA_VERSION) return;
+  /* Ojo con esta comparación. Antes era «si ya se avisó, no avisar», a secas, y
+     eso convertía el botón «Luego» en un «no me avises nunca más»: apartabas un
+     aviso y la siguiente versión, y la siguiente, pasaban calladas. Lo que se
+     aparta es ESTA versión concreta. */
+  if (v === S.versionAvisada) return;
+  S.versionNueva = v;
+  const barra = document.getElementById('barra-version');
+  const txt = document.getElementById('barra-version-txt');
+  if (txt) txt.textContent = 'Hay una versión nueva de ARIZA SAT (' + v + '). '+
+    'Tienes la ' + ARIZA_VERSION + '. Recarga para tenerla.';
+  if (barra) barra.hidden = false;
+}
+/* Se mira al entrar, cada media hora, y cada vez que se vuelve a la aplicación
+   después de tenerla en segundo plano, que en un móvil es lo que pasa de verdad. */
+function vigilarVersion(){
+  setTimeout(comprobarVersion, 4000);
+  setInterval(comprobarVersion, 30 * 60 * 1000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) comprobarVersion();
+  });
+  const rec = document.getElementById('btn-recargar');
+  if (rec) rec.addEventListener('click', () => location.reload());
+  const luego = document.getElementById('btn-version-luego');
+  if (luego) luego.addEventListener('click', () => {
+    /* «Luego» calla el aviso de esta versión, no de todas: si mañana sale otra,
+       vuelve a avisar. Lo contrario sería un botón para no enterarse nunca. */
+    S.versionAvisada = S.versionNueva;
+    const b = document.getElementById('barra-version'); if (b) b.hidden = true;
+  });
+}
+
 async function arranque(){
   const tokenK = contratoDeURL();
   if (tokenK){ await vistaContratoPublico(tokenK); return; }
@@ -1094,6 +1164,7 @@ async function entrar(sesion){
   if (!S.user){ $('#login').hidden = false; $('#app-root').hidden = true; return; }
   $('#login').hidden = true; $('#app-root').hidden = false;
   $('#quien').innerHTML = '<span class="dot"></span>' + esc(S.user.email);
+  if (!S.vigilando){ S.vigilando = true; vigilarVersion(); }
   // perfil
   let { data: per } = await sb.from('perfiles').select('*').eq('id', S.user.id).maybeSingle();
   if (!per){
@@ -2619,6 +2690,16 @@ function vistaEquipo(){
        '<div class="campo" style="align-content:end"><button class="btn pri" data-act="equipo-alta">Dar de alta</button></div>'+
        '</div><p class="err" id="t-err" role="alert" style="margin:10px 0 0"></p>'+
        '<p class="mini" style="margin:8px 0 0">Dale la contraseña en persona. Él puede cambiarla desde la pantalla de entrada, con «He olvidado mi contraseña».</p></div>';
+  /* La versión, lo primero del panel de Equipo. Cuando algo no cuadra, lo primero
+     que hay que saber es qué versión se está mirando. */
+  h += '<div class="panel"><div class="panel-h"><h3>Versión de la aplicación</h3>'+
+    '<span class="mini">'+esc(ARIZA_VERSION)+'</span></div>'+
+    '<p class="mini" style="margin:0">Esta es la versión que tienes cargada ahora mismo en este '+
+    'aparato. Si pides ayuda con algo que no cuadra, di este número: con él se sabe exactamente qué '+
+    'tiene la aplicación y qué no.</p>'+
+    '<div class="fila" style="margin-top:10px">'+
+    '<button class="btn sm" data-act="version-comprobar">Comprobar si hay una más nueva</button>'+
+    '<span class="mini">La aplicación lo mira sola al entrar y cada media hora</span></div></div>';
   h += panelEmpresa();
   h += panelCPF();
   h += panelLista('seguridad', 'Elementos de seguridad', SEGURIDAD,
@@ -15187,6 +15268,16 @@ raiz.addEventListener('click', async e => {
       toast(Object.keys(o).length + ' combinaciones guardadas.');
       pintar();
     } catch(err){ fallo(err); }
+  }
+  else if (a === 'version-comprobar'){
+    b.disabled = true;
+    const v = await versionPublicada();
+    b.disabled = false;
+    if (!v) return toast('No se ha podido preguntar al servidor. Mira la cobertura.');
+    if (v === ARIZA_VERSION) return toast('Tienes la última: '+ARIZA_VERSION+'.');
+    S.versionAvisada = null;      // si se había apartado el aviso, vuelve a salir
+    await comprobarVersion();
+    toast('Hay una versión nueva: '+v+'. Recarga para tenerla.');
   }
   else if (a === 'guardar-limobra'){
     /* Un campo vacío se queda vacío: no se rellena con nada. «Sin cargar» es un
