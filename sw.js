@@ -1,8 +1,32 @@
-/* ARIZA SAT: guarda la app en el móvil para que abra rápido y sin cobertura. */
-const CACHE = 'ariza-sat-v3';
+/* ARIZA SAT: guarda la app en el móvil para que abra rápido y sin cobertura.
+
+   EL NOMBRE DE LA CACHÉ LLEVA LA VERSIÓN DENTRO, Y NO ES UN DETALLE.
+   Hasta el 15-10-2026 se llamaba 'ariza-sat-v3' y no cambiaba nunca. Como el
+   paso de activación solo borra las cachés con OTRO nombre, la caché vieja no se
+   tiraba jamás: se quedaba ahí hasta que una recarga la pisara, y si una fallaba
+   o el aparato reabría la aplicación sin recargar, seguía sirviendo una versión
+   de hace semanas. David perdió dos ratos por esto, buscando en la aplicación
+   cosas que estaban publicadas pero que su aparato no tenía.
+
+   Ahora cada entrega estrena caché y la anterior se borra sola al activarse.
+
+   LA VERSIÓN DE AQUÍ TIENE QUE SER LA MISMA QUE LA DE index.html. El banco de
+   pruebas lo comprueba y se pone en rojo si se despistan: si no coincidieran,
+   la caché no se renovaría al entregar y volveríamos al mismo problema. */
+const VERSION = '2026.10.15-2';
+const CACHE = 'ariza-sat-' + VERSION;
 const SHELL = ['./index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
-self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
-self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== CACHE).map(x => caches.delete(x)))).then(() => self.clients.claim())); });
+
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+});
+self.addEventListener('activate', e => {
+  /* Se borra TODA caché que no sea la de esta versión. Con el nombre fijo de
+     antes, esta línea no borraba nunca nada. */
+  e.waitUntil(caches.keys()
+    .then(k => Promise.all(k.filter(x => x !== CACHE).map(x => caches.delete(x))))
+    .then(() => self.clients.claim()));
+});
 
 /* La comprobación de versión nueva pide /index.html?v=<marca de tiempo>. Esa URL
    cambia en cada comprobación: si se guardara, la caché crecería sin parar con

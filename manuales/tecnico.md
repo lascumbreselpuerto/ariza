@@ -3,7 +3,7 @@
 **Para el equipo de Ariza Puertas y Automatismos.**
 Esto no explica el oficio: explica la aplicación. Da por hecho que sabes de puertas.
 
-> **Versión de la aplicación que describe este manual: 2026.10.15-1**
+> **Versión de la aplicación que describe este manual: 2026.10.15-2**
 > Mira la tuya en Equipo, o pregúntasela a la oficina. Si no coincide, puede que
 > algo esté en otro sitio. Cuando salga la barra amarilla diciendo que hay una
 > versión nueva, dale a **Recargar ahora**.
@@ -131,4 +131,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.10.15-1 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.10.15-2 de ARIZA SAT*

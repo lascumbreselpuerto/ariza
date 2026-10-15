@@ -67,6 +67,32 @@ paso('y no está puesta en el futuro, que sería un despiste al escribirla',
   fv <= new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 1), v);
 
 /* ================================================================
+   1b. El service worker y la aplicación van a la par.
+
+   El 15-10-2026 David no veía una versión que estaba publicada desde
+   hacía rato. La causa: el sw.js guardaba la caché con un nombre fijo,
+   'ariza-sat-v3', que no cambiaba nunca. El paso de activación solo
+   borra las cachés con OTRO nombre, así que no borraba ninguna y la
+   copia vieja se servía indefinidamente.
+
+   Ahora el nombre lleva la versión dentro. Si la del sw.js y la del
+   index.html se despistan, la caché no se renovaría al entregar y
+   volveríamos al mismo problema sin enterarnos.
+   ================================================================ */
+bloque('1b. El service worker va a la par');
+
+const sw = readFileSync(join(AQUI, '..', 'sw.js'), 'utf8');
+const vsw = (sw.match(/const VERSION = '([^']+)'/) || [])[1];
+paso('el service worker lleva su propia versión', !!vsw, vsw);
+paso('Y ES LA MISMA que la de la aplicación: si no, la caché no se renueva',
+  vsw === v, 'sw.js: ' + vsw + ' · index.html: ' + v);
+paso('el nombre de la caché LLEVA LA VERSIÓN DENTRO, no es fijo',
+  /const CACHE = 'ariza-sat-' \+ VERSION/.test(sw),
+  (sw.match(/const CACHE = [^;]+/) || [''])[0]);
+paso('y al activarse borra TODA caché que no sea la de esta versión',
+  /caches\.keys\(\)[\s\S]{0,160}filter\(x => x !== CACHE\)[\s\S]{0,60}caches\.delete/.test(sw));
+
+/* ================================================================
    2. Se puede leer del fichero publicado
    ================================================================ */
 bloque('2. Leerla del fichero publicado');
