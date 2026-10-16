@@ -191,6 +191,20 @@ img{max-width:100%}
 .campo .pista.ojo{color:var(--mal);font-weight:600}
 .sin-ficha{background:var(--mal-bg);color:var(--mal);border-radius:6px;padding:8px 10px;font:600 13px var(--sans)}
 
+/* Alta de la puerta en obra: la lista de lo que hay que llevarse de allí */
+.obra-lista{display:grid;gap:0;margin:10px 0 0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.obra-p{padding:9px 11px;border-top:1px solid var(--line);background:var(--surface)}
+.obra-p:first-child{border-top:0}
+.obra-p.falta{background:var(--mal-bg)}
+.obra-p.hecho{background:rgba(42,140,90,.07)}
+.obra-p summary{cursor:pointer;display:flex;gap:8px;align-items:baseline;font-size:14px;line-height:1.4}
+.obra-p summary::marker{color:var(--muted)}
+.obra-p .obra-est{font:700 11px var(--mono);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+.obra-p.falta .obra-est{color:var(--mal)}
+.obra-p.hecho .obra-est{color:var(--ok)}
+.obra-p p{margin:7px 0 0;font-size:13.5px;line-height:1.5;color:var(--texto)}
+.obra-p p.obra-porque{color:var(--muted);font-size:12.5px}
+
 /* Ficha */
 .ficha-h{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
 .ficha-h h2{font-size:24px}
@@ -593,7 +607,7 @@ const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etique
             expedientes:[], expFotos:[], expDocs:[], exp:null, expPaso:'obra', expSucio:false,
             fotosEquipo:{}, histBusca:'', histTec:'', histTipo:'', histDesde:'', histHasta:'', histArchivadas:false,
             cliArchivados:false, centros:[], sinCentros:false, versionNueva:null, versionAvisada:null,
-            manual:null, manuales:null };
+            manual:null, manuales:null, sinObra:false, fotosCuenta:{} };
 /* Importes: solo existen para el administrador. Si no hay tarifas cargadas, no se enseña nada. */
 const valoracionDe = id => S.valoraciones[id] || null;
 const eur = n => (n == null || isNaN(n)) ? '—' :
@@ -1068,6 +1082,13 @@ async function cargar(){
   const ce = await sb.from('centros').select('*').order('nombre').range(0, 19999);
   S.centros = ce.error ? [] : (ce.data || []);
   S.sinCentros = !!ce.error;
+  /* La matrícula de la puerta y el motivo de que no la haya son dos columnas que
+     se añaden con servidor/obra.sql. Si todavía no se ha ejecutado, la aplicación
+     sigue funcionando: no guarda esos dos campos y el mínimo de obra se cumple con
+     la matrícula de los componentes, que sí se puede tomar igual. Se pregunta por
+     una columna concreta a propósito: un select('*') no falla aunque no exista. */
+  const ob = await sb.from('puertas').select('matricula').limit(1);
+  S.sinObra = !!ob.error;
   if (!j.error){ S.ajustes = {}; (j.data || []).forEach(x => { S.ajustes[x.clave] = x.valor; }); }
   // materiales ya usados, para ir sugiriéndolos al técnico
   const m = await sb.from('materiales').select('descripcion, unidad').limit(500);
@@ -1119,7 +1140,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.10.15-4';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.10.15-5';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -1401,6 +1422,7 @@ function vistaFicha(id){
   const d = [['Tipo',p.tipo],['Uso',p.uso],['Tipo de cliente',p.tipo_cliente],['Marca',p.marca],['Modelo',p.modelo],
     ['Cuadro de maniobra',p.cuadro],['Motor',p.motor],['Año',p.anio],['Instalador',p.instalador],
     ['Medidas',(p.ancho_mm||p.alto_mm)?((p.ancho_mm||'?')+' x '+(p.alto_mm||'?')+' mm'):''],['Peso hoja',p.peso_kg?(p.peso_kg+' kg'):''],
+    ['Matrícula',p.matricula],['Sin matrícula',p.sin_matricula],
     ['Última revisión',p.ultima_revision?fechaCorta(p.ultima_revision):''],['Próxima revisión',p.proxima_revision?(fechaCorta(p.proxima_revision)+' · '+relativo(p.proxima_revision)):'']];
   d.forEach(x => { if (x[1]) h += '<div><dt>'+x[0]+'</dt><dd>'+esc(x[1])+'</dd></div>'; });
   h += '</dl>';
@@ -1711,6 +1733,22 @@ function tarjetaTrabajo(a){
     (a.descripcion ? '<p class="trab-desc">'+esc(a.descripcion)+'</p>' : '')+
     (a.notas_oficina ? '<p class="nota-oficina">Oficina: '+esc(a.notas_oficina)+'</p>' : '')+
     bloqueSitio(p)+
+    /* ---- Aviso de alta en obra ----
+       Sale en la tarjeta, antes de salir de casa, y no al llegar al parte: si el
+       técnico sabe desde la furgoneta que esa puerta hay que documentarla, se
+       lleva el flexómetro y cuenta con el tiempo. Las fotos no se cuentan aquí
+       (haría una consulta por tarjeta); se cuentan en el parte y al cerrar. */
+    (() => {
+      if (!obligaAltaObra(a)) return '';
+      const m = minimoObra(a.puerta_id ? (puertaDe(a.puerta_id) || null) : null, null);
+      if (m.sinFicha) return '<p class="nota-oficina" style="border-left-color:var(--mal)">'+
+        '<b>Puerta sin documentar.</b> No tiene ficha ni QR: hay que darla de alta en obra, con '+
+        'medidas, fotos y matrículas. Sin eso no se cierra la visita.</p>';
+      const f = m.faltan.filter(x => !x.duda);
+      if (!f.length) return '';
+      return '<p class="nota-oficina" style="border-left-color:var(--mal)"><b>Falta documentar la puerta:</b> '+
+        esc(f.map(x => x.texto.toLowerCase()).join('; '))+'.</p>';
+    })()+
     '<div class="trab-btns">'+
       (tel ? '<a class="btn sm" href="tel:'+esc(tel.replace(/\s/g,''))+'">Llamar'+
              (a.contacto_nombre ? ' a '+esc(a.contacto_nombre.split(' ')[0]) : '')+'</a>' : '')+
@@ -5692,6 +5730,139 @@ function seguridadSegunComponentes(p){
   const fuera = ya.slice();
   extra.forEach(n => { if (!fuera.includes(n)) fuera.push(n); });
   return fuera;
+}
+
+/* ================================================================
+   ALTA DE LA PUERTA EN OBRA
+
+   El problema: una puerta que no está dada de alta no existe para la empresa.
+   No tiene ficha, no tiene QR, no tiene historial, no tiene expediente y no se
+   le puede sacar una hoja de campo. Y el único momento en que se puede
+   documentar de verdad es cuando el técnico está delante de ella: las medidas se
+   toman con el flexómetro allí, las fotos se hacen allí y la placa de
+   características se lee allí. Vuelto al taller ya no se puede, y lo que pasa
+   entonces es que no se documenta nunca.
+
+   Así que en las asistencias que tocan la puerta de lleno (montarla, ponerla en
+   servicio, adecuarla a normativa o revisarla) el alta no es una opción: es
+   parte del trabajo, y la aplicación no deja cerrar la visita sin ella.
+
+   Qué se exige y por qué cada cosa:
+     · Ficha: sin ella no hay nada donde colgar lo demás.
+     · Etiqueta con QR: es lo que identifica la puerta en obra y lo que escanea
+       el cliente. Única excepción admitida: que no queden etiquetas libres,
+       porque eso no lo puede resolver el técnico allí.
+     · Tipo de puerta: de él salen el guión de revisión, los peligros propios,
+       los puntos de medida de fuerzas y el límite que se les aplica. Sin tipo,
+       la aplicación no puede decirle al técnico lo que tiene que comprobar.
+     · Ancho y alto en mm: se miden en obra y no se pueden deducir después. De
+       la altura dependen además los puntos de medida de la EN 12453.
+     · Dos fotos: el conjunto y la placa o el cuadro. Una foto de la placa vale
+       más que tres campos rellenados de memoria.
+     · Matrícula: marca, modelo y número de serie de lo que ya está puesto. Es lo
+       que permite pedir un repuesto sin volver a mirar, y lo que decide el marco
+       legal de la puerta. Si no hay placa o no se puede leer, se dice por qué:
+       eso también es un dato, y queda escrito.
+
+   El peso de la hoja NO se exige: no se puede pesar una hoja en obra sin
+   báscula ni ficha del fabricante. Se pide como recomendado, no como mínimo.
+   ================================================================ */
+const ALTA_OBRA_OBLIGA = ['instalacion','puesta_servicio','normativa','mantenimiento'];
+const MIN_FOTOS_OBRA = 2;
+const obligaAltaObra = a => !!a && ALTA_OBRA_OBLIGA.includes(a.tipo);
+
+/* Hay matrícula tomada si está escrita en la ficha, o si algún componente de la
+   puerta lleva su número de serie o, al menos, marca y modelo: la placa del motor
+   y la del cuadro son matrículas igual que la del conjunto. */
+function matriculaTomada(p){
+  if (!p) return false;
+  if (String(p.matricula || '').trim()) return true;
+  return componentesDe(p.id).some(c => c.activo !== false &&
+    (String(c.num_serie || '').trim() || (String(c.marca || '').trim() && String(c.modelo || '').trim())));
+}
+
+/* El mínimo que hay que llevarse de la obra. nFotos a null significa «todavía no
+   se ha contado»: entonces el punto de las fotos queda en duda y no se da por
+   bueno, porque el cierre lo vuelve a contar antes de dejar firmar. */
+function minimoObra(p, nFotos){
+  const puntos = [];
+  const mete = (clave, texto, que, ok, extra) =>
+    puntos.push(Object.assign({ clave, texto, que, ok: !!ok, duda: ok === null }, extra || {}));
+
+  if (!p){
+    mete('ficha', 'Dar de alta la puerta', 'Crea la ficha desde este mismo parte. Queda enganchada a la '+
+      'asistencia y el resto de los datos se cuelgan de ella.', false);
+    return { puntos, faltan: puntos, bloquean: puntos, completo: false, sinFicha: true };
+  }
+
+  const usadas = new Set(S.puertas.filter(x => x.id !== p.id).map(x => x.codigo));
+  const libres = (S.etiquetas || []).filter(e => !usadas.has(e.codigo)).length;
+
+  mete('ficha', 'Ficha de la puerta creada', 'Ya está. El resto se cuelga de aquí.', true);
+  mete('etiqueta', 'Etiqueta con QR pegada y asignada',
+    'Pega una etiqueta de la furgoneta en un sitio visible y protegido, y elígela en la ficha. '+
+    'Es lo que identifica esta puerta para siempre y lo que escanea el cliente.',
+    !!String(p.codigo || '').trim(),
+    (!String(p.codigo || '').trim() && !libres)
+      ? { imposible: true, porque: 'No quedan etiquetas libres, y eso no se resuelve en obra. Se cierra la '+
+          'visita dejándolo como pendiente, y la etiqueta se pega en la siguiente.' } : null);
+  mete('tipo', 'Tipo de puerta',
+    'Elígelo en la ficha. De él salen el guión de revisión, los peligros propios de esa puerta, '+
+    'los puntos de medida de fuerzas y el límite que se les aplica.',
+    !!String(p.tipo || '').trim());
+  mete('medidas', 'Ancho y alto del hueco, en mm',
+    'Mide el paso libre: ancho entre jambas y alto desde el suelo acabado hasta el dintel. '+
+    'En milímetros y con el flexómetro, no a ojo. De la altura dependen además los puntos '+
+    'de medida del ensayo de fuerzas.',
+    (+p.ancho_mm > 0 && +p.alto_mm > 0));
+  mete('fotos', MIN_FOTOS_OBRA+' fotos de la puerta',
+    'Como mínimo dos: una del conjunto desde donde se vea entera, y otra de la placa de '+
+    'características o del cuadro de maniobra abierto. Si hay daños o algo fuera de norma, '+
+    'una foto más de eso.',
+    nFotos == null ? null : (nFotos >= MIN_FOTOS_OBRA));
+  mete('matricula', 'Matrícula de lo que hay puesto',
+    'Copia la placa: marca, modelo y número de serie. Vale la de la puerta, la del motor o la '+
+    'del cuadro, y lo normal es tomar las tres. Si no hay placa o está ilegible, escríbelo en '+
+    '«Si no tiene placa» y queda documentado.',
+    matriculaTomada(p) || !!String(p.sin_matricula || '').trim());
+
+  const faltan = puntos.filter(x => !x.ok);
+  return { puntos, faltan,
+           bloquean: faltan.filter(x => !x.imposible),
+           completo: !faltan.length, sinFicha: false };
+}
+
+/* Lo que no es mínimo pero conviene llevarse si está a mano. No bloquea nada:
+   se enseña para que el técnico que tiene dos minutos lo complete. */
+function recomendadoObra(p){
+  if (!p) return [];
+  const out = [];
+  if (!p.cliente_id) out.push('Enlazar la puerta con la ficha del cliente');
+  if (!String(p.uso || '').trim()) out.push('Uso de la puerta');
+  if (!+p.peso_kg) out.push('Peso de la hoja, si lo da la placa o el fabricante');
+  if (!String(p.cuadro || '').trim()) out.push('Cuadro de maniobra: marca y modelo');
+  if (!String(p.motor || '').trim()) out.push('Motor: marca y modelo');
+  if (!componentesDe(p.id).length) out.push('Dar de alta los componentes que lleva montados');
+  return out;
+}
+
+/* Cuántas fotos tiene la puerta ahora mismo. Se pregunta a la base de datos y no
+   se fía de ninguna caché: lo que decide si se puede cerrar la visita no puede
+   depender de un número que se quedó viejo. */
+async function contarFotos(puertaId){
+  if (!puertaId) return 0;
+  try {
+    const { count, error } = await sb.from('fotos')
+      .select('id', { count:'exact', head:true }).eq('puerta_id', puertaId);
+    if (error) throw error;
+    const n = count || 0;
+    S.fotosCuenta[puertaId] = n;
+    return n;
+  } catch(_){
+    /* Sin red no se puede contar. Se devuelve lo último que se supo, y si no se
+       supo nada, cero: más vale pedir una foto de más que cerrar sin ninguna. */
+    return S.fotosCuenta[puertaId] || 0;
+  }
 }
 
 
@@ -12760,6 +12931,24 @@ dlgForm.addEventListener('change', e => {
   if (t.id === 'a-puerta'){ clienteDeLaPuertaDelAviso(); return; }
   // Puerta: al elegir centro, su dirección baja a la puerta
   if (t.id === 'f-centro'){ centroElegido(); return; }
+  /* ---- Ficheros elegidos DENTRO de un diálogo ----
+     El <dialog> no está dentro de #vista, así que lo que pasa en él no llega al
+     oyente de la vista. Mientras esto no estuvo aquí, los botones de foto y de
+     papel del componente no hacían nada: se elegía el fichero y no subía, sin
+     ningún error. Las fotos del alta en obra van por el mismo sitio. */
+  if (t.dataset && t.dataset.act === 'obra-foto' && t.files && t.files.length){
+    const av = S.avisos.find(x => x.id === t.dataset.aviso);
+    const ficheros = Array.from(t.files);
+    t.value = '';
+    subirFotos(t.dataset.id, ficheros).then(() => { if (av) pintarAltaObra(av); });
+    return;
+  }
+  if (t.dataset && t.dataset.act === 'comp-foto' && t.files && t.files.length){
+    subirDeComponente(t.dataset.id, t.files[0], 'foto'); t.value = ''; return;
+  }
+  if (t.dataset && t.dataset.act === 'comp-doc' && t.files && t.files.length){
+    subirDeComponente(t.dataset.id, t.files[0], 'doc'); t.value = ''; return;
+  }
   if (t.id === 'k-dur' || t.id === 'k-alta'){
     const dur = +val('k-dur'), alta = val('k-alta') || hoy();
     const venc = document.getElementById('k-venc');
@@ -12797,7 +12986,7 @@ async function guardarLista(clave, arr){
 /* Campos del alta de puerta, para poder recuperarlos si se sale a crear un cliente */
 const CAMPOS_PUERTA = ['f-cod','f-cbusca','f-clid','f-centro','f-dir','f-ubi','f-tcliente','f-tipo','f-uso',
   'f-marca','f-modelo','f-cuadro','f-motor','f-anio','f-instalador','f-ancho','f-alto','f-peso',
-  'f-ult','f-prox','f-notas'];
+  'f-matricula','f-sinmat','f-ult','f-prox','f-notas'];
 function guardarBorradorPuerta(){
   const b = {};
   CAMPOS_PUERTA.forEach(id => { const e = document.getElementById(id); if (e) b[id] = e.value; });
@@ -13068,6 +13257,22 @@ function dlgPuerta(id, avisoId){
   h += '<div class="grupo"><h3>Identificación</h3><div class="campos">'+
     '<div class="campo"><label for="f-cod">Etiqueta / código</label><select id="f-cod">'+opts(libres, d.codigo)+'</select><span class="pista">'+(libres.length?'Elige la etiqueta que acabas de pegar':'No quedan etiquetas libres: genera una serie')+'</span></div>'+
     '<div class="campo"><label for="f-tcliente">Tipo de cliente</label><select id="f-tcliente">'+opts(lista('clientes', CLIENTES), d.tipo_cliente)+'</select></div>'+
+    /* ---- La matrícula ----
+       La placa de características de la puerta es lo que dice de verdad quién la
+       fabricó, qué modelo es y de qué año, y es el dato que decide el marco legal
+       que se le aplica. Se copia en obra, tal y como está escrita en la placa, sin
+       interpretarla. Si no hay placa o no se puede leer, eso también es un dato: se
+       escribe por qué y queda documentado en vez de quedar en blanco. */
+    (S.sinObra ? '' :
+      '<div class="campo full"><label for="f-matricula">Matrícula o placa de características</label>'+
+      '<input id="f-matricula" type="text" maxlength="200" value="'+esc(d.matricula||'')+'" '+
+        'placeholder="Ej.: Hörmann SPU F42, nº 4471-2019">'+
+      '<span class="pista">Cópiala tal y como está en la placa: marca, modelo, número de serie y año. '+
+      'La del motor y la del cuadro van en sus componentes.</span></div>'+
+      '<div class="campo full"><label for="f-sinmat">Si no tiene placa o no es legible, di por qué</label>'+
+      '<input id="f-sinmat" type="text" maxlength="200" value="'+esc(d.sin_matricula||'')+'" '+
+        'placeholder="Ej.: puerta de taller de los años 80, sin placa; el motor sí tiene y va en su componente">'+
+      '<span class="pista">Esto cuenta como dato tomado. Dejarlo en blanco sin matrícula, no.</span></div>')+
     '</div></div>';
   h += '<div class="grupo"><h3>La puerta</h3><div class="campos">'+
     '<div class="campo"><label for="f-tipo">Tipo</label><select id="f-tipo">'+opts(lista('tipos', TIPOS), d.tipo)+'</select></div>'+
@@ -13115,6 +13320,7 @@ function dlgPuerta(id, avisoId){
        de puertas. Y si el centro elegido no es del cliente que queda enlazado, no
        se guarda: una puerta no puede estar en el sitio de otro cliente. */
     if (!S.sinCentros) o.centro_id = val('f-centro') || null;
+    if (!S.sinObra){ o.matricula = val('f-matricula') || null; o.sin_matricula = val('f-sinmat') || null; }
     if (!o.cliente && !o.direccion) return setErr('Pon al menos el cliente o la dirección.');
     o.cliente_id = val('f-clid') || null;
     try {
@@ -13289,7 +13495,9 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
    Si viene `clave`, es uno del catálogo que se estaba echando en falta; si no, es
    un componente escrito a mano, que también vale: en una puerta vieja puede haber
    cosas que no estén en ninguna lista. */
-function dlgComponente(id, puertaId, clave){
+/* volverAviso: si se ha llegado aquí desde un parte (el alta en obra), al guardar
+   se vuelve a ese parte en vez de dejar al técnico en la ficha de la puerta. */
+function dlgComponente(id, puertaId, clave, volverAviso){
   const c = id ? (S.componentes || []).find(x => x.id === id) : null;
   const pid = (c && c.puerta_id) || puertaId;
   const p = puertaDe(pid);
@@ -13358,6 +13566,7 @@ function dlgComponente(id, puertaId, clave){
       await sincronizarSeguridad(pid);
       pintar();
       toast(c ? 'Componente guardado.' : 'Componente añadido.');
+      if (volverAviso) dlgCierre(volverAviso);
     } catch(e){ setErr(e.message || 'No se pudo guardar.'); }
   });
 }
@@ -14180,9 +14389,14 @@ function dlgCierre(avisoId){
   h += '<div class="grupo"><h3>'+esc(nombreCliente(a))+(p?(' · '+esc(p.codigo||'')):'')+'</h3>';
   if (a.descripcion) h += '<p class="mini" style="margin:0 0 8px"><b>Dijo el cliente:</b> '+esc(a.descripcion)+'</p>';
   if (a.notas_oficina) h += '<p class="nota-oficina">Oficina: '+esc(a.notas_oficina)+'</p>';
-  if (!p) h += '<p class="mini" style="margin:8px 0 0">Esta asistencia no tiene puerta asignada. '+
+  if (!p && !obligaAltaObra(a)) h += '<p class="mini" style="margin:8px 0 0">Esta asistencia no tiene puerta asignada. '+
     '<button type="button" class="btn sm" data-act="alta-puerta-asis" data-id="'+a.id+'">Dar de alta la puerta</button></p>';
   h += '</div>';
+
+  /* El alta en obra va aquí, antes de todo lo demás: en estos tipos de asistencia
+     documentar la puerta es parte del trabajo, no un extra. Las fotos se cuentan
+     después, al preparar el parte, porque hay que preguntarlo a la base de datos. */
+  if (obligaAltaObra(a)) h += bloqueAltaObra(a, p, null);
 
   h += '<div class="grupo"><h3>Qué has encontrado y qué has hecho</h3><div class="campos">'+
     '<div class="campo full"><label for="z-diag">Diagnóstico</label><textarea id="z-diag" rows="2" placeholder="Ej.: banda de seguridad cortada por roce con el marco">'+esc(a.diagnostico||'')+'</textarea></div>'+
@@ -14259,6 +14473,95 @@ function dlgCierre(avisoId){
 
   abrirDlg(h, () => guardarCierre(a, true));
   setTimeout(() => prepararCierre(a), 0);
+}
+
+/* ---- El recuadro del alta en obra, dentro del parte ----
+   Va arriba, antes del diagnóstico, por un motivo práctico: si sale al final, el
+   técnico lo lee cuando ya está firmando y con el cliente delante, y entonces ya
+   no quiere volver a la puerta a medir. Arriba lo lee al empezar a rellenar, que
+   es cuando todavía está allí.
+
+   Cada punto se abre y dice qué hay que tomar y cómo. Los que faltan salen
+   abiertos; los que ya están, cerrados y en verde. No hay ningún punto que se
+   pueda marcar a mano: cada uno se pone en verde solo cuando el dato está de
+   verdad en la base de datos. */
+function bloqueAltaObra(a, p, nFotos){
+  const m = minimoObra(p, nFotos);
+  let h = '<div class="grupo" id="obra-bloque"><h3>Documentar la puerta en obra</h3>'+
+    '<p class="mini" style="margin:0">Esta visita es de <b>'+esc(tipoAsis(a.tipo))+'</b>, así que la puerta '+
+    'tiene que quedar documentada antes de cerrar. Lo que se toma aquí no se puede tomar después: las '+
+    'medidas, las fotos y la placa están en la puerta, no en la oficina.</p>';
+
+  if (m.sinFicha){
+    h += '<div class="sin-ficha" style="margin-top:10px">Esta puerta no tiene ficha ni etiqueta con QR: '+
+      'para la empresa todavía no existe. Hay que darla de alta ahora, aquí mismo.</div>'+
+      '<p class="mini" style="margin:8px 0 0">Se guarda lo que ya hayas escrito en el parte, se abre el '+
+      'alta, y al guardarla vuelves a este parte con la puerta ya enganchada.</p>'+
+      '<div class="fila" style="gap:8px;margin-top:10px">'+
+      '<button type="button" class="btn pri sm" data-act="alta-puerta-asis" data-id="'+a.id+'">Dar de alta la puerta</button>'+
+      '</div></div>';
+    return h;
+  }
+
+  h += '<div class="obra-lista">'+ m.puntos.map(x => {
+    const estado = x.ok ? 'Hecho' : (x.duda ? 'Contando' : (x.imposible ? 'No se puede' : 'Falta'));
+    const clase  = x.ok ? 'hecho' : (x.duda ? '' : 'falta');
+    return '<details class="obra-p '+clase+'"'+((!x.ok && !x.duda) ? ' open' : '')+'>'+
+      '<summary><span class="obra-est">'+estado+'</span><span>'+esc(x.texto)+'</span></summary>'+
+      '<p>'+esc(x.que)+'</p>'+
+      (x.porque ? '<p class="obra-porque">'+esc(x.porque)+'</p>' : '')+
+      '</details>';
+  }).join('') +'</div>';
+
+  h += '<div class="fila" style="gap:8px;flex-wrap:wrap;margin-top:10px">'+
+    '<button type="button" class="btn sm" data-act="obra-ficha" data-id="'+a.id+'">Rellenar la ficha de la puerta</button>'+
+    '<label class="btn sm">Hacer fotos<input type="file" accept="image/*" capture="environment" multiple hidden '+
+      'data-act="obra-foto" data-id="'+esc(p.id)+'" data-aviso="'+a.id+'"></label>'+
+    '<button type="button" class="btn sm" data-act="obra-comp" data-id="'+a.id+'">Añadir la matrícula de un elemento</button>'+
+    '</div>'+
+    '<p class="mini" style="margin:8px 0 0">Las fotos se suben desde aquí sin salir del parte. '+
+    'Para la ficha y las matrículas se guarda lo escrito y se vuelve solo.</p>';
+
+  /* Lo recomendado va aparte y plegado: no bloquea nada y no tiene que competir
+     por la atención con lo que sí hay que hacer. El peso de la hoja vive aquí
+     justamente porque en obra no hay báscula. */
+  const rec = recomendadoObra(p);
+  if (rec.length)
+    h += '<details class="obra-p" style="border:1px solid var(--line);border-radius:8px;margin-top:10px">'+
+      '<summary><span class="obra-est">Recomendado</span><span>'+rec.length+
+      (rec.length === 1 ? ' dato más, si está a mano' : ' datos más, si están a mano')+'</span></summary>'+
+      '<p>'+rec.map(esc).join(' · ')+'</p>'+
+      '<p class="obra-porque">Esto no impide cerrar la visita. El peso de la hoja está aquí y no '+
+      'arriba porque en obra no hay báscula: se copia de la placa o de la ficha del fabricante, si la hay.</p>'+
+      '</details>';
+
+  if (S.sinObra)
+    h += '<p class="mini" style="margin:8px 0 0">Falta ejecutar en la base de datos el SQL de obra, '+
+      'así que la ficha de la puerta todavía no tiene los campos de matrícula. Hasta entonces, la '+
+      'matrícula se toma dando de alta el motor o el cuadro como componente con su número de serie.</p>';
+
+  if (m.completo)
+    h += '<p class="mini" style="margin:10px 0 0;color:var(--ok);font-weight:600">'+
+      'El mínimo de obra está completo.</p>';
+  else if (!m.bloquean.length)
+    h += '<div class="sin-ficha" style="margin-top:10px;background:var(--aviso-bg);color:var(--aviso)">'+
+      'Lo que falta no se puede resolver en obra. Se puede cerrar la visita, pero queda como pendiente.</div>';
+  else
+    h += '<div class="sin-ficha" style="margin-top:10px">Falta '+m.bloquean.length+
+      (m.bloquean.length === 1 ? ' punto' : ' puntos')+' del mínimo de obra. La visita no se cierra sin eso.</div>';
+
+  return h + '</div>';
+}
+
+/* Vuelve a pintar el recuadro con las fotos contadas de verdad. Se llama al abrir
+   el parte y después de cada foto subida. */
+async function pintarAltaObra(a){
+  if (!document.getElementById('obra-bloque')) return;
+  const p = a.puerta_id ? puertaDe(a.puerta_id) : null;
+  const n = p ? await contarFotos(p.id) : 0;
+  const cont = document.getElementById('obra-bloque');   // puede haberse cerrado el parte mientras contaba
+  if (!cont) return;
+  cont.outerHTML = bloqueAltaObra(a, p, n);
 }
 
 /* Guión de revisión: los puntos del tipo de puerta, en bloques que se abren y cierran */
@@ -14359,6 +14662,8 @@ function repintarCuentas(){
 }
 
 async function prepararCierre(a){
+  // el alta en obra, con las fotos contadas de verdad
+  if (obligaAltaObra(a)) pintarAltaObra(a);
   // materiales ya guardados
   const cont = document.getElementById('mats');
   if (cont){
@@ -14479,6 +14784,38 @@ async function guardarCierre(a, cerrando){
   }
   if (cerrando){
     if (!o.trabajo) return setErr('Escribe al menos qué has hecho.');
+    /* ---- El alta en obra, antes de la firma ----
+       En instalación, puesta en servicio, adecuación a normativa y preventiva, la
+       puerta tiene que quedar documentada. Esto no se comprueba con lo que haya en
+       pantalla sino con lo que hay guardado, y las fotos se cuentan otra vez contra
+       la base de datos: un parte abierto hace media hora puede traer un número de
+       fotos que ya no es el bueno. */
+    if (obligaAltaObra(a)){
+      const pu = a.puerta_id ? puertaDe(a.puerta_id) : null;
+      const nf = pu ? await contarFotos(pu.id) : 0;
+      const m = minimoObra(pu, nf);
+      if (m.sinFicha)
+        return setErr('Esta visita es de '+tipoAsis(a.tipo)+' y la puerta no está dada de alta. '+
+          'Dale a «Dar de alta la puerta» aquí arriba: no se puede cerrar sin ficha.');
+      if (m.bloquean.length){
+        const bl = document.getElementById('obra-bloque');
+        if (bl) bl.scrollIntoView({ block:'start' });
+        return setErr('Falta documentar la puerta en obra: '+
+          m.bloquean.map(x => x.texto.toLowerCase()).join('; ')+'. Está arriba, en «Documentar la puerta en obra».');
+      }
+      /* Lo que no se puede resolver allí (que no queden etiquetas libres) no bloquea,
+         pero tampoco se queda sin rastro: la visita se cierra señalada como pendiente
+         y la oficina lo ve en su lista. */
+      if (m.faltan.length){
+        const texto = m.faltan.map(x => x.texto).join('; ');
+        o.pendiente = true;
+        o.pendiente_texto = o.pendiente_texto
+          ? (/obra|etiqueta|matr[íi]cula|foto|medida/i.test(o.pendiente_texto)
+              ? o.pendiente_texto : texto+'. '+o.pendiente_texto)
+          : texto+' (no se pudo hacer en obra)';
+        toast('Se cierra dejándolo pendiente: '+texto+'.');
+      }
+    }
     /* Sin horas, la visita se valora en 0 € y desaparece de «pendiente de facturar»:
        queda cerrada, firmada y sin cobrar, y nada lo señala. Así que o se ponen las
        horas, o se dice expresamente que esta visita no se cobra. */
@@ -15769,6 +16106,21 @@ dlgForm.addEventListener('click', async e => {
       if (document.getElementById('z-trab')) return;
     } else cerrarDlg();
     dlgPuerta(null, id);
+    return;
+  }
+  /* Los dos atajos del alta en obra. Salen del parte, así que primero se guarda el
+     avance, igual que el alta de puerta: lo escrito no se pierde, y al guardar la
+     ficha o el componente se vuelve solo a este mismo parte. */
+  if (a === 'obra-ficha' || a === 'obra-comp'){
+    const id = b.dataset.id;
+    const av = S.avisos.find(x => x.id === id);
+    if (!av || !av.puerta_id) return;
+    if (document.getElementById('z-trab')){
+      await guardarCierre(av, false);
+      if (document.getElementById('z-trab')) return;
+    } else cerrarDlg();
+    if (a === 'obra-ficha') dlgPuerta(av.puerta_id, id);
+    else dlgComponente(null, av.puerta_id, '', id);
     return;
   }
   if (a === 'cerrar-asistencia'){ cerrarDlg(); dlgCierre(b.dataset.id); return; }
