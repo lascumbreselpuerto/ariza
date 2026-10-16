@@ -1,0 +1,649 @@
+/* ================================================================
+   obra.mjs — el alta obligatoria de la puerta en obra.
+
+   Por qué existe: una puerta que no está dada de alta no existe para
+   la empresa. No tiene ficha, ni QR, ni historial, ni expediente, y no
+   se le puede sacar una hoja de campo. Y el único momento en que se
+   puede documentar de verdad es cuando el técnico está delante de ella:
+   las medidas se toman con el flexómetro allí, las fotos se hacen allí
+   y la placa se lee allí. Vuelto al taller ya no se puede.
+
+   Lo que fija esta suite:
+     1. Qué asistencias obligan a documentar y cuáles no.
+     2. Sin ficha no se cierra: ni con firma ni con horas.
+     3. Cada punto del mínimo bloquea por sí solo.
+     4. La matrícula se puede tomar de tres maneras, y las tres valen.
+     5. Las fotos se cuentan en la base de datos, no en la pantalla.
+     6. Lo que no se puede resolver en obra no bloquea, pero deja la
+        visita señalada como pendiente.
+     7. Con el mínimo completo, la visita se cierra.
+     8. El aviso sale en la tarjeta de trabajo, antes de salir de casa.
+     9. Lo recomendado no bloquea nada.
+    10. Una avería corriente no pide nada de esto.
+    11. Los dos campos nuevos de la ficha se guardan y se recuperan.
+   ================================================================ */
+import { chromium } from 'playwright';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+const AQUI = dirname(fileURLToPath(import.meta.url));
+const URL_APP = process.env.ARIZA_URL || 'http://127.0.0.1:8899/index.html';
+
+const ajustes = JSON.parse(readFileSync(join(AQUI,'ajustes.json'),'utf8'));
+const ENV = { ...process.env, LANG:'es_ES.UTF-8', LANGUAGE:'es_ES:es', LC_ALL:'es_ES.UTF-8' };
+const nav = await chromium.launch({ env: ENV, args:['--lang=es-ES'] });
+const errores = [];
+const ctx = await nav.newContext({ viewport:{width:1320,height:1800}, locale:'es-ES', timezoneId:'Europe/Madrid' });
+await ctx.addInitScript(a => { window.__AJUSTES = a; }, ajustes);
+await ctx.addInitScript(() => {
+  window.__PARCHE = db => {
+    db.ajustes.push({ clave:'empresa', valor:{
+      razon_social:'Ariza Puertas y Automatismos S.L.U.', nif:'B72004849',
+      domicilio:'Calle Orilla 19', cp:'11500', poblacion:'El Puerto de Santa María',
+      provincia:'Cádiz', telefono:'661 352 795', email:'arizapuertasautomaticas@gmail.com',
+      representante:'David Ariza Arana', cargo_firmante:'Administrador único',
+      responsable_tecnico:'David Ariza Arana' } });
+    /* Etiquetas de sobra para que «no quedan etiquetas libres» sea algo que la
+       prueba provoca cuando quiere, y no el estado de partida. */
+    ['AR-0101','AR-0102','AR-0103','AR-0104'].forEach(cod =>
+      db.etiquetas.push({ codigo:cod, token:'tok-'+cod, creado:new Date().toISOString() }));
+    /* La puerta del caso: existe en la obra pero no en la empresa. Ficha recién
+       creada, sin etiqueta, sin tipo, sin medidas, sin fotos y sin matrícula. */
+    db.puertas.push({ id:'pt-sin-doc', codigo:null, cliente_id:db.clientes[0].id,
+      cliente:db.clientes[0].nombre, direccion:'Polígono El Palmar, nave 12',
+      ubicacion:'Muelle de carga', estado:'operativa', creado:new Date().toISOString() });
+    /* Una asistencia de cada tipo que obliga, y una avería para contrastar. */
+    const base = { estado:'asignado', prioridad:'normal', tecnico_id:'usuario-admin',
+                   cliente_id:db.clientes[0].id, creado:new Date().toISOString(),
+                   fecha_prevista:new Date().toISOString().slice(0,10) };
+    db.avisos.push({ ...base, id:'av-inst',  tipo:'instalacion',     puerta_id:'pt-sin-doc',
+                     descripcion:'Montar la puerta nueva del muelle 12' });
+    db.avisos.push({ ...base, id:'av-norm',  tipo:'normativa',       puerta_id:'pt-sin-doc',
+                     descripcion:'Adecuación a normativa' });
+    db.avisos.push({ ...base, id:'av-ps',    tipo:'puesta_servicio', puerta_id:null,
+                     descripcion:'Puesta en servicio de un kit, puerta sin dar de alta' });
+    db.avisos.push({ ...base, id:'av-aver',  tipo:'averia',          puerta_id:'pt-sin-doc',
+                     descripcion:'No cierra del todo' });
+  };
+});
+const pag = await ctx.newPage();
+pag.on('pageerror', e => errores.push('JS: '+e.message));
+pag.on('console', m => { if (m.type() === 'error') errores.push('consola: '+m.text()); });
+await pag.goto(URL_APP);
+await pag.waitForTimeout(1700);
+
+let ok = 0, mal = 0;
+const paso = (t, bien, extra='') => { bien ? ok++ : mal++;
+  console.log((bien?'  OK  ':' FALLA ')+t+(extra!==''&&extra!==undefined?' → '+String(extra):'')); };
+const bloque = t => console.log('\n· '+t);
+const T = (f, arg) => arg === undefined ? pag.evaluate(f) : pag.evaluate(f, arg);
+const esperar = (ms=350) => pag.waitForTimeout(ms);
+
+/* Deja la puerta del caso como estaba al empezar: sin nada documentado. */
+const limpiarPuerta = () => T(async () => {
+  const g = window.__T;
+  await g.sb.from('puertas').update({ codigo:null, tipo:null, ancho_mm:null, alto_mm:null,
+    matricula:null, sin_matricula:null, uso:null, peso_kg:null, cuadro:null, motor:null })
+    .eq('id', 'pt-sin-doc');
+  const { data } = await g.sb.from('fotos').select('*').eq('puerta_id', 'pt-sin-doc');
+  for (const f of (data || [])) await g.sb.from('fotos').delete().eq('id', f.id);
+  const { data: c } = await g.sb.from('componentes').select('*').eq('puerta_id', 'pt-sin-doc');
+  for (const x of (c || [])) await g.sb.from('componentes').delete().eq('id', x.id);
+  await g.cargar();
+});
+
+/* Abre el parte y rellena todo lo que NO es del alta en obra, de modo que lo
+   único que pueda impedir el cierre sea la documentación de la puerta. */
+const abrirParte = async (avisoId) => {
+  await T(id => { window.__T.dlgCierre(id); }, avisoId);
+  await esperar(900);
+  await pag.fill('#z-trab', 'Trabajo hecho.');
+  await pag.fill('#z-horas', '2');
+  await pag.fill('#z-sin', 'No había nadie para firmar.');
+  await esperar(200);
+};
+const cerrarIntento = async (avisoId) => {
+  const err = await T(async id => {
+    const g = window.__T;
+    const a = g.S.avisos.find(x => x.id === id);
+    await g.guardarCierre(a, true);
+    const e = document.querySelector('#dlg-form .err');
+    return { err: e ? e.textContent : '(sin recuadro de error)',
+             cerrado: !!(g.S.avisos.find(x => x.id === id) || {}).cerrado };
+  }, avisoId);
+  return err;
+};
+
+/* ================================================================
+   1. Qué asistencias obligan
+   ================================================================ */
+bloque('1. Qué asistencias obligan a documentar la puerta');
+
+const obliga = await T(() => {
+  const g = window.__T, out = {};
+  Object.keys(g.ASISTENCIAS).forEach(t => { out[t] = g.obligaAltaObra({ tipo:t }); });
+  return { out, lista: g.ALTA_OBRA_OBLIGA, min: g.MIN_FOTOS_OBRA };
+});
+paso('instalación obliga', obliga.out.instalacion === true);
+paso('puesta en servicio obliga', obliga.out.puesta_servicio === true);
+paso('normativa y adecuación obliga', obliga.out.normativa === true);
+paso('preventiva obliga', obliga.out.mantenimiento === true);
+paso('una avería no obliga: puede ser un cambio de pila',
+  obliga.out.averia === false);
+paso('una comercial no obliga: se va a ofertar, no a tocar la puerta',
+  obliga.out.comercial === false);
+paso('un desplazamiento en falso no obliga', obliga.out.falso === false);
+paso('una urgencia fuera de horario no obliga', obliga.out.urgencia === false);
+paso('la garantía tampoco: la puerta ya está documentada de antes',
+  obliga.out.garantia === false);
+paso('son exactamente cuatro los tipos que obligan',
+  obliga.lista.length === 4, obliga.lista.join(','));
+paso('el mínimo de fotos son dos', obliga.min === 2, obliga.min);
+paso('sin asistencia no se obliga a nada, y no se rompe',
+  await T(() => window.__T.obligaAltaObra(null) === false));
+
+/* ================================================================
+   2. Sin ficha no se cierra
+   ================================================================ */
+bloque('2. Una puerta sin ficha no deja cerrar la visita');
+
+const sinFicha = await T(() => {
+  const g = window.__T;
+  const m = g.minimoObra(null, 0);
+  return { sinFicha: m.sinFicha, completo: m.completo, bloquean: m.bloquean.length,
+           html: g.bloqueAltaObra({ id:'av-ps', tipo:'puesta_servicio' }, null, 0) };
+});
+paso('minimoObra de una puerta que no existe lo dice',
+  sinFicha.sinFicha === true && sinFicha.completo === false);
+paso('y bloquea', sinFicha.bloquean === 1, sinFicha.bloquean);
+paso('el recuadro dice que para la empresa todavía no existe',
+  /no tiene ficha ni etiqueta con QR/.test(sinFicha.html));
+paso('y ofrece darla de alta desde el propio parte',
+  /data-act="alta-puerta-asis"/.test(sinFicha.html));
+
+await abrirParte('av-ps');
+paso('el parte de una puesta en servicio sin puerta trae el recuadro',
+  await pag.locator('#obra-bloque').count() === 1);
+paso('y no repite el aviso viejo de «no tiene puerta asignada»',
+  !/no tiene puerta asignada/.test(await pag.textContent('#dlg-form')));
+const r2 = await cerrarIntento('av-ps');
+paso('la visita NO se cierra', r2.cerrado === false, r2.cerrado);
+paso('y el error dice que hay que darla de alta',
+  /no está dada de alta/.test(r2.err), r2.err);
+await T(() => window.__T.cerrarDlg()); await esperar(300);
+
+/* ================================================================
+   3. Punto por punto
+   ================================================================ */
+bloque('3. Cada punto del mínimo bloquea por sí solo');
+
+const completa = { codigo:'AR-0101', tipo:'Corredera', ancho_mm:4200, alto_mm:2400,
+                   matricula:'Erreka, Rino 4, nº 2019-0481' };
+const puntoAPunto = await T(async base => {
+  const g = window.__T;
+  const quita = async campo => {
+    const o = Object.assign({}, base);
+    o[campo] = null;
+    await g.sb.from('puertas').update(o).eq('id','pt-sin-doc');
+    await g.cargar();
+    const m = g.minimoObra(g.puertaDe('pt-sin-doc'), 2);
+    return { bloquean: m.bloquean.map(x => x.clave), completo: m.completo };
+  };
+  const out = {};
+  for (const campo of ['codigo','tipo','ancho_mm','alto_mm','matricula'])
+    out[campo] = await quita(campo);
+  // y con todo puesto
+  await g.sb.from('puertas').update(base).eq('id','pt-sin-doc');
+  await g.cargar();
+  const p = g.puertaDe('pt-sin-doc');
+  out.todo = { conFotos: g.minimoObra(p, 2).completo,
+               unaFoto:  g.minimoObra(p, 1).bloquean.map(x => x.clave),
+               sinContar: g.minimoObra(p, null).puntos.find(x => x.clave === 'fotos') };
+  return out;
+}, completa);
+
+paso('sin etiqueta: bloquea la etiqueta y nada más',
+  puntoAPunto.codigo.bloquean.join(',') === 'etiqueta', puntoAPunto.codigo.bloquean.join(','));
+paso('sin tipo de puerta: bloquea el tipo',
+  puntoAPunto.tipo.bloquean.join(',') === 'tipo', puntoAPunto.tipo.bloquean.join(','));
+paso('sin ancho: bloquean las medidas',
+  puntoAPunto.ancho_mm.bloquean.join(',') === 'medidas', puntoAPunto.ancho_mm.bloquean.join(','));
+paso('sin alto: bloquean las medidas igual',
+  puntoAPunto.alto_mm.bloquean.join(',') === 'medidas', puntoAPunto.alto_mm.bloquean.join(','));
+paso('sin matrícula: bloquea la matrícula',
+  puntoAPunto.matricula.bloquean.join(',') === 'matricula', puntoAPunto.matricula.bloquean.join(','));
+paso('ninguno de esos casos se da por completo',
+  ['codigo','tipo','ancho_mm','alto_mm','matricula'].every(k => puntoAPunto[k].completo === false));
+paso('con todo puesto y dos fotos, el mínimo está completo',
+  puntoAPunto.todo.conFotos === true);
+paso('con una sola foto, bloquean las fotos',
+  puntoAPunto.todo.unaFoto.join(',') === 'fotos', puntoAPunto.todo.unaFoto.join(','));
+paso('mientras no se han contado, las fotos quedan en duda y no se dan por buenas',
+  puntoAPunto.todo.sinContar.duda === true && puntoAPunto.todo.sinContar.ok === false,
+  JSON.stringify(puntoAPunto.todo.sinContar && { ok:puntoAPunto.todo.sinContar.ok, duda:puntoAPunto.todo.sinContar.duda }));
+
+const textos = await T(() => {
+  const g = window.__T;
+  return g.minimoObra(g.puertaDe('pt-sin-doc'), 0).puntos.map(x => ({ c:x.clave, q:x.que }));
+});
+/* Todos menos «ficha», que no pide nada: cuando sale, ya está hecha. */
+paso('cada punto que pide algo explica qué hay que tomar y cómo',
+  textos.filter(x => x.c !== 'ficha').every(x => x.q && x.q.length > 40),
+  textos.map(x=>x.c+':'+(x.q||'').length).join(' '));
+paso('las medidas dicen que es el paso libre y en milímetros',
+  /paso libre/.test((textos.find(x=>x.c==='medidas')||{}).q) &&
+  /milímetros/.test((textos.find(x=>x.c==='medidas')||{}).q));
+paso('las fotos dicen cuáles: el conjunto y la placa o el cuadro',
+  /conjunto/.test((textos.find(x=>x.c==='fotos')||{}).q) &&
+  /placa de características o del cuadro/.test((textos.find(x=>x.c==='fotos')||{}).q));
+paso('el tipo explica que de él salen el guión y los límites de fuerza',
+  /guión de revisión/.test((textos.find(x=>x.c==='tipo')||{}).q) &&
+  /límite/.test((textos.find(x=>x.c==='tipo')||{}).q));
+
+/* ================================================================
+   4. Las tres maneras de tomar la matrícula
+   ================================================================ */
+bloque('4. La matrícula: de la puerta, de un componente, o por qué no hay');
+
+const mat = await T(async () => {
+  const g = window.__T, out = {};
+  const poner = async o => { await g.sb.from('puertas').update(o).eq('id','pt-sin-doc'); await g.cargar();
+                             return g.matriculaTomada(g.puertaDe('pt-sin-doc')); };
+  out.conPlaca = await poner({ matricula:'Erreka, Rino 4, nº 2019-0481', sin_matricula:null });
+  out.sinNada  = await poner({ matricula:null, sin_matricula:null });
+  // la del motor, dada de alta como componente con su número de serie
+  await g.sb.from('componentes').insert({ puerta_id:'pt-sin-doc', clave:'motor', nombre:'Motor',
+    marca:'Erreka', modelo:'Rino 4', num_serie:'MT-55120', creado_por:'prueba' });
+  await g.cargar();
+  out.porComponente = g.matriculaTomada(g.puertaDe('pt-sin-doc'));
+  // un componente sin nada escrito no cuenta como matrícula
+  const { data: c } = await g.sb.from('componentes').select('*').eq('puerta_id','pt-sin-doc');
+  for (const x of (c||[])) await g.sb.from('componentes').delete().eq('id', x.id);
+  await g.sb.from('componentes').insert({ puerta_id:'pt-sin-doc', clave:'motor', nombre:'Motor',
+    creado_por:'prueba' });
+  await g.cargar();
+  out.componenteVacio = g.matriculaTomada(g.puertaDe('pt-sin-doc'));
+  // un componente retirado tampoco: ya no está puesto
+  await g.sb.from('componentes').update({ marca:'Erreka', modelo:'Rino 4', num_serie:'MT-55120',
+    activo:false }).eq('puerta_id','pt-sin-doc');
+  await g.cargar();
+  out.componenteRetirado = g.matriculaTomada(g.puertaDe('pt-sin-doc'));
+  const { data: c2 } = await g.sb.from('componentes').select('*').eq('puerta_id','pt-sin-doc');
+  for (const x of (c2||[])) await g.sb.from('componentes').delete().eq('id', x.id);
+  await g.cargar();
+  // y el motivo escrito cuenta como dato tomado
+  const p = g.puertaDe('pt-sin-doc');
+  out.sinMotivo = g.minimoObra(p, 2).bloquean.map(x => x.clave).join(',');
+  await g.sb.from('puertas').update({ sin_matricula:'Puerta de los años 80 sin placa; el motor es nuevo y va en su componente.' }).eq('id','pt-sin-doc');
+  await g.cargar();
+  out.conMotivo = g.minimoObra(g.puertaDe('pt-sin-doc'), 2).completo;
+  out.motivoNoEsMatricula = g.matriculaTomada(g.puertaDe('pt-sin-doc'));
+  return out;
+});
+paso('la placa de la puerta cuenta', mat.conPlaca === true);
+paso('sin nada, no hay matrícula tomada', mat.sinNada === false);
+paso('el número de serie del motor, como componente, cuenta',
+  mat.porComponente === true);
+paso('un componente dado de alta sin marca ni serie no cuenta',
+  mat.componenteVacio === false);
+paso('un componente retirado no cuenta: ya no está puesto',
+  mat.componenteRetirado === false);
+paso('sin matrícula ni motivo, el punto bloquea',
+  mat.sinMotivo === 'matricula', mat.sinMotivo);
+paso('con el motivo escrito, el mínimo se completa',
+  mat.conMotivo === true);
+paso('pero el motivo no se cuenta como matrícula tomada: son cosas distintas',
+  mat.motivoNoEsMatricula === false);
+
+/* ================================================================
+   5. Las fotos se cuentan en la base de datos
+   ================================================================ */
+bloque('5. Las fotos se cuentan donde están, no en la pantalla');
+
+await limpiarPuerta();
+const fotos = await T(async base => {
+  const g = window.__T;
+  await g.sb.from('puertas').update(base).eq('id','pt-sin-doc');
+  await g.cargar();
+  const out = { cero: await g.contarFotos('pt-sin-doc') };
+  await g.sb.from('fotos').insert({ puerta_id:'pt-sin-doc', ruta:'pt-sin-doc/a.jpg', autor:'prueba' });
+  out.una = await g.contarFotos('pt-sin-doc');
+  await g.sb.from('fotos').insert({ puerta_id:'pt-sin-doc', ruta:'pt-sin-doc/b.jpg', autor:'prueba' });
+  out.dos = await g.contarFotos('pt-sin-doc');
+  // las de otra puerta no se cuentan aquí
+  await g.sb.from('fotos').insert({ puerta_id: g.S.puertas[0].id, ruta:'otra/c.jpg', autor:'prueba' });
+  out.trasOtra = await g.contarFotos('pt-sin-doc');
+  out.sinPuerta = await g.contarFotos(null);
+  out.cacheada = g.S.fotosCuenta['pt-sin-doc'];
+  return out;
+}, completa);
+paso('sin fotos, cero', fotos.cero === 0, fotos.cero);
+paso('con una, una', fotos.una === 1, fotos.una);
+paso('con dos, dos', fotos.dos === 2, fotos.dos);
+paso('las fotos de otra puerta no se cuentan en esta',
+  fotos.trasOtra === 2, fotos.trasOtra);
+paso('sin puerta, cero y sin romperse', fotos.sinPuerta === 0, fotos.sinPuerta);
+paso('la cuenta se guarda para no volver a preguntarla sin motivo',
+  fotos.cacheada === 2, fotos.cacheada);
+
+/* El cierre vuelve a contar: no se fía de lo que se pintó al abrir el parte */
+const recuenta = await T(async () => {
+  const g = window.__T;
+  const { data } = await g.sb.from('fotos').select('*').eq('puerta_id','pt-sin-doc');
+  for (const f of (data||[])) await g.sb.from('fotos').delete().eq('id', f.id);
+  g.S.fotosCuenta['pt-sin-doc'] = 7;          // una cuenta vieja y falsa, a propósito
+  return g.S.fotosCuenta['pt-sin-doc'];
+});
+paso('se deja una cuenta vieja de 7 fotos para engañar al cierre', recuenta === 7);
+await abrirParte('av-inst');
+const rFotos = await cerrarIntento('av-inst');
+paso('el cierre no se fía de la cuenta vieja: vuelve a contar y no deja cerrar',
+  rFotos.cerrado === false, rFotos.cerrado);
+paso('y dice que faltan las fotos',
+  /fotos/i.test(rFotos.err), rFotos.err);
+await T(() => window.__T.cerrarDlg()); await esperar(300);
+
+/* ================================================================
+   6. Lo que no se puede resolver en obra
+   ================================================================ */
+bloque('6. Sin etiquetas libres: no bloquea, pero queda pendiente');
+
+const sinEtiquetas = await T(async base => {
+  const g = window.__T;
+  /* Se le dan a la puerta todos los datos menos la etiqueta, y se dejan todas las
+     etiquetas de la furgoneta asignadas a otras puertas: el técnico no puede pegar
+     ninguna, y eso no es culpa suya. */
+  await g.sb.from('puertas').update(Object.assign({}, base, { codigo:null })).eq('id','pt-sin-doc');
+  await g.sb.from('fotos').insert([
+    { puerta_id:'pt-sin-doc', ruta:'pt-sin-doc/a.jpg', autor:'prueba' },
+    { puerta_id:'pt-sin-doc', ruta:'pt-sin-doc/b.jpg', autor:'prueba' }]);
+  /* El cargar() va aquí a propósito: sin él, la lista de puertas en memoria
+     todavía diría que esta tiene la etiqueta AR-0101, y la prueba dejaría una
+     etiqueta libre sin querer. */
+  await g.cargar();
+  const libres = g.S.etiquetas.filter(e => !g.S.puertas.some(p => p.codigo === e.codigo));
+  for (const e of libres)
+    await g.sb.from('puertas').insert({ codigo:e.codigo, cliente:'Relleno de la prueba',
+      direccion:'Para gastar las etiquetas libres' });
+  await g.cargar();
+  const m = g.minimoObra(g.puertaDe('pt-sin-doc'), 2);
+  return { faltan: m.faltan.map(x => x.clave), bloquean: m.bloquean.map(x => x.clave),
+           imposible: (m.puntos.find(x => x.clave === 'etiqueta') || {}).imposible,
+           porque: (m.puntos.find(x => x.clave === 'etiqueta') || {}).porque,
+           html: g.bloqueAltaObra({ id:'av-inst', tipo:'instalacion' }, g.puertaDe('pt-sin-doc'), 2) };
+}, completa);
+paso('la etiqueta sigue faltando', sinEtiquetas.faltan.join(',') === 'etiqueta', sinEtiquetas.faltan.join(','));
+paso('pero no bloquea: no se puede resolver allí',
+  sinEtiquetas.bloquean.length === 0, sinEtiquetas.bloquean.join(','));
+paso('y queda marcada como no resoluble en obra', sinEtiquetas.imposible === true);
+paso('con el motivo explicado, no a secas',
+  /No quedan etiquetas libres/.test(sinEtiquetas.porque||''), sinEtiquetas.porque);
+paso('el recuadro lo dice sin dar a entender que da igual',
+  /Se puede cerrar la visita, pero queda como pendiente/.test(sinEtiquetas.html));
+
+await abrirParte('av-inst');
+const rPend = await T(async () => {
+  const g = window.__T;
+  const a = g.S.avisos.find(x => x.id === 'av-inst');
+  await g.guardarCierre(a, true);
+  await g.cargar();
+  const d = g.S.avisos.find(x => x.id === 'av-inst') || {};
+  return { cerrado: !!d.cerrado, pendiente: !!d.pendiente, texto: d.pendiente_texto || '' };
+});
+paso('la visita se cierra', rPend.cerrado === true);
+paso('pero queda señalada como pendiente', rPend.pendiente === true);
+paso('y el pendiente dice qué fue lo que no se pudo hacer',
+  /[Ee]tiqueta/.test(rPend.texto), rPend.texto);
+
+/* ================================================================
+   7. Con el mínimo completo se cierra
+   ================================================================ */
+bloque('7. Con el mínimo completo, la visita se cierra sin pelear');
+
+const completo = await T(async base => {
+  const g = window.__T;
+  // se libera una etiqueta quitando los rellenos de la prueba anterior
+  const rellenos = g.S.puertas.filter(p => p.cliente === 'Relleno de la prueba');
+  for (const p of rellenos) await g.sb.from('puertas').delete().eq('id', p.id);
+  await g.sb.from('puertas').update(base).eq('id','pt-sin-doc');
+  await g.cargar();
+  const m = g.minimoObra(g.puertaDe('pt-sin-doc'), await g.contarFotos('pt-sin-doc'));
+  return { completo: m.completo, faltan: m.faltan.length };
+}, completa);
+paso('la puerta queda documentada del todo',
+  completo.completo === true && completo.faltan === 0, JSON.stringify(completo));
+
+await abrirParte('av-norm');
+const rOk = await T(async () => {
+  const g = window.__T;
+  const a = g.S.avisos.find(x => x.id === 'av-norm');
+  await g.guardarCierre(a, true);
+  await g.cargar();
+  const d = g.S.avisos.find(x => x.id === 'av-norm') || {};
+  return { cerrado: !!d.cerrado, pendiente: !!d.pendiente,
+           err: (document.querySelector('#dlg-form .err') || {}).textContent || '' };
+});
+paso('la adecuación a normativa se cierra', rOk.cerrado === true, rOk.err);
+paso('y no se le inventa ningún pendiente', rOk.pendiente === false);
+const htmlOk = await T(() => {
+  const g = window.__T;
+  return g.bloqueAltaObra({ id:'av-norm', tipo:'normativa' }, g.puertaDe('pt-sin-doc'), 2);
+});
+paso('el recuadro lo dice en verde y sin avisos',
+  /El mínimo de obra está completo/.test(htmlOk) && !/no se cierra sin eso/.test(htmlOk));
+
+/* ================================================================
+   8. El aviso sale antes de salir de casa
+   ================================================================ */
+bloque('8. La tarjeta de trabajo avisa antes de salir');
+
+const tarjetas = await T(() => {
+  const g = window.__T;
+  const conTodo = g.tarjetaTrabajo(g.S.avisos.find(x => x.id === 'av-inst'));
+  // y la misma asistencia con la puerta vuelta a dejar sin medidas
+  return { conTodo };
+});
+paso('con la puerta documentada, la tarjeta no mete ruido',
+  !/Falta documentar/.test(tarjetas.conTodo) && !/Puerta sin documentar/.test(tarjetas.conTodo));
+
+const tarjetaFalta = await T(async () => {
+  const g = window.__T;
+  await g.sb.from('puertas').update({ ancho_mm:null, alto_mm:null }).eq('id','pt-sin-doc');
+  await g.cargar();
+  const conFalta = g.tarjetaTrabajo(g.S.avisos.find(x => x.id === 'av-inst'));
+  const averia   = g.tarjetaTrabajo(g.S.avisos.find(x => x.id === 'av-aver'));
+  const sinPuerta = g.tarjetaTrabajo(g.S.avisos.find(x => x.id === 'av-ps'));
+  return { conFalta, averia, sinPuerta };
+});
+paso('si falta algo, la tarjeta lo dice y nombra qué',
+  /Falta documentar la puerta/.test(tarjetaFalta.conFalta) &&
+  /ancho y alto/i.test(tarjetaFalta.conFalta));
+paso('las fotos no se nombran en la tarjeta: no se cuentan por tarjeta',
+  !/fotos de la puerta/i.test(tarjetaFalta.conFalta));
+paso('una puerta sin ficha sale como «puerta sin documentar»',
+  /Puerta sin documentar/.test(tarjetaFalta.sinPuerta) &&
+  /medidas, fotos y matrículas/.test(tarjetaFalta.sinPuerta));
+paso('la avería de la misma puerta no dice nada de esto',
+  !/documentar/.test(tarjetaFalta.averia));
+
+/* ================================================================
+   9. Lo recomendado no bloquea
+   ================================================================ */
+bloque('9. Lo recomendado se ofrece, no se exige');
+
+const rec = await T(async base => {
+  const g = window.__T;
+  await g.sb.from('puertas').update(base).eq('id','pt-sin-doc');
+  await g.cargar();
+  const p = g.puertaDe('pt-sin-doc');
+  const antes = g.recomendadoObra(p);
+  const m = g.minimoObra(p, 2);
+  await g.sb.from('puertas').update({ uso:'Comunidad de vecinos', peso_kg:180,
+    cuadro:'Erreka Roma', motor:'Erreka Rino 4' }).eq('id','pt-sin-doc');
+  await g.cargar();
+  const despues = g.recomendadoObra(g.puertaDe('pt-sin-doc'));
+  return { antes, completo: m.completo, despues, sinPuerta: g.recomendadoObra(null) };
+}, completa);
+paso('con el mínimo hecho y lo recomendado sin hacer, el mínimo está completo',
+  rec.completo === true);
+paso('y lo recomendado se enumera aparte',
+  rec.antes.length >= 4, rec.antes.join(' · '));
+paso('el peso de la hoja es recomendado, nunca obligatorio',
+  rec.antes.some(x => /[Pp]eso/.test(x)));
+paso('al rellenarlo, la lista se queda corta',
+  rec.despues.length < rec.antes.length, rec.despues.join(' · '));
+paso('de una puerta que no existe no se recomienda nada',
+  rec.sinPuerta.length === 0);
+
+const recHtml = await T(async () => {
+  const g = window.__T;
+  await g.sb.from('puertas').update({ uso:null, peso_kg:null }).eq('id','pt-sin-doc');
+  await g.cargar();
+  return g.bloqueAltaObra({ id:'av-inst', tipo:'instalacion' }, g.puertaDe('pt-sin-doc'), 2);
+});
+paso('lo recomendado sale en el parte, plegado y marcado como recomendado',
+  /Recomendado/.test(recHtml) && /datos más, si están a mano/.test(recHtml));
+paso('y dice por qué el peso no está arriba: en obra no hay báscula',
+  /en obra no hay báscula/.test(recHtml));
+paso('pero no se pinta ningún aviso de que falte el mínimo',
+  /El mínimo de obra está completo/.test(recHtml));
+
+/* ================================================================
+   10. Una avería corriente no pide nada
+   ================================================================ */
+bloque('10. Una avería corriente se cierra como siempre');
+
+await T(async () => {
+  const g = window.__T;
+  await g.sb.from('puertas').update({ codigo:null, tipo:null, ancho_mm:null, alto_mm:null,
+    matricula:null, sin_matricula:null }).eq('id','pt-sin-doc');
+  await g.cargar();
+});
+await abrirParte('av-aver');
+paso('el parte de una avería no trae el recuadro de obra',
+  await pag.locator('#obra-bloque').count() === 0);
+const rAv = await T(async () => {
+  const g = window.__T;
+  const a = g.S.avisos.find(x => x.id === 'av-aver');
+  await g.guardarCierre(a, true);
+  await g.cargar();
+  const d = g.S.avisos.find(x => x.id === 'av-aver') || {};
+  return { cerrado: !!d.cerrado, pendiente: !!d.pendiente,
+           err: (document.querySelector('#dlg-form .err')||{}).textContent || '' };
+});
+paso('y se cierra con la puerta a medio documentar', rAv.cerrado === true, rAv.err);
+paso('sin inventarle pendientes', rAv.pendiente === false);
+
+/* ================================================================
+   11. Los campos nuevos de la ficha
+   ================================================================ */
+bloque('11. Matrícula y motivo en la ficha de la puerta');
+
+const ficha = await T(() => {
+  const g = window.__T;
+  g.dlgPuerta('pt-sin-doc');
+  return { mat: !!document.getElementById('f-matricula'),
+           sin: !!document.getElementById('f-sinmat'),
+           enBorrador: g.CAMPOS_PUERTA.includes('f-matricula') && g.CAMPOS_PUERTA.includes('f-sinmat'),
+           sinObra: g.S.sinObra };
+});
+paso('la base de datos de pruebas tiene las columnas de obra', ficha.sinObra === false);
+paso('la ficha pide la matrícula', ficha.mat === true);
+paso('y por qué no hay, si no la hay', ficha.sin === true);
+paso('los dos campos se recuperan si se sale a crear un cliente',
+  ficha.enBorrador === true);
+
+const guardado = await T(async () => {
+  document.getElementById('f-matricula').value = 'Hörmann SPU F42, nº 4471-2019';
+  document.getElementById('f-sinmat').value = '';
+  document.querySelector('#dlg button[type="submit"]').click();
+  await new Promise(r => setTimeout(r, 1200));
+  const g = window.__T;
+  return (g.puertaDe('pt-sin-doc') || {}).matricula;
+});
+paso('lo escrito se guarda tal cual, sin interpretarlo',
+  guardado === 'Hörmann SPU F42, nº 4471-2019', guardado);
+
+const enFicha = await T(async () => {
+  const g = window.__T;
+  g.S.ficha = 'pt-sin-doc'; g.S.tab = 'puertas'; g.pintar();
+  // pintar() espera al siguiente fotograma: sin esta pausa se lee la pantalla vieja
+  await new Promise(r => setTimeout(r, 400));
+  const t = document.getElementById('vista').textContent;
+  return { matricula: /Hörmann SPU F42/.test(t) };
+});
+paso('y sale en la ficha técnica de la puerta', enFicha.matricula === true);
+
+const sinColumnas = await T(() => {
+  const g = window.__T;
+  g.S.sinObra = true;
+  g.dlgPuerta('pt-sin-doc');
+  const hay = !!document.getElementById('f-matricula');
+  const html = g.bloqueAltaObra({ id:'av-inst', tipo:'instalacion' }, g.puertaDe('pt-sin-doc'), 2);
+  g.cerrarDlg(); g.S.sinObra = false;
+  return { hay, html };
+});
+paso('si el SQL de obra no está ejecutado, esos campos no se enseñan',
+  sinColumnas.hay === false);
+paso('y el parte lo dice en vez de dejar al técnico buscando el campo',
+  /Falta ejecutar en la base de datos el SQL de obra/.test(sinColumnas.html));
+
+/* ================================================================
+   12. Los ficheros elegidos dentro del diálogo
+   ================================================================ */
+bloque('12. Subir fotos desde el propio parte');
+
+const oyente = await T(async () => {
+  const g = window.__T;
+  await g.sb.from('puertas').update({ codigo:'AR-0101', tipo:'Corredera' }).eq('id','pt-sin-doc');
+  await g.cargar();
+  g.dlgCierre('av-inst');
+  await new Promise(r => setTimeout(r, 800));
+  const inp = document.querySelector('[data-act="obra-foto"]');
+  return { hay: !!inp, puerta: inp ? inp.dataset.id : '', aviso: inp ? inp.dataset.aviso : '',
+           camara: inp ? inp.getAttribute('capture') : '' };
+});
+paso('el parte trae su propio botón de fotos', oyente.hay === true);
+paso('apuntando a esta puerta y a esta asistencia',
+  oyente.puerta === 'pt-sin-doc' && oyente.aviso === 'av-inst',
+  oyente.puerta+' / '+oyente.aviso);
+paso('y abre la cámara de atrás del móvil, no el carrete',
+  oyente.camara === 'environment', oyente.camara);
+
+/* El fichero se elige de verdad, para comprobar que el diálogo tiene oyente:
+   antes de esto, los botones de fichero dentro de un diálogo no hacían nada,
+   porque el oyente estaba puesto en la vista y el <dialog> no está dentro. */
+const antesFotos = await T(() => window.__T.contarFotos('pt-sin-doc'));
+await pag.setInputFiles('[data-act="obra-foto"]', [{
+  name:'placa.png', mimeType:'image/png',
+  buffer: Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c6300010000050001' +
+                      '0d0a2db40000000049454e44ae426082', 'hex') }]);
+await esperar(2500);
+const despuesFotos = await T(() => window.__T.contarFotos('pt-sin-doc'));
+paso('al elegir la foto, se sube sin salir del parte',
+  despuesFotos === antesFotos + 1, antesFotos+' → '+despuesFotos);
+paso('y el recuadro se vuelve a pintar con la cuenta nueva',
+  await pag.locator('#obra-bloque').count() === 1);
+const compInput = await T(() => {
+  const g = window.__T;
+  g.cerrarDlg();
+  g.dlgComponente(null, 'pt-sin-doc');
+  const f = document.querySelector('[data-act="comp-foto"]');
+  const d = document.querySelector('[data-act="comp-doc"]');
+  g.cerrarDlg();
+  return { f: !!f, d: !!d };
+});
+paso('el componente también ofrece su foto y su papel dentro del diálogo',
+  compInput.f === true && compInput.d === true);
+
+/* ================================================================
+   Final
+   ================================================================ */
+console.log('\n'+ok+' bien, '+mal+' mal.');
+/* Las fuentes de Google no se descargan en este entorno y la red lo dice por la
+   consola. No es un fallo de la aplicación, así que no cuenta. */
+const graves = errores.filter(x => !/fonts\.googleapis|ERR_TUNNEL|ERR_NAME|net::ERR|provocado por la prueba/.test(x));
+if (graves.length) console.log('Errores de JavaScript:\n'+graves.join('\n'));
+else console.log('Sin errores de JavaScript.');
+await nav.close();
+process.exit(mal || graves.length ? 1 : 0);

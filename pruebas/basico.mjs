@@ -770,6 +770,26 @@ if (await pag.locator('.g-punto').count()){
     await pag.locator('.g-punto').count(),
     await pag.locator('.g-punto .g-resp button[aria-pressed="true"]').count()+'/'+await pag.locator('.g-punto').count());
 }
+/* ---- Cambio deliberado del 16-10-2026: el alta en obra es obligatoria ----
+   Una preventiva ya no se cierra si la puerta no está documentada: hacen falta
+   las medidas, dos fotos y la matrícula. Esta prueba hacía lo que se hacía antes,
+   cerrar sin nada de eso, y por eso se puso en rojo. Ahora completa el mínimo,
+   que es exactamente lo que el técnico tiene que hacer estando allí, y de paso
+   deja fijado que el recuadro sale en el parte de una preventiva. */
+paso('la preventiva trae el recuadro de documentar la puerta en obra',
+  await pag.locator('#obra-bloque').count() === 1,
+  await pag.locator('#obra-bloque').count());
+await T(async pid => {
+  const g = window.__T;
+  await g.sb.from('puertas').update({ ancho_mm:3200, alto_mm:2250,
+    matricula:'Erreka Rino 4, nº 2019-0481' }).eq('id', pid);
+  await g.sb.from('fotos').insert([
+    { puerta_id:pid, ruta:pid+'/conjunto.jpg', autor:'prueba' },
+    { puerta_id:pid, ruta:pid+'/placa.jpg',    autor:'prueba' }]);
+  await g.cargar();
+}, puertaPrev.id);
+await esperar(500);
+
 await pag.fill('#z-fnom', 'Presidente de la comunidad');
 const cajaP = await pag.locator('#z-firma').boundingBox();
 await pag.mouse.move(cajaP.x + 25, cajaP.y + 35); await pag.mouse.down();

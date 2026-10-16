@@ -400,6 +400,53 @@ paso('y el de formación se abre y se lee',
 paso('con sus tablas de límites dentro',
   /1\.400 N/.test(dosManuales.texto) && /Td/.test(dosManuales.texto));
 
+/* ================================================================
+   10. El alta en obra: los dos manuales contra la aplicación
+   ================================================================ */
+bloque('10. El alta obligatoria en obra, dicha igual en los dos sitios');
+
+const obra = await T(() => {
+  const g = window.__T;
+  return { tipos: g.ALTA_OBRA_OBLIGA.map(t => g.tipoAsis(t)), claves: g.ALTA_OBRA_OBLIGA,
+           fotos: g.MIN_FOTOS_OBRA,
+           puntos: g.minimoObra({ id:'x' }, 0).puntos.map(x => x.clave) };
+});
+/* Los nombres NO se escriben aquí: se sacan de la aplicación. Si mañana se
+   renombra un tipo de asistencia, esta comprobación se pone en rojo y el manual
+   se corrige, en vez de quedarse diciendo otra cosa. */
+obra.tipos.forEach(n => {
+  const corto = n.replace(/\s*\(.*\)$/, '');      // «Preventiva (mantenimiento)» → «Preventiva»
+  paso('el manual del técnico nombra el tipo «'+corto+'» como lo nombra la aplicación',
+    M.includes(corto), corto);
+});
+paso('y dice que en esos cuatro no se cierra la visita sin documentar',
+  /no se cierra/.test(M) && /obligatorio/.test(M));
+paso('son los cuatro de la aplicación, ni uno más',
+  obra.claves.length === 4 && /cuatro tipos de asistencia|cuatro/i.test(M),
+  obra.claves.join(','));
+paso('el manual pide el mismo número de fotos que exige la aplicación',
+  obra.fotos === 2 && /[Dd]os fotos/.test(M), obra.fotos);
+[['etiqueta','Etiqueta con QR'], ['tipo','Tipo de puerta'],
+ ['medidas','Ancho y alto'], ['matricula','Matrícula']].forEach(([clave, texto]) => {
+  paso('el punto «'+clave+'» está en la aplicación y el manual lo nombra: '+texto,
+    obra.puntos.includes(clave) && M.includes(texto), obra.puntos.join(','));
+});
+paso('el manual explica las tres maneras de tomar la matrícula',
+  /Si no tiene placa/.test(M) && /número de serie del motor o del cuadro/.test(M));
+paso('y que el peso de la hoja NO se exige',
+  /peso de la hoja \*\*no\*\* se exige/.test(M) || /no se puede pesar una hoja en obra/.test(M));
+paso('dice también la única excepción, y que deja la visita pendiente',
+  /no quedan etiquetas libres/i.test(M) && /pendiente/.test(M));
+paso('y avisa de que subir fotos y cerrar necesitan cobertura',
+  /necesitan cobertura/.test(M));
+
+paso('el manual de formación explica POR QUÉ hay que hacerlo allí',
+  /solo estando delante de ella/.test(F) && /no se documenta nunca/.test(F));
+paso('y que un campo en blanco no distingue entre no mirarlo y no existir',
+  /no distingue/.test(F));
+paso('el de formación lo cuenta como parte del trabajo, no como papeleo',
+  /es parte del trabajo/.test(F));
+
 console.log('\n'+ok+' bien, '+mal+' mal.');
 const graves = errores.filter(x => !/fonts\.googleapis|ERR_TUNNEL|ERR_NAME|net::ERR|provocado por la prueba/.test(x));
 if (graves.length) console.log('Errores de JavaScript:\n'+graves.join('\n'));
