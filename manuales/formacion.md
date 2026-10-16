@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.10.15-4**
+> **Versión de la aplicación que describe este manual: 2026.10.15-5**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -207,6 +207,26 @@ Hay dos cosas distintas y se mezclan constantemente:
 
 Confundirlos tiene dos consecuencias feas: entregar documentación interna que no toca, o quedarse sin el expediente que te respalda si alguien pregunta.
 
+### La puerta que no está documentada
+
+Hay un caso que se repite y que cuesta dinero: se atiende una puerta que **no está dada de alta** en ningún sitio. No tiene ficha, ni identificación, ni historial, ni expediente. Para la empresa no existe.
+
+Lo que hay que entender es **cuándo** se puede arreglar eso: solo estando delante de ella. Las medidas se toman con el flexómetro allí. Las fotos se hacen allí. La placa de características se lee allí. De vuelta al taller no hay manera, y lo que pasa entonces es que no se documenta nunca, y a la siguiente visita se empieza otra vez de cero.
+
+De ahí sale el criterio: en los trabajos que tocan la puerta de lleno (montarla, ponerla en servicio, adecuarla a normativa o revisarla), documentarla **es parte del trabajo**, no un extra administrativo. El mínimo exigible en obra es:
+
+| Dato | Para qué sirve después |
+|---|---|
+| Identificación | Poder referirse a esa puerta y no a otra; el QR del cliente |
+| Tipo de puerta | Decide el guión, los peligros, los puntos de medida y el límite de fuerza |
+| Ancho y alto del paso libre | La altura decide los puntos de medida del ensayo |
+| Foto del conjunto y de la placa | Una foto de la placa vale más que tres campos de memoria |
+| Marca, modelo y número de serie | Pedir repuestos sin volver, y decidir el marco legal aplicable |
+
+El peso de la hoja no entra en el mínimo: no se puede pesar una hoja en obra sin báscula ni ficha del fabricante.
+
+Y si no hay placa, o está pintada o ilegible, **eso también es un dato**: se escribe por qué no la hay. Un campo en blanco no distingue entre «no lo mirré» y «no existe»; una frase escrita, sí.
+
 ### La firma no arregla nada
 
 Esto hay que entenderlo bien. Que el cliente firme el parte significa que ha visto lo que se ha hecho. **No** significa que la puerta esté conforme. Un punto marcado «no conforme» sigue siéndolo después de la firma, y el documento tiene que seguir diciéndolo.
@@ -227,6 +247,7 @@ Los que más veces se ven, por orden de gravedad:
 6. **Dejar una seguridad puenteada** después de una prueba.
 7. **Cerrar un parte sin horas** en una visita de pago: se valora en cero y desaparece de lo pendiente de facturar.
 8. **No anotar la configuración del ensayo.** El número solo, sin el contexto, no sostiene nada.
+9. **Salir de una obra sin documentar la puerta.** Las medidas y las fotos solo se pueden tomar estando allí. Lo que no se toma en obra no se toma nunca.
 
 ---
 
@@ -239,6 +260,8 @@ La aplicación no es un cuaderno bonito: está construida sobre lo que acabas de
 - En los puntos que citan norma o piden medir, tienes **«Cómo se comprueba»**: qué se mide, cómo y el límite de esa puerta concreta.
 - El **ensayo de fuerzas** aplica solo el límite que le toca a esa puerta por su forma de moverse y la abertura declarada.
 - Si un punto queda sin comprobar, el documento lo dice. Si el ensayo no se incluye, también.
+- En instalación, puesta en servicio, adecuación a normativa y preventiva, la aplicación **no deja cerrar la visita** si la puerta no está documentada: identificación, tipo, medidas, dos fotos y matrícula. Cada punto se pone en verde cuando el dato está guardado, nunca porque alguien lo marque.
+- Lo único que no bloquea es lo que el técnico no puede resolver allí, como quedarse sin etiquetas: entonces la visita se cierra señalada como pendiente, que no es lo mismo que cerrarla como si estuviera completa.
 
 Para el día a día con la aplicación, el **manual del técnico** es el que toca. Este es el de por qué.
 
@@ -274,6 +297,8 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 **Caso 5.** Una puerta cortafuegos. Explica por qué su protección no puede ser un dispositivo que impida el cierre, y qué se pone en su lugar.
 
+**Caso 6.** Llegas a instalar una puerta nueva en una nave y resulta que la cancela de al lado, que también atiendes de paso, no está dada de alta en ningún sitio. ¿Qué datos tienes que tomar antes de irte, y qué pasa con cada uno de ellos si no los tomas hoy? El motor es de los años 90 y no se le lee la placa: ¿qué escribes?
+
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.10.15-4 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.10.15-5 de ARIZA SAT*

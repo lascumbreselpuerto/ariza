@@ -6,7 +6,7 @@ Esto no explica el oficio: explica la aplicación. Da por hecho que sabes de pue
 Lo tienes siempre a mano en la pestaña **Manual** de la propia aplicación, también
 sin cobertura una vez que lo has abierto la primera vez.
 
-> **Versión de la aplicación que describe este manual: 2026.10.15-4**
+> **Versión de la aplicación que describe este manual: 2026.10.15-5**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -31,6 +31,7 @@ En la tarjeta de **Mi trabajo**, además del cliente y la dirección, puedes ten
 
 - **Oficina:** lo que la oficina quiere que sepas. Léelo siempre.
 - **El sitio:** cómo se entra, el horario de acceso, con quién hablar allí y los avisos de seguridad del sitio. Esto sale cuando la puerta está en un centro.
+- **Falta documentar la puerta:** en instalación, puesta en servicio, adecuación a normativa y preventiva, si la puerta no está documentada la tarjeta te lo dice **antes de salir**. Llévate el flexómetro y cuenta con el tiempo. El apartado 4 explica lo que hay que tomar.
 
 > Los avisos de seguridad del sitio van separados del resto a propósito. No son un dato más: son lo que te vas a encontrar al llegar.
 
@@ -104,29 +105,76 @@ Firma en la pantalla y pones el **Nombre de quien firma**. Si no puede firmar, h
 
 ---
 
-## 4. Tres cosas que se preguntan siempre
+## 4. Si la puerta no está documentada, se documenta allí
+
+Esto es nuevo y es obligatorio. En estos cuatro tipos de asistencia:
+
+- Instalación
+- Puesta en servicio
+- Normativa y adecuación
+- Preventiva (mantenimiento)
+
+**la puerta tiene que quedar documentada antes de cerrar la visita.** Si no lo está, el parte no se cierra.
+
+No es papeleo: una puerta sin dar de alta no existe para la empresa. No tiene ficha, ni QR, ni historial, ni expediente, y no se le puede sacar una hoja de campo. Y el único momento en que se puede documentar es cuando estás delante de ella. De vuelta al taller ya no se mide ni se fotografía nada.
+
+### Lo que hay que llevarse de allí
+
+Lo tienes en el parte, arriba, en **«Documentar la puerta en obra»**. Cada punto se abre y te dice qué tomar y cómo. Ninguno se marca a mano: se pone en verde cuando el dato está guardado de verdad.
+
+| Punto | Qué se toma |
+|---|---|
+| Ficha | La creas desde el propio parte y queda enganchada a la asistencia |
+| Etiqueta con QR | Pegas una de la furgoneta en sitio visible y protegido, y la eliges en la ficha |
+| Tipo de puerta | De él salen el guión, los peligros, los puntos de medida y el límite de fuerza |
+| Ancho y alto | Paso libre en mm, con el flexómetro. De la altura dependen los puntos de medida |
+| Dos fotos | El conjunto entero, y la placa de características o el cuadro abierto |
+| Matrícula | Marca, modelo y número de serie, copiados de la placa |
+
+La matrícula vale tomada de tres sitios, y cualquiera de los tres sirve:
+
+1. La placa de la puerta, en el campo **Matrícula** de la ficha.
+2. El número de serie del motor o del cuadro, dándolos de alta como componentes.
+3. Si no hay placa o está ilegible: lo escribes en **«Si no tiene placa»**. Eso también es un dato. Dejarlo en blanco, no.
+
+### Los tres atajos del parte
+
+- **Rellenar la ficha de la puerta:** guarda lo escrito, abre la ficha y vuelve solo al parte.
+- **Hacer fotos:** abre la cámara y sube las fotos sin salir del parte.
+- **Añadir la matrícula de un elemento:** da de alta el motor o el cuadro con su número de serie.
+
+El peso de la hoja **no** se exige: no se puede pesar una hoja en obra. Sale como recomendado, junto al uso, el cuadro y el motor.
+
+### Lo único que no bloquea
+
+Si no quedan etiquetas libres en la furgoneta, eso no lo puedes resolver allí. La visita se cierra, pero queda señalada como **pendiente** y la oficina lo ve. Lo demás sí se puede hacer en obra, y por eso se exige.
+
+---
+
+## 5. Tres cosas que se preguntan siempre
 
 **«Me he quedado a medias.»**
 Dale a **Guardar sin cerrar**. Se guarda todo y la visita sigue abierta. No pierdes el guión.
 
 **«La puerta no está dada de alta.»**
-Desde el propio parte puedes darla de alta y queda enganchada a la asistencia. Antes de salir del parte, guarda el avance.
+Desde el propio parte puedes darla de alta y queda enganchada a la asistencia. Antes de salir del parte, guarda el avance. En los cuatro tipos del apartado 4, además, es obligatorio.
 
 **«No tengo cobertura.»**
-La aplicación abre con lo último que tenía. Para medir, llévate impresa la **hoja de campo**: trae los puntos de medida, las aberturas y los límites.
+La aplicación abre con lo último que tenía. Para medir, llévate impresa la **hoja de campo**: trae los puntos de medida, las aberturas y los límites. Ojo: subir fotos y cerrar la visita sí necesitan cobertura.
 
 ---
 
-## 5. Lo que no debes hacer
+## 6. Lo que no debes hacer
 
 - **No marques Bien lo que no has comprobado.** Para eso están **N/A** y, en el expediente, «No verificado».
 - **No marques conforme un paracaídas que no has podido probar.** Si no se puede probar sin riesgo, se deja como no comprobado y se escribe por qué.
 - **No puentees una seguridad y la dejes puenteada.** Como prueba, un momento y controlado. Si la dejas así, la puerta queda fuera de servicio y se dice.
 - **No cierres una visita de pago sin horas.** Se queda valorada en cero y desaparece de lo pendiente de facturar.
+- **No dejes sin documentar una puerta que has tocado.** Las medidas y las fotos solo se pueden tomar allí. Lo que no se toma en obra no se toma nunca.
 
 ---
 
-## 6. Si algo no cuadra
+## 7. Si algo no cuadra
 
 1. Mira la versión arriba de esta pantalla, en la pestaña **Manual**.
 2. Recarga a fondo: en el móvil, cierra la aplicación del todo y vuelve a abrirla.
@@ -134,4 +182,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.10.15-4 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.10.15-5 de ARIZA SAT*
