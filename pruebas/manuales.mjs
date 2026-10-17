@@ -447,6 +447,31 @@ paso('y que un campo en blanco no distingue entre no mirarlo y no existir',
 paso('el de formación lo cuenta como parte del trabajo, no como papeleo',
   /es parte del trabajo/.test(F));
 
+/* ================================================================
+   11. Lo que se arregló probando el alta: buscador, cuadro y motor,
+       y cómo se acciona la puerta
+   ================================================================ */
+bloque('11. El manual cuenta lo que cambió en la ficha');
+
+const ficha = await T(() => {
+  const g = window.__T;
+  return { modos: Object.keys(g.MODOS_ACCIONAMIENTO).map(k => g.MODOS_ACCIONAMIENTO[k].nombre),
+           desde: g.COMBO_DESDE };
+});
+paso('el manual explica que las listas largas tienen buscador',
+  /buscador/i.test(M) && /se elige sola/.test(M));
+paso('y que el cuadro y el motor se escriben una sola vez',
+  /se escriben una vez/.test(M) && /Componentes/.test(M));
+paso('diciendo qué queda en el componente y qué no',
+  /número de serie, la foto de la placa y el papel/.test(M));
+/* Los cuatro modos no se escriben aquí: se leen de la aplicación */
+ficha.modos.forEach(n => paso('el manual nombra el modo «'+n+'» como lo nombra la aplicación',
+  M.toLowerCase().includes(n.toLowerCase()), n));
+paso('y dice que no hace falta esperar al expediente',
+  /No hace falta esperar a ningún expediente/.test(M));
+paso('el manual de formación dice quién manda si la ficha y el expediente no coinciden',
+  /manda la ficha/.test(F) && /foto del día en que se emitió/.test(F));
+
 console.log('\n'+ok+' bien, '+mal+' mal.');
 const graves = errores.filter(x => !/fonts\.googleapis|ERR_TUNNEL|ERR_NAME|net::ERR|provocado por la prueba/.test(x));
 if (graves.length) console.log('Errores de JavaScript:\n'+graves.join('\n'));

@@ -79,8 +79,15 @@ paso('cada componente dice de dónde sale',
 paso('sin expediente no se inventa qué protección le toca',
   !seccional.claves.includes('fotocelulas') && !seccional.claves.includes('banda'),
   seccional.claves.filter(c => ['fotocelulas','banda','limitador'].includes(c)).join(',') || '(ninguno)');
-paso('y lo dice en vez de callárselo',
-  /no tiene todavía ningún expediente/.test(seccional.aviso), seccional.aviso.slice(0, 80));
+/* Cambio deliberado del 17-10-2026: el modo de accionamiento y el tipo de usuario
+   ya no son cosa solo del expediente, están en la ficha de la puerta. El aviso ya
+   no manda a esperar un expediente: manda a rellenar la ficha, que es lo que el
+   técnico puede hacer estando delante de la puerta. */
+paso('y lo dice en vez de callárselo, mandando a la ficha y no a esperar un expediente',
+  /No consta cómo se acciona/.test(seccional.aviso) &&
+  /se ponen en su ficha/.test(seccional.aviso) &&
+  /No hace falta esperar a ningún expediente/.test(seccional.aviso),
+  seccional.aviso.slice(0, 80));
 
 const corredera = await T(() => {
   const g = window.__T;
