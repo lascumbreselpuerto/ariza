@@ -191,6 +191,14 @@ img{max-width:100%}
 .campo .pista.ojo{color:var(--mal);font-weight:600}
 .sin-ficha{background:var(--mal-bg);color:var(--mal);border-radius:6px;padding:8px 10px;font:600 13px var(--sans)}
 
+/* Desplegables largos con buscador */
+.combo{display:grid;gap:5px}
+.combo-busca{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;
+  background:var(--surface);font:inherit;font-size:14px;color:var(--texto)}
+.combo-busca::placeholder{color:var(--muted)}
+.combo-cuenta{font:500 11.5px var(--sans);color:var(--muted)}
+.combo-cuenta.nada{color:var(--mal);font-weight:600}
+
 /* Alta de la puerta en obra: la lista de lo que hay que llevarse de allí */
 .obra-lista{display:grid;gap:0;margin:10px 0 0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .obra-p{padding:9px 11px;border-top:1px solid var(--line);background:var(--surface)}
@@ -607,7 +615,7 @@ const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etique
             expedientes:[], expFotos:[], expDocs:[], exp:null, expPaso:'obra', expSucio:false,
             fotosEquipo:{}, histBusca:'', histTec:'', histTipo:'', histDesde:'', histHasta:'', histArchivadas:false,
             cliArchivados:false, centros:[], sinCentros:false, versionNueva:null, versionAvisada:null,
-            manual:null, manuales:null, sinObra:false, fotosCuenta:{} };
+            manual:null, manuales:null, sinObra:false, sinModo:false, fotosCuenta:{} };
 /* Importes: solo existen para el administrador. Si no hay tarifas cargadas, no se enseña nada. */
 const valoracionDe = id => S.valoraciones[id] || null;
 const eur = n => (n == null || isNaN(n)) ? '—' :
@@ -1089,6 +1097,11 @@ async function cargar(){
      una columna concreta a propósito: un select('*') no falla aunque no exista. */
   const ob = await sb.from('puertas').select('matricula').limit(1);
   S.sinObra = !!ob.error;
+  /* Cómo se acciona la puerta y quién la usa: servidor/ficha.sql. Sin esas dos
+     columnas la aplicación sigue deduciendo la protección del expediente, como
+     antes, y no enseña los dos desplegables en la ficha. */
+  const mo = await sb.from('puertas').select('modo').limit(1);
+  S.sinModo = !!mo.error;
   if (!j.error){ S.ajustes = {}; (j.data || []).forEach(x => { S.ajustes[x.clave] = x.valor; }); }
   // materiales ya usados, para ir sugiriéndolos al técnico
   const m = await sb.from('materiales').select('descripcion, unidad').limit(500);
@@ -1140,7 +1153,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.10.15-5';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.10.17-1';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -1246,6 +1259,7 @@ function render(){
   else if (S.tab === 'manual') h = vistaManual();
   else h = vistaPuertas();
   raiz.innerHTML = h;
+  activarCombos(raiz);
   if (keep){ const el = document.getElementById(keep.id); if (el){ if(keep.txt) el.value = keep.v; el.focus(); if(keep.txt){ try{ el.setSelectionRange(keep.s,keep.e); }catch(_){} } } }
 }
 
@@ -1423,6 +1437,7 @@ function vistaFicha(id){
     ['Cuadro de maniobra',p.cuadro],['Motor',p.motor],['Año',p.anio],['Instalador',p.instalador],
     ['Medidas',(p.ancho_mm||p.alto_mm)?((p.ancho_mm||'?')+' x '+(p.alto_mm||'?')+' mm'):''],['Peso hoja',p.peso_kg?(p.peso_kg+' kg'):''],
     ['Matrícula',p.matricula],['Sin matrícula',p.sin_matricula],
+    ['Accionamiento',(MODOS_ACCIONAMIENTO[p.modo]||{}).nombre||''],['Usuarios',TIPOS_USUARIO[p.usuarios]||''],
     ['Última revisión',p.ultima_revision?fechaCorta(p.ultima_revision):''],['Próxima revisión',p.proxima_revision?(fechaCorta(p.proxima_revision)+' · '+relativo(p.proxima_revision)):'']];
   d.forEach(x => { if (x[1]) h += '<div><dt>'+x[0]+'</dt><dd>'+esc(x[1])+'</dd></div>'; });
   h += '</dl>';
@@ -5648,16 +5663,27 @@ function familiaDePuerta(p){
   return FAMILIA_POR_TIPO[formaDePuerta(p.tipo)] || 'industrial';
 }
 
-/* El modo de accionamiento y el tipo de usuario no se preguntan en la ficha de la
-   puerta, sino en el expediente. Si la puerta no tiene ninguno todavía, no se sabe,
-   y entonces no se puede decir qué protección le toca. */
+/* ---- Cómo se acciona la puerta y quién la usa ----
+   Hasta el 17-10-2026 esto solo se preguntaba dentro del expediente. Resultado:
+   una puerta recién dada de alta no podía decir qué protección le tocaba ni qué
+   elementos debía llevar, y el panel de componentes se quedaba en los genéricos
+   del tipo de puerta hasta que alguien emitía un expediente. Lo señaló David: son
+   dos datos que se saben mirando la puerta, así que ahora están en su ficha.
+
+   Manda la ficha, y es a propósito: la ficha es el dato vivo de la puerta, y si
+   mañana se le pone un mando a distancia, se corrige allí. El expediente es la
+   foto del día en que se emitió y no se toca. Si la ficha está vacía (puertas de
+   antes de este cambio), se usa el último expediente que lo diga. */
 function proteccionDePuerta(p){
   if (!p) return null;
+  if (p.modo && p.usuarios)
+    return { modo: p.modo, usuarios: p.usuarios, origen: 'ficha' };
   const xs = (S.expedientes || []).filter(x => x.puerta_id === p.id)
     .sort((a,b) => (a.creado||'') < (b.creado||'') ? 1 : -1);
   for (const x of xs){
     const pu = (x.datos || {}).puerta || {};
-    if (pu.modo && pu.usuarios) return { modo: pu.modo, usuarios: pu.usuarios, expediente: x.id };
+    if (pu.modo && pu.usuarios)
+      return { modo: pu.modo, usuarios: pu.usuarios, expediente: x.id, origen: 'expediente' };
   }
   return null;
 }
@@ -5695,9 +5721,10 @@ function componentesMinimos(p){
   if (MATRIZ_NO_APLICA_A.includes(familia)){
     aviso = 'Esta familia no se rige por la matriz de protección: sus elementos salen de su propia norma.';
   } else if (!prot){
-    aviso = 'Esta puerta no tiene todavía ningún expediente con el modo de accionamiento y el tipo de '+
-            'usuario, así que no se puede saber qué protección le toca. Aquí solo salen los componentes '+
-            'propios del tipo de puerta.';
+    aviso = 'No consta cómo se acciona esta puerta ni quién la usa, así que no se puede saber qué '+
+            'protección le toca: aquí solo salen los componentes propios del tipo de puerta. '+
+            'Son dos datos que se ven mirando la puerta y se ponen en su ficha, en «Cómo se acciona '+
+            'y quién la usa». No hace falta esperar a ningún expediente.';
   } else {
     const base = MATRIZ_PROTECCION_FABRICA[prot.modo + '|' + prot.usuarios];
     const niveles = base ? (base.niveles || '') : '';
@@ -5708,7 +5735,11 @@ function componentesMinimos(p){
                   (MODOS_ACCIONAMIENTO[prot.modo]||{}).nombre+' con '+
                   (TIPOS_USUARIO[prot.usuarios]||prot.usuarios)));
     });
-    aviso = 'Los elementos de seguridad salen de la matriz de protección, que está '+
+    aviso = 'Según la ficha de la puerta se acciona por '+
+            ((MODOS_ACCIONAMIENTO[prot.modo]||{}).nombre || prot.modo).toLowerCase()+
+            ' y la usan '+((TIPOS_USUARIO[prot.usuarios]||prot.usuarios)+'').toLowerCase()+
+            (prot.origen === 'expediente' ? ' (tomado de su último expediente, porque la ficha no lo dice)' : '')+
+            '. Los elementos de seguridad salen de ahí, por la matriz de protección, que está '+
             'PENDIENTE DE VALIDAR con el ejemplar de la norma. Sirven de recordatorio, '+
             'no acreditan por sí solos que la puerta cumpla.';
   }
@@ -5716,6 +5747,84 @@ function componentesMinimos(p){
   const puestos = componentesDe(p && p.id).map(c => c.clave).filter(Boolean);
   return { familia, aviso, proteccion: prot,
            todos: salida, faltan: salida.filter(x => !puestos.includes(x.clave)) };
+}
+
+/* ================================================================
+   CUADRO Y MOTOR: UN SOLO SITIO
+
+   Lo encontró David probando el alta: la ficha técnica pide el cuadro de maniobra
+   y el motor, y acto seguido el panel de componentes vuelve a pedir marca, modelo,
+   número de serie, foto y papel de esos mismos dos elementos. Se escribía dos
+   veces lo mismo, y lo que pasa cuando algo se escribe dos veces es que acaba
+   diciendo dos cosas distintas.
+
+   Ahora es un solo dato con dos puertas de entrada: en la ficha se ponen la marca
+   y el modelo (que es lo que se rellena rápido en obra), y eso CREA O ACTUALIZA el
+   componente correspondiente. Lo que el componente tiene y la ficha no (número de
+   serie, foto de la placa, declaración o manual) se sigue poniendo en el
+   componente, y eso no es duplicar: es lo que la ficha no guarda.
+
+   Qué componente es el motor depende de la familia, porque no se llama igual en
+   una industrial que en una peatonal o en una barrera. Una cortafuegos no lleva
+   cuadro de maniobra, así que allí no hay nada que sincronizar.
+   ================================================================ */
+const CLAVE_MOTOR  = { industrial:'motor', peatonal:'operador', barrera:'cuerpo', cortafuegos:'motor' };
+const CLAVE_CUADRO = { industrial:'cuadro', peatonal:'cuadro', barrera:'cuadro', cortafuegos:null };
+const claveFicha = (p, cual) =>
+  (cual === 'motor' ? CLAVE_MOTOR : CLAVE_CUADRO)[familiaDePuerta(p)] || null;
+/* La clave de componente, al revés: ¿este componente es el que la ficha guarda? */
+const fichaDeClave = (p, clave) =>
+  clave && clave === claveFicha(p, 'motor') ? 'motor'
+  : (clave && clave === claveFicha(p, 'cuadro') ? 'cuadro' : null);
+
+/* Marca y modelo que hay que enseñar en la ficha. Manda el componente, que es
+   donde están separados; si no existe, se usa el texto suelto de la ficha vieja,
+   y entero en «marca»: partirlo por el primer espacio sería inventarse dónde
+   acaba la marca y empieza el modelo. */
+function marcaModeloFicha(p, cual){
+  const clave = claveFicha(p, cual);
+  const c = clave ? componentesDe(p && p.id)
+    .find(x => x.activo !== false && x.clave === clave) : null;
+  if (c && (c.marca || c.modelo))
+    return { marca: c.marca || '', modelo: c.modelo || '', de: 'componente', id: c.id };
+  const txt = String((p && (cual === 'motor' ? p.motor : p.cuadro)) || '').trim();
+  return { marca: txt, modelo: '', de: txt ? 'ficha' : 'nada', id: c ? c.id : null };
+}
+
+/* De la ficha al componente. No borra nunca: si los dos campos se dejan vacíos,
+   el componente que hubiera se queda como estaba (puede tener número de serie,
+   foto y papel, y eso no se tira por haber vaciado un campo de la ficha). */
+async function guardarCuadroMotor(puertaId, puerta){
+  if (!puertaId || S.sinComponentes) return;
+  for (const cual of ['motor', 'cuadro']){
+    const clave = claveFicha(puerta, cual);
+    if (!clave) continue;
+    const marca = val('f-'+cual+'-marca'), modelo = val('f-'+cual+'-modelo');
+    if (!marca && !modelo) continue;
+    const ya = componentesDe(puertaId).find(x => x.activo !== false && x.clave === clave);
+    try {
+      if (ya){
+        if ((ya.marca || '') === marca && (ya.modelo || '') === modelo) continue;
+        await sb.from('componentes').update({ marca: marca || null, modelo: modelo || null,
+          actualizado: new Date().toISOString() }).eq('id', ya.id);
+      } else {
+        await sb.from('componentes').insert({ puerta_id: puertaId, clave,
+          nombre: nombreComponente(familiaDePuerta(puerta), clave),
+          marca: marca || null, modelo: modelo || null, creado_por: yo() });
+      }
+    } catch(_){ /* el componente es la copia; la ficha ya está guardada */ }
+  }
+}
+
+/* Y del componente a la ficha, para que no se separen por el otro lado */
+async function guardarFichaDesdeComponente(puertaId, clave, marca, modelo){
+  const p = puertaDe(puertaId);
+  const cual = fichaDeClave(p, clave);
+  if (!p || !cual) return;
+  const texto = [marca, modelo].filter(Boolean).join(' ');
+  if (String(p[cual] || '') === texto) return;
+  try { await sb.from('puertas').update({ [cual]: texto || null }).eq('id', puertaId); }
+  catch(_){ /* no es grave: la ficha enseña el componente de todas formas */ }
 }
 
 /* Las casillas de «Seguridad instalada» de la puerta se marcan solas con lo que
@@ -5842,6 +5951,10 @@ function recomendadoObra(p){
   if (!+p.peso_kg) out.push('Peso de la hoja, si lo da la placa o el fabricante');
   if (!String(p.cuadro || '').trim()) out.push('Cuadro de maniobra: marca y modelo');
   if (!String(p.motor || '').trim()) out.push('Motor: marca y modelo');
+  /* No es del mínimo (lo decidió David: dos desplegables no pueden impedir cerrar
+     una preventiva), pero sin ellos la puerta no sabe qué protección le toca. */
+  if (!S.sinModo && !(p.modo && p.usuarios))
+    out.push('Cómo se acciona y quién la usa, que es de donde salen los elementos de seguridad que debe llevar');
   if (!componentesDe(p.id).length) out.push('Dar de alta los componentes que lleva montados');
   return out;
 }
@@ -9245,6 +9358,18 @@ function dlgExpedienteNuevo(puertaId){
         p_puerta: puertaId, p_situacion: val('xp-sit'), p_familia: val('xp-fam'), p_aviso: null });
       if (error) throw error;
       if (!data || !data.ok) return setErr(textoFallo(data));
+      /* El expediente nace sabiendo cómo se acciona la puerta y quién la usa, si
+         la ficha lo dice: es el mismo dato y no hay por qué preguntarlo otra vez.
+         Se puede cambiar dentro del expediente, que es su foto del momento. */
+      const pf = puertaDe(puertaId);
+      if (pf && pf.modo && pf.usuarios){
+        try {
+          const { data: ex } = await sb.from('expedientes').select('datos').eq('id', data.id).maybeSingle();
+          const dd = (ex && ex.datos) || {};
+          dd.puerta = Object.assign({}, dd.puerta || {}, { modo: pf.modo, usuarios: pf.usuarios });
+          await sb.from('expedientes').update({ datos: dd }).eq('id', data.id);
+        } catch(_){ /* si falla, el expediente lo pregunta como siempre */ }
+      }
       cerrarDlg(); await cargar();
       S.exp = data.id; S.expPaso = 'intervencion'; S.ficha = null;
       await cargarFotosExp(data.id); await cargarDocsExp(data.id);
@@ -12865,7 +12990,16 @@ function cssLibro(){
 /* ================= Diálogos ================= */
 const dlg = $('#dlg'), dlgForm = $('#dlg-form');
 let alGuardar = null;
-function abrirDlg(html, guardar){ dlgForm.innerHTML = html; alGuardar = guardar; dlg.showModal(); const f = dlgForm.querySelector('input,select,textarea'); if (f) f.focus(); }
+/* El buscador de los desplegables largos se pone dos veces: ahora, y otra vez
+   enseguida, porque varios diálogos llenan sus desplegables en un setTimeout
+   (los centros del cliente, los materiales ya usados) y en el primer pase
+   todavía están vacíos. */
+function abrirDlg(html, guardar){
+  dlgForm.innerHTML = html; alGuardar = guardar; dlg.showModal();
+  activarCombos(dlgForm);
+  setTimeout(() => activarCombos(dlgForm), 60);
+  const f = dlgForm.querySelector('input,select,textarea'); if (f) f.focus();
+}
 function cerrarDlg(){ dlg.close(); alGuardar = null; }
 /* Un solo envío por vez. Con red lenta, dos toques en «Cerrar visita» lanzaban
    dos guardados en paralelo: dos borrados y dos altas de los mismos materiales. */
@@ -12977,6 +13111,116 @@ const opts = (arr, sel) => {
     .concat(lista.map(o => '<option'+(o===sel?' selected':'')+'>'+esc(o)+'</option>')).join('');
 };
 const casillaSeg = (s, marcado) => '<label><input type="checkbox" class="f-seg" value="'+esc(s)+'"'+(marcado?' checked':'')+'>'+esc(s)+'</label>';
+
+/* ================================================================
+   DESPLEGABLES CON BUSCADOR
+
+   El problema, encontrado por David probando el alta en obra: con cincuenta
+   clientes o diecisiete tipos de puerta, elegir en un desplegable es bajar con el
+   dedo por una lista hasta dar con el que es. En una furgoneta, de pie y con
+   guantes, eso es lo que hace que no se rellene.
+
+   Lo que se hace aquí NO es cambiar los desplegables por otra cosa: el <select>
+   sigue siendo el mismo, con su id y su valor, así que el resto de la aplicación
+   no se entera. Lo que se añade encima es una casilla de búsqueda que va dejando
+   en el desplegable solo lo que casa con lo escrito. Así el desplegable del móvil
+   sigue abriéndose como el del sistema (que es el que se maneja bien con el dedo)
+   pero con tres opciones en vez de cincuenta.
+
+   Se pone solo donde hace falta: a partir de COMBO_DESDE opciones. Una lista de
+   cuatro estados no necesita buscador y tenerlo sería estorbo.
+
+   Dos cuidados que no son evidentes:
+     · La opción que esté elegida NUNCA se filtra fuera. Si se fuera, el valor se
+       perdería al guardar sin que nadie lo dijera.
+     · Cuando otra parte de la aplicación elige un valor por su cuenta (el cliente
+       que sale de la puerta, el tipo de cliente que sale de su ficha), tiene que
+       mirar la lista COMPLETA y no la filtrada: para eso están comboTiene y
+       comboElegir.
+   ================================================================ */
+const COMBO_DESDE = 10;
+const comboOpciones = sel => Array.from(sel.options).map(o => ({ v:o.value, t:o.textContent }));
+/* Todas las opciones del desplegable, filtrado o no */
+const comboTodas = sel => (sel && sel.__comboTodas) ? sel.__comboTodas : (sel ? comboOpciones(sel) : []);
+const comboTiene = (sel, v) => comboTodas(sel).some(o => o.v === v);
+/* Elegir un valor desde fuera: si estaba filtrado fuera, se quita el filtro */
+function comboElegir(sel, v){
+  if (!sel) return;
+  if (sel.dataset.combo === '1' && !Array.from(sel.options).some(o => o.value === v)){
+    const caja = sel.closest('.combo');
+    const inp = caja && caja.querySelector('.combo-busca');
+    if (inp){ inp.value = ''; comboPintar(sel); }
+  }
+  sel.value = v;
+}
+
+function comboPintar(sel){
+  const caja = sel.closest('.combo'); if (!caja) return;
+  const inp = caja.querySelector('.combo-busca');
+  const q = normTxt(inp ? inp.value : '');
+  const todas = comboTodas(sel);
+  const elegido = sel.value;
+  const casan = q ? todas.filter(o => normTxt(o.t).includes(q) || normTxt(o.v).includes(q)) : todas;
+  const lista = casan.slice();
+  // la elegida se queda siempre, aunque no case: si no, se perdería al guardar
+  if (elegido && !lista.some(o => o.v === elegido)){
+    const ya = todas.find(o => o.v === elegido);
+    if (ya) lista.unshift(ya);
+  }
+  sel.innerHTML = lista.map(o =>
+    '<option value="'+esc(o.v)+'"'+(o.v === elegido ? ' selected' : '')+'>'+esc(o.t)+'</option>').join('');
+  sel.value = elegido;
+  const utiles = casan.filter(o => o.v !== '');
+  // si lo escrito deja una sola, se elige sola: un toque menos
+  if (q && utiles.length === 1 && sel.value !== utiles[0].v){
+    sel.value = utiles[0].v;
+    sel.dispatchEvent(new Event('change', { bubbles:true }));
+  }
+  const cuenta = caja.querySelector('.combo-cuenta');
+  if (cuenta){
+    const tot = todas.filter(o => o.v !== '').length;
+    cuenta.textContent = q
+      ? (utiles.length ? utiles.length+' de '+tot : 'Nada coincide con «'+inp.value.trim()+'»')
+      : tot+' para elegir';
+    cuenta.classList.toggle('nada', !!q && !utiles.length);
+  }
+}
+
+function activarCombos(cont){
+  const raizC = cont || document;
+  raizC.querySelectorAll('select').forEach(sel => {
+    if (sel.multiple || sel.dataset.buscador === 'no') return;
+    if (sel.dataset.combo === '1'){
+      /* Ya lo tiene. Si quien pinta ese desplegable lo ha vuelto a llenar (los
+         centros del cliente, por ejemplo), hay que quedarse con la lista nueva,
+         pero solo si no hay búsqueda escrita: con búsqueda, lo que se ve es el
+         resultado del filtro y tomarlo por la lista completa la destruiría. */
+      const caja = sel.closest('.combo');
+      const inp = caja && caja.querySelector('.combo-busca');
+      if (inp && !inp.value.trim()){ sel.__comboTodas = comboOpciones(sel); comboPintar(sel); }
+      return;
+    }
+    if (sel.options.length < COMBO_DESDE) return;
+    sel.__comboTodas = comboOpciones(sel);
+    sel.dataset.combo = '1';
+    const caja = document.createElement('div');
+    caja.className = 'combo';
+    sel.parentNode.insertBefore(caja, sel);
+    const inp = document.createElement('input');
+    inp.type = 'search'; inp.className = 'combo-busca'; inp.autocomplete = 'off';
+    inp.placeholder = 'Escribe para buscar en la lista';
+    inp.setAttribute('aria-label', 'Buscar en la lista');
+    const cuenta = document.createElement('span');
+    cuenta.className = 'combo-cuenta';
+    caja.appendChild(inp); caja.appendChild(sel); caja.appendChild(cuenta);
+    inp.addEventListener('input', () => comboPintar(sel));
+    // Intro no envía el formulario: lleva al desplegable ya filtrado
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter'){ e.preventDefault(); sel.focus(); }
+    });
+    comboPintar(sel);
+  });
+}
 async function guardarLista(clave, arr){
   const { error } = await sb.from('ajustes').upsert({ clave, valor: arr, actualizado: new Date().toISOString() }, { onConflict:'clave' });
   if (error) throw error;
@@ -12985,7 +13229,8 @@ async function guardarLista(clave, arr){
 
 /* Campos del alta de puerta, para poder recuperarlos si se sale a crear un cliente */
 const CAMPOS_PUERTA = ['f-cod','f-cbusca','f-clid','f-centro','f-dir','f-ubi','f-tcliente','f-tipo','f-uso',
-  'f-marca','f-modelo','f-cuadro','f-motor','f-anio','f-instalador','f-ancho','f-alto','f-peso',
+  'f-marca','f-modelo','f-anio','f-instalador','f-ancho','f-alto','f-peso',
+  'f-motor-marca','f-motor-modelo','f-cuadro-marca','f-cuadro-modelo','f-modo','f-usuarios',
   'f-matricula','f-sinmat','f-ult','f-prox','f-notas'];
 function guardarBorradorPuerta(){
   const b = {};
@@ -13013,7 +13258,11 @@ function aplicarBorradorPuerta(){
   CAMPOS_PUERTA.forEach(id => {
     const e = document.getElementById(id);
     if (!e || b[id] === undefined) return;
-    if (e.tagName === 'SELECT' && !Array.from(e.options).some(o => o.value === b[id])) return;
+    if (e.tagName === 'SELECT'){
+      if (!comboTiene(e, b[id])) return;
+      comboElegir(e, b[id]);
+      return;
+    }
     e.value = b[id];
   });
   /* Si se salió a crear un cliente, al volver la puerta ya trae su ficha: se
@@ -13091,8 +13340,8 @@ function clienteDeLaPuertaDelAviso(){
   const pista = document.getElementById('a-cestado');
   if (!sel || !cli) return;
   const p = sel.value ? puertaDe(sel.value) : null;
-  if (p && p.cliente_id && Array.from(cli.options).some(o => o.value === p.cliente_id)){
-    cli.value = p.cliente_id;
+  if (p && p.cliente_id && comboTiene(cli, p.cliente_id)){
+    comboElegir(cli, p.cliente_id);
     if (pista){
       pista.innerHTML = 'Puesto desde la puerta: <b>'+esc((clienteDe(p.cliente_id)||{}).nombre||'')+'</b>.';
       pista.classList.remove('ojo');
@@ -13134,6 +13383,9 @@ function pintarCentros(sel){
   caja.value = elegido;
   caja.disabled = !cid;
   if (boton) boton.disabled = !cid;
+  /* La lista se acaba de rehacer: si este desplegable lleva buscador, hay que
+     decírselo para que no siga trabajando con los centros del cliente anterior. */
+  activarCombos(caja.closest('.campo') || dlgForm);
   pistaCentro();
 }
 function pistaCentro(){
@@ -13195,9 +13447,8 @@ function elegirCliente(id){
     dir.value = c.direccion; dir.dataset.auto = '1';
   }
   const tc = document.getElementById('f-tcliente');
-  if (tc && c.tipo && (!tc.value || tc.dataset.auto === '1')
-      && Array.from(tc.options).some(o => o.value === c.tipo)){
-    tc.value = c.tipo; tc.dataset.auto = '1';
+  if (tc && c.tipo && (!tc.value || tc.dataset.auto === '1') && comboTiene(tc, c.tipo)){
+    comboElegir(tc, c.tipo); tc.dataset.auto = '1';
   }
   /* Los centros del cliente nuevo. Si el que estaba elegido es de este cliente se
      queda; si era de otro, desaparece: un centro de otro cliente no es este sitio. */
@@ -13279,14 +13530,62 @@ function dlgPuerta(id, avisoId){
     '<div class="campo"><label for="f-uso">Uso</label><select id="f-uso">'+opts(lista('usos', USOS), d.uso)+'</select></div>'+
     '<div class="campo"><label for="f-marca">Marca</label><input id="f-marca" type="text" value="'+esc(d.marca||'')+'"></div>'+
     '<div class="campo"><label for="f-modelo">Modelo</label><input id="f-modelo" type="text" value="'+esc(d.modelo||'')+'"></div>'+
-    '<div class="campo"><label for="f-cuadro">Cuadro de maniobra</label><input id="f-cuadro" type="text" value="'+esc(d.cuadro||'')+'"></div>'+
-    '<div class="campo"><label for="f-motor">Motor</label><input id="f-motor" type="text" value="'+esc(d.motor||'')+'"></div>'+
     '<div class="campo"><label for="f-anio">Año</label><input id="f-anio" type="number" min="1950" max="2100" value="'+esc(d.anio||'')+'"></div>'+
     '<div class="campo"><label for="f-instalador">Instalada por</label><input id="f-instalador" type="text" value="'+esc(d.instalador||'')+'"></div>'+
     '<div class="campo"><label for="f-ancho">Ancho (mm)</label><input id="f-ancho" type="number" value="'+esc(d.ancho_mm||'')+'"></div>'+
     '<div class="campo"><label for="f-alto">Alto (mm)</label><input id="f-alto" type="number" value="'+esc(d.alto_mm||'')+'"></div>'+
     '<div class="campo"><label for="f-peso">Peso hoja (kg)</label><input id="f-peso" type="number" step="0.1" value="'+esc(d.peso_kg||'')+'"></div>'+
     '</div></div>';
+
+  /* ---- Cuadro y motor ----
+     Es el mismo dato que el componente, y se escribe una sola vez. Lo que se
+     ponga aquí crea o actualiza ese componente; el número de serie, la foto de la
+     placa y el papel siguen estando en el componente, que es donde caben. */
+  const mMotor  = marcaModeloFicha(d.id ? d : null, 'motor');
+  const mCuadro = marcaModeloFicha(d.id ? d : null, 'cuadro');
+  const hayCuadro = !!claveFicha(d.id ? d : { tipo: d.tipo }, 'cuadro');
+  h += '<div class="grupo"><h3>Cuadro y motor</h3><div class="campos">'+
+    '<div class="campo"><label for="f-motor-marca">Motor · marca</label>'+
+      '<input id="f-motor-marca" type="text" maxlength="60" value="'+esc(mMotor.marca)+'"></div>'+
+    '<div class="campo"><label for="f-motor-modelo">Motor · modelo</label>'+
+      '<input id="f-motor-modelo" type="text" maxlength="80" value="'+esc(mMotor.modelo)+'"></div>'+
+    (hayCuadro
+      ? '<div class="campo"><label for="f-cuadro-marca">Cuadro de maniobra · marca</label>'+
+          '<input id="f-cuadro-marca" type="text" maxlength="60" value="'+esc(mCuadro.marca)+'"></div>'+
+        '<div class="campo"><label for="f-cuadro-modelo">Cuadro de maniobra · modelo</label>'+
+          '<input id="f-cuadro-modelo" type="text" maxlength="80" value="'+esc(mCuadro.modelo)+'"></div>'
+      : '')+
+    '</div><p class="mini" style="margin:8px 0 0">Esto es lo mismo que el componente: al guardar, '+
+    'el motor'+(hayCuadro ? ' y el cuadro quedan dados' : ' queda dado')+' de alta en Componentes con esta marca y este modelo, '+
+    'y no hay que volver a escribirlos allí. El número de serie, la foto de la placa y el papel '+
+    'van en el componente, que es donde caben.'+
+    ((mMotor.de === 'ficha' || mCuadro.de === 'ficha')
+      ? ' Lo que había escrito antes de una sola vez está puesto en «marca»: repártelo si hace falta.'
+      : '')+'</p></div>';
+
+  /* ---- Cómo se acciona y quién la usa ----
+     De estos dos datos sale la protección que le toca a la puerta y, con ella, los
+     elementos de seguridad que debería llevar. Estaban solo en el expediente, y
+     eso dejaba a toda puerta recién dada de alta sin poder decir nada. */
+  if (!S.sinModo){
+    const ayudaModo = Object.keys(MODOS_ACCIONAMIENTO)
+      .map(k => MODOS_ACCIONAMIENTO[k].nombre+': '+MODOS_ACCIONAMIENTO[k].ayuda).join(' ');
+    h += '<div class="grupo"><h3>Cómo se acciona y quién la usa</h3><div class="campos">'+
+      '<div class="campo"><label for="f-modo">Modo de accionamiento</label><select id="f-modo">'+
+        '<option value=""></option>'+
+        Object.keys(MODOS_ACCIONAMIENTO).map(k => '<option value="'+k+'"'+(d.modo===k?' selected':'')+'>'+
+          esc(MODOS_ACCIONAMIENTO[k].nombre)+'</option>').join('')+'</select></div>'+
+      '<div class="campo"><label for="f-usuarios">Tipo de usuario</label><select id="f-usuarios">'+
+        '<option value=""></option>'+
+        Object.keys(TIPOS_USUARIO).map(k => '<option value="'+k+'"'+(d.usuarios===k?' selected':'')+'>'+
+          esc(TIPOS_USUARIO[k])+'</option>').join('')+'</select></div>'+
+      '</div><p class="mini" style="margin:8px 0 0">De estos dos sale qué protección le toca a la puerta '+
+      'y, con ella, qué elementos de seguridad debería llevar. Se ven mirando la puerta y no hay que '+
+      'esperar a ningún expediente. '+esc(ayudaModo)+'</p>'+
+      '<p class="mini" style="margin:6px 0 0">La matriz que cruza estos dos datos está pendiente de '+
+      'validar con el ejemplar de la norma: sirve de recordatorio, no acredita cumplimiento.</p></div>';
+  }
+
   const puestos = d.seguridad || [];
   const maestra = lista('seguridad', SEGURIDAD);
   const elementos = maestra.concat(puestos.filter(s => !maestra.includes(s)));
@@ -13311,7 +13610,11 @@ function dlgPuerta(id, avisoId){
     const o = {
       codigo: val('f-cod') || null, cliente: val('f-cbusca'), direccion: val('f-dir'), ubicacion: val('f-ubi'),
       tipo_cliente: val('f-tcliente'), tipo: val('f-tipo'), uso: val('f-uso'), marca: val('f-marca'), modelo: val('f-modelo'),
-      cuadro: val('f-cuadro'), motor: val('f-motor'), anio: val('f-anio')?+val('f-anio'):null, instalador: val('f-instalador'),
+      /* El texto de siempre se sigue guardando, montado con la marca y el modelo:
+         de él viven los documentos que imprimen «Cuadro de maniobra» y «Motor». */
+      cuadro: [val('f-cuadro-marca'), val('f-cuadro-modelo')].filter(Boolean).join(' '),
+      motor:  [val('f-motor-marca'),  val('f-motor-modelo')].filter(Boolean).join(' '),
+      anio: val('f-anio')?+val('f-anio'):null, instalador: val('f-instalador'),
       ancho_mm: val('f-ancho')?+val('f-ancho'):null, alto_mm: val('f-alto')?+val('f-alto'):null, peso_kg: val('f-peso')?+val('f-peso'):null,
       seguridad: seg, ultima_revision: val('f-ult')||null, proxima_revision: val('f-prox')||null, notas: val('f-notas')
     };
@@ -13321,6 +13624,7 @@ function dlgPuerta(id, avisoId){
        se guarda: una puerta no puede estar en el sitio de otro cliente. */
     if (!S.sinCentros) o.centro_id = val('f-centro') || null;
     if (!S.sinObra){ o.matricula = val('f-matricula') || null; o.sin_matricula = val('f-sinmat') || null; }
+    if (!S.sinModo){ o.modo = val('f-modo') || null; o.usuarios = val('f-usuarios') || null; }
     if (!o.cliente && !o.direccion) return setErr('Pon al menos el cliente o la dirección.');
     o.cliente_id = val('f-clid') || null;
     try {
@@ -13360,6 +13664,11 @@ function dlgPuerta(id, avisoId){
         if (error) throw error;
         if (data){ puertaId = data.id; S.ficha = data.id; }
       }
+      /* El cuadro y el motor son el mismo dato que su componente: lo que se acaba
+         de escribir en la ficha se vuelca ahí, y así no hay que teclearlo dos
+         veces. Va después de guardar la puerta, porque una puerta nueva no tiene
+         id hasta ese momento. */
+      if (puertaId) await guardarCuadroMotor(puertaId, Object.assign({ id: puertaId }, o));
       // si venimos de una asistencia sin puerta, queda enganchada
       if (avisoId && puertaId){
         await sb.from('avisos').update({ puerta_id: puertaId, cliente_id: o.cliente_id || null }).eq('id', avisoId);
@@ -13517,6 +13826,11 @@ function dlgComponente(id, puertaId, clave, volverAviso){
     '<div class="campo"><label for="o-marca">Marca</label><input id="o-marca" type="text" maxlength="60" value="'+esc(d.marca||'')+'"></div>'+
     '<div class="campo"><label for="o-modelo">Modelo</label><input id="o-modelo" type="text" maxlength="80" value="'+esc(d.modelo||'')+'"></div>'+
     '<div class="campo"><label for="o-serie">Nº de serie</label><input id="o-serie" type="text" maxlength="60" value="'+esc(d.num_serie||'')+'"></div>'+
+    (fichaDeClave(p, d.clave)
+      ? '<div class="campo full"><span class="pista">La marca y el modelo de este elemento son los '+
+        'mismos que los de la ficha de la puerta: se escriben una vez y se cambian desde cualquiera '+
+        'de los dos sitios. Lo que solo cabe aquí es el número de serie, la foto de la placa y el papel.</span></div>'
+      : '')+
     '<div class="campo"><label for="o-fecha">Puesto el</label><input id="o-fecha" type="date" value="'+esc(d.fecha_instalacion||'')+'"></div>'+
     '<div class="campo full"><label for="o-notas">Notas</label><input id="o-notas" type="text" maxlength="200" value="'+esc(d.notas||'')+'" placeholder="Ej.: par inferior a 40 cm del suelo"></div>'+
     '</div>';
@@ -13562,6 +13876,9 @@ function dlgComponente(id, puertaId, clave, volverAviso){
         o.creado_por = yo();
         const { error } = await sb.from('componentes').insert(o); if (error) throw error;
       }
+      /* El motor y el cuadro son el mismo dato que la ficha de la puerta: se
+         pueden escribir desde los dos sitios y los dos tienen que decir lo mismo. */
+      await guardarFichaDesdeComponente(pid, o.clave, o.marca || '', o.modelo || '');
       cerrarDlg(); await cargar();
       await sincronizarSeguridad(pid);
       pintar();
@@ -13697,8 +14014,19 @@ async function anadirComponentesMinimos(puertaId){
   const min = componentesMinimos(p);
   if (!min.faltan.length) return toast('No falta ninguno.');
   try {
-    const filas = min.faltan.map(x => ({ puerta_id: puertaId, clave: x.clave, nombre: x.nombre,
-                                         notas: null, activo: true, creado_por: yo() }));
+    /* El motor y el cuadro nacen ya con la marca y el modelo que haya en la ficha
+       de la puerta: es el mismo dato y no se teclea dos veces. */
+    const filas = min.faltan.map(x => {
+      const fila = { puerta_id: puertaId, clave: x.clave, nombre: x.nombre,
+                     notas: null, activo: true, creado_por: yo() };
+      const cual = fichaDeClave(p, x.clave);
+      if (cual){
+        const m = marcaModeloFicha(p, cual);
+        if (m.marca) fila.marca = m.marca;
+        if (m.modelo) fila.modelo = m.modelo;
+      }
+      return fila;
+    });
     const { error } = await sb.from('componentes').insert(filas);
     if (error) throw error;
     await cargar();
