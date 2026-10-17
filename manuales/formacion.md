@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.10.15-5**
+> **Versión de la aplicación que describe este manual: 2026.10.17-1**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -256,6 +256,7 @@ Los que más veces se ven, por orden de gravedad:
 La aplicación no es un cuaderno bonito: está construida sobre lo que acabas de leer.
 
 - El **tipo de puerta** que eliges determina los peligros que te pregunta y los componentes mínimos que te pide.
+- El **modo de accionamiento** y el **tipo de usuario** están en la ficha de la puerta, no solo en el expediente: de ellos sale la protección que le toca y, con ella, los elementos que debería llevar. Si la ficha y un expediente antiguo dicen cosas distintas, manda la ficha, que es el dato vivo; el expediente es la foto del día en que se emitió.
 - El **guión de revisión** es distinto para cada forma de puerta.
 - En los puntos que citan norma o piden medir, tienes **«Cómo se comprueba»**: qué se mide, cómo y el límite de esa puerta concreta.
 - El **ensayo de fuerzas** aplica solo el límite que le toca a esa puerta por su forma de moverse y la abertura declarada.
@@ -301,4 +302,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.10.15-5 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.10.17-1 de ARIZA SAT*

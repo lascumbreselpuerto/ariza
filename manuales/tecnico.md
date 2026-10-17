@@ -6,7 +6,7 @@ Esto no explica el oficio: explica la aplicación. Da por hecho que sabes de pue
 Lo tienes siempre a mano en la pestaña **Manual** de la propia aplicación, también
 sin cobertura una vez que lo has abierto la primera vez.
 
-> **Versión de la aplicación que describe este manual: 2026.10.15-5**
+> **Versión de la aplicación que describe este manual: 2026.10.17-1**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -118,6 +118,14 @@ Esto es nuevo y es obligatorio. En estos cuatro tipos de asistencia:
 
 No es papeleo: una puerta sin dar de alta no existe para la empresa. No tiene ficha, ni QR, ni historial, ni expediente, y no se le puede sacar una hoja de campo. Y el único momento en que se puede documentar es cuando estás delante de ella. De vuelta al taller ya no se mide ni se fotografía nada.
 
+### Dos cosas de la ficha que ahorran tiempo
+
+**Las listas largas tienen buscador.** En el tipo de puerta, el cliente, la puerta de una asistencia o el catálogo de componentes, encima del desplegable hay una casilla: escribes tres letras y la lista se queda en lo que casa. Si queda una sola, se elige sola. No hace falta tilde ni mayúscula. Las listas cortas, de tres o cuatro opciones, no la llevan porque no hace falta.
+
+**El cuadro y el motor se escriben una vez.** En la ficha pones marca y modelo de cada uno, y con eso quedan dados de alta en **Componentes**. Allí ya solo tienes que ponerles el número de serie, la foto de la placa y el papel, que es lo que la ficha no guarda. Si los cambias en el componente, la ficha cambia también: es el mismo dato.
+
+**Cómo se acciona y quién la usa.** Son dos desplegables de la ficha: el modo de accionamiento (Hombre presente, Impulso con el hueco a la vista, Impulso sin ver el hueco, Funcionamiento automático) y el tipo de usuario. De ellos sale qué protección le toca a la puerta y, con ella, qué elementos de seguridad debería llevar. No hace falta esperar a ningún expediente: se ven mirando la puerta. No son obligatorios para cerrar la visita, pero sin ellos el inventario solo puede enseñarte los elementos genéricos del tipo de puerta.
+
 ### Lo que hay que llevarse de allí
 
 Lo tienes en el parte, arriba, en **«Documentar la puerta en obra»**. Cada punto se abre y te dice qué tomar y cómo. Ninguno se marca a mano: se pone en verde cuando el dato está guardado de verdad.
@@ -182,4 +190,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.10.15-5 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.10.17-1 de ARIZA SAT*
