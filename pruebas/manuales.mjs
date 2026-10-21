@@ -472,6 +472,33 @@ paso('y dice que no hace falta esperar al expediente',
 paso('el manual de formación dice quién manda si la ficha y el expediente no coinciden',
   /manda la ficha/.test(F) && /foto del día en que se emitió/.test(F));
 
+/* ================================================================
+   12. El almacén
+   ================================================================ */
+bloque('12. Lo que el manual dice del almacén');
+
+const alm = await T(() => {
+  const g = window.__T;
+  g.S.tab = 'almacen';
+  const html = g.vistaAlmacen();
+  g.S.tab = 'puertas';
+  return { pestana: Array.from(document.querySelectorAll('#tabs button')).map(b => b.textContent.trim()),
+           motivos: Object.values(g.MOTIVO_MOV) };
+});
+paso('la pestaña se llama como la nombra el manual',
+  alm.pestana.includes('Almacén') && M.includes('**Almacén**'), alm.pestana.join(' | '));
+paso('el manual explica que lo que importa es dónde está el material',
+  /en la nave, en tu furgoneta o en la de otro/.test(M));
+paso('y los tres botones del QR, con las palabras de la aplicación',
+  ['Ha llegado material','Lo he gastado','Me lo llevo'].every(x => M.includes(x)));
+paso('dice que la furgoneta se crea sola', /se crea sola/.test(M));
+paso('que el descuento es al cerrar y una sola vez',
+  /al \*\*cerrar la visita\*\*/.test(M) && /una sola vez/.test(M));
+paso('y que previsto no es lo mismo que gastado',
+  /previsto, no lo gastado/.test(M));
+paso('deja claro que dar de alta y poner precios es de oficina',
+  /cosa de oficina/.test(M));
+
 console.log('\n'+ok+' bien, '+mal+' mal.');
 const graves = errores.filter(x => !/fonts\.googleapis|ERR_TUNNEL|ERR_NAME|net::ERR|provocado por la prueba/.test(x));
 if (graves.length) console.log('Errores de JavaScript:\n'+graves.join('\n'));

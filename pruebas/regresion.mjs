@@ -517,8 +517,8 @@ const abrirDoc = async (pag, act) => {
        !(await pag.locator('#login').isVisible()));
   /* Once desde el 15-10-2026: se añadió «Manual», para que el técnico lleve el
      manual dentro de la aplicación y pueda leerlo sin cobertura. */
-  paso('B1 · con sus once pestañas',
-       await pag.locator('#tabs button').count() === 11,
+  paso('B1 · con sus doce pestañas',
+       await pag.locator('#tabs button').count() === 12,
        String(await pag.locator('#tabs button').count()));
   const t = await pag.textContent('body');
   paso('B1 · y reconoce al usuario', /David Ariza Arana/.test(t));

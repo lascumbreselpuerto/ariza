@@ -76,7 +76,21 @@ function semilla(){
     partes: [],
     lineas_parte: [],
     historico: [],
+    ubicaciones: [{ id:'ubi-nave', nombre:'Nave', tipo:'nave', activo:true, creado: ahora() }],
+    movimientos_material: [],
+    materiales_previstos: [],
   };
+}
+
+function existenciasCalculadas(){
+  const suma = {};
+  (DB.movimientos_material || []).forEach(m => {
+    const n = Number(m.cantidad || 0);
+    if (m.hasta){ const k = m.articulo_id+'|'+m.hasta; suma[k] = (suma[k] || 0) + n; }
+    if (m.desde){ const k = m.articulo_id+'|'+m.desde; suma[k] = (suma[k] || 0) - n; }
+  });
+  return Object.keys(suma).filter(k => suma[k] !== 0).map(k => ({
+    articulo_id: k.split('|')[0], ubicacion_id: k.split('|')[1], cantidad: suma[k] }));
 }
 
 const DB = semilla();
@@ -145,7 +159,10 @@ class Consulta {
   maybeSingle(){ this.uno = 'quizas'; return this; }
   /* --- ejecución --- */
   _filas(){
-    let f = tabla(this.t);
+    /* «existencias_material» no es una tabla: en Postgres es una vista que suma
+       los movimientos. Aquí se calcula igual, para que el banco pruebe lo mismo
+       que ocurre de verdad y no un número guardado a mano. */
+    let f = this.t === 'existencias_material' ? existenciasCalculadas() : tabla(this.t);
     this.filtros.forEach(fn => { f = f.filter(fn); });
     return f;
   }
