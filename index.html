@@ -228,6 +228,14 @@ img{max-width:100%}
 .nota-oficina{margin:0;padding:8px 10px;border-left:3px solid var(--amarillo);background:rgba(252,186,29,.09);border-radius:0 6px 6px 0;font-size:14px;line-height:1.45}
 .firma-caja{border:1px solid var(--line);border-radius:8px;background:#fff;touch-action:none;width:100%;height:170px;display:block}
 .mat-fila{display:grid;grid-template-columns:1fr 76px 60px 34px;gap:6px;margin-bottom:6px;align-items:center}
+/* Con almacén, la línea lleva además el material elegido del catálogo, que va
+   arriba y a todo lo ancho: en el móvil no caben cinco columnas. */
+.mat-fila.con-art{grid-template-areas:"art art art art" "desc cant uni quitar"}
+.mat-fila.con-art .mat-art{grid-area:art}
+.mat-fila.con-art .mat-desc{grid-area:desc}
+.mat-fila.con-art .mat-cant{grid-area:cant}
+.mat-fila.con-art .mat-uni{grid-area:uni}
+.mat-fila.con-art button{grid-area:quitar}
 .mat-fila input,.mat-fila select{width:100%}
 @media (max-width:520px){ .mat-fila{grid-template-columns:1fr 64px 52px 32px} }
 .foto-rota{display:grid;place-items:center;width:100%;height:100%;font-size:12px;color:var(--muted);text-align:center;padding:8px;text-decoration:none}
@@ -444,6 +452,7 @@ dialog::backdrop{background:rgba(20,18,17,.55)}
     <button data-tab="calendario" role="tab">Calendario</button>
     <button data-tab="clientes" role="tab">Clientes</button>
     <button data-tab="contratos" role="tab">Contratos</button>
+    <button data-tab="almacen" role="tab">Almacén</button>
     <button data-tab="etiquetas" role="tab">Etiquetas</button>
     <button data-tab="gestion" role="tab" hidden>Gestión</button>
     <button data-tab="equipo" role="tab" hidden>Equipo</button>
@@ -615,7 +624,9 @@ const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etique
             expedientes:[], expFotos:[], expDocs:[], exp:null, expPaso:'obra', expSucio:false,
             fotosEquipo:{}, histBusca:'', histTec:'', histTipo:'', histDesde:'', histHasta:'', histArchivadas:false,
             cliArchivados:false, centros:[], sinCentros:false, versionNueva:null, versionAvisada:null,
-            manual:null, manuales:null, sinObra:false, sinModo:false, fotosCuenta:{} };
+            manual:null, manuales:null, sinObra:false, sinModo:false, fotosCuenta:{},
+            sinAlmacen:false, ubicaciones:[], existencias:[], movimientos:[], previstos:[],
+            buscaMat:'', matFamilia:'', matProveedor:'', matFiltro:'', fichaMat:null };
 /* Importes: solo existen para el administrador. Si no hay tarifas cargadas, no se enseña nada. */
 const valoracionDe = id => S.valoraciones[id] || null;
 const eur = n => (n == null || isNaN(n)) ? '—' :
@@ -1102,6 +1113,22 @@ async function cargar(){
      antes, y no enseña los dos desplegables en la ficha. */
   const mo = await sb.from('puertas').select('modo').limit(1);
   S.sinModo = !!mo.error;
+  /* ---- El almacén ----
+     Las existencias no se guardan en ninguna columna: se leen de la vista, que
+     las suma de los movimientos. Si falta el SQL del almacén, la aplicación
+     sigue funcionando como antes y la pestaña lo dice en vez de romperse. */
+  const [ub, ex, mv] = await Promise.all([
+    sb.from('ubicaciones').select('*').order('nombre'),
+    sb.from('existencias_material').select('*'),
+    sb.from('movimientos_material').select('*').order('creado', { ascending:false }).limit(3000),
+  ]);
+  S.sinAlmacen = !!ub.error || !!ex.error;
+  S.ubicaciones = ub.error ? [] : (ub.data || []);
+  S.existencias = ex.error ? [] : (ex.data || []);
+  S.movimientos = mv.error ? [] : (mv.data || []);
+  const pv = S.sinAlmacen ? { data: [] }
+    : await sb.from('materiales_previstos').select('*').order('creado');
+  S.previstos = pv.error ? [] : (pv.data || []);
   if (!j.error){ S.ajustes = {}; (j.data || []).forEach(x => { S.ajustes[x.clave] = x.valor; }); }
   // materiales ya usados, para ir sugiriéndolos al técnico
   const m = await sb.from('materiales').select('descripcion, unidad').limit(500);
@@ -1153,7 +1180,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.10.21-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.10.21-2';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -1206,6 +1233,11 @@ async function arranque(){
   if (tokenK){ await vistaContratoPublico(tokenK); return; }
   const ref = codigoDeURL();
   if (ref){ await vistaPublica(ref); return; }
+  /* La etiqueta de un material NO tiene vista pública: dentro hay existencias y
+     proveedores, que no son cosa de quien pase por allí. Se guarda y, en cuanto
+     haya sesión, se abre su entrada y salida. */
+  const mat = materialDeURL();
+  if (mat) S.qrMaterial = mat;
   sb.auth.onAuthStateChange((_ev, sesion) => entrar(sesion));
   const { data } = await sb.auth.getSession();
   entrar(data.session);
@@ -1231,6 +1263,15 @@ async function entrar(sesion){
   $('#tabs button[data-tab="equipo"]').hidden = per.rol !== 'admin';
   $('#tabs button[data-tab="gestion"]').hidden = !(per.rol === 'admin' || per.rol === 'oficina');
   await cargar();
+  /* Si se ha entrado escaneando la etiqueta de un material, se va derecho a su
+     movimiento: el técnico ha escaneado con una caja en la mano. */
+  if (S.qrMaterial){
+    const ref = S.qrMaterial; S.qrMaterial = null;
+    const a = (S.catalogo || []).find(x =>
+      normTxt(x.codigo || '') === normTxt(ref.codigo) && (x.token || '') === ref.token);
+    if (a){ S.tab = 'almacen'; pintar(); dlgEscaneado(a.id); }
+    else toast('Esa etiqueta no corresponde a ningún material del almacén.');
+  }
 }
 const yo = () => (S.perfil && S.perfil.nombre) || (S.user && S.user.email) || 'Técnico';
 
@@ -1255,6 +1296,7 @@ function render(){
   else if (S.tab === 'realizadas') h = vistaRealizadas();
   else if (S.tab === 'etiquetas') h = vistaEtiquetas();
   else if (S.tab === 'gestion') h = esGestion() ? vistaGestion() : vistaPuertas();
+  else if (S.tab === 'almacen') h = vistaAlmacen();
   else if (S.tab === 'equipo') h = vistaEquipo();
   else if (S.tab === 'manual') h = vistaManual();
   else h = vistaPuertas();
@@ -1703,6 +1745,12 @@ function accionesAsis(a, firmada){
                : '<span class="mini" title="A este correo saldría">'+esc(mail)+'</span>'));
     else
       b.push('<span class="mini">Sin correo del cliente: no se le puede mandar el parte</span>');
+  }
+  /* La oficina apunta aquí lo que el técnico tiene que llevar y montar */
+  if (!a.cerrado && esGestion() && !S.sinAlmacen){
+    const n = previstosDe(a.id).length;
+    b.push('<button class="btn sm plana" data-act="prev-abrir" data-id="'+a.id+'">'+
+      (n ? 'Material que lleva ('+n+')' : 'Decirle qué material llevar')+'</button>');
   }
   b.push('<button class="btn sm plana" data-act="aviso-duplicar" data-id="'+a.id+'">Duplicar</button>');
   if (!a.cerrado && esGestion())
@@ -2849,6 +2897,370 @@ function vistaGestion(){
   return h + '</div>';
 }
 
+/* ---- Almacén ---- */
+function vistaAlmacen(){
+  let h = '<div class="stack">';
+  if (S.sinAlmacen){
+    h += '<div class="panel"><div class="panel-h"><h2>Almacén</h2></div>'+
+      '<div class="sin-ficha">Falta ejecutar en la base de datos el SQL del almacén '+
+      '(servidor/almacen.sql).</div>'+
+      '<p class="mini" style="margin:10px 0 0">Hasta entonces el material se sigue escribiendo a mano '+
+      'en el parte, como siempre, y no se lleva cuenta de existencias.</p></div></div>';
+    return h;
+  }
+
+  const q = normTxt(S.buscaMat);
+  const todos = (S.catalogo || []).filter(a => a.activo !== false);
+  let lista2 = todos.filter(a => !q ||
+    normTxt([a.descripcion, a.codigo, a.referencia, a.marca, a.familia, a.proveedor].join(' ')).includes(q));
+  if (S.matFamilia) lista2 = lista2.filter(a => (a.familia || '') === S.matFamilia);
+  if (S.matProveedor) lista2 = lista2.filter(a => (a.proveedor || '') === S.matProveedor);
+  if (S.matFiltro === 'minimo') lista2 = lista2.filter(bajoMinimo);
+  if (S.matFiltro === 'mia') lista2 = lista2.filter(a => existenciasDe(a.id).enMiFurgoneta > 0);
+  if (S.matFiltro === 'sin') lista2 = lista2.filter(a => existenciasDe(a.id).total <= 0);
+
+  const faltan = todos.filter(bajoMinimo);
+  const fur = miFurgoneta();
+
+  h += '<div class="fila"><div class="buscador sp"><input id="busca-mat" type="search" '+
+       'placeholder="Buscar material por nombre, código, referencia, marca o familia" '+
+       'value="'+esc(S.buscaMat)+'" data-act="busca-mat"></div>'+
+       (esGestion() ? '<button class="btn" data-act="importar" data-tipo="materiales">Cargar desde Excel</button>'+
+                      '<button class="btn" data-act="mat-etiquetas">Etiquetas QR</button>' : '')+
+       (esGestion() ? '<button class="btn pri" data-act="mat-nuevo">Nuevo material</button>' : '')+'</div>';
+
+  h += '<p class="mini" style="margin:0">'+todos.length+' materiales en el catálogo'+
+       (faltan.length ? ' · <b>'+faltan.length+' por debajo del mínimo</b>' : '')+
+       (fur ? ' · tu furgoneta: '+esc(fur.nombre) : ' · todavía no tienes furgoneta: se crea sola al coger material')+
+       '</p>';
+
+  /* Filtros. Son desplegables y no pestañas porque la lista de familias la
+     hacéis vosotros y no cabe arriba. */
+  h += '<div class="fila" style="gap:8px;flex-wrap:wrap">'+
+    '<select class="cal-sel" data-act="mat-familia"><option value="">Todas las familias</option>'+
+      familiasMaterial().map(f => '<option'+(S.matFamilia===f?' selected':'')+'>'+esc(f)+'</option>').join('')+'</select>'+
+    (proveedoresMaterial().length
+      ? '<select class="cal-sel" data-act="mat-proveedor"><option value="">Todos los proveedores</option>'+
+        proveedoresMaterial().map(p => '<option'+(S.matProveedor===p?' selected':'')+'>'+esc(p)+'</option>').join('')+'</select>'
+      : '')+
+    '<select class="cal-sel" data-act="mat-filtro">'+
+      [['','Todo lo que hay'],['minimo','Solo lo que falta'],['mia','Solo lo que llevo yo'],['sin','Solo lo que está a cero']]
+        .map(x => '<option value="'+x[0]+'"'+(S.matFiltro===x[0]?' selected':'')+'>'+x[1]+'</option>').join('')+
+    '</select></div>';
+
+  if (faltan.length && !S.matFiltro)
+    h += '<div class="sin-ficha">'+faltan.length+' material'+(faltan.length===1?'':'es')+
+      ' por debajo del mínimo: '+esc(faltan.slice(0,6).map(a => a.descripcion).join(', '))+
+      (faltan.length > 6 ? ' y '+(faltan.length-6)+' más' : '')+'.</div>';
+
+  if (!todos.length){
+    h += '<div class="panel"><p class="muted" style="margin:0 0 10px">El almacén está vacío. '+
+      'Puedes dar de alta los materiales uno a uno, o cargarlos de golpe desde un Excel.</p>'+
+      '<div class="fila" style="gap:8px">'+(esGestion() ? '<button class="btn pri" data-act="mat-nuevo">Dar de alta el primero</button>' : '')+
+      (esGestion() ? '<button class="btn" data-act="importar" data-tipo="materiales">Cargar desde Excel</button>' : '')+
+      '</div></div>';
+  }
+  else if (!lista2.length)
+    h += '<div class="panel"><p class="muted" style="margin:0">Ningún material coincide con lo que buscas.</p></div>';
+  else {
+    h += '<div class="lista">';
+    lista2.slice(0, 300).forEach(a => {
+      const e = existenciasDe(a.id);
+      const falta = bajoMinimo(a);
+      h += '<div class="item" data-act="mat-ficha" data-id="'+a.id+'" style="cursor:pointer">'+
+        '<div class="item-in">'+
+        '<div class="fila" style="gap:8px;flex-wrap:wrap">'+
+          '<b>'+esc(a.descripcion)+'</b>'+
+          (a.codigo ? '<span class="chip gris sin">'+esc(a.codigo)+'</span>' : '')+
+          (a.familia ? '<span class="chip gris sin">'+esc(a.familia)+'</span>' : '')+
+          '<span class="sp"></span>'+
+          '<span class="chip '+(e.total > 0 ? (falta ? 'aviso' : 'ok') : 'mal')+'">'+
+            (e.total > 0 ? e.total+' '+esc(a.unidad || 'ud') : 'sin existencias')+'</span>'+
+        '</div>'+
+        '<div class="mini">'+
+          esc([a.marca, a.referencia, a.proveedor].filter(Boolean).join(' · ') || 'Sin más datos')+
+        '</div>'+
+        '<div class="mini">'+
+          (e.porSitio.length
+            ? esc(e.porSitio.map(s => s.nombre+': '+s.cantidad).join(' · '))
+            : 'No hay existencias en ningún sitio')+
+          (falta ? ' · <b style="color:var(--mal)">mínimo '+esc(a.minimo)+'</b>' : '')+
+        '</div>'+
+        '<div class="fila" style="gap:6px;flex-wrap:wrap;margin-top:6px">'+
+          '<button class="btn sm pri" data-act="mat-mover" data-id="'+a.id+'" data-modo="entrada">Entrada</button>'+
+          '<button class="btn sm" data-act="mat-mover" data-id="'+a.id+'" data-modo="salida">Salida</button>'+
+          '<button class="btn sm plana" data-act="mat-mover" data-id="'+a.id+'" data-modo="traspaso">Traspaso</button>'+
+          '<span class="sp"></span>'+
+          (a.codigo && a.token ? '<button class="btn sm plana" data-act="mat-qr" data-id="'+a.id+'">QR</button>' : '')+
+        '</div>'+
+        '</div></div>';
+    });
+    h += '</div>';
+    if (lista2.length > 300)
+      h += '<p class="mini" style="margin:0">Se enseñan los 300 primeros. Afina la búsqueda.</p>';
+  }
+  return h + '</div>';
+}
+
+/* Ficha de un material: lo que es, dónde está y qué ha pasado con él */
+function dlgMaterial(id){
+  const a = articuloDe(id);
+  if (!a) return;
+  const e = existenciasDe(id);
+  const movs = (S.movimientos || []).filter(m => m.articulo_id === id).slice(0, 15);
+  let h = '<h3>'+esc(a.descripcion)+'</h3>'+
+    '<p class="mini" style="margin:0 0 10px">'+
+      esc([a.codigo, a.familia, a.marca, a.referencia, a.proveedor].filter(Boolean).join(' · '))+'</p>';
+
+  h += '<div class="grupo"><h3>Dónde está</h3>';
+  if (!e.porSitio.length) h += '<p class="muted" style="margin:0">No hay existencias en ningún sitio.</p>';
+  else h += '<dl class="datos">'+e.porSitio.map(s =>
+    '<div><dt>'+esc(s.nombre)+'</dt><dd>'+s.cantidad+' '+esc(a.unidad||'ud')+'</dd></div>').join('')+
+    '<div><dt>Total</dt><dd><b>'+e.total+' '+esc(a.unidad||'ud')+'</b></dd></div></dl>';
+  if (bajoMinimo(a))
+    h += '<div class="sin-ficha" style="margin-top:10px">Por debajo del mínimo, que está en '+esc(a.minimo)+'.</div>';
+  if (a.ubicacion) h += '<p class="mini" style="margin:10px 0 0">En la nave está en: <b>'+esc(a.ubicacion)+'</b></p>';
+  h += '<div class="fila" style="gap:6px;flex-wrap:wrap;margin-top:10px">'+
+    '<button type="button" class="btn sm pri" data-act="mat-mover" data-id="'+a.id+'" data-modo="entrada">Entrada</button>'+
+    '<button type="button" class="btn sm" data-act="mat-mover" data-id="'+a.id+'" data-modo="salida">Salida</button>'+
+    '<button type="button" class="btn sm" data-act="mat-mover" data-id="'+a.id+'" data-modo="traspaso">Traspaso</button>'+
+    '<button type="button" class="btn sm plana" data-act="mat-mover" data-id="'+a.id+'" data-modo="ajuste">Ajuste de inventario</button>'+
+    '</div></div>';
+
+  h += '<div class="grupo"><h3>Últimos movimientos</h3>';
+  if (!movs.length) h += '<p class="muted" style="margin:0">Todavía no se ha movido nada.</p>';
+  else {
+    h += '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Cuándo</th><th>Qué</th>'+
+      '<th style="width:70px">Cantidad</th><th>Quién</th></tr></thead><tbody>';
+    movs.forEach(m => {
+      const de = m.desde ? nombreUbicacion(m.desde) : null;
+      const al = m.hasta ? nombreUbicacion(m.hasta) : null;
+      const texto = de && al ? de+' → '+al : (al ? 'Entrada en '+al : 'Salida de '+de);
+      const av = m.aviso_id ? (S.avisos || []).find(x => x.id === m.aviso_id) : null;
+      h += '<tr><td class="mini">'+esc(fechaCorta(m.creado))+'</td>'+
+        '<td>'+esc(texto)+
+          '<span class="sub" style="display:block">'+esc(MOTIVO_MOV[m.motivo] || m.motivo)+
+          (av ? ' · '+esc(nombreCliente(av)) : '')+(m.nota ? ' · '+esc(m.nota) : '')+'</span></td>'+
+        '<td>'+esc(m.cantidad)+'</td><td class="mini">'+esc(m.creado_por || '')+'</td></tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+  h += '</div>';
+
+  h += '<div class="pie">'+
+    (esGestion() ? '<button type="button" class="btn plana" data-act="articulo-editar" data-id="'+a.id+'">Editar el material</button>' : '')+
+    (a.codigo && a.token ? '<button type="button" class="btn plana" data-act="mat-qr" data-id="'+a.id+'">Ver su QR</button>' : '')+
+    '<span class="sp"></span><button type="button" class="btn pri" data-cerrar>Cerrar</button></div>';
+  abrirDlg(h, null);
+}
+
+const MOTIVO_MOV = { compra:'Compra', obra:'Usado en obra', averia:'Usado en una avería',
+  traspaso:'Traspaso', devolucion:'Devuelto', ajuste:'Ajuste de inventario', baja:'Baja' };
+
+/* ================================================================
+   LO QUE LA OFICINA MANDA LLEVAR
+
+   La oficina sabe lo que va a hacer falta antes de que el técnico salga: lo
+   apunta aquí y el técnico lo ve en su parte, con un botón para pasarlo a
+   material usado sin volver a teclearlo. No descuenta nada por sí solo: previsto
+   no es gastado, y confundir las dos cosas es lo que descuadra un almacén.
+   ================================================================ */
+const previstosDe = avisoId => (S.previstos || []).filter(p => p.aviso_id === avisoId);
+
+function dlgPrevistos(avisoId){
+  const av = (S.avisos || []).find(x => x.id === avisoId);
+  if (!av) return;
+  const lista2 = previstosDe(avisoId);
+  const cat = (S.catalogo || []).filter(a => a.activo !== false)
+    .sort((x, y) => (x.descripcion||'').localeCompare(y.descripcion||'', 'es'));
+  let h = '<h3>Material que hay que llevar</h3>'+
+    '<p class="mini" style="margin:0 0 10px">'+esc(nombreCliente(av))+' · '+esc(tipoAsis(av.tipo))+
+    (av.puerta_id ? ' · '+esc((puertaDe(av.puerta_id)||{}).codigo || '') : '')+'</p>';
+
+  h += '<div class="grupo"><h3>Ya apuntado</h3>';
+  if (!lista2.length) h += '<p class="muted" style="margin:0">Todavía no hay nada apuntado.</p>';
+  else {
+    h += '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Material</th>'+
+      '<th style="width:80px">Cantidad</th><th style="width:90px">En furgoneta</th><th></th></tr></thead><tbody>';
+    lista2.forEach(p => {
+      const a = p.articulo_id ? articuloDe(p.articulo_id) : null;
+      const fur = av.tecnico_id ? furgonetaDe(av.tecnico_id) : null;
+      const lleva = (a && fur) ? hayEn(a.id, fur.id) : null;
+      h += '<tr><td>'+esc(p.descripcion || (a ? a.descripcion : '—'))+
+        (p.nota ? '<span class="sub" style="display:block">'+esc(p.nota)+'</span>' : '')+'</td>'+
+        '<td>'+esc(p.cantidad)+' '+esc(a ? (a.unidad||'ud') : 'ud')+'</td>'+
+        '<td>'+(lleva == null ? '<span class="mini">—</span>'
+          : '<span class="chip '+(lleva >= p.cantidad ? 'ok' : 'aviso')+' sin">'+lleva+'</span>')+'</td>'+
+        '<td style="text-align:right"><button type="button" class="btn sm plana" data-act="prev-quitar" data-id="'+p.id+'" data-aviso="'+avisoId+'">Quitar</button></td></tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+  h += '</div>';
+
+  h += '<div class="grupo"><h3>Añadir</h3><div class="campos">'+
+    (S.sinAlmacen ? '' :
+      '<div class="campo full"><label for="pv-art">Material del almacén</label>'+
+      '<select id="pv-art"><option value="">Lo escribo a mano</option>'+
+      cat.map(a => '<option value="'+a.id+'">'+esc(a.descripcion + (a.codigo ? ' · '+a.codigo : ''))+'</option>').join('')+
+      '</select></div>')+
+    '<div class="campo full"><label for="pv-desc">Descripción</label>'+
+      '<input id="pv-desc" type="text" maxlength="120" placeholder="Si no está en el almacén, escríbelo"></div>'+
+    '<div class="campo"><label for="pv-cant">Cantidad</label>'+
+      '<input id="pv-cant" type="number" step="any" min="0" value="1"></div>'+
+    '<div class="campo full"><label for="pv-nota">Nota para el técnico</label>'+
+      '<input id="pv-nota" type="text" maxlength="160" placeholder="Ej.: la de 2 m, no la de 1,5"></div>'+
+    '</div>'+
+    '<div class="fila" style="margin-top:10px"><span class="sp"></span>'+
+    '<button type="button" class="btn pri sm" data-act="prev-anadir" data-aviso="'+avisoId+'">Añadir a la lista</button></div></div>';
+
+  h += '<p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn pri" data-cerrar>Cerrar</button></div>';
+  abrirDlg(h, null);
+}
+
+/* Lo que sale al escanear la etiqueta de un material. Botones grandes y pocos:
+   quien escanea tiene una caja en una mano y el teléfono en la otra. */
+function dlgEscaneado(id){
+  const a = articuloDe(id);
+  if (!a) return;
+  const e = existenciasDe(id);
+  abrirDlg('<h3>'+esc(a.descripcion)+'</h3>'+
+    '<p class="mini" style="margin:0 0 4px">'+esc([a.codigo, a.marca, a.referencia].filter(Boolean).join(' · '))+'</p>'+
+    '<div class="grupo"><h3>Ahora mismo hay</h3>'+
+      (e.porSitio.length
+        ? '<dl class="datos">'+e.porSitio.map(s => '<div><dt>'+esc(s.nombre)+'</dt><dd>'+s.cantidad+' '+
+            esc(a.unidad||'ud')+'</dd></div>').join('')+'</dl>'
+        : '<p class="muted" style="margin:0">Nada en ningún sitio.</p>')+
+    '</div>'+
+    '<div class="fila" style="gap:8px;flex-wrap:wrap">'+
+      '<button type="button" class="btn pri" data-act="mat-mover" data-id="'+a.id+'" data-modo="entrada">Ha llegado material</button>'+
+      '<button type="button" class="btn pri" data-act="mat-mover" data-id="'+a.id+'" data-modo="salida">Lo he gastado</button>'+
+      '<button type="button" class="btn" data-act="mat-mover" data-id="'+a.id+'" data-modo="traspaso">Me lo llevo</button>'+
+      '<button type="button" class="btn plana" data-act="mat-ficha" data-id="'+a.id+'">Ver la ficha</button>'+
+    '</div>'+
+    '<div class="pie"><span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cerrar</button></div>', null);
+}
+
+/* ---- Mover material ----
+   Un solo diálogo para las cuatro cosas: entra, sale, se traspasa o se ajusta.
+   Lo que cambia entre ellas es de dónde sale y a dónde va, así que eso es lo
+   único que se pregunta distinto. */
+function dlgMover(articuloId, modo, avisoId){
+  const a = articuloDe(articuloId);
+  if (!a) return;
+  const e = existenciasDe(articuloId);
+  const nave = laNave();
+  const fur = miFurgoneta();
+  const sitios = (S.ubicaciones || []).filter(u => u.activo !== false);
+  const opsSitio = (sel, incluirFuera) =>
+    (incluirFuera ? '<option value="">Fuera del almacén (compra o consumo)</option>' : '')+
+    sitios.map(u => '<option value="'+u.id+'"'+(u.id===sel?' selected':'')+'>'+esc(u.nombre)+'</option>').join('');
+
+  const titulos = { entrada:'Entrada de material', salida:'Salida de material',
+                    traspaso:'Traspaso entre sitios', ajuste:'Ajuste de inventario' };
+  /* Mis asistencias abiertas, para poder decir en qué obra se ha gastado */
+  const mias = (S.avisos || []).filter(x => !x.cerrado && !x.archivado &&
+    (!S.perfil || x.tecnico_id === S.perfil.id || esGestion()))
+    .slice(0, 60);
+
+  let h = '<h3>'+titulos[modo]+'</h3>'+
+    '<p class="mini" style="margin:0 0 10px"><b>'+esc(a.descripcion)+'</b>'+
+    (a.codigo ? ' · '+esc(a.codigo) : '')+' · hay '+e.total+' '+esc(a.unidad||'ud')+
+    (e.porSitio.length ? ' ('+esc(e.porSitio.map(s => s.nombre+': '+s.cantidad).join(' · '))+')' : '')+'</p>';
+
+  h += '<div class="campos">'+
+    '<div class="campo"><label for="mv-cant">Cantidad ('+esc(a.unidad||'ud')+')</label>'+
+      '<input id="mv-cant" type="number" step="any" min="0" inputmode="decimal" value="1"></div>';
+
+  if (modo === 'entrada')
+    h += '<div class="campo"><label for="mv-hasta">Entra en</label><select id="mv-hasta">'+
+      opsSitio(nave ? nave.id : (sitios[0]||{}).id, false)+'</select></div>'+
+      '<div class="campo full"><label for="mv-nota">Albarán o nota</label>'+
+      '<input id="mv-nota" type="text" maxlength="160" placeholder="Ej.: albarán 2026-4471 de Erreka"></div>';
+
+  if (modo === 'salida')
+    h += '<div class="campo"><label for="mv-desde">Sale de</label><select id="mv-desde">'+
+      opsSitio(fur ? fur.id : (nave ? nave.id : ''), false)+'</select></div>'+
+      '<div class="campo"><label for="mv-motivo">Para qué</label><select id="mv-motivo">'+
+        '<option value="obra">Montado en una obra</option>'+
+        '<option value="averia">Usado en una avería</option>'+
+        '<option value="baja">Roto o perdido</option>'+
+      '</select></div>'+
+      '<div class="campo full"><label for="mv-aviso">¿En qué asistencia?</label><select id="mv-aviso">'+
+        '<option value="">Sin asistencia</option>'+
+        mias.map(x => '<option value="'+x.id+'"'+(x.id===avisoId?' selected':'')+'>'+
+          esc(nombreCliente(x)+' · '+tipoAsis(x.tipo)+(x.puerta_id ? ' · '+((puertaDe(x.puerta_id)||{}).codigo||'') : ''))+
+          '</option>').join('')+
+      '</select><span class="pista">Así el material queda imputado a esa obra y sale en su parte.</span></div>'+
+      '<div class="campo full"><label for="mv-nota">Nota</label>'+
+      '<input id="mv-nota" type="text" maxlength="160"></div>';
+
+  if (modo === 'traspaso')
+    h += '<div class="campo"><label for="mv-desde">Sale de</label><select id="mv-desde">'+
+      opsSitio(nave ? nave.id : '', false)+'</select></div>'+
+      '<div class="campo"><label for="mv-hasta">Va a</label><select id="mv-hasta">'+
+      opsSitio(fur ? fur.id : '', false)+'</select></div>'+
+      '<div class="campo full"><label for="mv-nota">Nota</label>'+
+      '<input id="mv-nota" type="text" maxlength="160" placeholder="Ej.: lo cargo para el muelle 2"></div>';
+
+  if (modo === 'ajuste')
+    h += '<div class="campo"><label for="mv-sitio">Dónde</label><select id="mv-sitio">'+
+      opsSitio(nave ? nave.id : '', false)+'</select></div>'+
+      '<div class="campo"><label for="mv-signo">Qué pasa</label><select id="mv-signo">'+
+        '<option value="mas">Hay más de lo que decía la aplicación</option>'+
+        '<option value="menos">Hay menos</option></select></div>'+
+      '<div class="campo full"><label for="mv-nota">Por qué</label>'+
+      '<input id="mv-nota" type="text" maxlength="160" placeholder="Ej.: recuento del 20 de octubre"></div>';
+
+  h += '</div>';
+
+  if (modo === 'salida' && !fur)
+    h += '<p class="mini" style="margin:10px 0 0">Todavía no tienes furgoneta en el almacén. '+
+      'En cuanto cojas material de la nave, se crea sola.</p>';
+
+  h += '<p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Guardar el movimiento</button></div>';
+
+  abrirDlg(h, async () => {
+    const cant = parseFloat(val('mv-cant'));
+    if (!(cant > 0)) return setErr('Pon una cantidad mayor que cero.');
+    let o = { articulo_id: articuloId, cantidad: cant, nota: val('mv-nota') || null };
+    try {
+      if (modo === 'entrada'){ o.hasta = val('mv-hasta'); o.motivo = 'compra'; }
+      if (modo === 'salida'){
+        o.desde = val('mv-desde'); o.motivo = val('mv-motivo') || 'obra';
+        o.aviso_id = val('mv-aviso') || null;
+        if (o.aviso_id){
+          const av = (S.avisos || []).find(x => x.id === o.aviso_id);
+          if (av) o.puerta_id = av.puerta_id || null;
+        }
+      }
+      if (modo === 'traspaso'){
+        o.desde = val('mv-desde'); o.hasta = val('mv-hasta'); o.motivo = 'traspaso';
+        if (o.desde === o.hasta) return setErr('El origen y el destino son el mismo sitio.');
+      }
+      if (modo === 'ajuste'){
+        const s = val('mv-sitio');
+        if (val('mv-signo') === 'mas') o.hasta = s; else o.desde = s;
+        o.motivo = 'ajuste';
+        if (!o.nota) return setErr('En un ajuste hay que decir por qué: es lo que explica el descuadre.');
+      }
+      /* Se avisa, pero no se impide: el almacén puede estar mal contado y lo que
+         manda es lo que hay de verdad en la furgoneta. */
+      if (o.desde && hayEn(articuloId, o.desde) < cant && !dlgForm.dataset.avisado){
+        dlgForm.dataset.avisado = '1';
+        return setErr('Según el almacén ahí solo hay '+hayEn(articuloId, o.desde)+' '+(a.unidad||'ud')+
+          '. Si aun así es correcto, vuelve a darle a guardar y se anota.');
+      }
+      await moverMaterial(o);
+      delete dlgForm.dataset.avisado;
+      cerrarDlg(); await cargar(); pintar();
+      toast('Movimiento guardado.');
+    } catch(err){ setErr(err.message || 'No se ha podido guardar el movimiento.'); }
+  });
+}
+
 /* ---- Equipo ---- */
 function vistaEquipo(){
   let h = '<div class="stack"><div class="panel"><div class="panel-h"><h2>Técnicos con acceso</h2><span class="mini">'+S.equipo.length+'</span></div>';
@@ -3199,6 +3611,134 @@ function crearZip(entradas){
 }
 
 /* ================================================================
+   EL ALMACÉN DE MATERIALES
+
+   Tres ideas, y de ellas sale todo lo demás:
+
+   1. Una existencia no es un número: es un número EN un sitio. Saber que quedan
+      tres bandas no sirve de nada si no se sabe si están en la nave o en la
+      furgoneta de otro. Por eso hay ubicaciones, y la furgoneta de cada técnico
+      es una de ellas.
+
+   2. Las existencias no se guardan, se suman. Cada entrada, salida o traspaso
+      deja su movimiento, y lo que hay es la suma de lo que ha pasado. Así el
+      número y su explicación no se pueden separar: si algo no cuadra, se ve
+      dónde. Guardar un contador aparte es lo que hace que los almacenes acaben
+      mintiendo.
+
+   3. El QR es de un PRODUCTO, no de una unidad. La misma etiqueta va pegada en
+      todas las cajas de ese material: se escanea, se dice si entra o sale y
+      cuánto. Etiquetar tornillos de uno en uno no lo hace nadie.
+   ================================================================ */
+
+/* ---- Lo básico ---- */
+const articuloDe = id => (S.catalogo || []).find(a => a.id === id) || null;
+const ubicacionDe = id => (S.ubicaciones || []).find(u => u.id === id) || null;
+const laNave = () => (S.ubicaciones || []).find(u => u.tipo === 'nave' && u.activo !== false) || null;
+/* La furgoneta de un técnico. Puede no existir todavía: se crea la primera vez
+   que ese técnico mueve material, no antes, para no llenar la lista de
+   furgonetas de gente que nunca ha cogido nada. */
+const furgonetaDe = perfilId => (S.ubicaciones || [])
+  .find(u => u.tipo === 'furgoneta' && u.perfil_id === perfilId && u.activo !== false) || null;
+const miFurgoneta = () => S.perfil ? furgonetaDe(S.perfil.id) : null;
+async function asegurarFurgoneta(perfilId){
+  const ya = furgonetaDe(perfilId);
+  if (ya) return ya;
+  const t = (S.equipo || []).find(x => x.id === perfilId);
+  const { data, error } = await sb.from('ubicaciones')
+    .insert({ nombre: 'Furgoneta de ' + ((t && t.nombre) ? t.nombre.split(' ')[0] : 'un técnico'),
+              tipo: 'furgoneta', perfil_id: perfilId })
+    .select().maybeSingle();
+  if (error) throw error;
+  if (data) S.ubicaciones.push(data);
+  return data;
+}
+const nombreUbicacion = id => {
+  const u = ubicacionDe(id);
+  return u ? u.nombre : 'Sin sitio';
+};
+
+/* Cuánto hay y dónde */
+function existenciasDe(articuloId){
+  const filas = (S.existencias || []).filter(x => x.articulo_id === articuloId);
+  const total = filas.reduce((a, x) => a + Number(x.cantidad || 0), 0);
+  const porSitio = filas.map(x => ({ ubicacion_id: x.ubicacion_id,
+                                     nombre: nombreUbicacion(x.ubicacion_id),
+                                     cantidad: Number(x.cantidad || 0) }))
+    .filter(x => x.cantidad !== 0)
+    .sort((a, b) => b.cantidad - a.cantidad);
+  const nave = laNave();
+  return {
+    total,
+    porSitio,
+    enNave: nave ? (filas.find(x => x.ubicacion_id === nave.id) || {}).cantidad || 0 : 0,
+    enMiFurgoneta: (() => { const f = miFurgoneta();
+      return f ? Number((filas.find(x => x.ubicacion_id === f.id) || {}).cantidad || 0) : 0; })(),
+  };
+}
+const hayEn = (articuloId, ubicacionId) => {
+  const f = (S.existencias || []).find(x => x.articulo_id === articuloId && x.ubicacion_id === ubicacionId);
+  return f ? Number(f.cantidad || 0) : 0;
+};
+/* Por debajo del mínimo: lo que hay que comprar */
+const bajoMinimo = a => {
+  const m = Number(a.minimo || 0);
+  return m > 0 && existenciasDe(a.id).total < m;
+};
+
+/* Las familias y los proveedores que se usan de verdad, más los que estén
+   puestos en ajustes. Nadie tiene que mantener una lista: sale de los datos. */
+const FAMILIAS_MATERIAL = ['Seguridad','Automatismos','Cuadros y electrónica','Mandos y accesos',
+  'Herrajes y guías','Muelles y cables','Motores','Material eléctrico','Tornillería',
+  'Chapa y perfilería','Cerrajería','Consumibles','Otros'];
+const familiasMaterial = () => {
+  const usadas = (S.catalogo || []).map(a => a.familia).filter(Boolean);
+  return Array.from(new Set(lista('familias_material', FAMILIAS_MATERIAL).concat(usadas)))
+    .sort((a, b) => a.localeCompare(b, 'es'));
+};
+const proveedoresMaterial = () => Array.from(new Set((S.catalogo || [])
+  .map(a => a.proveedor).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'es'));
+
+/* El código del material: MAT-0001, el que va impreso en su etiqueta */
+function siguienteCodigoMaterial(){
+  const n = (S.catalogo || [])
+    .map(a => parseInt(String(a.codigo || '').split('-')[1] || '0', 10))
+    .filter(x => !isNaN(x));
+  return 'MAT-' + String((n.length ? Math.max.apply(null, n) : 0) + 1).padStart(4, '0');
+}
+const enlaceMaterial = a => BASE_QR + 'M-' + String(a.codigo || '').replace('-','') + '-' + (a.token || '');
+/* El QR de un material: #M-MAT0001-A3K9 */
+function materialDeURL(){
+  const h = (location.hash || '').replace(/^#/, '').trim();
+  const m = h.match(/^M-([A-Z]{3}\d{3,6})-([A-Z0-9]{4})$/i);
+  if (!m) return null;
+  return { codigo: m[1].toUpperCase().replace(/^([A-Z]{3})/, '$1-'), token: m[2].toUpperCase() };
+}
+
+/* ---- Guardar un movimiento ----
+   Todo pasa por aquí: entradas, salidas, traspasos y ajustes. Un solo sitio
+   donde se decide qué se escribe, para que no haya dos maneras de mover algo. */
+async function moverMaterial(o){
+  const fila = {
+    articulo_id: o.articulo_id,
+    cantidad: Math.abs(Number(o.cantidad) || 0),
+    desde: o.desde || null,
+    hasta: o.hasta || null,
+    motivo: o.motivo || 'ajuste',
+    aviso_id: o.aviso_id || null,
+    puerta_id: o.puerta_id || null,
+    nota: o.nota || null,
+    creado_por: yo(),
+  };
+  if (!fila.articulo_id) throw new Error('Falta el material.');
+  if (!(fila.cantidad > 0)) throw new Error('La cantidad tiene que ser mayor que cero.');
+  if (!fila.desde && !fila.hasta) throw new Error('Un movimiento tiene que venir de algún sitio o ir a alguno.');
+  const { error } = await sb.from('movimientos_material').insert(fila);
+  if (error) throw error;
+  return fila;
+}
+
+/* ================================================================
    CARGAR CLIENTES Y PUERTAS DESDE UN EXCEL
 
    El problema: una empresa de veinticinco años no empieza de cero. Los clientes
@@ -3390,6 +3930,30 @@ const IMPORTA = {
               '2019', '3500', '2200', '180', 'Ariza Puertas y Automatismos',
               '2026-03-14', '2027-03-14', ''],
   },
+  /* El almacén. «Existencias» no es un campo del material: es un movimiento de
+     entrada que se hace al cargarlo, para que el inventario de partida quede
+     registrado como lo que es y no aparezca de la nada. */
+  materiales: {
+    titulo: 'Materiales',
+    tabla: 'articulos',
+    campos: [
+      ['descripcion', 'Descripción',              ['material','nombre','articulo','producto','denominacion'], 'texto', true],
+      ['familia',     'Familia',                  ['grupo','categoria','seccion'], 'lista'],
+      ['marca',       'Marca',                    ['fabricante'], 'texto'],
+      ['referencia',  'Referencia del fabricante',['ref','codigo fabricante','codigo articulo'], 'texto'],
+      ['proveedor',   'Proveedor',                ['suministrador','distribuidor'], 'texto'],
+      ['unidad',      'Unidad',                   ['ud','medida'], 'texto'],
+      ['coste',       'Precio de compra',         ['precio','coste','pvp compra','precio compra'], 'numero'],
+      ['minimo',      'Mínimo en almacén',        ['stock minimo','minimo','alerta'], 'numero'],
+      ['existencias', 'Existencias de partida',   ['stock','cantidad','existencias actuales'], 'numero'],
+      ['ubicacion',   'Dónde está en la nave',    ['estanteria','balda','sitio'], 'texto'],
+      ['ean',         'Código de barras',         ['ean','codigo barras'], 'texto'],
+      ['notas',       'Notas',                    ['observaciones'], 'texto'],
+    ],
+    ejemplo: ['Banda de seguridad resistiva 2 m', 'Seguridad', 'ASO', 'Sentir 45.25',
+              'Suministros Gaditanos', 'ud', '38,50', '2', '5', 'Estantería B, balda 3',
+              '8412345678905', ''],
+  },
 };
 
 /* La plantilla, en .xlsx de verdad. Se escribe sin comprimir (el ZIP lo admite)
@@ -3515,6 +4079,37 @@ function analizarImportacion(tipo, filas, opciones){
       }
     }
 
+    if (tipo === 'materiales'){
+      if (!o.descripcion){ fila.estado = 'error'; fila.motivo = 'Sin descripción: no se sabe qué material es.'; }
+      else {
+        /* Se reconoce por referencia y marca, que es lo que de verdad identifica
+           un material; si no hay referencia, por la descripción. */
+        const clave = o.referencia
+          ? normTxt(o.referencia + '|' + (o.marca || ''))
+          : normTxt(o.descripcion);
+        if (vistos.has(clave)){ fila.estado = 'error'; fila.motivo = 'Repetida dentro del propio fichero.'; }
+        else {
+          vistos.add(clave);
+          const ya = (S.catalogo || []).find(x => o.referencia
+            ? normTxt((x.referencia || '') + '|' + (x.marca || '')) === clave
+            : normTxt(x.descripcion || '') === clave);
+          if (ya){
+            fila.existente = ya.id;
+            Object.keys(o).forEach(k => {
+              if (k === 'existencias' || k === 'coste') return;   // uno es movimiento y el otro no se lee
+              if (String(ya[k] == null ? '' : ya[k]) !== String(o[k])) fila.cambios.push([k, ya[k] == null ? '' : ya[k], o[k]]);
+            });
+            fila.estado = fila.cambios.length ? 'actualiza' : 'igual';
+            if (o.existencias != null)
+              fila.aviso = 'Las existencias de partida no se tocan en un material que ya existe: '+
+                'para corregirlas, un ajuste de inventario.';
+          }
+          else if (o.existencias != null)
+            fila.aviso = 'Entrarán '+o.existencias+' en la nave como existencias de partida.';
+        }
+      }
+    }
+
     if (tipo === 'puertas'){
       const cli = o.cliente ? clientePorClave.get(normTxt(o.cliente)) : null;
       if (!o.cliente){ fila.estado = 'error'; fila.motivo = 'Sin cliente: la puerta quedaría suelta.'; }
@@ -3575,6 +4170,39 @@ async function ejecutarImportacion(tipo, analisis, op){
           const { error } = await sb.from('clientes').insert(o);
           if (error) throw error;
           hechos.creados++;
+        }
+        continue;
+      }
+      if (tipo === 'materiales'){
+        const o = Object.assign({}, fila.datos);
+        const existencias = o.existencias; delete o.existencias;
+        if (!o.unidad) o.unidad = 'ud';
+        let artId = fila.existente;
+        if (artId){
+          const { error } = await sb.from('articulos').update(o).eq('id', artId);
+          if (error) throw error;
+          hechos.actualizados++;
+        } else {
+          o.codigo = siguienteCodigoMaterial();
+          o.token = token();
+          const { data, error } = await sb.from('articulos').insert(o).select().maybeSingle();
+          if (error) throw error;
+          artId = data ? data.id : null;
+          /* El código se calcula sobre lo que hay en memoria, así que hay que
+             apuntarlo ya: si no, las veinte filas siguientes pedirían el mismo. */
+          if (data) S.catalogo.push(data);
+          hechos.creados++;
+          /* Las existencias de partida entran como un movimiento de verdad, con
+             su fecha y su motivo, para que el inventario no empiece con un
+             número que no se sabe de dónde salió. */
+          const nave = laNave();
+          if (artId && nave && existencias > 0){
+            try {
+              await moverMaterial({ articulo_id: artId, cantidad: existencias, hasta: nave.id,
+                motivo: 'ajuste', nota: 'Existencias de partida, cargadas desde '+(IMPORTE.nombre || 'un fichero') });
+              hechos.movimientos = (hechos.movimientos || 0) + 1;
+            } catch(_){ /* el material ya está dado de alta; el recuento se puede repetir */ }
+          }
         }
         continue;
       }
@@ -13634,6 +14262,20 @@ dlgForm.addEventListener('change', e => {
   if (t.id === 'a-puerta'){ clienteDeLaPuertaDelAviso(); return; }
   // Puerta: al elegir centro, su dirección baja a la puerta
   if (t.id === 'f-centro'){ centroElegido(); return; }
+  /* Elegir un material del almacén rellena la línea del parte. Lo escrito a
+     mano NO se pisa: puede ser una matización («banda, la de 2 m»). */
+  if (t.classList && t.classList.contains('mat-art')){
+    const a = articuloDe(t.value);
+    const fila = t.closest('.mat-fila');
+    if (a && fila){
+      const d = fila.querySelector('.mat-desc');
+      if (d && !d.value.trim()) d.value = a.descripcion;
+      const u = fila.querySelector('.mat-uni');
+      if (u && a.unidad && Array.from(u.options).some(o => o.value === a.unidad)) u.value = a.unidad;
+    }
+    return;
+  }
+
   /* ---- La carga desde Excel ---- */
   if (t.dataset && t.dataset.act === 'imp-fichero' && t.files && t.files.length){
     const f = t.files[0]; t.value = '';
@@ -15131,38 +15773,114 @@ function dlgTarifas(){
   });
 }
 
-/* Alta y edición de un material del catálogo */
+/* Alta y edición de un material del catálogo.
+   El código y el código de seguridad del QR se ponen solos al dar de alta: son
+   lo que identifica al material cuando se escanea su etiqueta, y pedírselos a
+   quien está dando de alta veinte materiales seguidos no tiene sentido. */
 function dlgArticulo(id){
   const a = id ? S.catalogo.find(x => x.id === id) : null;
+  const fams = familiasMaterial();
   let h = '<h3>'+(a ? 'Material del catálogo' : 'Nuevo material')+'</h3>'+
+    (a && a.codigo ? '<p class="mini" style="margin:0 0 10px">'+esc(a.codigo)+'</p>' : '')+
     '<div class="campos">'+
     '<div class="campo full"><label for="x-desc">Descripción</label><input id="x-desc" type="text" maxlength="120" value="'+esc(a?a.descripcion:'')+'" placeholder="Ej.: Banda de seguridad 2 m"></div>'+
+    '<div class="campo"><label for="x-fam">Familia</label><select id="x-fam"><option value=""></option>'+
+      fams.map(f => '<option'+(a && a.familia===f?' selected':'')+'>'+esc(f)+'</option>').join('')+'</select></div>'+
     '<div class="campo"><label for="x-uni">Unidad</label><select id="x-uni">'+
       ['ud','m','kg','l','h'].map(u=>'<option'+(a&&a.unidad===u?' selected':'')+'>'+u+'</option>').join('')+'</select></div>'+
-    '<div class="campo"><label for="x-coste">Precio de compra (€)</label><input id="x-coste" type="number" step="0.01" min="0" placeholder="Sin IVA"></div>'+
-    '<div class="campo"><label for="x-rec">Recargo propio (%)</label><input id="x-rec" type="number" step="1" min="0" placeholder="Si lo dejas vacío, el general"></div>'+
-    '<div class="campo"><label for="x-ref">Referencia</label><input id="x-ref" type="text" maxlength="60" value="'+esc(a&&a.referencia?a.referencia:'')+'"></div>'+
-    '<div class="campo"><label for="x-prov">Proveedor</label><input id="x-prov" type="text" maxlength="80"></div>'+
+    '<div class="campo"><label for="x-marca">Marca</label><input id="x-marca" type="text" maxlength="60" value="'+esc(a&&a.marca?a.marca:'')+'"></div>'+
+    '<div class="campo"><label for="x-ref">Referencia del fabricante</label><input id="x-ref" type="text" maxlength="60" value="'+esc(a&&a.referencia?a.referencia:'')+'"></div>'+
+    '<div class="campo"><label for="x-prov">Proveedor</label><input id="x-prov" type="text" maxlength="80" list="prov-lista"></div>'+
+    '<datalist id="prov-lista">'+proveedoresMaterial().map(p => '<option value="'+esc(p)+'">').join('')+'</datalist>'+
+    '<div class="campo"><label for="x-min">Mínimo en almacén</label><input id="x-min" type="number" step="any" min="0" value="'+esc(a&&a.minimo!=null?a.minimo:'')+'"><span class="pista">Por debajo de esto, el almacén avisa</span></div>'+
+    '<div class="campo"><label for="x-sitio">Dónde está en la nave</label><input id="x-sitio" type="text" maxlength="60" value="'+esc(a&&a.ubicacion?a.ubicacion:'')+'" placeholder="Ej.: estantería B, balda 3"></div>'+
+    (esGestion()
+      ? '<div class="campo"><label for="x-coste">Precio de compra (€)</label><input id="x-coste" type="number" step="0.01" min="0" placeholder="Sin IVA"></div>'+
+        '<div class="campo"><label for="x-rec">Recargo propio (%)</label><input id="x-rec" type="number" step="1" min="0" placeholder="Si lo dejas vacío, el general"></div>'
+      : '')+
+    '<div class="campo full"><label for="x-notas">Notas</label><input id="x-notas" type="text" maxlength="200" value="'+esc(a&&a.notas?a.notas:'')+'"></div>'+
     '</div>'+
-    (a ? '<p class="mini" style="margin:10px 0 0">El precio de compra y el proveedor no se muestran aquí por seguridad. '+
+    (a && esGestion() ? '<p class="mini" style="margin:10px 0 0">El precio de compra no se muestra aquí por seguridad. '+
          'Si escribes uno nuevo, sustituye al anterior.</p>' : '')+
+    (!a ? '<p class="mini" style="margin:10px 0 0">Al guardar se le asigna el código '+
+         esc(siguienteCodigoMaterial())+' y su etiqueta QR, que ya puedes imprimir y pegar.</p>' : '')+
     '<p class="err"></p><div class="pie">'+
     (a ? '<button type="button" class="btn plana" data-act="articulo-baja" data-id="'+a.id+'">Dar de baja</button>' : '')+
     '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
     '<button type="submit" class="btn pri">Guardar</button></div>';
   abrirDlg(h, async () => {
     const o = { descripcion: val('x-desc'), unidad: val('x-uni') || 'ud',
-                referencia: val('x-ref') || null, proveedor: val('x-prov') || null };
-    if (val('x-coste') !== '') o.coste = +val('x-coste');
-    if (val('x-rec') !== '') o.recargo = +val('x-rec');
+                referencia: val('x-ref') || null, proveedor: val('x-prov') || null,
+                familia: val('x-fam') || null, marca: val('x-marca') || null,
+                ubicacion: val('x-sitio') || null, notas: val('x-notas') || null };
+    if (val('x-min') !== '') o.minimo = +val('x-min');
+    if (esGestion() && val('x-coste') !== '') o.coste = +val('x-coste');
+    if (esGestion() && val('x-rec') !== '') o.recargo = +val('x-rec');
     if (!o.descripcion) return setErr('Pon la descripción del material.');
-    if (!a && o.coste == null) return setErr('Pon el precio de compra: sin él no se puede calcular el margen.');
     try {
       if (a){ const { error } = await sb.from('articulos').update(o).eq('id', a.id); if (error) throw error; }
-      else { const { error } = await sb.from('articulos').insert(o); if (error) throw error; }
-      cerrarDlg(); await cargar(); toast('Material guardado.');
+      else {
+        if (!S.sinAlmacen){ o.codigo = siguienteCodigoMaterial(); o.token = token(); }
+        const { error } = await sb.from('articulos').insert(o); if (error) throw error;
+      }
+      cerrarDlg(); await cargar(); pintar(); toast('Material guardado.');
     } catch(e){ setErr(e.message.includes('duplicate') ? 'Ya existe un material con esa descripción.' : e.message); }
   });
+}
+
+/* El QR de un material, en pantalla: para enseñárselo a alguien o escanearlo
+   desde otro teléfono sin tener que imprimir nada. */
+function dlgQrMaterial(id){
+  const a = articuloDe(id);
+  if (!a) return;
+  if (!a.codigo || !a.token){
+    abrirDlg('<h3>Sin etiqueta todavía</h3><p class="mini">Este material es de antes del almacén y no tiene '+
+      'código ni QR. Ábrelo y guárdalo otra vez'+(esGestion()?'':', o pídeselo a la oficina')+' y se le asigna.</p>'+
+      '<div class="pie"><span class="sp"></span><button type="button" class="btn pri" data-cerrar>Cerrar</button></div>', null);
+    return;
+  }
+  const url = enlaceMaterial(a);
+  abrirDlg('<h3>'+esc(a.descripcion)+'</h3>'+
+    '<div style="display:grid;place-items:center;gap:8px;background:#fff;padding:16px;border-radius:8px">'+
+    svgQR(url, '220px')+'<span class="codigo" style="color:#000;font-weight:700">'+esc(a.codigo)+'</span>'+
+    '<span class="mini" style="color:#444">'+esc(url.replace('https://',''))+'</span></div>'+
+    '<p class="mini" style="margin:10px 0 0">Esta es la etiqueta de este material. Se pega en la caja, en la '+
+    'estantería o en el propio producto, y al escanearla se abre directamente su entrada y salida.</p>'+
+    '<div class="pie">'+(esGestion() ? '<button type="button" class="btn plana" data-act="mat-etiquetas">Hoja de etiquetas</button>' : '')+
+    '<span class="sp"></span><button type="button" class="btn pri" data-cerrar>Cerrar</button></div>', null);
+}
+
+/* Hoja de etiquetas de material, para imprimir y pegar. Más pequeñas que las de
+   las puertas: estas van en una caja o en una balda, no en una puerta. */
+function hojaEtiquetasMaterial(){
+  const con = (S.catalogo || []).filter(a => a.activo !== false && a.codigo && a.token);
+  if (!con.length){ toast('Todavía no hay materiales con etiqueta.'); return; }
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana de impresión.'); return; }
+  const etiquetas = con.map(a => {
+    const corto = String(a.descripcion || '').slice(0, 42);
+    return '<div class="etq">'+
+      '<div class="logo">ARIZA <span style="color:#C98F08">almacén</span></div>'+
+      svgQR(enlaceMaterial(a), '22mm')+
+      '<div class="cod">'+esc(a.codigo)+'</div>'+
+      '<div class="desc">'+esc(corto)+'</div></div>';
+  }).join('');
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
+    '<title>Etiquetas de material · ARIZA SAT</title><style>'+
+    '@page{size:A4;margin:8mm}body{margin:0;font-family:system-ui,sans-serif;background:#fff;color:#000}'+
+    '.hoja-grid{display:grid;grid-template-columns:repeat(4,45mm);gap:4mm;padding:4mm}'+
+    '.etq{width:45mm;height:52mm;border:.2mm dashed #bbb;padding:2mm;display:flex;flex-direction:column;'+
+      'align-items:center;justify-content:space-between;text-align:center;page-break-inside:avoid}'+
+    '.etq .logo{font-weight:700;font-size:2.8mm}'+
+    '.etq .cod{font-family:ui-monospace,monospace;font-weight:700;font-size:4.6mm;letter-spacing:.3mm}'+
+    '.etq .desc{font-size:2.6mm;line-height:1.25;color:#333}'+
+    '.etq svg{width:22mm;height:22mm}'+
+    '@media print{.aviso-print{display:none}}</style></head><body>'+
+    '<p class="aviso-print" style="padding:6mm;font-size:3.6mm">Hoja de '+con.length+' etiquetas de material, '+
+    'cuatro por fila en A4. Imprime en papel adhesivo y pega cada una en su caja o en su balda. '+
+    'Al escanearlas se abre la entrada y salida de ese material.</p>'+
+    '<div class="hoja-grid">'+etiquetas+'</div></body></html>');
+  w.document.close();
 }
 
 /* Marcar una visita como facturada */
@@ -15224,9 +15942,22 @@ function dlgValoracion(avisoId){
 /* ================= Cierre de la visita ================= */
 const FIRMA = { canvas:null, ctx:null, pintado:false };
 
+/* Una línea de material del parte.
+   Lleva dos cosas que parecen la misma y no lo son: el material del almacén
+   (que es el que se descuenta al cerrar) y la descripción escrita (que es la que
+   sale en el parte del cliente). Lo segundo se rellena solo al elegir lo
+   primero, y se puede matizar a mano. Lo que no está en el almacén se sigue
+   escribiendo a mano, porque no todo lo que se gasta está dado de alta. */
 function filaMaterial(m){
   m = m || { descripcion:'', cantidad:1, unidad:'ud' };
-  return '<div class="mat-fila">'+
+  const cat = (S.catalogo || []).filter(a => a.activo !== false)
+    .sort((x, y) => (x.descripcion || '').localeCompare(y.descripcion || '', 'es'));
+  const sel = S.sinAlmacen ? '' :
+    '<select class="mat-art"><option value="">Escrito a mano</option>'+
+    cat.map(a => '<option value="'+a.id+'"'+(m.articulo_id === a.id ? ' selected' : '')+'>'+
+      esc(a.descripcion + (a.codigo ? ' · '+a.codigo : ''))+'</option>').join('')+'</select>';
+  return '<div class="mat-fila'+(S.sinAlmacen ? '' : ' con-art')+'">'+
+    sel+
     '<input type="text" class="mat-desc" list="sugeridos" maxlength="120" placeholder="Material" value="'+esc(m.descripcion||'')+'">'+
     '<input type="number" class="mat-cant" step="0.01" min="0" value="'+esc(m.cantidad!=null?m.cantidad:1)+'">'+
     '<select class="mat-uni">'+['ud','m','kg','l','h'].map(u=>'<option'+(m.unidad===u?' selected':'')+'>'+u+'</option>').join('')+'</select>'+
@@ -15319,6 +16050,19 @@ function dlgCierre(avisoId){
     '<div class="campo full"><label for="z-diag">Diagnóstico</label><textarea id="z-diag" rows="2" placeholder="Ej.: banda de seguridad cortada por roce con el marco">'+esc(a.diagnostico||'')+'</textarea></div>'+
     '<div class="campo full"><label for="z-trab">Trabajo realizado</label><textarea id="z-trab" rows="3" placeholder="Ej.: sustituida banda, ajustado final de carrera y engrase general">'+esc(a.trabajo||'')+'</textarea></div>'+
     '</div></div>';
+
+  /* Lo que la oficina ha mandado llevar, antes de la lista de lo gastado: es lo
+     primero que el técnico quiere comprobar al abrir el parte. */
+  const prev = previstosDe(a.id);
+  if (prev.length)
+    h += '<div class="grupo"><h3>Lo que la oficina manda llevar</h3>'+
+      '<ul style="margin:0 0 10px;padding-left:18px">'+
+      prev.map(p => '<li>'+esc(p.descripcion)+' · <b>'+esc(p.cantidad)+'</b>'+
+        (p.nota ? ' <span class="mini">('+esc(p.nota)+')</span>' : '')+'</li>').join('')+
+      '</ul><div class="fila"><span class="sp"></span>'+
+      '<button type="button" class="btn sm pri" data-act="prev-usar" data-aviso="'+a.id+'">Pasarlo a material usado</button></div>'+
+      '<p class="mini" style="margin:8px 0 0">Esto es lo previsto, no lo gastado. Pásalo abajo y corrige '+
+      'las cantidades con lo que de verdad hayas puesto.</p></div>';
 
   h += '<div class="grupo"><h3>Materiales</h3>'+
     '<datalist id="sugeridos">'+
@@ -15632,11 +16376,68 @@ async function prepararCierre(a){
 }
 
 function materialesDelForm(){
-  return Array.from(dlgForm.querySelectorAll('.mat-fila')).map(f => ({
-    descripcion: (f.querySelector('.mat-desc')||{}).value?.trim() || '',
-    cantidad: parseFloat((f.querySelector('.mat-cant')||{}).value) || 0,
-    unidad: (f.querySelector('.mat-uni')||{}).value || 'ud',
-  })).filter(m => m.descripcion);
+  return Array.from(dlgForm.querySelectorAll('.mat-fila')).map(f => {
+    const art = (f.querySelector('.mat-art')||{}).value || null;
+    const o = {
+      descripcion: (f.querySelector('.mat-desc')||{}).value?.trim() || '',
+      cantidad: parseFloat((f.querySelector('.mat-cant')||{}).value) || 0,
+      unidad: (f.querySelector('.mat-uni')||{}).value || 'ud',
+    };
+    if (!S.sinAlmacen) o.articulo_id = art || null;
+    /* Si se eligió del almacén y nadie escribió nada, la descripción es la suya:
+       el parte del cliente no puede salir con una línea en blanco. */
+    if (!o.descripcion && art){
+      const a = articuloDe(art);
+      if (a) o.descripcion = a.descripcion;
+    }
+    return o;
+  }).filter(m => m.descripcion);
+}
+
+/* ---- Lo gastado sale del almacén ----
+   Se hace SOLO al cerrar la visita, no al guardar el avance: si descontara en
+   cada guardado, una visita que se guarda cuatro veces descontaría cuatro.
+   Y se rehace entero, igual que las líneas del parte, para que reabrir y volver
+   a cerrar no deje movimientos de más. */
+async function descontarMaterialDelParte(a, mats){
+  if (S.sinAlmacen) return { bajas:0, aviso:'' };
+  const conArticulo = (mats || []).filter(m => m.articulo_id && m.cantidad > 0);
+  /* Primero se tiran los movimientos que este mismo parte hubiera generado antes */
+  try {
+    await sb.from('movimientos_material').delete()
+      .eq('aviso_id', a.id).in('motivo', ['obra','averia']);
+  } catch(_){ /* si no se pueden borrar, mejor no duplicar: se sale */ }
+  if (!conArticulo.length) return { bajas:0, aviso:'' };
+
+  /* El material sale de donde lo lleva quien hace la visita: su furgoneta. Si
+     todavía no tenía, se crea ahora, que es cuando hace falta. */
+  let origen = null;
+  try {
+    const quien = a.tecnico_id || (S.perfil || {}).id;
+    origen = quien ? await asegurarFurgoneta(quien) : null;
+  } catch(_){ origen = null; }
+  if (!origen) origen = laNave();
+  if (!origen) return { bajas:0, aviso:'No hay ningún sitio del almacén donde descontar el material.' };
+
+  const motivo = a.tipo === 'averia' ? 'averia' : 'obra';
+  let bajas = 0, negativos = [];
+  for (const m of conArticulo){
+    try {
+      if (hayEn(m.articulo_id, origen.id) < m.cantidad){
+        const art = articuloDe(m.articulo_id);
+        negativos.push((art ? art.descripcion : 'un material'));
+      }
+      await moverMaterial({ articulo_id: m.articulo_id, cantidad: m.cantidad,
+        desde: origen.id, motivo, aviso_id: a.id, puerta_id: a.puerta_id || null,
+        nota: 'Gastado en la visita' });
+      bajas++;
+    } catch(_){ /* una línea que falle no puede impedir cerrar la visita */ }
+  }
+  return { bajas, origen: origen.nombre,
+           aviso: negativos.length
+             ? 'Se ha descontado más de lo que constaba en '+origen.nombre+' de: '+
+               negativos.join(', ')+'. Revisa el inventario cuando puedas.'
+             : '' };
 }
 
 async function guardarCierre(a, cerrando){
@@ -15774,6 +16575,9 @@ async function guardarCierre(a, cerrando){
     };
     const mats = materialesDelForm();
     await rehacer('materiales', mats.map(m => ({ ...m, aviso_id: a.id })));
+    // lo gastado sale del almacén, y solo al cerrar
+    let almacen = null;
+    if (cerrando) almacen = await descontarMaterialDelParte(a, mats);
     if (revision) await rehacer('revisiones', [revision]);
     const { error } = await sb.from('avisos').update(o).eq('id', a.id);
     if (error) throw error;
@@ -15800,6 +16604,10 @@ async function guardarCierre(a, cerrando){
     if (cerrando) { try { await sb.rpc('valorar_aviso', { p_aviso: a.id }); } catch(_){} }
     cerrarDlg(); await cargar();
     toast(cerrando ? 'Visita cerrada. La oficina ya tiene el parte.' : 'Guardado.');
+    if (almacen && almacen.bajas)
+      toast(almacen.bajas+' material'+(almacen.bajas===1?'':'es')+' descontado'+
+            (almacen.bajas===1?'':'s')+' de '+almacen.origen+'.');
+    if (almacen && almacen.aviso) toast(almacen.aviso);
   } catch(e){ setErr(e.message || 'No se pudo guardar.'); }
 }
 
@@ -16449,11 +17257,19 @@ raiz.addEventListener('click', async e => {
       toast((data || 0) + ' revisión' + ((data||0)===1?'':'es') + ' abierta' + ((data||0)===1?'':'s') + '. Asígnalas desde Asistencias.');
     } catch(err){ fallo(err); b.disabled = false; b.textContent = 'Abrir las revisiones que tocan'; }
   }
+  else if (a === 'mat-nuevo') dlgArticulo(null);
+  else if (a === 'prev-abrir') dlgPrevistos(b.dataset.id);
+  else if (a === 'mat-ficha') dlgMaterial(b.dataset.id);
+  else if (a === 'mat-mover') dlgMover(b.dataset.id, b.dataset.modo || 'entrada', b.dataset.aviso || null);
+  else if (a === 'mat-qr') dlgQrMaterial(b.dataset.id);
+  else if (a === 'mat-etiquetas') hojaEtiquetasMaterial();
+  else if (a === 'articulo-editar') dlgArticulo(b.dataset.id);
   else if (a === 'puerta-nueva') dlgPuerta(null);
   else if (a === 'importar'){
     /* Solo administrador y oficina: una carga masiva no es cosa de obra. */
     if (!esGestion()) return;
-    dlgImportar(b.dataset.tipo === 'puertas' ? 'puertas' : 'clientes');
+    const t = b.dataset.tipo;
+    dlgImportar(['puertas','materiales','clientes'].includes(t) ? t : 'clientes');
   }
   else if (a === 'exp-comp-traer'){
     if (!armar(b, 'Confirmar')) return;
@@ -16758,6 +17574,7 @@ raiz.addEventListener('click', async e => {
 raiz.addEventListener('input', e => {
   if (e.target.dataset.act === 'busca'){ S.busca = e.target.value; pintar(); }
   if (e.target.dataset.act === 'busca-cli'){ S.buscaCli = e.target.value; pintar(); }
+  if (e.target.dataset.act === 'busca-mat'){ S.buscaMat = e.target.value; pintar(); }
   if (e.target.dataset.act === 'busca-con'){ S.buscaCon = e.target.value; pintar(); }
   if (e.target.dataset.act === 'busca-hist'){ S.histBusca = e.target.value; pintar(); }
   // Campos del expediente: se guardan solos y sin repintar, para no interrumpir al que escribe
@@ -16867,6 +17684,9 @@ raiz.addEventListener('change', e => {
     }
     return;
   }
+  if (e.target.dataset.act === 'mat-familia'){ S.matFamilia = e.target.value; pintar(); return; }
+  if (e.target.dataset.act === 'mat-proveedor'){ S.matProveedor = e.target.value; pintar(); return; }
+  if (e.target.dataset.act === 'mat-filtro'){ S.matFiltro = e.target.value; pintar(); return; }
   if (e.target.dataset.act === 'cal-tec'){ S.calTec = e.target.value; pintar(); return; }
   if (e.target.dataset.act === 'guion-tipo'){ S.guionTipo = e.target.value; pintar(); return; }
   if (e.target.dataset.act === 'gestion-mes'){ S.mesGestion = e.target.value; pintar(); return; }
@@ -17045,6 +17865,55 @@ dlgForm.addEventListener('click', async e => {
     else dlgComponente(null, av.puerta_id, '', id);
     return;
   }
+  if (a === 'mat-mover'){ cerrarDlg(); dlgMover(b.dataset.id, b.dataset.modo || 'entrada', b.dataset.aviso || null); return; }
+  if (a === 'mat-ficha'){ cerrarDlg(); dlgMaterial(b.dataset.id); return; }
+  if (a === 'prev-anadir'){
+    const avisoId = b.dataset.aviso;
+    const art = val('pv-art') || null;
+    const art2 = art ? articuloDe(art) : null;
+    const desc = val('pv-desc') || (art2 ? art2.descripcion : '');
+    const cant = parseFloat(val('pv-cant'));
+    if (!desc) return setErr('Elige un material o escribe qué hay que llevar.');
+    if (!(cant > 0)) return setErr('Pon la cantidad.');
+    try {
+      const { error } = await sb.from('materiales_previstos').insert({
+        aviso_id: avisoId, articulo_id: art, descripcion: desc, cantidad: cant,
+        nota: val('pv-nota') || null, creado_por: yo() });
+      if (error) throw error;
+      await cargar(); cerrarDlg(); dlgPrevistos(avisoId);
+    } catch(e){ setErr(e.message); }
+    return;
+  }
+  if (a === 'prev-quitar'){
+    const avisoId = b.dataset.aviso;
+    try {
+      const { error } = await sb.from('materiales_previstos').delete().eq('id', b.dataset.id);
+      if (error) throw error;
+      await cargar(); cerrarDlg(); dlgPrevistos(avisoId);
+    } catch(e){ setErr(e.message); }
+    return;
+  }
+  if (a === 'prev-usar'){
+    /* Del parte: lo previsto pasa a material usado, sin teclearlo otra vez.
+       Se añade como líneas nuevas y se puede corregir antes de cerrar. */
+    const cont = document.getElementById('mats');
+    if (!cont) return;
+    const yaPuestos = Array.from(cont.querySelectorAll('.mat-art')).map(x => x.value).filter(Boolean);
+    let n = 0;
+    previstosDe(b.dataset.aviso).forEach(p => {
+      if (p.articulo_id && yaPuestos.includes(p.articulo_id)) return;
+      cont.insertAdjacentHTML('beforeend', filaMaterial({
+        descripcion: p.descripcion, cantidad: p.cantidad, unidad: 'ud', articulo_id: p.articulo_id }));
+      n++;
+    });
+    activarCombos(cont);
+    toast(n ? (n+' línea'+(n===1?'':'s')+' añadida'+(n===1?'':'s')+'. Corrige las cantidades si gastaste otra cosa.')
+            : 'Ya estaban todas puestas.');
+    return;
+  }
+  if (a === 'prev-abrir'){ cerrarDlg(); dlgPrevistos(b.dataset.id); return; }
+  if (a === 'mat-qr'){ cerrarDlg(); dlgQrMaterial(b.dataset.id); return; }
+  if (a === 'articulo-editar'){ cerrarDlg(); dlgArticulo(b.dataset.id); return; }
   if (a === 'imp-plantilla'){
     const tipo = b.dataset.tipo;
     bajarFichero(plantillaXlsx(tipo), 'plantilla-'+tipo+'-ariza.xlsx');
@@ -17079,6 +17948,7 @@ dlgForm.addEventListener('click', async e => {
       '<div><dt>Actualizados</dt><dd>'+r.actualizados+'</dd></div>'+
       '<div><dt>Saltados</dt><dd>'+r.saltados+'</dd></div>'+
       (r.clientes ? '<div><dt>Clientes creados</dt><dd>'+r.clientes+'</dd></div>' : '')+
+      (r.movimientos ? '<div><dt>Entradas de existencias</dt><dd>'+r.movimientos+'</dd></div>' : '')+
       (r.etiquetas ? '<div><dt>Etiquetas dadas de alta</dt><dd>'+r.etiquetas+'</dd></div>' : '')+
       '</dl></div>';
     if (r.fallos.length)
