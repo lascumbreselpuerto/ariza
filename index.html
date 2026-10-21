@@ -1153,7 +1153,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.10.17-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.10.21-1';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -1272,6 +1272,7 @@ function vistaPuertas(){
     (centroDePuerta(p)||{}).nombre].join(' ').toLowerCase().includes(q));
   let h = '<div class="stack">';
   h += '<div class="fila"><div class="buscador sp"><input id="busca" type="search" placeholder="Buscar por código, cliente, dirección o marca" value="'+esc(S.busca)+'" data-act="busca"></div>'+
+       (esGestion() ? '<button class="btn" data-act="importar" data-tipo="puertas">Cargar desde Excel</button>' : '')+
        '<button class="btn pri" data-act="puerta-nueva">Nueva puerta</button></div>';
   const libres = S.etiquetas.filter(e => !S.puertas.some(p => p.codigo === e.codigo)).length;
   const sinFicha = S.puertas.filter(p => !p.cliente_id).length;
@@ -2326,6 +2327,7 @@ function vistaClientes(){
   const lista = enJuego.filter(c => !q || [c.nombre,c.nif,c.telefono,c.email,c.direccion,c.poblacion].join(' ').toLowerCase().includes(q));
   let h = '<div class="stack">';
   h += '<div class="fila"><div class="buscador sp"><input id="busca-cli" type="search" placeholder="Buscar cliente por nombre, NIF, teléfono o dirección" value="'+esc(S.buscaCli)+'" data-act="busca-cli"></div>'+
+       (esGestion() ? '<button class="btn" data-act="importar" data-tipo="clientes">Cargar desde Excel</button>' : '')+
        '<button class="btn pri" data-act="cliente-nuevo">Nuevo cliente</button></div>';
   h += '<div class="fila" style="gap:8px;flex-wrap:wrap"><p class="mini" style="margin:0">'+
        enJuego.length+(S.cliArchivados?' clientes archivados':' clientes')+' · '+
@@ -3194,6 +3196,573 @@ function crearZip(entradas){
     u32(tamCentral), u32(inicioCentral), u16(0))));
 
   return new Blob(trozos, { type:'application/zip' });
+}
+
+/* ================================================================
+   CARGAR CLIENTES Y PUERTAS DESDE UN EXCEL
+
+   El problema: una empresa de veinticinco años no empieza de cero. Los clientes
+   y las puertas están en hojas de cálculo, y teclearlos uno a uno en la
+   aplicación es trabajo de semanas que nadie hace. Mientras no estén dentro, la
+   aplicación no sirve para el día a día.
+
+   Por qué se lee el Excel aquí dentro y no con una librería de internet: un
+   .xlsx es un ZIP con XML. El navegador ya sabe descomprimir (DecompressionStream)
+   y ya sabe leer XML (DOMParser), así que no hace falta traer nada de fuera. La
+   aplicación sigue siendo un solo fichero, funciona sin cobertura y el banco de
+   pruebas puede probar la lectura de verdad. Si un navegador viejo no supiera
+   descomprimir, se dice y se pide el fichero en CSV, que también se lee.
+
+   Lo que NO hace, a propósito: no guarda nada hasta que se ha visto la vista
+   previa. Una carga masiva mal hecha es de las pocas cosas que pueden estropear
+   una base de datos entera en un segundo, así que primero se enseña qué va a
+   pasar fila por fila, y solo después se escribe.
+   ================================================================ */
+
+/* ---- Leer un ZIP (y por tanto un .xlsx) ---- */
+async function abrirZip(buf){
+  const u8 = new Uint8Array(buf);
+  const dv = new DataView(buf);
+  /* El directorio central está al final, detrás de un comentario de longitud
+     variable, así que se busca su marca hacia atrás. */
+  let fin = -1;
+  for (let i = u8.length - 22; i >= 0 && i > u8.length - 70000; i--)
+    if (dv.getUint32(i, true) === 0x06054b50){ fin = i; break; }
+  if (fin < 0) throw new Error('El fichero no parece un Excel: no tiene estructura de ZIP.');
+  const n = dv.getUint16(fin + 10, true);
+  let p = dv.getUint32(fin + 16, true);
+  const td = new TextDecoder();
+  const out = {};
+  for (let i = 0; i < n; i++){
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const metodo = dv.getUint16(p + 10, true);
+    const tamComp = dv.getUint32(p + 20, true);
+    const lnom = dv.getUint16(p + 28, true), lext = dv.getUint16(p + 30, true), lcom = dv.getUint16(p + 32, true);
+    const desp = dv.getUint32(p + 42, true);
+    const nombre = td.decode(u8.subarray(p + 46, p + 46 + lnom));
+    const ln = dv.getUint16(desp + 26, true), le = dv.getUint16(desp + 28, true);
+    const ini = desp + 30 + ln + le;
+    out[nombre] = { metodo, crudo: u8.subarray(ini, ini + tamComp) };
+    p += 46 + lnom + lext + lcom;
+  }
+  return out;
+}
+async function textoDelZip(zip, nombre){
+  const e = zip[nombre];
+  if (!e) return null;
+  if (e.metodo === 0) return new TextDecoder().decode(e.crudo);
+  if (typeof DecompressionStream !== 'function')
+    throw new Error('Este navegador no sabe abrir ficheros .xlsx. Guarda la hoja como CSV desde Excel y vuelve a intentarlo.');
+  const flujo = new Blob([e.crudo]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return await new Response(flujo).text();
+}
+
+/* Letras de columna a número: A=0, B=1, ... AA=26 */
+const colIndice = letras => {
+  let n = 0;
+  for (const ch of String(letras).toUpperCase()) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n - 1;
+};
+/* Un número de fecha de Excel a texto ISO. Excel cuenta desde el 30-12-1899 y
+   además arrastra el error del año 1900 bisiesto, que ya va en esa base. */
+const fechaExcel = n => {
+  const dias = Math.floor(Number(n));
+  if (!(dias > 0) || dias > 80000) return '';
+  const ms = Date.UTC(1899, 11, 30) + dias * 86400000;
+  return new Date(ms).toISOString().slice(0, 10);
+};
+
+async function leerXlsx(buf){
+  const zip = await abrirZip(buf);
+  const parser = new DOMParser();
+  /* Las cadenas van aparte, en una tabla compartida, y cada celda apunta a ella */
+  const cadenas = [];
+  const ss = await textoDelZip(zip, 'xl/sharedStrings.xml');
+  if (ss) parser.parseFromString(ss, 'application/xml').querySelectorAll('si').forEach(si =>
+    cadenas.push(Array.from(si.querySelectorAll('t')).map(t => t.textContent).join('')));
+
+  let hoja = await textoDelZip(zip, 'xl/worksheets/sheet1.xml');
+  if (!hoja){
+    const otra = Object.keys(zip).find(k => /^xl\/worksheets\/.+\.xml$/.test(k));
+    if (otra) hoja = await textoDelZip(zip, otra);
+  }
+  if (!hoja) throw new Error('El Excel no tiene ninguna hoja que se pueda leer.');
+
+  const doc = parser.parseFromString(hoja, 'application/xml');
+  const filas = [];
+  doc.querySelectorAll('row').forEach(r => {
+    const fila = [];
+    r.querySelectorAll('c').forEach(c => {
+      const col = colIndice((c.getAttribute('r') || '').replace(/[^A-Za-z]/g, '') || 'A');
+      const t = c.getAttribute('t');
+      let v = '';
+      if (t === 'inlineStr'){ const is = c.querySelector('is'); v = is ? is.textContent : ''; }
+      else {
+        const vEl = c.querySelector('v');
+        v = vEl ? vEl.textContent : '';
+        if (t === 's') v = cadenas[+v] || '';
+      }
+      fila[col] = String(v == null ? '' : v).trim();
+    });
+    for (let i = 0; i < fila.length; i++) if (fila[i] === undefined) fila[i] = '';
+    filas.push(fila);
+  });
+  return filas.filter(f => f.some(x => x !== ''));
+}
+
+/* ---- Leer un CSV ---- */
+function leerCsv(texto){
+  const t = String(texto).replace(/^﻿/, '');
+  const primera = t.split(/\r?\n/)[0] || '';
+  // Excel en español guarda con punto y coma; se mira cuál manda en la cabecera
+  const sep = (primera.split(';').length >= primera.split(',').length) ? ';' : ',';
+  const filas = [];
+  let fila = [], campo = '', comillas = false;
+  for (let i = 0; i < t.length; i++){
+    const ch = t[i];
+    if (comillas){
+      if (ch === '"'){ if (t[i+1] === '"'){ campo += '"'; i++; } else comillas = false; }
+      else campo += ch;
+    }
+    else if (ch === '"') comillas = true;
+    else if (ch === sep){ fila.push(campo.trim()); campo = ''; }
+    else if (ch === '\n'){ fila.push(campo.trim()); filas.push(fila); fila = []; campo = ''; }
+    else if (ch !== '\r') campo += ch;
+  }
+  if (campo !== '' || fila.length){ fila.push(campo.trim()); filas.push(fila); }
+  return filas.filter(f => f.some(x => x !== ''));
+}
+
+/* ================================================================
+   Qué columnas se admiten
+
+   clave   · el campo de la base de datos
+   et      · cómo se llama en la plantilla y en pantalla
+   alias   · otras formas de escribirlo que se reconocen solas, porque cada
+             hoja de cálculo vieja las llama de una manera
+   tipo    · texto | numero | fecha | clave (de una lista de la aplicación)
+   ================================================================ */
+const IMPORTA = {
+  clientes: {
+    titulo: 'Clientes',
+    tabla: 'clientes',
+    campos: [
+      ['nombre',    'Nombre o razón social', ['cliente','razon social','titular','nombre cliente'], 'texto', true],
+      ['nif',       'NIF o CIF',             ['cif','dni','nif cif','documento'], 'texto'],
+      ['tipo',      'Tipo de cliente',       ['tipo'], 'lista'],
+      ['telefono',  'Teléfono',              ['tlf','movil','tel','telefono 1','contacto telefono'], 'texto'],
+      ['email',     'Correo',                ['mail','correo electronico','e mail'], 'texto'],
+      ['direccion', 'Dirección',             ['domicilio','calle'], 'texto'],
+      ['poblacion', 'Población',             ['ciudad','localidad','municipio'], 'texto'],
+      ['notas',     'Notas internas',        ['observaciones','nota'], 'texto'],
+    ],
+    ejemplo: ['Comunidad de Propietarios Las Flores', 'H11223344', 'Comunidad',
+              '600 000 001', 'presidencia@lasflores.es', 'Avenida de la Bajamar 14',
+              'El Puerto de Santa María', 'Llaves del portal en recepción'],
+  },
+  puertas: {
+    titulo: 'Puertas',
+    tabla: 'puertas',
+    campos: [
+      ['cliente',    'Cliente (nombre o NIF)', ['titular','nombre cliente','cif','nif'], 'texto', true],
+      ['codigo',     'Etiqueta',               ['etiqueta','codigo etiqueta','qr','numero'], 'texto'],
+      ['direccion',  'Dirección',              ['domicilio','calle','emplazamiento'], 'texto'],
+      ['ubicacion',  'Ubicación en el edificio',['ubicacion','situacion','planta'], 'texto'],
+      ['tipo',       'Tipo de puerta',         ['tipo'], 'lista'],
+      ['uso',        'Uso',                    ['uso de la puerta'], 'lista'],
+      ['marca',      'Marca',                  ['fabricante'], 'texto'],
+      ['modelo',     'Modelo',                 [], 'texto'],
+      ['motor',      'Motor (marca y modelo)', ['automatismo','motorreductor','operador'], 'texto'],
+      ['cuadro',     'Cuadro de maniobra',     ['central','cuadro'], 'texto'],
+      ['matricula',  'Matrícula o placa',      ['placa','numero de serie','serie'], 'texto'],
+      ['anio',       'Año',                    ['año','ano','ejercicio'], 'numero'],
+      ['ancho_mm',   'Ancho (mm)',             ['ancho'], 'numero'],
+      ['alto_mm',    'Alto (mm)',              ['alto','altura'], 'numero'],
+      ['peso_kg',    'Peso de la hoja (kg)',   ['peso'], 'numero'],
+      ['instalador', 'Instalada por',          ['instalador'], 'texto'],
+      ['ultima_revision',  'Última revisión',  ['ultima revision','fecha ultima revision'], 'fecha'],
+      ['proxima_revision', 'Próxima revisión', ['proxima revision','fecha proxima revision'], 'fecha'],
+      ['notas',      'Observaciones',          ['observaciones','nota'], 'texto'],
+    ],
+    ejemplo: ['Comunidad de Propietarios Las Flores', 'AR-0001', 'Avenida de la Bajamar 14',
+              'Rampa del garaje', 'Corredera autoportante', 'Comunidad', 'Erreka', 'Rino 4',
+              'Erreka Rino 4', 'Erreka Roma 24', 'Erreka Rino 4, nº 2019-0481',
+              '2019', '3500', '2200', '180', 'Ariza Puertas y Automatismos',
+              '2026-03-14', '2027-03-14', ''],
+  },
+};
+
+/* La plantilla, en .xlsx de verdad. Se escribe sin comprimir (el ZIP lo admite)
+   y así se aprovecha el mismo generador que usan las copias de seguridad. */
+function plantillaXlsx(tipo){
+  const def = IMPORTA[tipo];
+  const cab = def.campos.map(c => c[1]);
+  const filas = [cab, def.ejemplo.slice(0, cab.length)];
+  const esc2 = s => String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const letra = i => { let s = '', n = i + 1;
+    while (n > 0){ const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); }
+    return s; };
+  const hoja = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'+
+    filas.map((f, fi) => '<row r="'+(fi+1)+'">'+
+      f.map((v, ci) => '<c r="'+letra(ci)+(fi+1)+'" t="inlineStr"><is><t>'+esc2(v)+'</t></is></c>').join('')+
+      '</row>').join('')+
+    '</sheetData></worksheet>';
+  return crearZip([
+    { nombre:'[Content_Types].xml', datos:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'+
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'+
+      '<Default Extension="xml" ContentType="application/xml"/>'+
+      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'+
+      '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'+
+      '</Types>' },
+    { nombre:'_rels/.rels', datos:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'+
+      '</Relationships>' },
+    { nombre:'xl/workbook.xml', datos:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+      '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '+
+      'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'+
+      '<sheets><sheet name="'+def.titulo+'" sheetId="1" r:id="rId1"/></sheets></workbook>' },
+    { nombre:'xl/_rels/workbook.xml.rels', datos:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'+
+      '</Relationships>' },
+    { nombre:'xl/worksheets/sheet1.xml', datos: hoja },
+  ]);
+}
+
+/* ---- De las filas leídas a algo que se pueda guardar ---- */
+function mapearCabeceras(tipo, cabeceras){
+  const def = IMPORTA[tipo];
+  const usadas = {}, sobran = [];
+  (cabeceras || []).forEach((h, i) => {
+    const n = normTxt(h);
+    if (!n) return;
+    const campo = def.campos.find(c =>
+      normTxt(c[1]) === n || c[0] === n || (c[2] || []).some(a => normTxt(a) === n));
+    if (campo && usadas[campo[0]] === undefined) usadas[campo[0]] = i;
+    else sobran.push(h);
+  });
+  const faltan = def.campos.filter(c => c[4] && usadas[c[0]] === undefined).map(c => c[1]);
+  return { usadas, sobran, faltan };
+}
+
+function valorImporta(campo, bruto){
+  const v = String(bruto == null ? '' : bruto).trim();
+  if (!v) return null;
+  if (campo[3] === 'numero'){
+    const n = parseFloat(v.replace(/\./g, '').replace(',', '.'));
+    return isNaN(n) ? null : n;
+  }
+  if (campo[3] === 'fecha'){
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+    const es = v.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+    if (es){
+      const a = es[3].length === 2 ? '20'+es[3] : es[3];
+      return a+'-'+es[2].padStart(2,'0')+'-'+es[1].padStart(2,'0');
+    }
+    if (/^\d+(\.\d+)?$/.test(v)) return fechaExcel(v) || null;   // número de serie de Excel
+    return null;
+  }
+  return v;
+}
+
+/* El análisis: qué pasaría con cada fila, SIN guardar nada todavía */
+function analizarImportacion(tipo, filas, opciones){
+  const def = IMPORTA[tipo];
+  const op = opciones || {};
+  const cab = mapearCabeceras(tipo, filas[0] || []);
+  const salida = { tipo, columnas: cab, filas: [], resumen: { nueva:0, actualiza:0, igual:0, error:0 } };
+  if (cab.faltan.length) return salida;
+
+  const clientePorClave = new Map();
+  (S.clientes || []).forEach(c => {
+    if (c.nif) clientePorClave.set(normTxt(c.nif), c);
+    if (c.nombre) clientePorClave.set(normTxt(c.nombre), c);
+  });
+  const vistos = new Set();
+
+  filas.slice(1).forEach((f, i) => {
+    const o = {};
+    def.campos.forEach(c => {
+      const idx = cab.usadas[c[0]];
+      if (idx === undefined) return;
+      const v = valorImporta(c, f[idx]);
+      if (v !== null) o[c[0]] = v;
+    });
+    const fila = { n: i + 2, datos: o, estado: 'nueva', cambios: [], aviso: '', motivo: '' };
+
+    if (tipo === 'clientes'){
+      if (!o.nombre){ fila.estado = 'error'; fila.motivo = 'Sin nombre: un cliente sin nombre no se puede dar de alta.'; }
+      else {
+        const clave = normTxt(o.nif || '') || normTxt(o.nombre);
+        if (vistos.has(clave)){ fila.estado = 'error'; fila.motivo = 'Repetida dentro del propio fichero.'; }
+        else {
+          vistos.add(clave);
+          const ya = (S.clientes || []).find(c =>
+            (o.nif && normTxt(c.nif || '') === normTxt(o.nif)) ||
+            (!o.nif && normTxt(c.nombre || '') === normTxt(o.nombre)));
+          if (ya){
+            fila.existente = ya.id;
+            Object.keys(o).forEach(k => {
+              if (String(ya[k] || '') !== String(o[k])) fila.cambios.push([k, ya[k] || '', o[k]]);
+            });
+            fila.estado = fila.cambios.length ? 'actualiza' : 'igual';
+          }
+        }
+      }
+    }
+
+    if (tipo === 'puertas'){
+      const cli = o.cliente ? clientePorClave.get(normTxt(o.cliente)) : null;
+      if (!o.cliente){ fila.estado = 'error'; fila.motivo = 'Sin cliente: la puerta quedaría suelta.'; }
+      else if (!cli && !op.crearClientes){
+        fila.estado = 'error';
+        fila.motivo = 'El cliente «'+o.cliente+'» no existe todavía. Márcalo abajo para crearlo, o carga antes los clientes.';
+      }
+      else {
+        fila.cliente_id = cli ? cli.id : null;
+        if (!cli) fila.aviso = 'Se creará el cliente «'+o.cliente+'».';
+        if (o.codigo){
+          const clave = normTxt(o.codigo);
+          if (vistos.has(clave)){ fila.estado = 'error'; fila.motivo = 'Etiqueta repetida dentro del propio fichero.'; }
+          else {
+            vistos.add(clave);
+            const ya = (S.puertas || []).find(p => normTxt(p.codigo || '') === clave);
+            if (ya){
+              fila.existente = ya.id;
+              Object.keys(o).forEach(k => {
+                if (k === 'cliente') return;
+                if (String(ya[k] == null ? '' : ya[k]) !== String(o[k])) fila.cambios.push([k, ya[k] == null ? '' : ya[k], o[k]]);
+              });
+              fila.estado = fila.cambios.length ? 'actualiza' : 'igual';
+            }
+            else if (!(S.etiquetas || []).some(e => normTxt(e.codigo) === clave))
+              fila.aviso = (fila.aviso ? fila.aviso+' ' : '')+
+                'La etiqueta '+o.codigo+' no está en la serie: se dará de alta para que su QR funcione.';
+          }
+        }
+        else fila.aviso = (fila.aviso ? fila.aviso+' ' : '')+'Sin etiqueta: habrá que pegarle una en la próxima visita.';
+      }
+    }
+
+    salida.filas.push(fila);
+    salida.resumen[fila.estado]++;
+  });
+  return salida;
+}
+
+/* ---- Guardar de verdad ---- */
+async function ejecutarImportacion(tipo, analisis, op){
+  const hechos = { creados:0, actualizados:0, saltados:0, clientes:0, etiquetas:0, fallos:[] };
+  const nuevosClientes = new Map();
+
+  for (const fila of analisis.filas){
+    if (fila.estado === 'error'){ hechos.saltados++; continue; }
+    if (fila.estado === 'igual'){ hechos.saltados++; continue; }
+    if (fila.estado === 'actualiza' && !op.actualizar){ hechos.saltados++; continue; }
+    try {
+      if (tipo === 'clientes'){
+        const o = Object.assign({}, fila.datos);
+        if (fila.existente){
+          const { error } = await sb.from('clientes').update(o).eq('id', fila.existente);
+          if (error) throw error;
+          hechos.actualizados++;
+        } else {
+          o.creado_por = yo();
+          const { error } = await sb.from('clientes').insert(o);
+          if (error) throw error;
+          hechos.creados++;
+        }
+        continue;
+      }
+      // puertas
+      const o = Object.assign({}, fila.datos);
+      const nombreCli = o.cliente; delete o.cliente;
+      let cid = fila.cliente_id;
+      if (!cid && nombreCli){
+        const yaCreado = nuevosClientes.get(normTxt(nombreCli));
+        if (yaCreado) cid = yaCreado;
+        else {
+          const { data, error } = await sb.from('clientes')
+            .insert({ nombre: nombreCli, direccion: o.direccion || null, creado_por: yo() })
+            .select().maybeSingle();
+          if (error) throw error;
+          cid = data ? data.id : null;
+          if (cid){ nuevosClientes.set(normTxt(nombreCli), cid); hechos.clientes++; }
+        }
+      }
+      o.cliente_id = cid || null;
+      o.cliente = nombreCli || null;
+      /* La etiqueta que no exista se da de alta con su código de seguridad: sin
+         fila en «etiquetas» el QR de esa puerta no llevaría a ninguna parte. */
+      if (o.codigo && !(S.etiquetas || []).some(e => normTxt(e.codigo) === normTxt(o.codigo))){
+        const { error } = await sb.from('etiquetas')
+          .upsert([{ codigo:o.codigo, token:token() }], { onConflict:'codigo', ignoreDuplicates:true });
+        if (!error) hechos.etiquetas++;
+      }
+      if (fila.existente){
+        const { error } = await sb.from('puertas').update(o).eq('id', fila.existente);
+        if (error) throw error;
+        hechos.actualizados++;
+      } else {
+        o.creado_por = yo();
+        const { error } = await sb.from('puertas').insert(o);
+        if (error) throw error;
+        hechos.creados++;
+      }
+    } catch(e){
+      hechos.fallos.push('Fila '+fila.n+': '+(e.message || 'no se pudo guardar'));
+    }
+  }
+  return hechos;
+}
+
+/* Bajar un fichero generado aquí mismo */
+function bajarFichero(blob, nombre){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = nombre; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 4000);
+}
+
+/* ---- La pantalla de la carga ----
+   Tres pasos, y del segundo no se pasa sin mirar: elegir fichero, ver qué va a
+   pasar fila por fila, y guardar. */
+const IMPORTE = { tipo:null, filas:null, analisis:null, nombre:'' };
+
+function dlgImportar(tipo){
+  const def = IMPORTA[tipo];
+  IMPORTE.tipo = tipo; IMPORTE.filas = null; IMPORTE.analisis = null; IMPORTE.nombre = '';
+  let h = '<h3>Cargar '+esc(def.titulo.toLowerCase())+' desde un Excel</h3>'+
+    '<p class="mini" style="margin:0 0 10px">Sirve un fichero de Excel (.xlsx) o un CSV. '+
+    'La primera fila tiene que ser la de los títulos de columna. No se guarda nada hasta que veas '+
+    'la vista previa y le des a cargar.</p>'+
+    '<div class="grupo"><h3>1. El fichero</h3>'+
+    '<div class="fila" style="gap:8px;flex-wrap:wrap">'+
+      '<button type="button" class="btn sm" data-act="imp-plantilla" data-tipo="'+tipo+'">Bajar la plantilla</button>'+
+      '<label class="btn sm pri">Elegir el fichero'+
+        '<input type="file" accept=".xlsx,.xls,.csv,text/csv" hidden data-act="imp-fichero" data-tipo="'+tipo+'"></label>'+
+    '</div>'+
+    '<p class="mini" style="margin:8px 0 0">La plantilla trae los títulos en el orden correcto y una fila '+
+    'de ejemplo que hay que borrar. Si tu hoja ya existe, no hace falta rehacerla: los títulos se '+
+    'reconocen solos aunque estén escritos de otra forma.</p>'+
+    '<details style="margin-top:8px"><summary class="mini" style="cursor:pointer">Qué columnas se reconocen</summary>'+
+      '<table class="tabla" style="margin-top:8px"><thead><tr><th>Columna</th><th>También vale</th></tr></thead><tbody>'+
+      def.campos.map(c => '<tr><td>'+esc(c[1])+(c[4]?' <b>(obligatoria)</b>':'')+'</td>'+
+        '<td class="mini">'+esc((c[2]||[]).join(', ') || '—')+'</td></tr>').join('')+
+      '</tbody></table></details>'+
+    '</div>'+
+    '<div id="imp-previa"></div>'+
+    '<p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Cerrar</button>'+
+    '<button type="button" class="btn pri" data-act="imp-cargar" disabled>Cargar</button></div>';
+  abrirDlg(h, null);
+}
+
+/* Pinta la vista previa con lo que pasaría */
+function pintarPreviaImporta(){
+  const caja = document.getElementById('imp-previa');
+  if (!caja || !IMPORTE.analisis) return;
+  const a = IMPORTE.analisis, def = IMPORTA[IMPORTE.tipo];
+  const botonCargar = dlgForm.querySelector('[data-act="imp-cargar"]');
+
+  if (a.columnas.faltan.length){
+    caja.innerHTML = '<div class="grupo"><h3>2. No se puede seguir</h3>'+
+      '<div class="sin-ficha">Falta'+(a.columnas.faltan.length===1?' la columna':'n las columnas')+' '+
+      esc(a.columnas.faltan.join(', '))+'. Sin eso no se puede dar de alta nada.</div>'+
+      '<p class="mini" style="margin:8px 0 0">Baja la plantilla, copia tus datos dentro y vuelve a intentarlo.</p></div>';
+    if (botonCargar) botonCargar.disabled = true;
+    return;
+  }
+
+  const r = a.resumen;
+  const chip = (n, t, c) => '<span class="chip '+c+'">'+n+' '+t+'</span>';
+  let h = '<div class="grupo"><h3>2. Qué va a pasar</h3>'+
+    '<p class="mini" style="margin:0 0 8px">'+esc(IMPORTE.nombre)+' · '+a.filas.length+' fila'+(a.filas.length===1?'':'s')+' con datos</p>'+
+    '<div class="fila" style="gap:6px;flex-wrap:wrap;margin:0 0 10px">'+
+      chip(r.nueva, 'se dan de alta', 'ok')+
+      chip(r.actualiza, 'ya existen y cambian', 'aviso')+
+      chip(r.igual, 'ya están igual', 'gris')+
+      chip(r.error, 'no se pueden cargar', r.error ? 'mal' : 'gris')+
+    '</div>';
+
+  if (a.columnas.sobran.length)
+    h += '<p class="mini" style="margin:0 0 8px">Columnas del fichero que no se usan: '+
+      esc(a.columnas.sobran.join(', '))+'. No pasa nada: se quedan fuera.</p>';
+
+  h += '<div class="campos" style="margin:0 0 10px">'+
+    '<div class="campo full"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+      '<input type="checkbox" id="imp-act" data-act="imp-opcion"'+(IMPORTE.actualizar?' checked':'')+
+      ' style="accent-color:var(--amarillo);width:18px;height:18px">'+
+      'Actualizar también las '+r.actualiza+' fichas que ya existen</label>'+
+      '<span class="pista">Si lo dejas sin marcar, esas filas se saltan y no se toca nada de lo que ya hay.</span></div>'+
+    (IMPORTE.tipo === 'puertas'
+      ? '<div class="campo full"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+        '<input type="checkbox" id="imp-cli" data-act="imp-opcion"'+(IMPORTE.crearClientes?' checked':'')+
+        ' style="accent-color:var(--amarillo);width:18px;height:18px">'+
+        'Crear los clientes que no existan</label>'+
+        '<span class="pista">Se crean solo con el nombre y la dirección de la puerta. Lo suyo es cargar antes los clientes.</span></div>'
+      : '')+
+    '</div>';
+
+  const pinta = f => {
+    const col = { nueva:'ok', actualiza:'aviso', igual:'gris', error:'mal' }[f.estado];
+    const txt = { nueva:'Alta', actualiza:'Cambia', igual:'Igual', error:'No se carga' }[f.estado];
+    const nombre = IMPORTE.tipo === 'clientes'
+      ? (f.datos.nombre || '—')
+      : [f.datos.codigo, f.datos.cliente].filter(Boolean).join(' · ') || '—';
+    return '<tr><td class="mini">'+f.n+'</td>'+
+      '<td><span class="chip '+col+' sin">'+txt+'</span></td>'+
+      '<td><b>'+esc(nombre)+'</b>'+
+        (f.motivo ? '<span class="sub" style="display:block;color:var(--mal)">'+esc(f.motivo)+'</span>' : '')+
+        (f.aviso ? '<span class="sub" style="display:block">'+esc(f.aviso)+'</span>' : '')+
+        (f.cambios.length ? '<span class="sub" style="display:block">'+
+          esc(f.cambios.slice(0,4).map(c => {
+            const et = (def.campos.find(x => x[0] === c[0]) || [,c[0]])[1];
+            return et+': «'+(c[1]||'vacío')+'» → «'+c[2]+'»';
+          }).join(' · '))+
+          (f.cambios.length > 4 ? ' y '+(f.cambios.length-4)+' más' : '')+'</span>' : '')+
+      '</td></tr>';
+  };
+  const malas = a.filas.filter(f => f.estado === 'error');
+  const resto = a.filas.filter(f => f.estado !== 'error');
+  h += '<div class="tabla-wrap"><table class="tabla"><thead><tr><th style="width:40px">Fila</th>'+
+    '<th style="width:96px"></th><th>Qué es y qué pasa</th></tr></thead><tbody>'+
+    malas.map(pinta).join('')+
+    resto.slice(0, 40).map(pinta).join('')+
+    '</tbody></table></div>';
+  if (resto.length > 40)
+    h += '<p class="mini" style="margin:8px 0 0">Y '+(resto.length - 40)+' filas más sin novedad, '+
+      'que no se enseñan para no hacer la lista interminable.</p>';
+  h += '</div>';
+
+  caja.innerHTML = h;
+  if (botonCargar) botonCargar.disabled = !(r.nueva || r.actualiza);
+}
+
+/* Relee el fichero elegido y analiza */
+async function leerFicheroImporta(tipo, file){
+  const setE = m => setErr(m);
+  try {
+    setE('');
+    let filas;
+    if (/\.csv$/i.test(file.name) || file.type === 'text/csv')
+      filas = leerCsv(await file.text());
+    else
+      filas = await leerXlsx(await file.arrayBuffer());
+    if (!filas.length) throw new Error('El fichero no tiene ninguna fila con datos.');
+    IMPORTE.filas = filas;
+    IMPORTE.nombre = file.name;
+    IMPORTE.crearClientes = false;
+    IMPORTE.actualizar = true;
+    IMPORTE.analisis = analizarImportacion(tipo, filas, { crearClientes:false });
+    pintarPreviaImporta();
+  } catch(e){
+    setE(e.message || 'No se ha podido leer el fichero.');
+  }
 }
 
 /* ---- Un valor de Postgres escrito como SQL ---- */
@@ -13065,6 +13634,26 @@ dlgForm.addEventListener('change', e => {
   if (t.id === 'a-puerta'){ clienteDeLaPuertaDelAviso(); return; }
   // Puerta: al elegir centro, su dirección baja a la puerta
   if (t.id === 'f-centro'){ centroElegido(); return; }
+  /* ---- La carga desde Excel ---- */
+  if (t.dataset && t.dataset.act === 'imp-fichero' && t.files && t.files.length){
+    const f = t.files[0]; t.value = '';
+    leerFicheroImporta(t.dataset.tipo, f);
+    return;
+  }
+  if (t.dataset && t.dataset.act === 'imp-opcion'){
+    IMPORTE.actualizar = !!(document.getElementById('imp-act') || {}).checked;
+    const cli = document.getElementById('imp-cli');
+    const quiere = !!(cli && cli.checked);
+    /* Crear o no los clientes que faltan cambia qué filas son un error, así que
+       hay que volver a analizar; actualizar o no, solo cambia lo que se guarda. */
+    if (quiere !== IMPORTE.crearClientes && IMPORTE.filas){
+      IMPORTE.crearClientes = quiere;
+      IMPORTE.analisis = analizarImportacion(IMPORTE.tipo, IMPORTE.filas, { crearClientes: quiere });
+    }
+    pintarPreviaImporta();
+    return;
+  }
+
   /* ---- Ficheros elegidos DENTRO de un diálogo ----
      El <dialog> no está dentro de #vista, así que lo que pasa en él no llega al
      oyente de la vista. Mientras esto no estuvo aquí, los botones de foto y de
@@ -15861,6 +16450,11 @@ raiz.addEventListener('click', async e => {
     } catch(err){ fallo(err); b.disabled = false; b.textContent = 'Abrir las revisiones que tocan'; }
   }
   else if (a === 'puerta-nueva') dlgPuerta(null);
+  else if (a === 'importar'){
+    /* Solo administrador y oficina: una carga masiva no es cosa de obra. */
+    if (!esGestion()) return;
+    dlgImportar(b.dataset.tipo === 'puertas' ? 'puertas' : 'clientes');
+  }
   else if (a === 'exp-comp-traer'){
     if (!armar(b, 'Confirmar')) return;
     await expTraerComponentes(b.dataset.id);
@@ -16449,6 +17043,57 @@ dlgForm.addEventListener('click', async e => {
     } else cerrarDlg();
     if (a === 'obra-ficha') dlgPuerta(av.puerta_id, id);
     else dlgComponente(null, av.puerta_id, '', id);
+    return;
+  }
+  if (a === 'imp-plantilla'){
+    const tipo = b.dataset.tipo;
+    bajarFichero(plantillaXlsx(tipo), 'plantilla-'+tipo+'-ariza.xlsx');
+    toast('Plantilla descargada. Borra la fila de ejemplo antes de rellenarla.');
+    return;
+  }
+  if (a === 'imp-cargar'){
+    if (!IMPORTE.analisis) return;
+    /* Doble toque, como en todo lo que no tiene vuelta atrás: una carga puede
+       crear cientos de fichas de golpe. */
+    if (!armar(b, 'Confirmar la carga')) return;
+    b.disabled = true;
+    setErr('');
+    const caja = document.getElementById('imp-previa');
+    if (caja) caja.insertAdjacentHTML('afterbegin',
+      '<p class="mini" id="imp-yendo" style="margin:0 0 8px">Cargando, no cierres esta ventana…</p>');
+    let r;
+    try {
+      r = await ejecutarImportacion(IMPORTE.tipo, IMPORTE.analisis,
+        { actualizar: IMPORTE.actualizar, crearClientes: IMPORTE.crearClientes });
+    } catch(e){
+      b.disabled = false;
+      const y = document.getElementById('imp-yendo'); if (y) y.remove();
+      return setErr(e.message || 'No se ha podido completar la carga.');
+    }
+    await cargar();
+    const def = IMPORTA[IMPORTE.tipo];
+    let h = '<h3>Carga terminada</h3>'+
+      '<p class="mini" style="margin:0 0 10px">'+esc(def.titulo)+' · '+esc(IMPORTE.nombre)+'</p>'+
+      '<div class="grupo"><h3>Qué ha quedado</h3><dl class="datos">'+
+      '<div><dt>Dados de alta</dt><dd>'+r.creados+'</dd></div>'+
+      '<div><dt>Actualizados</dt><dd>'+r.actualizados+'</dd></div>'+
+      '<div><dt>Saltados</dt><dd>'+r.saltados+'</dd></div>'+
+      (r.clientes ? '<div><dt>Clientes creados</dt><dd>'+r.clientes+'</dd></div>' : '')+
+      (r.etiquetas ? '<div><dt>Etiquetas dadas de alta</dt><dd>'+r.etiquetas+'</dd></div>' : '')+
+      '</dl></div>';
+    if (r.fallos.length)
+      h += '<div class="grupo"><h3>Lo que no ha entrado</h3>'+
+        '<div class="sin-ficha">'+r.fallos.length+' fila'+(r.fallos.length===1?'':'s')+' ha'+
+        (r.fallos.length===1?'':'n')+' fallado al guardar.</div>'+
+        '<ul class="mini" style="margin:8px 0 0;padding-left:18px">'+
+        r.fallos.slice(0,20).map(x => '<li>'+esc(x)+'</li>').join('')+'</ul>'+
+        (r.fallos.length > 20 ? '<p class="mini">Y '+(r.fallos.length-20)+' más.</p>' : '')+
+        '</div>';
+    else h += '<p class="mini" style="margin:0">Sin incidencias.</p>';
+    h += '<div class="pie"><span class="sp"></span><button type="button" class="btn pri" data-cerrar>Cerrar</button></div>';
+    dlgForm.innerHTML = h;
+    pintar();
+    toast(r.creados+' dados de alta · '+r.actualizados+' actualizados.');
     return;
   }
   if (a === 'cerrar-asistencia'){ cerrarDlg(); dlgCierre(b.dataset.id); return; }
