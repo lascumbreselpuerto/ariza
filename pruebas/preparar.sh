@@ -120,6 +120,10 @@ COMBO_DESDE activarCombos comboPintar comboTiene comboElegir comboTodas
 dlgAviso dlgContrato dlgEstado abrirDlg
 CLAVE_MOTOR CLAVE_CUADRO claveFicha fichaDeClave marcaModeloFicha
 guardarCuadroMotor guardarFichaDesdeComponente anadirComponentesMinimos
+abrirZip textoDelZip leerXlsx leerCsv colIndice fechaExcel plantillaXlsx
+IMPORTA IMPORTE mapearCabeceras valorImporta analizarImportacion
+ejecutarImportacion dlgImportar pintarPreviaImporta leerFicheroImporta
+bajarFichero token crearZip esGestion
 vistaManual cargarManual mdAHtml MANUALES
 guardarBorradorPuerta aplicarBorradorPuerta CAMPOS_PUERTA dlgPuerta dlgCliente
 libroExpediente informeSituacion propuestaActuaciones actaEntrega vidaPuerta
