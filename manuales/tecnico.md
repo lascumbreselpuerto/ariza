@@ -6,7 +6,7 @@ Esto no explica el oficio: explica la aplicación. Da por hecho que sabes de pue
 Lo tienes siempre a mano en la pestaña **Manual** de la propia aplicación, también
 sin cobertura una vez que lo has abierto la primera vez.
 
-> **Versión de la aplicación que describe este manual: 2026.10.21-1**
+> **Versión de la aplicación que describe este manual: 2026.10.21-2**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -72,7 +72,11 @@ Por ejemplo, en la fuerza dinámica te dice el dinamómetro, dónde apoyarlo, cu
 
 ### Materiales
 
-Lo que has gastado. Escribes y te va sugiriendo lo que ya se ha usado otras veces.
+Cada línea tiene dos cosas: el **material del almacén**, que eliges de la lista, y la **descripción**, que se rellena sola y puedes matizar. Lo que no esté en el almacén se sigue escribiendo a mano, como siempre.
+
+Lo importante: al **cerrar la visita**, lo que hayas elegido del almacén se descuenta de tu furgoneta. Solo al cerrar, y una sola vez, aunque guardes el avance diez veces.
+
+Si la oficina te ha mandado llevar material, te sale arriba del todo con un botón para **pasarlo a material usado**. Eso es lo previsto, no lo gastado: corrige las cantidades con lo que de verdad hayas puesto.
 
 ### Tiempo y desplazamiento
 
@@ -159,7 +163,27 @@ Si no quedan etiquetas libres en la furgoneta, eso no lo puedes resolver allí. 
 
 ---
 
-## 5. Tres cosas que se preguntan siempre
+## 5. El almacén
+
+Pestaña **Almacén**. Lo que ves de cada material es cuánto hay y **dónde**: en la nave, en tu furgoneta o en la de otro. Esa es la pregunta de todos los días.
+
+Cada material lleva su etiqueta QR pegada en la caja o en la balda. **La escaneas con la cámara y se abre directamente** con tres botones:
+
+| Botón | Cuándo |
+|---|---|
+| **Ha llegado material** | Entra en la nave lo que trae el proveedor |
+| **Lo he gastado** | Lo has puesto en una obra o en una avería. Puedes decir en qué asistencia |
+| **Me lo llevo** | Lo pasas de la nave a tu furgoneta |
+
+Tu furgoneta se crea sola la primera vez que coges material. No hay que pedirla.
+
+Si das salida a más de lo que la aplicación creía que llevabas, **no te lo impide**: manda lo que de verdad hay en la furgoneta, no lo que diga la pantalla. Te avisa para que se revise el inventario, y ese aviso es lo que hace que el almacén se ponga al día en vez de quedarse mintiendo.
+
+Dar de alta materiales nuevos y poner precios es cosa de oficina. Tú mueves.
+
+---
+
+## 6. Tres cosas que se preguntan siempre
 
 **«Me he quedado a medias.»**
 Dale a **Guardar sin cerrar**. Se guarda todo y la visita sigue abierta. No pierdes el guión.
@@ -172,7 +196,7 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-## 6. Lo que no debes hacer
+## 7. Lo que no debes hacer
 
 - **No marques Bien lo que no has comprobado.** Para eso están **N/A** y, en el expediente, «No verificado».
 - **No marques conforme un paracaídas que no has podido probar.** Si no se puede probar sin riesgo, se deja como no comprobado y se escribe por qué.
@@ -182,7 +206,7 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-## 7. Si algo no cuadra
+## 8. Si algo no cuadra
 
 1. Mira la versión arriba de esta pantalla, en la pestaña **Manual**.
 2. Recarga a fondo: en el móvil, cierra la aplicación del todo y vuelve a abrirla.
@@ -190,4 +214,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.10.21-1 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.10.21-2 de ARIZA SAT*
