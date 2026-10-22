@@ -453,6 +453,7 @@ dialog::backdrop{background:rgba(20,18,17,.55)}
     <button data-tab="clientes" role="tab">Clientes</button>
     <button data-tab="contratos" role="tab">Contratos</button>
     <button data-tab="almacen" role="tab">Almacén</button>
+    <button data-tab="presupuestos" role="tab" hidden>Presupuestos</button>
     <button data-tab="etiquetas" role="tab">Etiquetas</button>
     <button data-tab="gestion" role="tab" hidden>Gestión</button>
     <button data-tab="equipo" role="tab" hidden>Equipo</button>
@@ -626,7 +627,9 @@ const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etique
             cliArchivados:false, centros:[], sinCentros:false, versionNueva:null, versionAvisada:null,
             manual:null, manuales:null, sinObra:false, sinModo:false, fotosCuenta:{},
             sinAlmacen:false, ubicaciones:[], existencias:[], movimientos:[], previstos:[],
-            buscaMat:'', matFamilia:'', matProveedor:'', matFiltro:'', fichaMat:null };
+            buscaMat:'', matFamilia:'', matProveedor:'', matFiltro:'', fichaMat:null,
+            sinPresupuestos:false, presupuestos:[], presuLineas:[], articulos:[],
+            presu:null, presuFiltro:'', buscaPresu:'' };
 /* Importes: solo existen para el administrador. Si no hay tarifas cargadas, no se enseña nada. */
 const valoracionDe = id => S.valoraciones[id] || null;
 const eur = n => (n == null || isNaN(n)) ? '—' :
@@ -950,6 +953,115 @@ async function vistaContratoPublico(token){
     'o pedir presupuesto: llega directamente a nuestro servicio técnico.</p></div>';
   cont.innerHTML = h;
 }
+/* ---- El presupuesto visto por el cliente ----
+   Sin contraseña, por su enlace. Lo que puede hacer es aceptar o rechazar, y
+   queda escrito quién y cuándo. */
+async function vistaPresupuestoPublico(tok){
+  $('#arranque').hidden = true;
+  $('#publica').hidden = false;
+  const cont = $('#publica-in');
+  cont.innerHTML = '<p class="pie">Consultando…</p>';
+  const { data, error } = await sb.rpc('presupuesto_publico', { p_token: tok });
+  if (error || !data || !data.ok){
+    const motivo = (data && data.motivo) || 'no_existe';
+    const texto = motivo === 'no_enviado'
+      ? 'Este presupuesto todavía no se ha mandado.'
+      : 'Este enlace no corresponde a ningún presupuesto.';
+    cont.innerHTML = '<div class="tarjeta"><h1>No encontrado</h1><p>'+texto+'</p>'+
+      '<p class="mini">Si crees que es un error, llámanos al 661 352 795.</p></div>';
+    return;
+  }
+  const d = data;
+  const num = n => eur(Number(n || 0));
+  let h = '<div class="tarjeta">'+
+    '<span class="marca" style="font-size:20px"><i></i>ARIZA <b>puertas automáticas</b></span>'+
+    '<h1>Presupuesto '+esc(d.referencia || '')+'</h1>'+
+    '<p style="margin:0 0 4px"><b>'+esc(d.titulo || '')+'</b></p>'+
+    '<p class="mini" style="margin:0">'+esc(d.cliente || '')+
+      (d.puerta ? ' · puerta '+esc(d.puerta) : '')+
+      (d.fecha ? ' · '+esc(fechaCorta(d.fecha)) : '')+'</p>';
+
+  if (d.estado === 'aceptado' || d.estado === 'convertido')
+    h += '<div class="estado-grande"><span class="bola" style="background:#2E7D46"></span>Aceptado</div>'+
+      '<p style="margin:0">Aceptado por '+esc(d.aceptado_por || '')+' el '+esc(fechaHora(d.aceptado_el))+'. '+
+      'Nos pondremos en contacto para programar el trabajo.</p>';
+  else if (d.estado === 'rechazado')
+    h += '<div class="estado-grande"><span class="bola" style="background:#B3271E"></span>Rechazado</div>'+
+      '<p style="margin:0">Si cambia de opinión, llámenos y le hacemos uno nuevo.</p>';
+  else if (d.caducado)
+    h += '<div class="estado-grande"><span class="bola" style="background:#A49E99"></span>Caducado</div>'+
+      '<p style="margin:0">Este presupuesto venció el '+esc(fechaCorta(d.valido_hasta))+'. '+
+      'Llámenos y le pasamos uno actualizado: los precios de material cambian.</p>';
+  h += '</div>';
+
+  if (d.descripcion)
+    h += '<div class="tarjeta"><h2 style="font-size:20px">Qué proponemos</h2>'+
+      '<p style="margin:0;white-space:pre-wrap">'+esc(d.descripcion)+'</p></div>';
+
+  h += '<div class="tarjeta"><h2 style="font-size:20px">Detalle</h2>';
+  (d.lineas || []).forEach(l => {
+    if (l.tipo === 'texto'){ h += '<p class="mini" style="margin:0 0 6px">'+esc(l.descripcion)+'</p>'; return; }
+    h += '<div class="fila" style="gap:8px;padding:6px 0;border-bottom:1px solid var(--line)">'+
+      '<span class="sp">'+esc(l.descripcion)+
+        '<span class="mini" style="display:block">'+esc(l.cantidad)+' '+esc(l.unidad||'')+' × '+num(l.precio)+'</span></span>'+
+      '<b>'+num(l.importe)+'</b></div>';
+  });
+  h += '<div class="fila" style="gap:8px;padding:8px 0"><span class="sp">Base</span><b>'+num(d.base)+'</b></div>'+
+    (Number(d.descuento) ? '<div class="fila" style="gap:8px"><span class="sp">Descuento</span><b>-'+num(d.descuento)+'</b></div>' : '')+
+    '<div class="fila" style="gap:8px"><span class="sp">IVA ('+esc(d.tipo_iva)+'%)</span><b>'+num(d.iva)+'</b></div>'+
+    '<div class="fila" style="gap:8px;font-size:20px;margin-top:6px"><span class="sp"><b>Total</b></span><b>'+num(d.total)+'</b></div>';
+  if (d.valido_hasta)
+    h += '<p class="mini" style="margin:10px 0 0">Válido hasta el '+esc(fechaCorta(d.valido_hasta))+'.</p>';
+  h += '</div>';
+
+  if (d.condiciones)
+    h += '<div class="tarjeta"><h2 style="font-size:20px">Condiciones</h2>'+
+      '<p style="margin:0;white-space:pre-wrap">'+esc(d.condiciones)+'</p></div>';
+
+  const puedeResponder = d.ok && !d.caducado &&
+    !['aceptado','convertido','rechazado'].includes(d.estado);
+  if (puedeResponder)
+    h += '<div class="tarjeta" id="responder"><h2 style="font-size:20px">¿Lo aceptamos?</h2>'+
+      '<p style="margin:0 0 10px">Si está conforme, escriba su nombre y acepte. Queda registrado '+
+      'quién lo acepta y cuándo, y nos ponemos con ello.</p>'+
+      '<label class="mini" for="pb-nombre">Nombre y apellidos de quien acepta</label>'+
+      '<input id="pb-nombre" type="text" maxlength="120" style="width:100%;padding:10px;margin:4px 0 10px;'+
+        'border:1px solid var(--line);border-radius:8px;font-size:16px">'+
+      '<button class="btn pri" id="pb-aceptar" style="width:100%">Acepto el presupuesto</button>'+
+      '<button class="btn plana" id="pb-rechazar" style="width:100%;margin-top:8px">No me interesa</button>'+
+      '<p class="err" id="pb-err" style="margin-top:8px"></p></div>';
+
+  h += '<p class="pie">Ariza Puertas y Automatismos · 661 352 795 · Presupuesto sin compromiso</p>';
+  cont.innerHTML = h;
+
+  if (!puedeResponder) return;
+  const responder = async (acepta) => {
+    const nombre = (document.getElementById('pb-nombre') || {}).value || '';
+    const err = document.getElementById('pb-err');
+    if (acepta && !nombre.trim()){
+      err.textContent = 'Escriba su nombre: sin él la aceptación no vale.';
+      return;
+    }
+    err.textContent = '';
+    const { data: r } = await sb.rpc('responder_presupuesto',
+      { p_token: tok, p_acepta: acepta, p_nombre: nombre, p_motivo: null });
+    if (!r || !r.ok){
+      const m = { caducado:'Este presupuesto ha caducado.', ya_aceptado:'Ya estaba aceptado.',
+                  ya_rechazado:'Ya se había respondido.', sin_nombre:'Escriba su nombre.' };
+      err.textContent = (r && m[r.motivo]) || 'No se ha podido registrar la respuesta.';
+      return;
+    }
+    document.getElementById('responder').innerHTML = acepta
+      ? '<h2 style="font-size:20px">Aceptado</h2><p style="margin:0">Gracias. Nos ponemos en contacto '+
+        'para programar el trabajo.</p>'
+      : '<h2 style="font-size:20px">Entendido</h2><p style="margin:0">Gracias por contestar. '+
+        'Si cambia de opinión, llámenos.</p>';
+    window.scrollTo({ top: document.body.scrollHeight, behavior:'smooth' });
+  };
+  document.getElementById('pb-aceptar').addEventListener('click', () => responder(true));
+  document.getElementById('pb-rechazar').addEventListener('click', () => responder(false));
+}
+
 async function vistaPublica(ref){
   $('#arranque').hidden = true;
   $('#publica').hidden = false;
@@ -1129,6 +1241,24 @@ async function cargar(){
   const pv = S.sinAlmacen ? { data: [] }
     : await sb.from('materiales_previstos').select('*').order('creado');
   S.previstos = pv.error ? [] : (pv.data || []);
+  /* ---- Presupuestos ----
+     Llevan precios y costes, así que la base de datos solo se los deja ver al
+     administrador y a la oficina: para un técnico vienen vacíos y la pestaña ni
+     siquiera aparece. Los artículos CON su coste se leen aparte de la vista del
+     catálogo, que es la que no los trae, y solo para quien puede verlos. */
+  if (esGestion()){
+    const [pr, pl, ar] = await Promise.all([
+      sb.from('presupuestos').select('*').order('creado', { ascending:false }).range(0, 4999),
+      sb.from('presupuesto_lineas').select('*').order('orden').range(0, 19999),
+      sb.from('articulos').select('*').order('descripcion').range(0, 19999),
+    ]);
+    S.sinPresupuestos = !!pr.error;
+    S.presupuestos = pr.error ? [] : (pr.data || []);
+    S.presuLineas = pl.error ? [] : (pl.data || []);
+    S.articulos = ar.error ? [] : (ar.data || []);
+  } else {
+    S.sinPresupuestos = true; S.presupuestos = []; S.presuLineas = []; S.articulos = [];
+  }
   if (!j.error){ S.ajustes = {}; (j.data || []).forEach(x => { S.ajustes[x.clave] = x.valor; }); }
   // materiales ya usados, para ir sugiriéndolos al técnico
   const m = await sb.from('materiales').select('descripcion, unidad').limit(500);
@@ -1180,7 +1310,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.10.21-2';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.10.21-3';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -1231,6 +1361,8 @@ function vigilarVersion(){
 async function arranque(){
   const tokenK = contratoDeURL();
   if (tokenK){ await vistaContratoPublico(tokenK); return; }
+  const presuTok = presupuestoDeURL();
+  if (presuTok){ await vistaPresupuestoPublico(presuTok); return; }
   const ref = codigoDeURL();
   if (ref){ await vistaPublica(ref); return; }
   /* La etiqueta de un material NO tiene vista pública: dentro hay existencias y
@@ -1262,6 +1394,7 @@ async function entrar(sesion){
   if (per.rol === 'tecnico' && !S.tabElegida) S.tab = 'trabajo';
   $('#tabs button[data-tab="equipo"]').hidden = per.rol !== 'admin';
   $('#tabs button[data-tab="gestion"]').hidden = !(per.rol === 'admin' || per.rol === 'oficina');
+  $('#tabs button[data-tab="presupuestos"]').hidden = !(per.rol === 'admin' || per.rol === 'oficina');
   await cargar();
   /* Si se ha entrado escaneando la etiqueta de un material, se va derecho a su
      movimiento: el técnico ha escaneado con una caja en la mano. */
@@ -1297,6 +1430,7 @@ function render(){
   else if (S.tab === 'etiquetas') h = vistaEtiquetas();
   else if (S.tab === 'gestion') h = esGestion() ? vistaGestion() : vistaPuertas();
   else if (S.tab === 'almacen') h = vistaAlmacen();
+  else if (S.tab === 'presupuestos') h = esGestion() ? vistaPresupuestos() : vistaPuertas();
   else if (S.tab === 'equipo') h = vistaEquipo();
   else if (S.tab === 'manual') h = vistaManual();
   else h = vistaPuertas();
@@ -1751,6 +1885,12 @@ function accionesAsis(a, firmada){
     const n = previstosDe(a.id).length;
     b.push('<button class="btn sm plana" data-act="prev-abrir" data-id="'+a.id+'">'+
       (n ? 'Material que lleva ('+n+')' : 'Decirle qué material llevar')+'</button>');
+  }
+  /* De lo que el técnico ha visto a una oferta, sin volver a teclearlo */
+  if (esGestion() && !S.sinPresupuestos){
+    const hay = (S.presupuestos || []).filter(x => x.aviso_id === a.id).length;
+    b.push('<button class="btn sm plana" data-act="presu-desde-aviso" data-id="'+a.id+'">'+
+      (hay ? 'Presupuestos de esta visita ('+hay+')' : 'Hacer presupuesto')+'</button>');
   }
   b.push('<button class="btn sm plana" data-act="aviso-duplicar" data-id="'+a.id+'">Duplicar</button>');
   if (!a.cerrado && esGestion())
@@ -3259,6 +3399,595 @@ function dlgMover(articuloId, modo, avisoId){
       toast('Movimiento guardado.');
     } catch(err){ setErr(err.message || 'No se ha podido guardar el movimiento.'); }
   });
+}
+
+/* ================================================================
+   PRESUPUESTOS Y OFERTAS
+
+   Un presupuesto es una promesa con fecha: lo que se ofrece, por cuánto y hasta
+   cuándo. De ahí salen las tres reglas que sigue esto:
+
+   1. Los importes se congelan al emitir. Cada línea guarda SU precio, no una
+      referencia al precio de hoy. Si mañana sube el coste del material, la
+      oferta que mandaste ayer sigue diciendo lo mismo.
+
+   2. El coste viaja al lado del precio, pero nunca sale en el papel del cliente.
+      Está para ver el margen ANTES de mandarlo, que es cuando se puede corregir.
+
+   3. La aceptación deja rastro: quién y cuándo. Es lo que evita el «yo no dije
+      que sí», y la razón de que el cliente acepte por su enlace y no por
+      teléfono.
+   ================================================================ */
+const ESTADOS_PRESU = {
+  borrador:   { t:'Borrador',  c:'gris'  },
+  enviado:    { t:'Enviado',   c:'aviso' },
+  aceptado:   { t:'Aceptado',  c:'ok'    },
+  rechazado:  { t:'Rechazado', c:'mal'   },
+  convertido: { t:'En marcha', c:'ok'    },
+  caducado:   { t:'Caducado',  c:'gris'  },
+};
+const presuDe = id => (S.presupuestos || []).find(p => p.id === id) || null;
+const lineasDe = id => (S.presuLineas || []).filter(l => l.presupuesto_id === id)
+  .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+/* Caducado no se guarda: se mira la fecha. Guardarlo obligaría a alguien a pasar
+   cada noche a cambiarlo, y ese alguien no existe. */
+const presuCaducado = p => !!(p && p.valido_hasta && p.valido_hasta < hoy() &&
+  !['aceptado','convertido','rechazado','borrador'].includes(p.estado));
+const estadoPresu = p => presuCaducado(p) ? 'caducado' : (p ? p.estado : 'borrador');
+
+/* El artículo CON su coste. S.catalogo no lo trae nunca; S.articulos solo lo
+   tiene quien puede verlo. */
+const articuloConCoste = id => (S.articulos || []).find(a => a.id === id) || null;
+/* Precio de venta de un material: su coste más el recargo. El del propio
+   artículo manda sobre el general, que es para lo que está. */
+function precioVentaMaterial(articuloId){
+  const a = articuloConCoste(articuloId);
+  const t = S.tarifas || {};
+  if (!a || a.coste == null) return null;
+  const rec = (a.recargo != null ? a.recargo : (t.recargo_material != null ? t.recargo_material : 0));
+  return Math.round(Number(a.coste) * (1 + Number(rec) / 100) * 100) / 100;
+}
+
+/* Lo que suma un presupuesto. Se calcula a partir de sus líneas, siempre igual,
+   lo mismo para pintarlo en pantalla que para guardarlo al emitir. */
+function totalesPresu(lineas, descuento, tipoIva){
+  const por = t => (lineas || []).filter(l => l.tipo === t)
+    .reduce((a, l) => a + Number(l.importe || 0), 0);
+  const materiales = por('material');
+  const mano_obra = por('mano_obra');
+  const desplazamiento = por('desplazamiento');
+  const bruto = materiales + mano_obra + desplazamiento;
+  const desc = Math.min(Number(descuento || 0), bruto);
+  const base = Math.round((bruto - desc) * 100) / 100;
+  const iv = Number(tipoIva != null ? tipoIva : ((S.tarifas || {}).iva != null ? S.tarifas.iva : 21));
+  const iva = Math.round(base * iv / 100 * 100) / 100;
+  const coste = (lineas || []).reduce((a, l) => a + Number(l.coste || 0) * Number(l.cantidad || 0), 0);
+  return { materiales, mano_obra, desplazamiento, descuento: desc, base,
+           tipo_iva: iv, iva, total: Math.round((base + iva) * 100) / 100,
+           coste: Math.round(coste * 100) / 100,
+           margen: Math.round((base - coste) * 100) / 100 };
+}
+
+function siguienteReferenciaPresu(){
+  const anio = new Date().getFullYear();
+  const n = (S.presupuestos || [])
+    .map(p => String(p.referencia || ''))
+    .filter(r => r.startsWith('PR-' + anio))
+    .map(r => parseInt(r.split('-')[2] || '0', 10))
+    .filter(x => !isNaN(x));
+  return 'PR-' + anio + '-' + String((n.length ? Math.max.apply(null, n) : 0) + 1).padStart(4, '0');
+}
+/* El token del enlace del cliente. Más largo que el de una puerta porque aquí
+   lo que hay detrás es dinero: doce caracteres, no cuatro. */
+const tokenPresu = () => {
+  let s = '';
+  for (let i = 0; i < 3; i++) s += token();
+  return s;
+};
+const enlacePresu = p => BASE_QR + 'P-' + (p.token || '');
+function presupuestoDeURL(){
+  const h = (location.hash || '').replace(/^#/, '').trim();
+  const m = h.match(/^P-([A-Z0-9]{8,24})$/i);
+  return m ? m[1].toUpperCase() : null;
+}
+
+/* ---- La pantalla ---- */
+function vistaPresupuestos(){
+  let h = '<div class="stack">';
+  if (!esGestion()) return h + '</div>';
+  if (S.sinPresupuestos){
+    h += '<div class="panel"><div class="panel-h"><h2>Presupuestos</h2></div>'+
+      '<div class="sin-ficha">Falta ejecutar en la base de datos el SQL de presupuestos '+
+      '(servidor/presupuestos.sql).</div></div></div>';
+    return h;
+  }
+  const q = normTxt(S.buscaPresu);
+  let lista2 = (S.presupuestos || []).filter(p => {
+    const cli = p.cliente_id ? (clienteDe(p.cliente_id) || {}).nombre : '';
+    return !q || normTxt([p.referencia, p.titulo, cli].join(' ')).includes(q);
+  });
+  if (S.presuFiltro) lista2 = lista2.filter(p => estadoPresu(p) === S.presuFiltro);
+
+  const abiertos = (S.presupuestos || []).filter(p => estadoPresu(p) === 'enviado');
+  const aceptados = (S.presupuestos || []).filter(p => p.estado === 'aceptado');
+  const caducan = abiertos.filter(p => p.valido_hasta && dias(p.valido_hasta) >= 0 && dias(p.valido_hasta) <= 7);
+
+  h += '<div class="fila"><div class="buscador sp"><input id="busca-presu" type="search" '+
+       'placeholder="Buscar por referencia, título o cliente" value="'+esc(S.buscaPresu)+'" data-act="busca-presu"></div>'+
+       '<button class="btn pri" data-act="presu-nuevo">Nuevo presupuesto</button></div>';
+
+  h += '<div class="cifras">'+
+    '<div class="cifra"><b>'+abiertos.length+'</b><span>Enviados, sin respuesta</span></div>'+
+    '<div class="cifra"><b>'+eur(abiertos.reduce((a,p)=>a+Number(p.total||0),0))+'</b><span>En juego</span></div>'+
+    '<div class="cifra"><b>'+aceptados.length+'</b><span>Aceptados sin abrir trabajo</span></div>'+
+    '</div>';
+
+  if (caducan.length)
+    h += '<div class="sin-ficha" style="background:var(--aviso-bg);color:var(--aviso)">'+
+      caducan.length+' presupuesto'+(caducan.length===1?'':'s')+' caduca'+(caducan.length===1?'':'n')+
+      ' esta semana. Una llamada a tiempo es la diferencia.</div>';
+
+  h += '<div class="fila" style="gap:8px;flex-wrap:wrap"><select class="cal-sel" data-act="presu-filtro">'+
+    [['','Todos']].concat(Object.keys(ESTADOS_PRESU).map(k => [k, ESTADOS_PRESU[k].t]))
+      .map(x => '<option value="'+x[0]+'"'+(S.presuFiltro===x[0]?' selected':'')+'>'+x[1]+'</option>').join('')+
+    '</select></div>';
+
+  if (!lista2.length)
+    h += '<div class="panel"><p class="muted" style="margin:0">'+
+      ((S.presupuestos||[]).length ? 'Ninguno coincide con lo que buscas.'
+        : 'Todavía no hay presupuestos. El primero se hace en dos minutos: cliente, lo que se propone y las líneas.')+'</p></div>';
+  else {
+    h += '<div class="lista">';
+    lista2.slice(0, 200).forEach(p => {
+      const e = ESTADOS_PRESU[estadoPresu(p)] || ESTADOS_PRESU.borrador;
+      const cli = p.cliente_id ? (clienteDe(p.cliente_id) || {}).nombre : 'Sin cliente';
+      const pu = p.puerta_id ? (puertaDe(p.puerta_id) || {}) : null;
+      h += '<div class="item" data-act="presu-abrir" data-id="'+p.id+'" style="cursor:pointer"><div class="item-in">'+
+        '<div class="fila" style="gap:8px;flex-wrap:wrap">'+
+          '<b>'+esc(p.titulo || 'Sin título')+'</b>'+
+          (p.referencia ? '<span class="chip gris sin">'+esc(p.referencia)+'</span>' : '')+
+          '<span class="sp"></span><span class="chip '+e.c+'">'+e.t+'</span>'+
+          '<span class="chip gris sin">'+eur(p.total)+'</span>'+
+        '</div>'+
+        '<div class="mini">'+esc(cli)+(pu && pu.codigo ? ' · '+esc(pu.codigo) : '')+
+          (p.fecha ? ' · '+esc(fechaCorta(p.fecha)) : '')+
+          (p.valido_hasta ? ' · válido hasta '+esc(fechaCorta(p.valido_hasta)) : '')+'</div>'+
+        (p.aceptado_el ? '<div class="mini">Aceptado por <b>'+esc(p.aceptado_por||'')+'</b> el '+
+          esc(fechaHora(p.aceptado_el))+'</div>' : '')+
+        (p.rechazado_el ? '<div class="mini">Rechazado el '+esc(fechaCorta(p.rechazado_el))+
+          (p.rechazado_motivo ? ': '+esc(p.rechazado_motivo) : '')+'</div>' : '')+
+        '</div></div>';
+    });
+    h += '</div>';
+  }
+  return h + '</div>';
+}
+
+/* ---- El editor del presupuesto ----
+   Las líneas se manejan en memoria (S.presu.lineas) y se guardan todas juntas:
+   un presupuesto es un documento, no una colección de líneas sueltas, y medio
+   guardado no es nada. */
+function dlgPresupuesto(id, pre){
+  const p = id ? presuDe(id) : null;
+  const t = S.tarifas || {};
+  S.presu = {
+    id: p ? p.id : null,
+    cliente_id: p ? p.cliente_id : (pre && pre.cliente_id) || null,
+    puerta_id: p ? p.puerta_id : (pre && pre.puerta_id) || null,
+    aviso_id: p ? p.aviso_id : (pre && pre.aviso_id) || null,
+    titulo: p ? p.titulo : (pre && pre.titulo) || '',
+    descripcion: p ? p.descripcion : (pre && pre.descripcion) || '',
+    condiciones: p ? p.condiciones : (t.condiciones_presu || ''),
+    notas_internas: p ? p.notas_internas : '',
+    validez_dias: p ? p.validez_dias : 30,
+    descuento: p ? Number(p.descuento || 0) : 0,
+    tipo_iva: p ? Number(p.tipo_iva) : (t.iva != null ? Number(t.iva) : 21),
+    estado: p ? p.estado : 'borrador',
+    lineas: p ? lineasDe(p.id).map(l => ({ ...l })) : ((pre && pre.lineas) || []),
+  };
+  pintarEditorPresu();
+}
+
+function pintarEditorPresu(){
+  const d = S.presu;
+  const editable = d.estado === 'borrador';
+  const tot = totalesPresu(d.lineas, d.descuento, d.tipo_iva);
+  const p = d.id ? presuDe(d.id) : null;
+  const est = ESTADOS_PRESU[estadoPresu(p || d)] || ESTADOS_PRESU.borrador;
+
+  let h = '<h3>'+(d.id ? 'Presupuesto' : 'Nuevo presupuesto')+
+    (p && p.referencia ? ' '+esc(p.referencia) : '')+'</h3>'+
+    '<p class="mini" style="margin:0 0 10px"><span class="chip '+est.c+'">'+est.t+'</span>'+
+    (p && p.aceptado_el ? ' Aceptado por <b>'+esc(p.aceptado_por||'')+'</b> el '+esc(fechaHora(p.aceptado_el)) : '')+
+    (p && p.rechazado_el ? ' Rechazado el '+esc(fechaCorta(p.rechazado_el)) : '')+'</p>';
+
+  if (!editable)
+    h += '<div class="sin-ficha" style="background:var(--aviso-bg);color:var(--aviso);margin-bottom:10px">'+
+      'Este presupuesto ya salió de la casa, así que no se toca. Si hay que cambiar algo, se duplica '+
+      'y se manda uno nuevo: la oferta que recibió el cliente tiene que seguir diciendo lo que decía.</div>';
+
+  /* Cabecera */
+  const cli = d.cliente_id ? clienteDe(d.cliente_id) : null;
+  const puertasCli = d.cliente_id ? (S.puertas || []).filter(x => x.cliente_id === d.cliente_id) : [];
+  h += '<div class="grupo"><h3>De quién y de qué</h3><div class="campos">'+
+    '<div class="campo full"><label for="pz-cli">Cliente</label><select id="pz-cli"'+(editable?'':' disabled')+'>'+
+      '<option value="">Elige el cliente</option>'+
+      (S.clientes || []).filter(c => !c.archivado).map(c =>
+        '<option value="'+c.id+'"'+(c.id===d.cliente_id?' selected':'')+'>'+esc(c.nombre)+'</option>').join('')+
+      '</select></div>'+
+    '<div class="campo full"><label for="pz-puerta">Puerta (si es de una en concreto)</label>'+
+      '<select id="pz-puerta"'+(editable?'':' disabled')+'><option value="">Sin puerta</option>'+
+      puertasCli.map(x => '<option value="'+x.id+'"'+(x.id===d.puerta_id?' selected':'')+'>'+
+        esc([x.codigo, x.tipo, x.ubicacion].filter(Boolean).join(' · '))+'</option>').join('')+
+      '</select></div>'+
+    '<div class="campo full"><label for="pz-titulo">Título</label>'+
+      '<input id="pz-titulo" type="text" maxlength="160" value="'+esc(d.titulo)+'"'+(editable?'':' disabled')+
+      ' placeholder="Ej.: Adecuación a normativa de la puerta del garaje"></div>'+
+    '<div class="campo full"><label for="pz-desc">Qué se propone</label>'+
+      '<textarea id="pz-desc" rows="3"'+(editable?'':' disabled')+
+      ' placeholder="Lo que va a leer el cliente: qué se va a hacer y por qué">'+esc(d.descripcion||'')+'</textarea></div>'+
+    '</div></div>';
+
+  /* Líneas */
+  h += '<div class="grupo"><h3>Lo que se ofrece</h3>';
+  if (!d.lineas.length)
+    h += '<p class="muted" style="margin:0 0 10px">Todavía no hay ninguna línea.</p>';
+  else {
+    h += '<div class="tabla-wrap"><table class="tabla"><thead><tr>'+
+      '<th>Concepto</th><th style="width:70px">Cant.</th><th style="width:90px">Precio</th>'+
+      '<th style="width:90px">Importe</th>'+(editable?'<th style="width:36px"></th>':'')+
+      '</tr></thead><tbody>';
+    d.lineas.forEach((l, i) => {
+      const tipoTxt = { material:'Material', mano_obra:'Mano de obra', desplazamiento:'Desplazamiento', texto:'' }[l.tipo] || '';
+      h += '<tr>'+
+        '<td>'+(editable
+          ? '<input type="text" class="pz-l-desc" data-i="'+i+'" maxlength="160" value="'+esc(l.descripcion||'')+'" style="width:100%">'
+          : esc(l.descripcion))+
+          (tipoTxt ? '<span class="sub" style="display:block">'+tipoTxt+
+            (l.tipo==='material' && l.coste ? ' · coste '+eur(l.coste) : '')+'</span>' : '')+'</td>'+
+        '<td>'+(editable && l.tipo !== 'texto'
+          ? '<input type="number" step="any" min="0" class="pz-l-cant" data-i="'+i+'" value="'+esc(l.cantidad)+'" style="width:100%">'
+          : (l.tipo === 'texto' ? '' : esc(l.cantidad)+' '+esc(l.unidad||'')))+'</td>'+
+        '<td>'+(editable && l.tipo !== 'texto'
+          ? '<input type="number" step="0.01" min="0" class="pz-l-prec" data-i="'+i+'" value="'+esc(l.precio)+'" style="width:100%">'
+          : (l.tipo === 'texto' ? '' : eur(l.precio)))+'</td>'+
+        '<td>'+(l.tipo === 'texto' ? '' : '<b>'+eur(l.importe)+'</b>')+'</td>'+
+        (editable ? '<td><button type="button" class="btn sm plana" data-act="pz-quitar" data-i="'+i+'">✕</button></td>' : '')+
+        '</tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+  if (editable)
+    h += '<div class="fila" style="gap:6px;flex-wrap:wrap;margin-top:8px">'+
+      '<button type="button" class="btn sm" data-act="pz-add" data-tipo="material">Añadir material</button>'+
+      '<button type="button" class="btn sm" data-act="pz-add" data-tipo="mano_obra">Mano de obra</button>'+
+      '<button type="button" class="btn sm" data-act="pz-add" data-tipo="desplazamiento">Desplazamiento</button>'+
+      '<button type="button" class="btn sm plana" data-act="pz-add" data-tipo="texto">Línea de texto</button>'+
+      '</div>';
+  h += '</div>';
+
+  /* Totales */
+  h += '<div class="grupo"><h3>Totales</h3><div class="campos">'+
+    '<div class="campo"><label for="pz-descuento">Descuento (€)</label>'+
+      '<input id="pz-descuento" type="number" step="0.01" min="0" value="'+esc(d.descuento||0)+'"'+(editable?'':' disabled')+'></div>'+
+    '<div class="campo"><label for="pz-iva">IVA (%)</label>'+
+      '<input id="pz-iva" type="number" step="1" min="0" value="'+esc(d.tipo_iva)+'"'+(editable?'':' disabled')+'></div>'+
+    '<div class="campo"><label for="pz-validez">Validez (días)</label>'+
+      '<input id="pz-validez" type="number" step="1" min="1" value="'+esc(d.validez_dias)+'"'+(editable?'':' disabled')+'></div>'+
+    '</div>'+
+    '<dl class="datos" style="margin-top:10px">'+
+      '<div><dt>Materiales</dt><dd>'+eur(tot.materiales)+'</dd></div>'+
+      '<div><dt>Mano de obra</dt><dd>'+eur(tot.mano_obra)+'</dd></div>'+
+      '<div><dt>Desplazamiento</dt><dd>'+eur(tot.desplazamiento)+'</dd></div>'+
+      (tot.descuento ? '<div><dt>Descuento</dt><dd>-'+eur(tot.descuento)+'</dd></div>' : '')+
+      '<div><dt>Base</dt><dd><b>'+eur(tot.base)+'</b></dd></div>'+
+      '<div><dt>IVA ('+esc(tot.tipo_iva)+'%)</dt><dd>'+eur(tot.iva)+'</dd></div>'+
+      '<div><dt>Total</dt><dd><b>'+eur(tot.total)+'</b></dd></div>'+
+    '</dl>'+
+    /* El margen es lo que no sale en el papel del cliente y lo único que dice si
+       la oferta se sostiene. Va aquí, al lado del total, y no escondido. */
+    '<div class="'+(tot.margen < 0 ? 'sin-ficha' : 'nota-oficina')+'" style="margin-top:10px">'+
+      '<b>Para ti:</b> cuesta '+eur(tot.coste)+' y deja '+eur(tot.margen)+
+      (tot.base > 0 ? ' ('+Math.round(tot.margen / tot.base * 100)+'% de la venta)' : '')+
+      (tot.coste === 0 && tot.materiales > 0
+        ? '. Ojo: hay material sin coste cargado, así que ese margen no es real.' : '')+
+      '</div>'+
+    '</div>';
+
+  h += '<div class="grupo"><h3>Condiciones y notas</h3><div class="campos">'+
+    '<div class="campo full"><label for="pz-cond">Condiciones (las lee el cliente)</label>'+
+      '<textarea id="pz-cond" rows="3"'+(editable?'':' disabled')+
+      ' placeholder="Ej.: plazo de ejecución, forma de pago, garantía">'+esc(d.condiciones||'')+'</textarea></div>'+
+    '<div class="campo full"><label for="pz-notas">Notas internas (no salen en el documento)</label>'+
+      '<textarea id="pz-notas" rows="2"'+(editable?'':' disabled')+'>'+esc(d.notas_internas||'')+'</textarea></div>'+
+    '</div></div>';
+
+  /* Pie */
+  h += '<p class="err"></p><div class="pie" style="flex-wrap:wrap;gap:6px">';
+  if (d.id){
+    h += '<button type="button" class="btn sm plana" data-act="pz-documento" data-id="'+d.id+'">Ver el documento</button>';
+    if (p && p.token)
+      h += '<button type="button" class="btn sm plana" data-act="pz-enlace" data-id="'+d.id+'">Enlace y QR</button>';
+    h += '<button type="button" class="btn sm plana" data-act="pz-duplicar" data-id="'+d.id+'">Duplicar</button>';
+    if (editable)
+      h += '<button type="button" class="btn sm plana" data-act="pz-borrar" data-id="'+d.id+'">Borrar</button>';
+    if (p && p.estado === 'aceptado' && !p.convertido_aviso)
+      h += '<button type="button" class="btn sm pri" data-act="pz-convertir" data-id="'+d.id+'">Abrir el trabajo</button>';
+    if (p && p.estado === 'enviado')
+      h += '<button type="button" class="btn sm" data-act="pz-acepta-mano" data-id="'+d.id+'">Lo ha aceptado por teléfono</button>';
+  }
+  h += '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cerrar</button>';
+  if (editable){
+    h += '<button type="button" class="btn" data-act="pz-guardar">Guardar borrador</button>'+
+         '<button type="button" class="btn pri" data-act="pz-emitir">Emitir y mandar</button>';
+  }
+  h += '</div>';
+
+  abrirDlg(h, null);
+}
+
+/* Lee del formulario lo que se haya tocado, para no perderlo al repintar */
+function leerEditorPresu(){
+  const d = S.presu; if (!d) return;
+  const v = id => { const e = document.getElementById(id); return e ? e.value : null; };
+  if (v('pz-cli') !== null) d.cliente_id = v('pz-cli') || null;
+  if (v('pz-puerta') !== null) d.puerta_id = v('pz-puerta') || null;
+  if (v('pz-titulo') !== null) d.titulo = v('pz-titulo');
+  if (v('pz-desc') !== null) d.descripcion = v('pz-desc');
+  if (v('pz-cond') !== null) d.condiciones = v('pz-cond');
+  if (v('pz-notas') !== null) d.notas_internas = v('pz-notas');
+  if (v('pz-descuento') !== null) d.descuento = parseFloat(v('pz-descuento')) || 0;
+  if (v('pz-iva') !== null) d.tipo_iva = parseFloat(v('pz-iva')) || 0;
+  if (v('pz-validez') !== null) d.validez_dias = parseInt(v('pz-validez'), 10) || 30;
+  dlgForm.querySelectorAll('.pz-l-desc').forEach(e => { d.lineas[+e.dataset.i].descripcion = e.value; });
+  dlgForm.querySelectorAll('.pz-l-cant').forEach(e => { d.lineas[+e.dataset.i].cantidad = parseFloat(e.value) || 0; });
+  dlgForm.querySelectorAll('.pz-l-prec').forEach(e => { d.lineas[+e.dataset.i].precio = parseFloat(e.value) || 0; });
+  d.lineas.forEach(l => {
+    l.importe = l.tipo === 'texto' ? 0
+      : Math.round(Number(l.cantidad || 0) * Number(l.precio || 0) * 100) / 100;
+  });
+}
+
+/* Añadir una línea. El material se elige del almacén y trae su precio de venta
+   y su coste; la mano de obra y el desplazamiento salen de las tarifas. */
+function dlgLineaPresu(tipo){
+  const t = S.tarifas || {};
+  if (tipo === 'texto' || tipo === 'mano_obra' || tipo === 'desplazamiento'){
+    const d = S.presu;
+    if (tipo === 'texto')
+      d.lineas.push({ tipo:'texto', descripcion:'', cantidad:0, unidad:'', precio:0, importe:0, coste:0 });
+    if (tipo === 'mano_obra')
+      d.lineas.push({ tipo:'mano_obra', descripcion:'Mano de obra', cantidad:1, unidad:'h',
+        precio: Number(t.precio_hora || 0), importe: Number(t.precio_hora || 0),
+        coste: Number(t.coste_hora || 0) });
+    if (tipo === 'desplazamiento')
+      d.lineas.push({ tipo:'desplazamiento', descripcion:'Desplazamiento', cantidad:1, unidad:'ud',
+        precio: Number(t.desplazamiento_fijo || 0), importe: Number(t.desplazamiento_fijo || 0),
+        coste: 0 });
+    pintarEditorPresu();
+    return;
+  }
+  /* Material: se elige del almacén */
+  const cat = (S.articulos || []).filter(a => a.activo !== false)
+    .sort((x, y) => (x.descripcion||'').localeCompare(y.descripcion||'', 'es'));
+  let h = '<h3>Añadir material al presupuesto</h3>'+
+    '<div class="campos">'+
+    '<div class="campo full"><label for="pl-art">Material</label><select id="pl-art">'+
+      '<option value="">Lo escribo a mano</option>'+
+      cat.map(a => '<option value="'+a.id+'">'+esc(a.descripcion + (a.codigo ? ' · '+a.codigo : ''))+
+        (a.coste != null ? ' · coste '+a.coste+' €' : ' · sin coste cargado')+'</option>').join('')+
+      '</select></div>'+
+    '<div class="campo full"><label for="pl-desc">Cómo sale en el presupuesto</label>'+
+      '<input id="pl-desc" type="text" maxlength="160" placeholder="Se rellena solo al elegir"></div>'+
+    '<div class="campo"><label for="pl-cant">Cantidad</label>'+
+      '<input id="pl-cant" type="number" step="any" min="0" value="1"></div>'+
+    '<div class="campo"><label for="pl-prec">Precio unitario (€)</label>'+
+      '<input id="pl-prec" type="number" step="0.01" min="0"><span class="pista" id="pl-pista">Sale del coste más el recargo</span></div>'+
+    '</div>'+
+    '<p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Añadir</button></div>';
+  abrirDlg(h, () => {
+    const art = val('pl-art') || null;
+    const a = art ? articuloConCoste(art) : null;
+    const desc = val('pl-desc') || (a ? a.descripcion : '');
+    const cant = parseFloat(val('pl-cant')) || 0;
+    const prec = parseFloat(val('pl-prec'));
+    if (!desc) return setErr('Elige un material o escribe el concepto.');
+    if (!(cant > 0)) return setErr('Pon la cantidad.');
+    if (isNaN(prec)) return setErr('Pon el precio.');
+    S.presu.lineas.push({ tipo:'material', articulo_id: art, descripcion: desc,
+      cantidad: cant, unidad: a ? (a.unidad || 'ud') : 'ud', precio: prec,
+      importe: Math.round(cant * prec * 100) / 100,
+      coste: a && a.coste != null ? Number(a.coste) : 0 });
+    pintarEditorPresu();
+  });
+}
+
+/* ---- De una visita a un presupuesto ----
+   El técnico ve en obra lo que hay que hacer y lo escribe en «Recomendaciones y
+   presupuesto a ofertar» de su revisión, o en las deficiencias del informe. Eso
+   es la materia prima: se trae aquí para no volver a teclear la puerta, el
+   cliente ni lo que se vio. */
+async function presupuestoDesdeAsistencia(av){
+  let texto = '';
+  try {
+    const { data } = await sb.from('revisiones').select('*').eq('aviso_id', av.id).limit(1).maybeSingle();
+    if (data){
+      if (data.recomendaciones) texto += data.recomendaciones;
+      if (data.deficiencias) texto += (texto ? '\n\n' : '')+'Deficiencias encontradas:\n'+data.deficiencias;
+    }
+  } catch(_){ /* sin revisión, se parte de lo que diga el parte */ }
+  if (!texto) texto = [av.diagnostico, av.pendiente_texto].filter(Boolean).join('\n\n');
+  const pu = av.puerta_id ? puertaDe(av.puerta_id) : null;
+  dlgPresupuesto(null, {
+    cliente_id: av.cliente_id || (pu ? pu.cliente_id : null),
+    puerta_id: av.puerta_id || null,
+    aviso_id: av.id,
+    titulo: pu ? ('Trabajos en la puerta '+(pu.codigo || '')) : ('Trabajos propuestos tras la visita'),
+    descripcion: texto,
+    lineas: [],
+  });
+}
+
+/* ---- Guardar, emitir y convertir ---- */
+async function guardarPresupuesto(emitiendo){
+  leerEditorPresu();
+  const d = S.presu;
+  if (!d.cliente_id) return setErr('Elige el cliente: un presupuesto es para alguien.');
+  if (!d.titulo.trim()) return setErr('Ponle un título, que es lo que lo identifica.');
+  if (emitiendo && !d.lineas.filter(l => l.tipo !== 'texto').length)
+    return setErr('No se puede mandar un presupuesto sin ninguna línea con importe.');
+
+  const tot = totalesPresu(d.lineas, d.descuento, d.tipo_iva);
+  const o = {
+    cliente_id: d.cliente_id, puerta_id: d.puerta_id || null, aviso_id: d.aviso_id || null,
+    titulo: d.titulo.trim(), descripcion: d.descripcion || null,
+    condiciones: d.condiciones || null, notas_internas: d.notas_internas || null,
+    validez_dias: d.validez_dias, descuento: tot.descuento, tipo_iva: tot.tipo_iva,
+    materiales: tot.materiales, mano_obra: tot.mano_obra, desplazamiento: tot.desplazamiento,
+    base: tot.base, iva: tot.iva, total: tot.total, coste: tot.coste,
+    actualizado: new Date().toISOString(),
+  };
+  if (emitiendo){
+    o.estado = 'enviado';
+    o.fecha = hoy();
+    o.valido_hasta = iso(sumaDias(deIso(hoy()), d.validez_dias));
+    o.enviado_el = new Date().toISOString();
+  }
+  try {
+    let id = d.id;
+    if (id){
+      const p = presuDe(id);
+      if (emitiendo && !p.referencia) o.referencia = siguienteReferenciaPresu();
+      if (emitiendo && !p.token) o.token = tokenPresu();
+      const { error } = await sb.from('presupuestos').update(o).eq('id', id);
+      if (error) throw error;
+    } else {
+      o.creado_por = yo();
+      if (emitiendo){ o.referencia = siguienteReferenciaPresu(); o.token = tokenPresu(); }
+      const { data, error } = await sb.from('presupuestos').insert(o).select().maybeSingle();
+      if (error) throw error;
+      id = data ? data.id : null;
+      if (data) S.presupuestos.unshift(data);
+    }
+    if (!id) throw new Error('No se ha podido guardar el presupuesto.');
+    /* Las líneas se rehacen enteras: son el documento, no piezas sueltas */
+    await sb.from('presupuesto_lineas').delete().eq('presupuesto_id', id);
+    if (d.lineas.length){
+      const filas = d.lineas.map((l, i) => ({
+        presupuesto_id: id, orden: i, tipo: l.tipo, articulo_id: l.articulo_id || null,
+        descripcion: l.descripcion || '', cantidad: Number(l.cantidad || 0),
+        unidad: l.unidad || 'ud', precio: Number(l.precio || 0),
+        importe: Number(l.importe || 0), coste: Number(l.coste || 0) }));
+      const { error } = await sb.from('presupuesto_lineas').insert(filas);
+      if (error) throw error;
+    }
+    await cargar();
+    S.presu.id = id;
+    S.presu.estado = emitiendo ? 'enviado' : 'borrador';
+    pintar();
+    if (emitiendo){ cerrarDlg(); dlgEnlacePresu(id); }
+    else { pintarEditorPresu(); toast('Borrador guardado.'); }
+  } catch(e){ setErr(e.message || 'No se ha podido guardar.'); }
+}
+
+/* El enlace y el QR que se le manda al cliente */
+function dlgEnlacePresu(id){
+  const p = presuDe(id);
+  if (!p || !p.token) return;
+  const url = enlacePresu(p);
+  const cli = p.cliente_id ? clienteDe(p.cliente_id) : null;
+  const mail = cli ? (cli.email || '') : '';
+  const texto = 'Buenos días:\n\nLe mandamos el presupuesto '+(p.referencia||'')+', '+p.titulo+
+    '.\nImporte total: '+eur(p.total)+' (IVA incluido).\n'+
+    (p.valido_hasta ? 'Válido hasta el '+fechaCorta(p.valido_hasta)+'.\n' : '')+
+    '\nPuede verlo y aceptarlo desde aquí:\n'+url+
+    '\n\nQuedamos a su disposición para cualquier duda.\n\nAriza Puertas y Automatismos\n661 352 795';
+  abrirDlg('<h3>Mandárselo al cliente</h3>'+
+    '<p class="mini" style="margin:0 0 10px">'+esc(p.referencia||'')+' · '+esc(p.titulo)+' · '+eur(p.total)+'</p>'+
+    '<div style="display:grid;place-items:center;gap:8px;background:#fff;padding:14px;border-radius:8px">'+
+      svgQR(url, '190px')+
+      '<span class="mini" style="color:#444">'+esc(url.replace('https://',''))+'</span></div>'+
+    '<div class="campos" style="margin-top:12px">'+
+      '<div class="campo full"><label for="pe-url">Enlace</label>'+
+        '<input id="pe-url" type="text" readonly value="'+esc(url)+'"></div>'+
+      '<div class="campo full"><label for="pe-txt">Texto para el correo o el WhatsApp</label>'+
+        '<textarea id="pe-txt" rows="8">'+esc(texto)+'</textarea></div>'+
+    '</div>'+
+    '<p class="mini" style="margin:10px 0 0">Con ese enlace el cliente ve el presupuesto y lo acepta o lo '+
+    'rechaza desde el móvil. Queda escrito quién lo aceptó y cuándo. El enlace es lo único que hace falta '+
+    'para entrar, así que va a su correo y a ningún otro sitio.'+
+    (mail ? ' El correo que tenemos suyo es <b>'+esc(mail)+'</b>.' : ' No tenemos correo suyo en la ficha.')+'</p>'+
+    '<div class="pie"><button type="button" class="btn plana" data-act="pz-documento" data-id="'+p.id+'">Ver el documento</button>'+
+    '<span class="sp"></span><button type="button" class="btn pri" data-cerrar>Listo</button></div>', null);
+}
+
+/* Aceptado por teléfono: pasa lo mismo que con el enlace, pero lo escribe quien
+   lo ha hablado, y queda dicho que fue así. */
+function dlgAceptarAMano(id){
+  const p = presuDe(id);
+  if (!p) return;
+  abrirDlg('<h3>Aceptado fuera de la aplicación</h3>'+
+    '<p class="mini" style="margin:0 0 10px">'+esc(p.referencia||'')+' · '+esc(p.titulo)+'</p>'+
+    '<div class="campos">'+
+      '<div class="campo full"><label for="pa-nombre">Quién lo ha aceptado</label>'+
+        '<input id="pa-nombre" type="text" maxlength="120" placeholder="Nombre y cargo de quien lo autoriza"></div>'+
+      '<div class="campo full"><label for="pa-como">Cómo</label>'+
+        '<input id="pa-como" type="text" maxlength="160" placeholder="Ej.: por teléfono el 21-10, habló el presidente"></div>'+
+    '</div>'+
+    '<p class="mini" style="margin:10px 0 0">Esto no es lo mismo que la aceptación por el enlace, y por eso '+
+    'queda anotado cómo fue. Si puedes, pídele que lo acepte él desde el enlace: vale más.</p>'+
+    '<p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Darlo por aceptado</button></div>', async () => {
+    const nombre = val('pa-nombre');
+    if (!nombre) return setErr('Pon quién lo ha aceptado: sin nombre, la aceptación no vale.');
+    try {
+      const { error } = await sb.from('presupuestos').update({
+        estado:'aceptado', aceptado_el: new Date().toISOString(),
+        aceptado_por: nombre + (val('pa-como') ? ' · '+val('pa-como') : '') + ' (fuera de la aplicación)',
+        actualizado: new Date().toISOString() }).eq('id', id);
+      if (error) throw error;
+      cerrarDlg(); await cargar(); pintar(); toast('Presupuesto aceptado.');
+    } catch(e){ setErr(e.message); }
+  });
+}
+
+/* ---- De presupuesto aceptado a trabajo ----
+   Abre la asistencia y deja el material apuntado como previsto, que es lo que el
+   técnico verá en su parte. No mueve existencias: reservar no es gastar. */
+async function convertirPresupuesto(id){
+  const p = presuDe(id);
+  if (!p) return;
+  const lineas = lineasDe(id);
+  try {
+    const admin = (S.equipo.find(t => t.rol === 'admin' && t.activo) || {}).id || null;
+    const { data: av, error } = await sb.from('avisos').insert({
+      tipo: p.puerta_id ? 'instalacion' : 'comercial',
+      estado: admin ? 'asignado' : 'recibido', prioridad: 'normal', origen: 'Interno',
+      cliente_id: p.cliente_id, puerta_id: p.puerta_id || null, tecnico_id: admin,
+      descripcion: 'Presupuesto aceptado '+(p.referencia||'')+': '+p.titulo,
+      notas_oficina: (p.descripcion || '') +
+        (p.condiciones ? '\n\nCondiciones ofertadas: '+p.condiciones : ''),
+      creado_por: yo(),
+    }).select().maybeSingle();
+    if (error) throw error;
+    if (!av) throw new Error('No se ha podido abrir el trabajo.');
+
+    const mats = lineas.filter(l => l.tipo === 'material');
+    if (mats.length && !S.sinAlmacen){
+      const filas = mats.map(l => ({ aviso_id: av.id, articulo_id: l.articulo_id || null,
+        descripcion: l.descripcion, cantidad: l.cantidad,
+        nota: 'Del presupuesto '+(p.referencia||''), creado_por: yo() }));
+      await sb.from('materiales_previstos').insert(filas);
+    }
+    await sb.from('presupuestos').update({ estado:'convertido', convertido_aviso: av.id,
+      actualizado: new Date().toISOString() }).eq('id', id);
+    await cargar();
+    cerrarDlg(); pintar();
+    toast('Trabajo abierto'+(mats.length ? ' con '+mats.length+' material'+(mats.length===1?'':'es')+' apuntado'+(mats.length===1?'':'s') : '')+'.');
+  } catch(e){ fallo(e); }
 }
 
 /* ---- Equipo ---- */
@@ -14262,6 +14991,22 @@ dlgForm.addEventListener('change', e => {
   if (t.id === 'a-puerta'){ clienteDeLaPuertaDelAviso(); return; }
   // Puerta: al elegir centro, su dirección baja a la puerta
   if (t.id === 'f-centro'){ centroElegido(); return; }
+  if (t.id === 'pl-art'){
+    const a = articuloConCoste(t.value);
+    const d = document.getElementById('pl-desc');
+    const p = document.getElementById('pl-prec');
+    const pista = document.getElementById('pl-pista');
+    if (a){
+      if (d && !d.value.trim()) d.value = a.descripcion;
+      const venta = precioVentaMaterial(a.id);
+      if (p && venta != null) p.value = venta;
+      if (pista) pista.textContent = a.coste != null
+        ? ('Coste '+a.coste+' € más el recargo. Puedes cambiarlo.')
+        : 'Este material no tiene coste cargado: pon el precio a mano.';
+    }
+    return;
+  }
+
   /* Elegir un material del almacén rellena la línea del parte. Lo escrito a
      mano NO se pisa: puede ser una matización («banda, la de 2 m»). */
   if (t.classList && t.classList.contains('mat-art')){
@@ -15850,6 +16595,111 @@ function dlgQrMaterial(id){
     '<span class="sp"></span><button type="button" class="btn pri" data-cerrar>Cerrar</button></div>', null);
 }
 
+/* El presupuesto en papel. Lo que ve el cliente: sin costes y sin notas
+   internas, con el QR para aceptarlo desde el móvil. */
+function documentoPresupuesto(id){
+  const p = presuDe(id);
+  if (!p) return;
+  const em = datosEmpresa();
+  const cli = p.cliente_id ? clienteDe(p.cliente_id) : null;
+  const pu = p.puerta_id ? puertaDe(p.puerta_id) : null;
+  const lineas = lineasDe(id);
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana.'); return; }
+  const fila = (a, b) => '<tr><th>'+esc(a)+'</th><td>'+esc(b || '—')+'</td></tr>';
+  const est = ESTADOS_PRESU[estadoPresu(p)] || ESTADOS_PRESU.borrador;
+
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
+    '<title>Presupuesto '+esc(p.referencia || '')+'</title><style>'+
+    '@page{size:A4;margin:16mm 14mm}*{box-sizing:border-box}'+
+    'body{font:11px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#1C1817;margin:0}'+
+    '.cab{display:flex;justify-content:space-between;align-items:flex-start;'+
+      'border-bottom:3px solid #1C1817;padding-bottom:8px;margin-bottom:12px}'+
+    '.marca{font-weight:800;font-size:15px}.marca span{color:#C98F08}'+
+    'h1{font-size:17px;margin:2px 0 0}h2{font-size:12px;margin:14px 0 5px;'+
+      'border-bottom:2px solid #FCBA1D;padding-bottom:3px}'+
+    'table{width:100%;border-collapse:collapse;margin:0 0 8px}'+
+    'th,td{border:1px solid #d8d4d0;padding:4px 6px;text-align:left;vertical-align:top}'+
+    'thead th{background:#F3F2F0;font-size:9.5px;text-transform:uppercase;letter-spacing:.03em}'+
+    '.datos th{background:none;border:none;width:110px;color:#6B6560;font-weight:500}'+
+    '.datos td{border:none}'+
+    '.num{text-align:right;white-space:nowrap}'+
+    '.tot td{border:none;padding:2px 6px}.tot .g{font-size:14px;font-weight:800}'+
+    '.caja{border:1px solid #d8d4d0;border-radius:5px;padding:8px 11px;margin:0 0 10px;background:#FAF9F8}'+
+    '.acepta{display:flex;gap:14px;align-items:center;border:2px solid #FCBA1D;border-radius:6px;padding:10px 12px;margin:12px 0}'+
+    '.firma{margin-top:18px;display:flex;gap:18px}'+
+    '.firma div{flex:1;border-top:1px solid #1C1817;padding-top:3px;font-size:9.5px;color:#6B6560}'+
+    '.pie{margin-top:14px;border-top:1px solid #d8d4d0;padding-top:6px;font-size:9px;color:#6B6560}'+
+    '.barra{position:fixed;top:0;left:0;right:0;background:#1C1817;color:#fff;padding:8px 12px;z-index:9}'+
+    '.barra button{font:inherit;padding:5px 10px;border:0;border-radius:5px;background:#FCBA1D;cursor:pointer}'+
+    'body{padding-top:44px}@media print{.barra{display:none}body{padding-top:0}}'+
+    '</style></head><body>'+
+    '<div class="barra"><button onclick="window.print()">Imprimir o guardar en PDF</button></div>'+
+    '<div class="cab"><div><div class="marca">ARIZA <span>puertas automáticas</span></div>'+
+      '<h1>Presupuesto'+(p.referencia ? ' '+esc(p.referencia) : '')+'</h1></div>'+
+      '<div style="text-align:right;font-size:9.5px;color:#6B6560">'+
+      esc(em.razon_social || '')+'<br>NIF '+esc(em.nif || '')+'<br>'+
+      esc([em.domicilio, em.cp, em.poblacion].filter(Boolean).join(', '))+'<br>'+
+      esc(em.telefono || '')+' · '+esc(em.email || '')+'</div></div>'+
+
+    '<table class="datos">'+
+      fila('Cliente', cli ? cli.nombre : '')+
+      (cli && cli.nif ? fila('NIF', cli.nif) : '')+
+      (cli && cli.direccion ? fila('Dirección', cli.direccion) : '')+
+      (pu ? fila('Puerta', [pu.codigo, pu.tipo, pu.ubicacion].filter(Boolean).join(' · ')) : '')+
+      fila('Fecha', p.fecha ? fechaCorta(p.fecha) : fechaCorta(hoy()))+
+      (p.valido_hasta ? fila('Válido hasta', fechaCorta(p.valido_hasta)) : '')+
+      (p.estado !== 'borrador' ? fila('Situación', est.t) : '')+
+    '</table>'+
+
+    '<h2>'+esc(p.titulo)+'</h2>'+
+    (p.descripcion ? '<p style="white-space:pre-wrap;margin:0 0 10px">'+esc(p.descripcion)+'</p>' : '')+
+
+    '<table><thead><tr><th>Concepto</th><th class="num" style="width:60px">Cantidad</th>'+
+    '<th class="num" style="width:80px">Precio</th><th class="num" style="width:85px">Importe</th></tr></thead><tbody>'+
+    lineas.map(l => l.tipo === 'texto'
+      ? '<tr><td colspan="4">'+esc(l.descripcion)+'</td></tr>'
+      : '<tr><td>'+esc(l.descripcion)+'</td>'+
+        '<td class="num">'+esc(l.cantidad)+' '+esc(l.unidad||'')+'</td>'+
+        '<td class="num">'+eur(l.precio)+'</td>'+
+        '<td class="num">'+eur(l.importe)+'</td></tr>').join('')+
+    '</tbody></table>'+
+
+    '<table class="tot" style="width:auto;margin-left:auto">'+
+      '<tr><td>Base imponible</td><td class="num">'+eur(p.base)+'</td></tr>'+
+      (Number(p.descuento) ? '<tr><td>Descuento aplicado</td><td class="num">-'+eur(p.descuento)+'</td></tr>' : '')+
+      '<tr><td>IVA ('+esc(p.tipo_iva)+'%)</td><td class="num">'+eur(p.iva)+'</td></tr>'+
+      '<tr><td class="g">TOTAL</td><td class="num g">'+eur(p.total)+'</td></tr>'+
+    '</table>'+
+
+    (p.token && !['aceptado','convertido','rechazado'].includes(p.estado)
+      ? '<div class="acepta">'+svgQR(enlacePresu(p), '28mm')+
+        '<div><b>Puede aceptarlo desde el móvil.</b><br>'+
+        'Escanee este código o entre en<br><b>'+esc(enlacePresu(p).replace('https://',''))+'</b><br>'+
+        'Queda registrado quién lo acepta y cuándo.</div></div>'
+      : '')+
+
+    (p.aceptado_el
+      ? '<div class="caja"><b>Aceptado</b> por '+esc(p.aceptado_por||'')+' el '+esc(fechaHora(p.aceptado_el))+'.</div>'
+      : '')+
+
+    (p.condiciones ? '<h2>Condiciones</h2><p style="white-space:pre-wrap;margin:0 0 10px">'+
+      esc(p.condiciones)+'</p>' : '')+
+
+    '<div class="caja">Presupuesto sin compromiso. Los precios son sin IVA salvo donde se indica, y el '+
+    'total lo incluye. La ejecución se programa una vez aceptado. Si al abrir la puerta apareciera algo '+
+    'que no se puede ver desde fuera, se comunicará antes de seguir.</div>'+
+
+    '<div class="firma"><div>Por Ariza Puertas y Automatismos<br>'+esc(em.representante || '')+'</div>'+
+    '<div>Conforme, el cliente<br>Nombre, fecha y firma</div></div>'+
+
+    '<div class="pie">'+esc(em.razon_social||'')+' · NIF '+esc(em.nif||'')+' · '+
+    esc([em.domicilio, em.cp, em.poblacion, em.provincia].filter(Boolean).join(', '))+' · '+
+    esc(em.telefono||'')+' · '+esc(em.email||'')+'</div>'+
+    '</body></html>');
+  w.document.close();
+}
+
 /* Hoja de etiquetas de material, para imprimir y pegar. Más pequeñas que las de
    las puertas: estas van en una caja o en una balda, no en una puerta. */
 function hojaEtiquetasMaterial(){
@@ -17257,6 +18107,12 @@ raiz.addEventListener('click', async e => {
       toast((data || 0) + ' revisión' + ((data||0)===1?'':'es') + ' abierta' + ((data||0)===1?'':'s') + '. Asígnalas desde Asistencias.');
     } catch(err){ fallo(err); b.disabled = false; b.textContent = 'Abrir las revisiones que tocan'; }
   }
+  else if (a === 'presu-nuevo') dlgPresupuesto(null);
+  else if (a === 'presu-desde-aviso'){
+    const av = (S.avisos || []).find(x => x.id === b.dataset.id);
+    if (av) presupuestoDesdeAsistencia(av);
+  }
+  else if (a === 'presu-abrir') dlgPresupuesto(b.dataset.id);
   else if (a === 'mat-nuevo') dlgArticulo(null);
   else if (a === 'prev-abrir') dlgPrevistos(b.dataset.id);
   else if (a === 'mat-ficha') dlgMaterial(b.dataset.id);
@@ -17575,6 +18431,7 @@ raiz.addEventListener('input', e => {
   if (e.target.dataset.act === 'busca'){ S.busca = e.target.value; pintar(); }
   if (e.target.dataset.act === 'busca-cli'){ S.buscaCli = e.target.value; pintar(); }
   if (e.target.dataset.act === 'busca-mat'){ S.buscaMat = e.target.value; pintar(); }
+  if (e.target.dataset.act === 'busca-presu'){ S.buscaPresu = e.target.value; pintar(); }
   if (e.target.dataset.act === 'busca-con'){ S.buscaCon = e.target.value; pintar(); }
   if (e.target.dataset.act === 'busca-hist'){ S.histBusca = e.target.value; pintar(); }
   // Campos del expediente: se guardan solos y sin repintar, para no interrumpir al que escribe
@@ -17687,6 +18544,7 @@ raiz.addEventListener('change', e => {
   if (e.target.dataset.act === 'mat-familia'){ S.matFamilia = e.target.value; pintar(); return; }
   if (e.target.dataset.act === 'mat-proveedor'){ S.matProveedor = e.target.value; pintar(); return; }
   if (e.target.dataset.act === 'mat-filtro'){ S.matFiltro = e.target.value; pintar(); return; }
+  if (e.target.dataset.act === 'presu-filtro'){ S.presuFiltro = e.target.value; pintar(); return; }
   if (e.target.dataset.act === 'cal-tec'){ S.calTec = e.target.value; pintar(); return; }
   if (e.target.dataset.act === 'guion-tipo'){ S.guionTipo = e.target.value; pintar(); return; }
   if (e.target.dataset.act === 'gestion-mes'){ S.mesGestion = e.target.value; pintar(); return; }
@@ -17863,6 +18721,45 @@ dlgForm.addEventListener('click', async e => {
     } else cerrarDlg();
     if (a === 'obra-ficha') dlgPuerta(av.puerta_id, id);
     else dlgComponente(null, av.puerta_id, '', id);
+    return;
+  }
+  /* ---- Presupuestos ---- */
+  if (a === 'pz-add'){ leerEditorPresu(); dlgLineaPresu(b.dataset.tipo); return; }
+  if (a === 'pz-quitar'){ leerEditorPresu(); S.presu.lineas.splice(+b.dataset.i, 1); pintarEditorPresu(); return; }
+  if (a === 'pz-guardar'){ await guardarPresupuesto(false); return; }
+  if (a === 'pz-emitir'){
+    if (!armar(b, 'Confirmar: ya no se podrá cambiar')) return;
+    await guardarPresupuesto(true); return;
+  }
+  if (a === 'pz-documento'){ documentoPresupuesto(b.dataset.id); return; }
+  if (a === 'pz-enlace'){ cerrarDlg(); dlgEnlacePresu(b.dataset.id); return; }
+  if (a === 'pz-acepta-mano'){ cerrarDlg(); dlgAceptarAMano(b.dataset.id); return; }
+  if (a === 'pz-convertir'){
+    if (!armar(b, 'Confirmar: se abre el trabajo')) return;
+    await convertirPresupuesto(b.dataset.id); return;
+  }
+  if (a === 'pz-duplicar'){
+    const p = presuDe(b.dataset.id);
+    if (!p) return;
+    cerrarDlg();
+    dlgPresupuesto(null, { cliente_id:p.cliente_id, puerta_id:p.puerta_id,
+      titulo: p.titulo+' (copia)', descripcion:p.descripcion,
+      lineas: lineasDe(p.id).map(l => ({ ...l, id:undefined, presupuesto_id:undefined })) });
+    return;
+  }
+  if (a === 'pz-borrar'){
+    if (!armar(b, 'Confirmar el borrado')) return;
+    try {
+      await sb.from('presupuestos').delete().eq('id', b.dataset.id);
+      cerrarDlg(); await cargar(); pintar(); toast('Presupuesto borrado.');
+    } catch(e){ fallo(e); }
+    return;
+  }
+  if (a === 'presu-desde-aviso'){
+    const av = (S.avisos || []).find(x => x.id === b.dataset.id);
+    if (!av) return;
+    cerrarDlg();
+    presupuestoDesdeAsistencia(av);
     return;
   }
   if (a === 'mat-mover'){ cerrarDlg(); dlgMover(b.dataset.id, b.dataset.modo || 'entrada', b.dataset.aviso || null); return; }
