@@ -77,6 +77,8 @@ function semilla(){
     lineas_parte: [],
     historico: [],
     ubicaciones: [{ id:'ubi-nave', nombre:'Nave', tipo:'nave', activo:true, creado: ahora() }],
+    presupuestos: [],
+    presupuesto_lineas: [],
     movimientos_material: [],
     materiales_previstos: [],
   };
@@ -357,6 +359,45 @@ const RPC = {
   enviar_contrato(){ return { ok:true }; },
   contrato_publico(){ return { ok:false, motivo:'sin_token' }; },
   aviso_publico(){ return { ok:false, motivo:'sin_token' }; },
+  /* Los dos procedimientos del presupuesto público. Imitan lo que hace el
+     servidor: devuelven el documento SIN costes y solo dejan responder a lo que
+     está enviado, en plazo y sin respuesta previa. */
+  presupuesto_publico({ p_token }){
+    const p = DB.presupuestos.find(x => x.token === p_token);
+    if (!p) return { ok:false, motivo:'no_existe' };
+    if (p.estado === 'borrador') return { ok:false, motivo:'no_enviado' };
+    const cli = DB.clientes.find(c => c.id === p.cliente_id);
+    const pu = DB.puertas.find(x => x.id === p.puerta_id);
+    const hoyISO = new Date().toISOString().slice(0,10);
+    return {
+      ok:true, referencia:p.referencia, titulo:p.titulo, descripcion:p.descripcion,
+      estado:p.estado, fecha:p.fecha, valido_hasta:p.valido_hasta,
+      caducado: !!(p.valido_hasta && p.valido_hasta < hoyISO &&
+                   !['aceptado','convertido'].includes(p.estado)),
+      cliente: cli ? cli.nombre : '', puerta: pu ? pu.codigo : '',
+      materiales:p.materiales, mano_obra:p.mano_obra, desplazamiento:p.desplazamiento,
+      descuento:p.descuento, base:p.base, tipo_iva:p.tipo_iva, iva:p.iva, total:p.total,
+      condiciones:p.condiciones, aceptado_el:p.aceptado_el, aceptado_por:p.aceptado_por,
+      rechazado_el:p.rechazado_el,
+      lineas: DB.presupuesto_lineas.filter(l => l.presupuesto_id === p.id)
+        .sort((a,b) => (a.orden||0)-(b.orden||0))
+        .map(l => ({ descripcion:l.descripcion, cantidad:l.cantidad, unidad:l.unidad,
+                     precio:l.precio, importe:l.importe, tipo:l.tipo })),
+    };
+  },
+  responder_presupuesto({ p_token, p_acepta, p_nombre, p_motivo }){
+    const p = DB.presupuestos.find(x => x.token === p_token);
+    if (!p) return { ok:false, motivo:'no_existe' };
+    if (p.estado === 'borrador') return { ok:false, motivo:'no_enviado' };
+    if (['aceptado','convertido'].includes(p.estado)) return { ok:false, motivo:'ya_aceptado' };
+    if (p.estado === 'rechazado') return { ok:false, motivo:'ya_rechazado' };
+    const hoyISO = new Date().toISOString().slice(0,10);
+    if (p.valido_hasta && p.valido_hasta < hoyISO) return { ok:false, motivo:'caducado' };
+    if (p_acepta && !String(p_nombre||'').trim()) return { ok:false, motivo:'sin_nombre' };
+    if (p_acepta){ p.estado='aceptado'; p.aceptado_el=ahora(); p.aceptado_por=String(p_nombre).trim(); }
+    else { p.estado='rechazado'; p.rechazado_el=ahora(); p.rechazado_motivo=p_motivo||null; }
+    return { ok:true, estado:p.estado };
+  },
   ficha_publica({ p_codigo }){
     const pu = DB.puertas.find(x => x.codigo === p_codigo);
     if (!pu) return { ok:false, motivo:'sin_puerta' };

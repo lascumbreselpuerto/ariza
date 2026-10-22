@@ -36,9 +36,10 @@ paso('la aplicación arranca sin pedir contraseña', await pag.locator('#login')
 const nPest = await pag.locator('#tabs button').count();
 /* Once desde el 15-10-2026: se añadió «Manual», para que el técnico lleve el
    manual dentro de la aplicación y pueda leerlo sin cobertura. */
-/* Doce desde el 21-10-2026: entró «Almacén». El número se escribe a mano a
-   propósito, para que añadir una pestaña sin querer salte en rojo. */
-paso('monta sus doce pestañas', nPest === 12, String(nPest));
+/* Trece desde el 21-10-2026: entraron «Almacén» y «Presupuestos». El número se
+   escribe a mano a propósito, para que añadir una pestaña sin querer salte en
+   rojo. */
+paso('monta sus trece pestañas', nPest === 13, String(nPest));
 paso('y reconoce al usuario', /David Ariza Arana/.test(await pag.textContent('#quien')));
 
 await pag.click('#tabs button[data-tab="puertas"]'); await pag.waitForTimeout(400);
