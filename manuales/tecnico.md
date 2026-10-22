@@ -6,7 +6,7 @@ Esto no explica el oficio: explica la aplicación. Da por hecho que sabes de pue
 Lo tienes siempre a mano en la pestaña **Manual** de la propia aplicación, también
 sin cobertura una vez que lo has abierto la primera vez.
 
-> **Versión de la aplicación que describe este manual: 2026.10.21-2**
+> **Versión de la aplicación que describe este manual: 2026.10.21-3**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -66,6 +66,8 @@ Aparecen los puntos que le tocan a **ese tipo de puerta**. Cada uno se marca **B
 **Lo que más te interesa:** los puntos que citan una norma o piden medir llevan un desplegable **«Cómo se comprueba»**. Ábrelo y te dice qué se comprueba, cómo y el límite. No tienes que acordarte ni llevar apuntes.
 
 Por ejemplo, en la fuerza dinámica te dice el dinamómetro, dónde apoyarlo, cuántas lecturas y el límite **de esa puerta**: no es el mismo en una corredera que en una seccional.
+
+Lo que escribas en **Recomendaciones y presupuesto a ofertar** no se queda ahí: la oficina lo convierte en presupuesto para el cliente sin volver a teclearlo. Escríbelo como si lo fuera a leer él, porque acabará leyéndolo.
 
 - **Todo bien en este bloque** marca de golpe lo que no hayas tocado. No pisa lo que ya hayas marcado.
 - Si un límite sale como **«no cargado»**, mide y anota igual. El dato sirve aunque el límite todavía no esté puesto.
@@ -214,4 +216,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.10.21-2 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.10.21-3 de ARIZA SAT*
