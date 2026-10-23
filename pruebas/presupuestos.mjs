@@ -150,9 +150,14 @@ paso('y la siguiente ya no repite ese número',
   /0002$/.test(emitir.siguiente), emitir.siguiente);
 paso('el token del enlace del cliente es largo: aquí hay dinero detrás',
   emitir.p.tok === 12, emitir.p.tok);
-paso('queda enviado, con su fecha y su validez',
-  emitir.p.estado === 'enviado' && !!emitir.p.fecha && !!emitir.p.valido && emitir.p.enviado,
-  JSON.stringify({ e:emitir.p.estado, f:emitir.p.fecha, v:emitir.p.valido }));
+/* Cambiado a propósito el 23-10-2026: antes, emitir dejaba el presupuesto en
+   'enviado' y lo mandaba de golpe, así que no había manera de ver el documento
+   antes de que saliera. Ahora emitir lo cierra y le pone referencia, pero NO lo
+   manda: eso es otro botón, con la vista previa delante. Por eso aquí se espera
+   'emitido' y enviado_el vacío. */
+paso('queda emitido, con su fecha y su validez, pero sin mandar',
+  emitir.p.estado === 'emitido' && !!emitir.p.fecha && !!emitir.p.valido && !emitir.p.enviado,
+  JSON.stringify({ e:emitir.p.estado, f:emitir.p.fecha, v:emitir.p.valido, env:emitir.p.enviado }));
 paso('los importes quedan guardados, no se recalculan después',
   emitir.p.base === 242.8 && emitir.p.total === 293.79, emitir.p.base+' / '+emitir.p.total);
 paso('el coste también se guarda, para saber el margen de lo ofertado',
@@ -167,16 +172,26 @@ const yaNoSeToca = await T(async () => {
   g.dlgPresupuesto(p.id);
   await new Promise(r => setTimeout(r, 300));
   const txt = document.getElementById('dlg-form').innerText;
-  const deshabilitados = Array.from(document.querySelectorAll('#dlg-form input,#dlg-form select,#dlg-form textarea'))
-    .filter(e => e.id && e.id.startsWith('pz-')).every(e => e.disabled);
+  /* Ya no hay campos: un presupuesto emitido se abre para verlo, no en un
+     formulario con todo en gris */
+  const campos = document.querySelectorAll('#dlg-form input,#dlg-form select,#dlg-form textarea').length;
   const guardar = !!document.querySelector('[data-act="pz-guardar"]');
+  const editar = !!document.querySelector('[data-act="pz-editar"]');
+  const documento = !!document.querySelector('[data-act="pz-documento"]');
+  const enviar = !!document.querySelector('[data-act="pz-enviar"]');
   g.cerrarDlg();
-  return { txt, deshabilitados, guardar };
+  return { txt, campos, guardar, editar, documento, enviar };
 });
+/* Cambiado a propósito el 23-10-2026: antes se abría el editor con todos los
+   campos deshabilitados y un aviso de «ya salió de la casa». Ahora se abre la
+   ficha de lectura, que es como se abre cualquier presupuesto que ya existe. */
 paso('un presupuesto emitido ya no se edita',
-  yaNoSeToca.deshabilitados === true && yaNoSeToca.guardar === false);
-paso('y la aplicación explica por qué, en vez de solo impedirlo',
-  /ya salió de la casa/.test(yaNoSeToca.txt));
+  yaNoSeToca.campos === 0 && yaNoSeToca.guardar === false && yaNoSeToca.editar === false,
+  JSON.stringify({ campos:yaNoSeToca.campos, guardar:yaNoSeToca.guardar, editar:yaNoSeToca.editar }));
+paso('y se abre con el documento y el envío a mano, que es a lo que se viene',
+  yaNoSeToca.documento === true && yaNoSeToca.enviar === true);
+paso('la ficha dice que está emitido y todavía no ha salido',
+  /todavía no ha salido/.test(yaNoSeToca.txt));
 
 /* ================================================================
    3. Lo que ve el cliente
@@ -375,6 +390,216 @@ paso('y NO lleva el coste por ninguna parte',
   'coste del presupuesto: '+doc.coste);
 paso('el presupuesto ya aceptado lo dice en el papel',
   /Aceptado/.test(doc.html));
+
+/* ================================================================
+   8. Ver, editar, imprimir y mandar: cuatro cosas distintas
+   ================================================================
+   La primera versión las juntaba todas en «Emitir y mandar», y por eso
+   el presupuesto salía sin que nadie hubiera visto el papel. Esto
+   vigila que sigan separadas. */
+bloque('8. Ver, editar, imprimir y mandar');
+
+const nuevoBorrador = await T(async () => {
+  const g = window.__T;
+  g.dlgPresupuesto(null, { cliente_id: g.S.clientes[0].id, titulo:'Puerta del almacén' });
+  await new Promise(r => setTimeout(r, 200));
+  g.S.presu.lineas.push({ tipo:'material', articulo_id:'art-foto', descripcion:'Fotocélula de espejo',
+    cantidad:2, unidad:'ud', precio:40, importe:80, coste:25 });
+  g.S.presu.anexos = 'Se excluye la obra civil y la toma de corriente.';
+  g.pintarPresupuesto();
+  await new Promise(r => setTimeout(r, 150));
+  await g.guardarPresupuesto(false);
+  await new Promise(r => setTimeout(r, 600));
+  const id = g.S.presu.id;
+  /* Se cierra y se vuelve a abrir, que es lo que hace cualquiera */
+  g.cerrarDlg();
+  g.dlgPresupuesto(id);
+  await new Promise(r => setTimeout(r, 250));
+  const verTxt = document.getElementById('dlg-form').innerText;
+  const enVista = { campos: document.querySelectorAll('#dlg-form input,#dlg-form textarea').length,
+    editar: !!document.querySelector('[data-act="pz-editar"]'),
+    documento: !!document.querySelector('[data-act="pz-documento"]'),
+    enviar: !!document.querySelector('[data-act="pz-enviar"]') };
+  /* Y ahora al editor */
+  document.querySelector('[data-act="pz-editar"]').click();
+  await new Promise(r => setTimeout(r, 250));
+  const enEditor = { campos: document.querySelectorAll('#dlg-form input,#dlg-form textarea').length,
+    anexos: !!document.getElementById('pz-anexos'),
+    guardar: !!document.querySelector('[data-act="pz-guardar"]'),
+    emitir: (document.querySelector('[data-act="pz-emitir"]')||{}).textContent };
+  g.cerrarDlg();
+  return { id, verTxt, enVista, enEditor, anexosGuardados: g.presuDe(id).anexos };
+});
+paso('un borrador se abre para verlo, no en un formulario',
+  nuevoBorrador.enVista.campos === 0 && nuevoBorrador.enVista.editar === true,
+  JSON.stringify(nuevoBorrador.enVista));
+paso('desde la ficha se puede ver el documento sin mandar nada',
+  nuevoBorrador.enVista.documento === true);
+paso('un borrador todavía no se puede mandar: primero se emite',
+  nuevoBorrador.enVista.enviar === false);
+paso('la ficha avisa de que es un borrador', /borrador/i.test(nuevoBorrador.verTxt));
+paso('el botón Editar lleva al formulario, con sus campos',
+  nuevoBorrador.enEditor.campos > 0 && nuevoBorrador.enEditor.guardar === true);
+paso('y el botón ya no dice «Emitir y mandar», porque emitir no manda',
+  nuevoBorrador.enEditor.emitir === 'Emitir', nuevoBorrador.enEditor.emitir);
+paso('el editor tiene el campo de anexos, y se guardan',
+  nuevoBorrador.enEditor.anexos === true &&
+  /obra civil/.test(nuevoBorrador.anexosGuardados || ''), nuevoBorrador.anexosGuardados);
+
+const formatos = await T(async (id) => {
+  const g = window.__T;
+  const abierto = [];
+  const open0 = window.open;
+  window.open = () => ({ document:{ write: t => abierto.push(t), close(){} } });
+  const saca = op => { abierto.length = 0; g.documentoPresupuesto(id, op); return abierto.join(''); };
+  const valorado = saca({ formato:'valorado', condiciones:true, anexos:true, qr:true });
+  const sinVal   = saca({ formato:'sin_valorar', condiciones:true, anexos:true, qr:true });
+  const resumen  = saca({ formato:'resumen', condiciones:true, anexos:true, qr:true });
+  const pelado   = saca({ formato:'valorado', condiciones:false, anexos:false, qr:false });
+  window.open = open0;
+  return {
+    valorado:{ precio:/40,00/.test(valorado), agua:/BORRADOR/.test(valorado),
+               anexos:/obra civil/.test(valorado) },
+    sinVal:{ precio:/40,00/.test(sinVal), total:/TOTAL/.test(sinVal),
+             concepto:/Fotocélula/.test(sinVal) },
+    resumen:{ concepto:/Fotocélula/.test(resumen), total:/TOTAL/.test(resumen) },
+    pelado:{ anexos:/obra civil/.test(pelado) },
+  };
+}, nuevoBorrador.id);
+paso('el documento de un borrador sale marcado como BORRADOR',
+  formatos.valorado.agua === true);
+paso('el valorado lleva precios y anexos',
+  formatos.valorado.precio === true && formatos.valorado.anexos === true);
+paso('el formato sin valorar dice qué se hace, pero ni un precio',
+  formatos.sinVal.concepto === true && formatos.sinVal.precio === false &&
+  formatos.sinVal.total === false, JSON.stringify(formatos.sinVal));
+paso('el resumen deja fuera el detalle y conserva el total',
+  formatos.resumen.concepto === false && formatos.resumen.total === true,
+  JSON.stringify(formatos.resumen));
+paso('y si se quitan los anexos, no salen', formatos.pelado.anexos === false);
+
+const envio = await T(async (id) => {
+  const g = window.__T;
+  g.dlgPresupuesto(id, null, true);
+  await new Promise(r => setTimeout(r, 200));
+  await g.guardarPresupuesto(true);
+  await new Promise(r => setTimeout(r, 600));
+  const trasEmitir = { estado: g.presuDe(id).estado, enviado: !!g.presuDe(id).enviado_el,
+    ref: !!g.presuDe(id).referencia };
+  /* Mandarlo: primero las opciones, luego el enlace */
+  g.cerrarDlg();
+  g.dlgPresupuesto(id);
+  await new Promise(r => setTimeout(r, 250));
+  document.querySelector('[data-act="pz-enviar"]').click();
+  await new Promise(r => setTimeout(r, 200));
+  const pasoUno = { formato: !!document.getElementById('pd-formato'),
+    siguiente: !!document.querySelector('[data-act="pd-siguiente"]'),
+    ver: !!document.querySelector('[data-act="pd-ver"]') };
+  document.querySelector('[data-act="pd-siguiente"]').click();
+  await new Promise(r => setTimeout(r, 250));
+  const pasoDos = { qr: !!document.getElementById('pe-url'),
+    aDonde: !!document.getElementById('pe-a'),
+    marcar: !!document.querySelector('[data-act="pz-marcar-enviado"]') };
+  document.getElementById('pe-a').value = 'cliente@ejemplo.es';
+  document.querySelector('[data-act="pz-marcar-enviado"]').click();
+  await new Promise(r => setTimeout(r, 700));
+  const p = g.presuDe(id);
+  return { trasEmitir, pasoUno, pasoDos,
+    final: { estado:p.estado, a:p.enviado_a, cuando: !!p.enviado_el } };
+}, nuevoBorrador.id);
+paso('emitir pone referencia y cierra el presupuesto, pero no lo manda',
+  envio.trasEmitir.estado === 'emitido' && envio.trasEmitir.ref === true &&
+  envio.trasEmitir.enviado === false, JSON.stringify(envio.trasEmitir));
+paso('mandar empieza por las opciones del documento, con botón de verlo',
+  envio.pasoUno.formato === true && envio.pasoUno.ver === true &&
+  envio.pasoUno.siguiente === true);
+paso('el segundo paso trae el enlace, el QR y a dónde se manda',
+  envio.pasoDos.qr === true && envio.pasoDos.aDonde === true && envio.pasoDos.marcar === true);
+paso('al darlo por mandado queda enviado, con destino y hora',
+  envio.final.estado === 'enviado' && envio.final.a === 'cliente@ejemplo.es' &&
+  envio.final.cuando === true, JSON.stringify(envio.final));
+
+/* ================================================================
+   9. La firma del cliente en el sitio
+   ================================================================ */
+bloque('9. La firma del cliente');
+
+const firma = await T(async (id) => {
+  const g = window.__T;
+  g.dlgFirmarPresu(id);
+  await new Promise(r => setTimeout(r, 250));
+  const hayLienzo = !!document.getElementById('pf-firma');
+  /* Sin trazo no se guarda: una firma en blanco no es una firma */
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 250));
+  const sinTrazo = document.querySelector('#dlg-form .err').textContent;
+  /* Se pinta a mano sobre el lienzo */
+  g.FIRMA.ctx.beginPath(); g.FIRMA.ctx.moveTo(10,10);
+  g.FIRMA.ctx.lineTo(120,60); g.FIRMA.ctx.stroke(); g.FIRMA.pintado = true;
+  document.getElementById('pf-nom').value = 'Juan Pérez Gómez';
+  document.getElementById('pf-nif').value = '31000000X';
+  document.getElementById('pf-info').value = 'en la nave, delante del encargado';
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 900));
+  const p = g.presuDe(id);
+  const abierto = [];
+  const open0 = window.open;
+  window.open = () => ({ document:{ write: t => abierto.push(t), close(){} } });
+  g.documentoPresupuesto(id, { formato:'valorado', condiciones:true, anexos:true, qr:true });
+  window.open = open0;
+  return { hayLienzo, sinTrazo, estado:p.estado, nombre:p.firma_nombre, nif:p.firma_nif,
+    ruta:p.firma_ruta, cuando: !!p.firma_el, aceptadoPor:p.aceptado_por,
+    papel: abierto.join('') };
+}, nuevoBorrador.id);
+paso('para firmar hay un lienzo, como en el parte', firma.hayLienzo === true);
+paso('una firma en blanco no vale', /Falta la firma/.test(firma.sinTrazo), firma.sinTrazo);
+paso('firmado queda aceptado, con nombre y NIF',
+  firma.estado === 'aceptado' && firma.nombre === 'Juan Pérez Gómez' &&
+  firma.nif === '31000000X' && firma.cuando === true,
+  JSON.stringify({ e:firma.estado, n:firma.nombre }));
+paso('la firma se guarda como fichero, no como una casilla marcada',
+  /^presupuestos\//.test(firma.ruta || ''), firma.ruta);
+paso('y queda dicho que se firmó en el sitio',
+  /firmado en el sitio/.test(firma.aceptadoPor || ''), firma.aceptadoPor);
+paso('el papel enseña la firma recogida y ya no pide una nueva',
+  /Aceptado y firmado/.test(firma.papel) && !/Conforme, el cliente/.test(firma.papel));
+
+/* ================================================================
+   10. Los textos que se repiten
+   ================================================================ */
+bloque('10. Textos guardados');
+
+const textos = await T(async () => {
+  const g = window.__T;
+  g.dlgPresupuesto(null, { cliente_id: g.S.clientes[0].id, titulo:'Otra oferta' });
+  await new Promise(r => setTimeout(r, 200));
+  document.getElementById('pz-cond').value = 'Ingreso del 50% al aceptar y 50% al terminar.';
+  /* Guardar el texto para otras veces */
+  document.querySelector('[data-act="pz-texto-guardar"][data-destino="condiciones"]').click();
+  await new Promise(r => setTimeout(r, 200));
+  document.getElementById('pt-tit').value = 'Pago 50/50';
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 800));
+  const guardado = (g.S.textosPresu || []).length;
+  /* En un presupuesto nuevo, pegarlo */
+  g.dlgPresupuesto(null, { cliente_id: g.S.clientes[0].id, titulo:'Tercera oferta' });
+  await new Promise(r => setTimeout(r, 250));
+  const hayBoton = !!document.querySelector('[data-act="pz-texto-pegar"][data-destino="condiciones"]');
+  document.querySelector('[data-act="pz-texto-pegar"][data-destino="condiciones"]').click();
+  await new Promise(r => setTimeout(r, 200));
+  const enLista = document.getElementById('dlg-form').innerText;
+  document.querySelector('[data-act="pz-texto-usar"]').click();
+  await new Promise(r => setTimeout(r, 250));
+  const pegado = (document.getElementById('pz-cond') || {}).value;
+  g.cerrarDlg();
+  return { guardado, hayBoton, enLista, pegado };
+});
+paso('un texto escrito una vez se guarda con su nombre', textos.guardado === 1, textos.guardado);
+paso('y aparece para usarlo en el siguiente presupuesto', textos.hayBoton === true);
+paso('la lista enseña el nombre y un trozo del texto',
+  /Pago 50\/50/.test(textos.enLista) && /50% al aceptar/.test(textos.enLista));
+paso('al elegirlo se pega en el campo',
+  /50% al aceptar/.test(textos.pegado || ''), textos.pegado);
 
 /* ================================================================
    Final

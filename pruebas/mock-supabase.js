@@ -79,6 +79,7 @@ function semilla(){
     ubicaciones: [{ id:'ubi-nave', nombre:'Nave', tipo:'nave', activo:true, creado: ahora() }],
     presupuestos: [],
     presupuesto_lineas: [],
+    textos_presu: [],
     movimientos_material: [],
     materiales_previstos: [],
   };
@@ -377,7 +378,8 @@ const RPC = {
       cliente: cli ? cli.nombre : '', puerta: pu ? pu.codigo : '',
       materiales:p.materiales, mano_obra:p.mano_obra, desplazamiento:p.desplazamiento,
       descuento:p.descuento, base:p.base, tipo_iva:p.tipo_iva, iva:p.iva, total:p.total,
-      condiciones:p.condiciones, aceptado_el:p.aceptado_el, aceptado_por:p.aceptado_por,
+      condiciones:p.condiciones, anexos:p.anexos,
+      aceptado_el:p.aceptado_el, aceptado_por:p.aceptado_por,
       rechazado_el:p.rechazado_el,
       lineas: DB.presupuesto_lineas.filter(l => l.presupuesto_id === p.id)
         .sort((a,b) => (a.orden||0)-(b.orden||0))
