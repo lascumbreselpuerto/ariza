@@ -227,6 +227,15 @@ img{max-width:100%}
 .pie-foto{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(transparent,rgba(0,0,0,.72));color:#fff;font-size:11px;line-height:1.3;padding:12px 6px 4px;pointer-events:none}
 .nota-oficina{margin:0;padding:8px 10px;border-left:3px solid var(--amarillo);background:rgba(252,186,29,.09);border-radius:0 6px 6px 0;font-size:14px;line-height:1.45}
 .firma-caja{border:1px solid var(--line);border-radius:8px;background:#fff;touch-action:none;width:100%;height:170px;display:block}
+/* El hueco donde se ve el logo o un sello: fondo claro a cuadros para que se
+   note si la imagen trae fondo transparente o lo trae blanco. */
+.marca-hueco{display:grid;place-items:center;width:230px;height:84px;border:1px solid var(--line);
+  border-radius:8px;padding:6px;background:#fff;
+  background-image:linear-gradient(45deg,#f0eeec 25%,transparent 25%,transparent 75%,#f0eeec 75%),
+    linear-gradient(45deg,#f0eeec 25%,transparent 25%,transparent 75%,#f0eeec 75%);
+  background-size:14px 14px;background-position:0 0,7px 7px}
+.marca-hueco.sello{width:104px;height:84px}
+.marca-hueco img{max-width:100%;max-height:100%;object-fit:contain}
 .mat-fila{display:grid;grid-template-columns:1fr 76px 60px 34px;gap:6px;margin-bottom:6px;align-items:center}
 /* Con almacén, la línea lleva además el material elegido del catálogo, que va
    arriba y a todo lo ancho: en el móvil no caben cinco columnas. */
@@ -629,6 +638,7 @@ const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etique
             sinAlmacen:false, ubicaciones:[], existencias:[], movimientos:[], previstos:[],
             buscaMat:'', matFamilia:'', matProveedor:'', matFiltro:'', fichaMat:null,
             sinPresupuestos:false, presupuestos:[], presuLineas:[], articulos:[], textosPresu:[], sinTextos:false,
+            presuEnvios:[], presuVisitas:[], sinSeguimiento:false, contactos:[], sinContactos:false,
             presu:null, presuFiltro:'', buscaPresu:'' };
 /* Importes: solo existen para el administrador. Si no hay tarifas cargadas, no se enseña nada. */
 const valoracionDe = id => S.valoraciones[id] || null;
@@ -1250,12 +1260,17 @@ async function cargar(){
      siquiera aparece. Los artículos CON su coste se leen aparte de la vista del
      catálogo, que es la que no los trae, y solo para quien puede verlos. */
   if (esGestion()){
-    const [pr, pl, ar, tx] = await Promise.all([
+    const [pr, pl, ar, tx, pe, pv] = await Promise.all([
       sb.from('presupuestos').select('*').order('creado', { ascending:false }).range(0, 4999),
       sb.from('presupuesto_lineas').select('*').order('orden').range(0, 19999),
       sb.from('articulos').select('*').order('descripcion').range(0, 19999),
       sb.from('textos_presu').select('*').order('orden').range(0, 999),
+      sb.from('presupuesto_envios').select('*').order('cuando', { ascending:false }).range(0, 4999),
+      sb.from('presupuesto_visitas').select('*').order('cuando', { ascending:false }).range(0, 9999),
     ]);
+    S.presuEnvios  = pe.error ? [] : (pe.data || []);
+    S.presuVisitas = pv.error ? [] : (pv.data || []);
+    S.sinSeguimiento = !!(pe.error || pv.error);
     S.sinPresupuestos = !!pr.error;
     S.presupuestos = pr.error ? [] : (pr.data || []);
     S.presuLineas = pl.error ? [] : (pl.data || []);
@@ -1267,6 +1282,14 @@ async function cargar(){
   } else {
     S.sinPresupuestos = true; S.presupuestos = []; S.presuLineas = []; S.articulos = [];
     S.textosPresu = []; S.sinTextos = true;
+    S.presuEnvios = []; S.presuVisitas = []; S.sinSeguimiento = true;
+  }
+  /* Los contactos los ve todo el equipo: el técnico también necesita saber a
+     quién preguntar por el portón cuando llega a la obra. */
+  {
+    const co = await sb.from('contactos').select('*').order('nombre').range(0, 9999);
+    S.contactos = co.error ? [] : (co.data || []);
+    S.sinContactos = !!co.error;
   }
   if (!j.error){ S.ajustes = {}; (j.data || []).forEach(x => { S.ajustes[x.clave] = x.valor; }); }
   // materiales ya usados, para ir sugiriéndolos al técnico
@@ -1319,7 +1342,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.10.23-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.10.24-1';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -3442,6 +3465,28 @@ const ESTADOS_PRESU = {
 };
 /* Ya no es un borrador: tiene referencia y puede estar en manos del cliente */
 const presuSalido = p => !!p && p.estado !== 'borrador';
+
+/* ---- Las personas de un cliente ----
+   En una obra no hay un cliente, hay varios: el jefe de obra, el aparejador y
+   el que paga. La oferta va a uno de ellos, y conviene que quede dicho a cuál. */
+const contactosDe = cid => (S.contactos || [])
+  .filter(c => c.cliente_id === cid && c.activo !== false)
+  .sort((a, b) => (b.principal ? 1 : 0) - (a.principal ? 1 : 0) ||
+                  (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+const contactoDe = id => (S.contactos || []).find(c => c.id === id) || null;
+const contactoPrincipal = cid => contactosDe(cid).find(c => c.principal) || contactosDe(cid)[0] || null;
+/* Cómo se nombra un contacto en una lista: quién es y para qué sirve */
+const rotuloContacto = c => !c ? '' :
+  [c.nombre, c.cargo].filter(Boolean).join(' · ') + (c.email ? ' · ' + c.email : ' · sin correo');
+
+/* ---- El seguimiento de la oferta ----
+   Lo que se registra es cuándo se ABRE EL ENLACE, no el correo: el correo no
+   se puede saber sin una imagen oculta que la mitad de los clientes bloquea y
+   que además habría que declarar. Esto es un hecho, no una suposición. */
+const enviosDe = id => (S.presuEnvios || []).filter(e => e.presupuesto_id === id)
+  .sort((a, b) => String(b.cuando).localeCompare(String(a.cuando)));
+const visitasDe = id => (S.presuVisitas || []).filter(v => v.presupuesto_id === id)
+  .sort((a, b) => String(b.cuando).localeCompare(String(a.cuando)));
 const presuDe = id => (S.presupuestos || []).find(p => p.id === id) || null;
 const lineasDe = id => (S.presuLineas || []).filter(l => l.presupuesto_id === id)
   .sort((a, b) => (a.orden || 0) - (b.orden || 0));
@@ -3606,6 +3651,7 @@ function dlgPresupuesto(id, pre, editando){
     puerta_id: p ? p.puerta_id : (pre && pre.puerta_id) || null,
     aviso_id: p ? p.aviso_id : (pre && pre.aviso_id) || null,
     titulo: p ? p.titulo : (pre && pre.titulo) || '',
+    subtitulo: p ? p.subtitulo : (pre && pre.subtitulo) || '',
     descripcion: p ? p.descripcion : (pre && pre.descripcion) || '',
     condiciones: p ? p.condiciones : ((pre && pre.condiciones) || t.condiciones_presu || ''),
     anexos: p ? p.anexos : ((pre && pre.anexos) || t.anexos_presu || ''),
@@ -3746,6 +3792,37 @@ function pintarFichaPresu(){
     traza += '<div><dt>Salió de aquí</dt><dd>el trabajo '+esc(String(p.convertido_aviso).slice(0, 8))+'</dd></div>';
   if (traza) h += '<div class="grupo"><h3>Qué ha pasado con él</h3><dl class="datos">'+traza+'</dl></div>';
 
+  /* Seguimiento: cuándo salió, a quién, y cuándo lo han abierto */
+  if (!esBorrador && !S.sinSeguimiento){
+    const envios = enviosDe(p.id), visitas = visitasDe(p.id);
+    h += '<div class="grupo"><h3>Seguimiento</h3>';
+    if (!envios.length)
+      h += '<p class="mini" style="margin:0 0 8px">Todavía no se ha mandado desde la aplicación.</p>';
+    else {
+      h += '<p class="mini" style="margin:0 0 6px">Mandado '+envios.length+
+        (envios.length === 1 ? ' vez' : ' veces')+':</p><ul class="mini" style="margin:0 0 10px;padding-left:18px">'+
+        envios.slice(0, 6).map(e => '<li>'+esc(fechaHora(e.cuando))+' a <b>'+
+          esc(e.nombre || e.destino || 'sin destino')+'</b>'+
+          (e.nombre && e.destino ? ' ('+esc(e.destino)+')' : '')+'</li>').join('')+'</ul>';
+    }
+    if (!visitas.length)
+      h += '<div class="sin-ficha" style="margin:0">Todavía no lo ha abierto nadie. Si lo mandaste hace '+
+        'días, puede que no le haya llegado: conviene una llamada.</div>';
+    else {
+      const ult = visitas[0];
+      h += '<div class="nota-oficina" style="margin:0"><b>Lo han abierto '+visitas.length+
+        (visitas.length === 1 ? ' vez' : ' veces')+'.</b> La última, '+esc(fechaHora(ult.cuando))+'.'+
+        (visitas.length >= 3 ? ' Lo está mirando y no contesta: ese es el momento de llamar.' : '')+
+        '</div>';
+      if (visitas.length > 1)
+        h += '<details style="margin-top:8px"><summary class="mini" style="cursor:pointer">Ver todas las aperturas</summary>'+
+          '<ul class="mini" style="margin:6px 0 0;padding-left:18px">'+
+          visitas.slice(0, 40).map(v => '<li>'+esc(fechaHora(v.cuando))+'</li>').join('')+'</ul></details>';
+    }
+    h += '<p class="mini" style="margin:10px 0 0">Esto cuenta las veces que se ha abierto la página del '+
+      'presupuesto, no el correo. Si abres tú el enlace para comprobarlo, también cuenta.</p></div>';
+  }
+
   h += '<div class="pie"><span class="sp"></span>'+
     '<button type="button" class="btn plana" data-cerrar>Cerrar</button></div>';
   abrirDlg(h, null);
@@ -3786,6 +3863,11 @@ function pintarEditorPresu(){
     '<div class="campo full"><label for="pz-titulo">Título</label>'+
       '<input id="pz-titulo" type="text" maxlength="160" value="'+esc(d.titulo)+'"'+(editable?'':' disabled')+
       ' placeholder="Ej.: Adecuación a normativa de la puerta del garaje"></div>'+
+    '<div class="campo full"><label for="pz-subtitulo">Subtítulo del documento</label>'+
+      '<input id="pz-subtitulo" type="text" maxlength="200" value="'+esc(d.subtitulo||'')+'"'+(editable?'':' disabled')+
+      ' placeholder="Ej.: Instalación de cierre enrollable de aluminio Collbaix en verde">'+
+      '<span class="pista">Va bajo el título en el papel. De un vistazo dice de qué va la oferta sin leer una línea. '+
+      'Si lo dejas vacío sale el título.</span></div>'+
     '<div class="campo full"><label for="pz-desc">Qué se propone</label>'+
       '<textarea id="pz-desc" rows="3"'+(editable?'':' disabled')+
       ' placeholder="Lo que va a leer el cliente: qué se va a hacer y por qué">'+esc(d.descripcion||'')+'</textarea></div>'+
@@ -3797,15 +3879,33 @@ function pintarEditorPresu(){
     h += '<p class="muted" style="margin:0 0 10px">Todavía no hay ninguna línea.</p>';
   else {
     h += '<div class="tabla-wrap"><table class="tabla"><thead><tr>'+
-      '<th>Concepto</th><th style="width:70px">Cant.</th><th style="width:90px">Precio</th>'+
-      '<th style="width:90px">Importe</th>'+(editable?'<th style="width:36px"></th>':'')+
+      '<th>Concepto</th><th style="width:66px">Cant.</th><th style="width:84px">Precio</th>'+
+      '<th style="width:58px">Dto. %</th><th style="width:88px">Importe</th>'+
+      (editable?'<th style="width:72px"></th>':'')+
       '</tr></thead><tbody>';
     d.lineas.forEach((l, i) => {
-      const tipoTxt = { material:'Material', mano_obra:'Mano de obra', desplazamiento:'Desplazamiento', texto:'' }[l.tipo] || '';
+      const tipoTxt = { material:'Material', mano_obra:'Mano de obra',
+                        desplazamiento:'Desplazamiento', texto:'', capitulo:'' }[l.tipo] || '';
+      const nombre = l.nombre || l.descripcion || '';
+      /* Un capítulo no es una línea de venta: es el título de un grupo, y en el
+         papel lleva su propio subtotal. Por eso ocupa toda la fila. */
+      if (l.tipo === 'capitulo'){
+        h += '<tr style="background:var(--aviso-bg)"><td colspan="'+(editable?5:5)+'">'+
+          '<b style="text-transform:uppercase;letter-spacing:.03em">'+esc(nombre || 'Capítulo sin nombre')+'</b>'+
+          (l.detalle ? '<span class="sub" style="display:block">'+esc(l.detalle)+'</span>' : '')+
+          '<span class="sub" style="display:block">Capítulo</span></td>'+
+          (editable ? '<td><button type="button" class="btn sm plana" data-act="pz-linea" data-i="'+i+'">Abrir</button>'+
+            '<button type="button" class="btn sm plana" data-act="pz-quitar" data-i="'+i+'">✕</button></td>' : '')+
+          '</tr>';
+        return;
+      }
       h += '<tr>'+
         '<td>'+(editable
-          ? '<input type="text" class="pz-l-desc" data-i="'+i+'" maxlength="160" value="'+esc(l.descripcion||'')+'" style="width:100%">'
-          : esc(l.descripcion))+
+          ? '<input type="text" class="pz-l-desc" data-i="'+i+'" maxlength="200" value="'+esc(nombre)+'" style="width:100%">'
+          : esc(nombre))+
+          (l.referencia ? '<span class="sub" style="display:block">Ref. '+esc(l.referencia)+'</span>' : '')+
+          (l.detalle ? '<span class="sub" style="display:block">'+
+            esc(String(l.detalle).slice(0, 90))+(String(l.detalle).length > 90 ? '…' : '')+'</span>' : '')+
           (tipoTxt ? '<span class="sub" style="display:block">'+tipoTxt+
             (l.tipo==='material' && l.coste ? ' · coste '+eur(l.coste) : '')+'</span>' : '')+'</td>'+
         '<td>'+(editable && l.tipo !== 'texto'
@@ -3814,17 +3914,24 @@ function pintarEditorPresu(){
         '<td>'+(editable && l.tipo !== 'texto'
           ? '<input type="number" step="0.01" min="0" class="pz-l-prec" data-i="'+i+'" value="'+esc(l.precio)+'" style="width:100%">'
           : (l.tipo === 'texto' ? '' : eur(l.precio)))+'</td>'+
+        '<td>'+(editable && l.tipo !== 'texto'
+          ? '<input type="number" step="any" min="0" max="100" class="pz-l-dto" data-i="'+i+'" value="'+esc(l.dto||0)+'" style="width:100%">'
+          : (l.tipo === 'texto' || !Number(l.dto) ? '' : esc(l.dto)+' %'))+'</td>'+
         '<td>'+(l.tipo === 'texto' ? '' : '<b>'+eur(l.importe)+'</b>')+'</td>'+
-        (editable ? '<td><button type="button" class="btn sm plana" data-act="pz-quitar" data-i="'+i+'">✕</button></td>' : '')+
+        (editable ? '<td><button type="button" class="btn sm plana" data-act="pz-linea" data-i="'+i+'">Abrir</button>'+
+          '<button type="button" class="btn sm plana" data-act="pz-quitar" data-i="'+i+'">✕</button></td>' : '')+
         '</tr>';
     });
-    h += '</tbody></table></div>';
+    h += '</tbody></table></div>'+
+      (editable ? '<p class="mini" style="margin:6px 0 0">«Abrir» es donde se pone la referencia y la '+
+       'explicación larga que convence al que lee. Aquí solo cambias lo de cada día.</p>' : '');
   }
   if (editable)
     h += '<div class="fila" style="gap:6px;flex-wrap:wrap;margin-top:8px">'+
       '<button type="button" class="btn sm" data-act="pz-add" data-tipo="material">Añadir material</button>'+
       '<button type="button" class="btn sm" data-act="pz-add" data-tipo="mano_obra">Mano de obra</button>'+
       '<button type="button" class="btn sm" data-act="pz-add" data-tipo="desplazamiento">Desplazamiento</button>'+
+      '<button type="button" class="btn sm plana" data-act="pz-add" data-tipo="capitulo">Capítulo</button>'+
       '<button type="button" class="btn sm plana" data-act="pz-add" data-tipo="texto">Línea de texto</button>'+
       '</div>';
   h += '</div>';
@@ -3953,6 +4060,7 @@ function leerEditorPresu(){
   if (v('pz-cli') !== null) d.cliente_id = v('pz-cli') || null;
   if (v('pz-puerta') !== null) d.puerta_id = v('pz-puerta') || null;
   if (v('pz-titulo') !== null) d.titulo = v('pz-titulo');
+  if (v('pz-subtitulo') !== null) d.subtitulo = v('pz-subtitulo');
   if (v('pz-desc') !== null) d.descripcion = v('pz-desc');
   if (v('pz-cond') !== null) d.condiciones = v('pz-cond');
   if (v('pz-anexos') !== null) d.anexos = v('pz-anexos');
@@ -3960,23 +4068,43 @@ function leerEditorPresu(){
   if (v('pz-descuento') !== null) d.descuento = parseFloat(v('pz-descuento')) || 0;
   if (v('pz-iva') !== null) d.tipo_iva = parseFloat(v('pz-iva')) || 0;
   if (v('pz-validez') !== null) d.validez_dias = parseInt(v('pz-validez'), 10) || 30;
-  dlgForm.querySelectorAll('.pz-l-desc').forEach(e => { d.lineas[+e.dataset.i].descripcion = e.value; });
+  dlgForm.querySelectorAll('.pz-l-desc').forEach(e => {
+    const l = d.lineas[+e.dataset.i];
+    /* El nombre corto vive en 'descripcion' desde la primera versión y ahí se
+       queda: así lo guardado hasta hoy sigue saliendo en su sitio. */
+    l.descripcion = e.value; l.nombre = e.value;
+  });
   dlgForm.querySelectorAll('.pz-l-cant').forEach(e => { d.lineas[+e.dataset.i].cantidad = parseFloat(e.value) || 0; });
   dlgForm.querySelectorAll('.pz-l-prec').forEach(e => { d.lineas[+e.dataset.i].precio = parseFloat(e.value) || 0; });
-  d.lineas.forEach(l => {
-    l.importe = l.tipo === 'texto' ? 0
-      : Math.round(Number(l.cantidad || 0) * Number(l.precio || 0) * 100) / 100;
+  dlgForm.querySelectorAll('.pz-l-dto').forEach(e => {
+    d.lineas[+e.dataset.i].dto = Math.min(100, Math.max(0, parseFloat(e.value) || 0));
   });
+  d.lineas.forEach(l => { l.importe = importeLinea(l); });
+}
+
+/* Lo que suma una línea: cantidad por precio, menos su descuento. Un capítulo
+   y una línea de texto no suman nada: son rótulos. */
+function importeLinea(l){
+  if (!l || l.tipo === 'texto' || l.tipo === 'capitulo') return 0;
+  const bruto = Number(l.cantidad || 0) * Number(l.precio || 0);
+  const dto = Math.min(100, Math.max(0, Number(l.dto || 0)));
+  return Math.round(bruto * (1 - dto / 100) * 100) / 100;
 }
 
 /* Añadir una línea. El material se elige del almacén y trae su precio de venta
    y su coste; la mano de obra y el desplazamiento salen de las tarifas. */
 function dlgLineaPresu(tipo){
   const t = S.tarifas || {};
-  if (tipo === 'texto' || tipo === 'mano_obra' || tipo === 'desplazamiento'){
+  if (tipo === 'texto' || tipo === 'capitulo' || tipo === 'mano_obra' || tipo === 'desplazamiento'){
     const d = S.presu;
     if (tipo === 'texto')
       d.lineas.push({ tipo:'texto', descripcion:'', cantidad:0, unidad:'', precio:0, importe:0, coste:0 });
+    if (tipo === 'capitulo'){
+      d.lineas.push({ tipo:'capitulo', descripcion:'', nombre:'', detalle:'',
+        cantidad:0, unidad:'', precio:0, importe:0, coste:0 });
+      leerEditorPresu();
+      return dlgDetalleLinea(d.lineas.length - 1);
+    }
     if (tipo === 'mano_obra')
       d.lineas.push({ tipo:'mano_obra', descripcion:'Mano de obra', cantidad:1, unidad:'h',
         precio: Number(t.precio_hora || 0), importe: Number(t.precio_hora || 0),
@@ -4025,6 +4153,59 @@ function dlgLineaPresu(tipo){
   });
 }
 
+/* ---- Una línea por dentro ----
+   En el papel, una línea es un código, un nombre en negrita y, debajo, la
+   explicación que convence al que lee. Eso no cabe en la tabla del editor, así
+   que vive aquí: lo de cada día se toca en la tabla, y esto se abre cuando hay
+   que escribir de verdad. */
+function dlgDetalleLinea(i){
+  leerEditorPresu();
+  const l = S.presu.lineas[i];
+  if (!l) return;
+  const esCap = l.tipo === 'capitulo';
+  const esTxt = l.tipo === 'texto';
+  abrirDlg('<h3>'+(esCap ? 'Capítulo' : esTxt ? 'Línea de texto' : 'Detalle de la línea')+'</h3>'+
+    (esCap ? '<p class="mini" style="margin:0 0 10px">Un capítulo agrupa las líneas que vengan debajo '+
+      'y lleva su propio subtotal en el documento. Sirve para separar «Suministro» de «Instalación», '+
+      'o una puerta de otra.</p>' : '')+
+    '<div class="campos">'+
+    (esCap || esTxt ? '' :
+      '<div class="campo"><label for="pl-ref">Referencia</label>'+
+      '<input id="pl-ref" type="text" maxlength="40" value="'+esc(l.referencia||'')+'" '+
+      'placeholder="El código del almacén o el del fabricante"></div>'+
+      '<div class="campo"><label for="pl-uni">Unidad</label>'+
+      '<input id="pl-uni" type="text" maxlength="12" value="'+esc(l.unidad||'ud')+'"></div>')+
+    '<div class="campo full"><label for="pl-nom">'+(esCap ? 'Nombre del capítulo' : 'Nombre')+'</label>'+
+      '<input id="pl-nom" type="text" maxlength="200" value="'+esc(l.nombre || l.descripcion || '')+'" '+
+      'placeholder="'+(esCap ? 'Ej.: Cierre enrollable de aluminio' : 'Lo que sale en negrita')+'"></div>'+
+    '<div class="campo full"><label for="pl-det">'+(esCap ? 'Texto del capítulo' : 'Explicación')+'</label>'+
+      '<textarea id="pl-det" rows="7" placeholder="'+
+      (esCap ? 'Lo que conviene aclarar de este grupo: qué incluye y qué no'
+             : 'Marca, modelo, medidas, materiales, lo que incluye y la norma que cumple. '+
+               'Esto es lo que diferencia tu oferta de la del de al lado')+
+      '">'+esc(l.detalle||'')+'</textarea>'+
+      '<span class="pista">Sale debajo del nombre, en letra más pequeña. Los saltos de línea se respetan.</span></div>'+
+    (esCap || esTxt ? '' :
+      '<div class="campo"><label for="pl-dto2">Descuento de esta línea (%)</label>'+
+      '<input id="pl-dto2" type="number" step="any" min="0" max="100" value="'+esc(l.dto||0)+'"></div>')+
+    '</div>'+
+    '<p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-act="pz-volver-editor">Cancelar</button>'+
+    '<button type="submit" class="btn pri">Guardar la línea</button></div>', () => {
+    const nom = val('pl-nom');
+    if (!nom) return setErr(esCap ? 'El capítulo necesita un nombre.' : 'Pon el nombre de la línea.');
+    l.nombre = nom; l.descripcion = nom;
+    l.detalle = val('pl-det') || null;
+    if (!esCap && !esTxt){
+      l.referencia = val('pl-ref') || null;
+      l.unidad = val('pl-uni') || 'ud';
+      l.dto = Math.min(100, Math.max(0, parseFloat(val('pl-dto2')) || 0));
+      l.importe = importeLinea(l);
+    }
+    pintarPresupuesto();
+  });
+}
+
 /* ---- De una visita a un presupuesto ----
    El técnico ve en obra lo que hay que hacer y lo escribe en «Recomendaciones y
    presupuesto a ofertar» de su revisión, o en las deficiencias del informe. Eso
@@ -4063,7 +4244,8 @@ async function guardarPresupuesto(emitiendo){
   const tot = totalesPresu(d.lineas, d.descuento, d.tipo_iva);
   const o = {
     cliente_id: d.cliente_id, puerta_id: d.puerta_id || null, aviso_id: d.aviso_id || null,
-    titulo: d.titulo.trim(), descripcion: d.descripcion || null,
+    titulo: d.titulo.trim(), subtitulo: d.subtitulo || null,
+    descripcion: d.descripcion || null,
     condiciones: d.condiciones || null, anexos: d.anexos || null,
     notas_internas: d.notas_internas || null,
     validez_dias: d.validez_dias, descuento: tot.descuento, tipo_iva: tot.tipo_iva,
@@ -4105,7 +4287,9 @@ async function guardarPresupuesto(emitiendo){
     if (d.lineas.length){
       const filas = d.lineas.map((l, i) => ({
         presupuesto_id: id, orden: i, tipo: l.tipo, articulo_id: l.articulo_id || null,
-        descripcion: l.descripcion || '', cantidad: Number(l.cantidad || 0),
+        descripcion: l.descripcion || '', nombre: l.nombre || l.descripcion || '',
+        referencia: l.referencia || null, detalle: l.detalle || null,
+        cantidad: Number(l.cantidad || 0), dto: Number(l.dto || 0),
         unidad: l.unidad || 'ud', precio: Number(l.precio || 0),
         importe: Number(l.importe || 0), coste: Number(l.coste || 0) }));
       const { error } = await sb.from('presupuesto_lineas').insert(filas);
@@ -4202,7 +4386,11 @@ function dlgEnlacePresu(id, op){
   if (!p || !p.token) return;
   const url = enlacePresu(p);
   const cli = p.cliente_id ? clienteDe(p.cliente_id) : null;
-  const mail = cli ? (cli.email || '') : '';
+  /* Sale propuesto el contacto principal; si no hay ninguno, el correo de la
+     ficha del cliente, que es lo que había antes de que existieran. */
+  const pre = cli ? contactoPrincipal(cli.id) : null;
+  const mail = (pre && pre.email) || (cli ? (cli.email || '') : '');
+  const destino = mail;
   const texto = 'Buenos días:\n\nLe mandamos el presupuesto '+(p.referencia||'')+', '+p.titulo+
     '.\nImporte total: '+eur(p.total)+' (IVA incluido).\n'+
     (p.valido_hasta ? 'Válido hasta el '+fechaCorta(p.valido_hasta)+'.\n' : '')+
@@ -4223,9 +4411,24 @@ function dlgEnlacePresu(id, op){
     'rechaza desde el móvil. Queda escrito quién lo aceptó y cuándo. El enlace es lo único que hace falta '+
     'para entrar, así que va a su correo y a ningún otro sitio.'+
     (mail ? ' El correo que tenemos suyo es <b>'+esc(mail)+'</b>.' : ' No tenemos correo suyo en la ficha.')+'</p>'+
-    '<div class="campos" style="margin-top:10px"><div class="campo full">'+
-      '<label for="pe-a">A dónde se lo mandas</label>'+
-      '<input id="pe-a" type="text" maxlength="160" value="'+esc(mail)+'" '+
+    /* A quién va. En una obra hay varias personas y la oferta no siempre va a
+       la misma: se elige de la lista, o se escribe la dirección a mano. */
+    '<div class="campos" style="margin-top:10px">'+
+      (cli ? '<div class="campo full"><label for="pe-cont">A quién se lo mandas</label>'+
+        '<select id="pe-cont">'+
+        contactosDe(cli.id).map(c => '<option value="'+c.id+'"'+
+          ((pre && pre.id === c.id) || (!pre && c.principal) ? ' selected' : '')+'>'+
+          esc(rotuloContacto(c))+'</option>').join('')+
+        '<option value=""'+(pre ? '' : ' selected')+'>Escribir la dirección a mano</option>'+
+        '</select>'+
+        (contactosDe(cli.id).length
+          ? '<span class="pista">Los contactos se dan de alta en la ficha del cliente.</span>'
+          : '<span class="pista">Este cliente no tiene contactos dados de alta. Se pueden añadir en su ficha, '+
+            'y así no hay que teclear el correo cada vez.</span>')+
+      '</div>' : '')+
+      '<div class="campo full">'+
+      '<label for="pe-a">Correo, teléfono o cómo se entrega</label>'+
+      '<input id="pe-a" type="text" maxlength="160" value="'+esc(destino)+'" '+
       'placeholder="Un correo, un teléfono, o «entregado en mano»">'+
       '<span class="pista">Queda apuntado en el presupuesto, para cuando haya que recordar por dónde fue.</span>'+
     '</div></div>'+
@@ -4234,6 +4437,14 @@ function dlgEnlacePresu(id, op){
     '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Ahora no</button>'+
     '<button type="button" class="btn pri" data-act="pz-marcar-enviado" data-id="'+p.id+'">Ya se lo he mandado</button>'+
     '</div>', null);
+  /* Al elegir a una persona, su correo baja solo al campo de abajo */
+  const selC = document.getElementById('pe-cont');
+  if (selC) selC.addEventListener('change', () => {
+    const c = contactoDe(selC.value);
+    const campo = document.getElementById('pe-a');
+    if (campo && c) campo.value = c.email || c.telefono || '';
+    if (campo && !c) campo.focus();
+  });
 }
 
 /* Registrar que salió. La aplicación no manda el correo por ti: lo que hace es
@@ -4243,14 +4454,24 @@ async function marcarPresuEnviado(id){
   const p = presuDe(id);
   if (!p) return;
   const a = val('pe-a') || null;
+  const cid = val('pe-cont') || null;
+  const c = cid ? contactoDe(cid) : null;
   try {
     const { error } = await sb.from('presupuestos').update({
       estado: p.estado === 'emitido' ? 'enviado' : p.estado,
-      enviado_el: p.enviado_el || new Date().toISOString(),
-      enviado_a: a, actualizado: new Date().toISOString() }).eq('id', id);
+      enviado_el: new Date().toISOString(),
+      enviado_a: a, contacto_id: cid,
+      actualizado: new Date().toISOString() }).eq('id', id);
     if (error) throw error;
+    /* Cada salida se apunta aparte: mandarlo otra vez, o a otra persona, no
+       borra la vez anterior. Si la tabla todavía no existe, no se para el
+       trabajo por eso. */
+    try {
+      await sb.from('presupuesto_envios').insert({ presupuesto_id: id, contacto_id: cid,
+        destino: a || '', nombre: c ? c.nombre : null, por: yo() });
+    } catch(_){ /* sin historial, pero mandado */ }
     cerrarDlg(); await cargar(); pintar();
-    toast('Anotado como mandado'+(a ? ' a '+a : '')+'.');
+    toast('Anotado como mandado'+(c ? ' a '+c.nombre : (a ? ' a '+a : ''))+'.');
   } catch(e){ fallo(e); }
 }
 
@@ -4454,6 +4675,75 @@ function vistaEquipo(){
   return h;
 }
 
+/* El logo y los sellos, que son lo primero que ve el cliente en el papel */
+function panelMarca(){
+  const m = marcaEmpresa();
+  const sellos = (m.sellos || []).filter(Boolean);
+  const peso = Math.round((JSON.stringify(m).length * 0.75) / 1024);
+  let h = '<div class="panel"><div class="panel-h"><h3>Logo y sellos</h3></div>'+
+    '<p class="mini" style="margin:0 0 12px">Salen en la cabecera de los presupuestos y de los documentos '+
+    'que se le mandan al cliente, en todas las páginas. El logo, con fondo transparente o con el suyo, '+
+    'mejor apaisado. Los sellos son los distintivos que quieras enseñar: asociaciones, certificaciones, '+
+    'marcas con las que trabajas. Hasta '+MAX_SELLOS+'.</p>';
+
+  h += '<div class="fila" style="gap:16px;flex-wrap:wrap;align-items:flex-end">'+
+    '<div><div class="mini" style="margin-bottom:5px">Logo</div>'+
+      '<div class="marca-hueco">'+(m.logo
+        ? '<img src="'+m.logo+'" alt="Logo de la empresa">'
+        : '<span class="mini">Sin logo</span>')+'</div>'+
+      '<div class="fila" style="gap:6px;margin-top:6px">'+
+        '<label class="btn sm" style="cursor:pointer">'+(m.logo ? 'Cambiar' : 'Subir')+
+          '<input type="file" accept="image/*" hidden data-act="subir-logo"></label>'+
+        (m.logo ? '<button class="btn sm plana" data-act="quitar-logo">Quitar</button>' : '')+
+      '</div></div>';
+
+  h += '<div><div class="mini" style="margin-bottom:5px">Sellos ('+sellos.length+' de '+MAX_SELLOS+')</div>'+
+    '<div class="fila" style="gap:8px;flex-wrap:wrap">'+
+    (sellos.length ? sellos.map((s, i) =>
+      '<div style="text-align:center"><div class="marca-hueco sello"><img src="'+s+'" alt=""></div>'+
+      '<button class="btn sm plana" style="margin-top:4px;padding:3px 8px;font-size:12px" '+
+      'data-act="quitar-sello" data-i="'+i+'">Quitar</button></div>').join('')
+      : '<div class="marca-hueco sello"><span class="mini">Ninguno</span></div>')+
+    '</div>'+
+    (sellos.length < MAX_SELLOS
+      ? '<div style="margin-top:6px"><label class="btn sm" style="cursor:pointer">Añadir sello'+
+        '<input type="file" accept="image/*" hidden data-act="subir-sello"></label></div>'
+      : '<p class="mini" style="margin:6px 0 0">Ya están los '+MAX_SELLOS+'. Quita uno para poner otro.</p>')+
+    '</div></div>';
+
+  h += '<div class="fila" style="margin-top:14px;gap:8px;flex-wrap:wrap">'+
+    '<button class="btn sm plana" data-act="ver-cabecera">Ver cómo queda la cabecera</button>'+
+    '<span class="sp"></span>'+
+    '<span class="mini">'+(peso ? 'Ocupan unos '+peso+' KB' : '')+'</span></div>';
+
+  if (!hayLogo())
+    h += '<p class="nota-oficina" style="margin:12px 0 0">Mientras no haya logo, los documentos salen con el '+
+      'nombre escrito, que es como estaban hasta ahora. No falla nada, pero vende menos.</p>';
+  h += '<p class="mini" style="margin:12px 0 0">Las imágenes se guardan dentro de los ajustes, no como '+
+    'fichero suelto: así el documento se imprime siempre con ellas, aunque sea en el móvil del técnico y '+
+    'sin cobertura. Entran también en la copia de seguridad.</p>';
+  return h + '</div>';
+}
+
+/* Ver la cabecera en papel antes de mandar nada con ella */
+function vistaPreviaCabecera(){
+  const em = datosEmpresa();
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana.'); return; }
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
+    '<title>Cabecera de los documentos</title><style>'+
+    '@page{size:A4;margin:16mm 14mm}*{box-sizing:border-box}'+
+    'body{font:11px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#1C1817;margin:0;padding:16mm 14mm}'+
+    CSS_CABECERA+
+    '.aviso{margin-top:16px;border:1px dashed #d8d4d0;border-radius:6px;padding:10px;color:#6B6560}'+
+    '</style></head><body>'+
+    cabeceraDocumento(em, 'PRESUPUESTO DE VENTA', 'Instalación de puerta seccional en nave industrial')+
+    '<div class="aviso">Así es como va a salir la cabecera en cada página de los documentos que se le '+
+    'mandan al cliente. Esto es solo una muestra: ni el título ni el texto de debajo son reales.</div>'+
+    '</body></html>');
+  w.document.close();
+}
+
 /* Datos de la empresa: salen en las portadas y, sobre todo, en las declaraciones,
    donde el NIF y el domicilio completo son obligatorios. */
 function panelEmpresa(){
@@ -4492,6 +4782,8 @@ function panelEmpresa(){
     '</div>'+
     '<div class="fila" style="margin-top:12px"><span class="sp"></span>'+
     '<button class="btn pri" data-act="guardar-empresa">Guardar datos de la empresa</button></div></div>';
+
+  h += panelMarca();
 
   /* Tabla de protección exigida por combinación. Vacía de fábrica: la rellena quien
      tiene la norma delante. La aplicación no inventa qué exige cada casilla. */
@@ -9044,6 +9336,85 @@ const datosEmpresa = () => Object.assign({
   representante:'David Ariza Arana', cargo_firmante:'Administrador único',
   responsable_tecnico:''
 }, S.ajustes.empresa || {});
+
+/* ---- El logo y los sellos ----
+   Un presupuesto con el logo delante vende; uno con el nombre escrito a pelo,
+   no. Y los sellos de las asociaciones y las certificaciones dicen con quién
+   está tratando el cliente antes de leer una sola línea.
+
+   Se guardan dentro de los ajustes como imagen incrustada, no como fichero en
+   el cubo. La razón es la impresión: el documento se abre en otra ventana y se
+   manda a la impresora o a un PDF, y una imagen incrustada está siempre ahí,
+   sin enlaces que caduquen ni permisos que pedir. */
+const MAX_SELLOS = 4;
+const marcaEmpresa = () => Object.assign({ logo:'', sellos:[] }, S.ajustes.marca || {});
+const hayLogo = () => !!(marcaEmpresa().logo || '').trim();
+
+/* La imagen reducida y en PNG, que conserva el fondo transparente de un sello */
+function marcaImagen(file, max = 520){
+  return new Promise((res, rej) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const r = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * r); c.height = Math.round(img.height * r);
+      const cx = c.getContext('2d');
+      cx.imageSmoothingQuality = 'high';
+      cx.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      let d = '';
+      try { d = c.toDataURL('image/png'); } catch(e){ return rej(new Error('Imagen no válida')); }
+      /* Un logo enorme engorda cada documento y cada copia de seguridad. Si se
+         pasa, se vuelve a reducir en JPEG, que pesa mucho menos. */
+      if (d.length > 260000){
+        try { d = c.toDataURL('image/jpeg', 0.85); } catch(e){ /* se queda el PNG */ }
+      }
+      res(d);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Imagen no válida')); };
+    img.src = url;
+  });
+}
+
+async function guardarMarca(m){
+  const { error } = await sb.from('ajustes').upsert({ clave:'marca', valor: m }, { onConflict:'clave' });
+  if (error) throw error;
+  S.ajustes.marca = m;
+}
+
+/* La cabecera que llevan los documentos: logo, datos y sellos. Si todavía no
+   hay logo cargado, se escribe el nombre, que es lo que se hacía hasta ahora. */
+function cabeceraDocumento(em, titulo, subtitulo){
+  const m = marcaEmpresa();
+  const sellos = (m.sellos || []).filter(Boolean);
+  return '<div class="cab">'+
+    '<div class="cab-marca">'+
+      (m.logo ? '<img src="'+m.logo+'" alt="'+esc(em.nombre_comercial || em.razon_social || '')+'">'
+              : '<div class="marca">ARIZA <span>puertas automáticas</span></div>')+
+    '</div>'+
+    '<div class="cab-datos">'+esc(em.razon_social || '')+'<br>'+
+      esc(em.email || '')+(em.domicilio ? ', '+esc(em.domicilio) : '')+'<br>'+
+      esc([em.cp, em.poblacion].filter(Boolean).join(' '))+'<br>'+
+      esc(em.telefono || '')+(em.nif ? ' NIF: '+esc(em.nif) : '')+'</div>'+
+    (sellos.length ? '<div class="cab-sellos">'+
+      sellos.map(s => '<img src="'+s+'" alt="">').join('')+'</div>' : '')+
+    '</div>'+
+    (titulo ? '<h1 class="doc-tit">'+esc(titulo)+'</h1>' : '')+
+    (subtitulo ? '<p class="doc-sub">'+esc(subtitulo)+'</p>' : '');
+}
+
+/* El estilo de esa cabecera, igual en todos los documentos que la lleven */
+const CSS_CABECERA =
+  '.cab{display:flex;justify-content:space-between;align-items:center;gap:10mm;'+
+    'border-bottom:2px solid #FCBA1D;padding-bottom:5px;margin-bottom:10px}'+
+  '.cab-marca img{max-height:19mm;max-width:62mm;object-fit:contain;display:block}'+
+  '.cab-datos{font-size:8.5px;line-height:1.45;color:#3A3330;border-left:1px solid #d8d4d0;'+
+    'padding-left:5mm;flex:1}'+
+  '.cab-sellos{display:flex;gap:3mm;align-items:center}'+
+  '.cab-sellos img{max-height:16mm;max-width:24mm;object-fit:contain}'+
+  '.marca{font-weight:800;font-size:15px}.marca span{color:#C98F08}'+
+  '.doc-tit{font-size:19px;text-align:center;margin:10px 0 0;letter-spacing:.02em}'+
+  '.doc-sub{font-size:11.5px;text-align:center;margin:3px 0 12px;color:#3A3330}';
 
 /* ---- Estado del expediente abierto ---- */
 const expDe = id => S.expedientes.find(x => x.id === id);
@@ -16428,7 +16799,32 @@ function dlgCliente(id, alGuardarExtra, pre){
     '<div class="campo" style="align-content:end"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
       '<input type="checkbox" id="c-contrato"'+(d.contrato?' checked':'')+' style="accent-color:var(--amarillo);width:18px;height:18px">Tiene contrato de mantenimiento</label></div>'+
     '<div class="campo full"><label for="c-notas">Notas internas</label><textarea id="c-notas" rows="2" placeholder="Ej.: facturar a nombre de la comunidad, llaves en portería">'+esc(d.notas||'')+'</textarea></div>'+
-    '</div><p class="err"></p><div class="pie">'+
+    '</div>';
+  /* Las personas del cliente. Solo cuando ya existe: un contacto cuelga de un
+     cliente, y el cliente todavía no tiene número hasta que se guarda. */
+  if (c && !S.sinContactos){
+    const cons = contactosDe(c.id);
+    h += '<div class="grupo"><h3>Personas de contacto</h3>'+
+      '<p class="mini" style="margin:0 0 10px">En una obra hay varias: el jefe de obra, el administrador, '+
+      'quien paga. Al mandar un presupuesto se elige a cuál va, y queda apuntado.</p>';
+    if (!cons.length)
+      h += '<p class="muted" style="margin:0 0 10px">Todavía no hay ninguna. Mientras tanto se usa el correo '+
+        'de arriba.</p>';
+    else {
+      h += '<div class="lista">'+cons.map(x =>
+        '<div class="item"><div class="item-in"><div class="fila" style="gap:8px;flex-wrap:wrap">'+
+        '<b>'+esc(x.nombre||'Sin nombre')+'</b>'+
+        (x.cargo ? '<span class="chip gris sin">'+esc(x.cargo)+'</span>' : '')+
+        (x.principal ? '<span class="chip ok sin">Principal</span>' : '')+
+        '<span class="sp"></span>'+
+        '<button type="button" class="btn sm plana" data-act="contacto-edit" data-id="'+x.id+'">Abrir</button>'+
+        '</div><div class="mini">'+esc([x.email, x.telefono].filter(Boolean).join(' · ') || 'Sin correo ni teléfono')+
+        '</div></div></div>').join('')+'</div>';
+    }
+    h += '<div class="fila" style="margin-top:8px"><button type="button" class="btn sm" '+
+      'data-act="contacto-nuevo" data-cli="'+c.id+'">Añadir persona</button><span class="sp"></span></div></div>';
+  }
+  h += '<p class="err"></p><div class="pie">'+
     '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button><button type="submit" class="btn pri">Guardar</button></div>';
   abrirDlg(h, async () => {
     const o = { nombre: val('c-nombre'), nif: val('c-nif')||null, tipo: val('c-tipo')||null,
@@ -16449,6 +16845,64 @@ function dlgCliente(id, alGuardarExtra, pre){
       toast(c ? 'Cliente actualizado.' : 'Cliente creado.');
       if (alGuardarExtra) alGuardarExtra(nuevoId);
     } catch(e){ setErr(e.message); }
+  });
+}
+
+/* ---- Una persona del cliente ----
+   Quien contesta el teléfono en una obra no suele ser quien firma, y el que
+   firma casi nunca es el que abre la puerta. Cada uno con su nombre, su cargo
+   y su correo, para no acabar mandando la oferta siempre al mismo sitio. */
+function dlgContacto(id, clienteId){
+  const x = id ? contactoDe(id) : null;
+  const cid = clienteId || (x ? x.cliente_id : null);
+  const cli = cid ? clienteDe(cid) : null;
+  if (!cid) return;
+  const d = x || {};
+  abrirDlg('<h3>'+(x ? 'Editar persona' : 'Nueva persona de contacto')+'</h3>'+
+    (cli ? '<p class="mini" style="margin:0 0 12px">'+esc(cli.nombre)+'</p>' : '')+
+    '<div class="campos">'+
+    '<div class="campo full"><label for="ct-nom">Nombre y apellidos</label>'+
+      '<input id="ct-nom" type="text" maxlength="120" value="'+esc(d.nombre||'')+'"></div>'+
+    '<div class="campo"><label for="ct-cargo">Cargo</label>'+
+      '<input id="ct-cargo" type="text" maxlength="80" value="'+esc(d.cargo||'')+'" '+
+      'placeholder="Jefe de obra, administrador, propietario"></div>'+
+    '<div class="campo"><label for="ct-tel">Teléfono</label>'+
+      '<input id="ct-tel" type="tel" maxlength="20" value="'+esc(d.telefono||'')+'"></div>'+
+    '<div class="campo full"><label for="ct-mail">Correo</label>'+
+      '<input id="ct-mail" type="email" maxlength="160" value="'+esc(d.email||'')+'"></div>'+
+    '<div class="campo full"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+      '<input type="checkbox" id="ct-pri"'+(d.principal?' checked':'')+
+      ' style="accent-color:var(--amarillo);width:18px;height:18px">Es la persona principal</label>'+
+      '<span class="pista">Es la que sale propuesta al mandar un presupuesto. Solo puede haber una.</span></div>'+
+    '<div class="campo full"><label for="ct-notas">Notas</label>'+
+      '<textarea id="ct-notas" rows="2" placeholder="Ej.: solo por las mañanas, prefiere WhatsApp">'+
+      esc(d.notas||'')+'</textarea></div>'+
+    '</div><p class="err"></p><div class="pie">'+
+    (x ? '<button type="button" class="btn sm plana" data-act="contacto-borrar" data-id="'+x.id+'">Borrar</button>' : '')+
+    '<span class="sp"></span><button type="button" class="btn plana" data-act="contacto-volver" data-cli="'+cid+'">Cancelar</button>'+
+    '<button type="submit" class="btn pri">Guardar</button></div>', async () => {
+    const o = { cliente_id: cid, nombre: val('ct-nom'), cargo: val('ct-cargo')||null,
+      telefono: val('ct-tel')||null, email: val('ct-mail')||null, notas: val('ct-notas')||null,
+      principal: !!(document.getElementById('ct-pri')||{}).checked };
+    if (!o.nombre) return setErr('La persona necesita un nombre.');
+    if (!o.email && !o.telefono)
+      return setErr('Pon al menos un correo o un teléfono: si no, no sirve para mandarle nada.');
+    try {
+      /* Principal solo hay uno: marcar a este quita la marca a los demás */
+      if (o.principal)
+        await sb.from('contactos').update({ principal:false })
+          .eq('cliente_id', cid).neq('id', x ? x.id : '00000000-0000-0000-0000-000000000000');
+      if (x){ const { error } = await sb.from('contactos').update(o).eq('id', x.id); if (error) throw error; }
+      else { o.creado_por = yo();
+        const { error } = await sb.from('contactos').insert(o); if (error) throw error; }
+      await cargar();
+      dlgCliente(cid);
+      toast(x ? 'Contacto actualizado.' : 'Contacto añadido.');
+    } catch(e){
+      setErr((e.message||'').match(/contactos/i)
+        ? 'Falta ejecutar comercial.sql en la base de datos.'
+        : (e.message || 'No se pudo guardar.'));
+    }
   });
 }
 
@@ -17007,108 +17461,176 @@ function documentoPresupuesto(id, op){
      enseña solo el total. El coste y el margen no salen en ninguno. */
   const conPrecios = op.formato !== 'sin_valorar';
   const conDetalle = op.formato !== 'resumen';
-  const esBorrador = p.estado === 'borrador';
+  const esBorrador = !p.estado || p.estado === 'borrador';
   const em = datosEmpresa();
   const cli = p.cliente_id ? clienteDe(p.cliente_id) : null;
+  const cont = p.contacto_id ? contactoDe(p.contacto_id) : (cli ? contactoPrincipal(cli.id) : null);
   const pu = p.puerta_id ? puertaDe(p.puerta_id) : null;
   const lineas = lineasDe(id);
   const w = window.open('', '_blank');
   if (!w){ toast('El navegador ha bloqueado la ventana.'); return; }
-  const fila = (a, b) => '<tr><th>'+esc(a)+'</th><td>'+esc(b || '—')+'</td></tr>';
   const est = ESTADOS_PRESU[estadoPresu(p)] || ESTADOS_PRESU.borrador;
+  const dato = (a, b) => b ? '<div class="d"><span>'+esc(a)+':</span> <b>'+esc(b)+'</b></div>' : '';
+  const nCols = conPrecios ? 7 : 4;
+
+  /* ---- Las líneas, agrupadas por capítulos ----
+     Un capítulo abre un grupo y lleva su propio subtotal, como en cualquier
+     oferta de obra: el cliente ve lo que cuesta cada parte sin sumar a mano. */
+  let filas = '', grupo = null, sumaGrupo = 0, n = 0;
+  const cerrarGrupo = () => {
+    if (grupo === null) return '';
+    const s = conPrecios
+      ? '<tr class="cap-tot"><td colspan="'+nCols+'">Subtotal '+esc(grupo)+': <b>'+eur(sumaGrupo)+'</b></td></tr>'
+      : '';
+    grupo = null; sumaGrupo = 0;
+    return s;
+  };
+  lineas.forEach(l => {
+    const nombre = l.nombre || l.descripcion || '';
+    if (l.tipo === 'capitulo'){
+      filas += cerrarGrupo();
+      grupo = nombre;
+      filas += '<tr class="cap"><td colspan="'+nCols+'">'+esc(nombre)+
+        (l.detalle ? '<span class="cap-txt">'+esc(l.detalle)+'</span>' : '')+'</td></tr>';
+      return;
+    }
+    if (l.tipo === 'texto'){
+      filas += '<tr><td colspan="'+nCols+'" class="libre">'+esc(nombre)+'</td></tr>';
+      return;
+    }
+    if (!conDetalle){ sumaGrupo += Number(l.importe || 0); return; }
+    n++;
+    sumaGrupo += Number(l.importe || 0);
+    filas += '<tr>'+
+      '<td class="n">'+n+'</td>'+
+      '<td class="ref">'+esc(l.referencia || '')+'</td>'+
+      '<td><b>'+esc(nombre)+'</b>'+
+        (l.detalle ? '<div class="det">'+esc(l.detalle)+'</div>' : '')+'</td>'+
+      (conPrecios
+        ? '<td class="num">'+eur(l.precio)+'</td>'+
+          '<td class="num">'+(Number(l.dto) ? esc(l.dto)+' %' : '')+'</td>'+
+          '<td class="num">'+esc(l.cantidad)+' '+esc(l.unidad||'')+'</td>'+
+          '<td class="num"><b>'+eur(l.importe)+'</b></td>'
+        : '<td class="num">'+esc(l.cantidad)+' '+esc(l.unidad||'')+'</td>')+
+      '</tr>';
+  });
+  filas += cerrarGrupo();
 
   w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
-    '<title>Presupuesto '+esc(p.referencia || '')+'</title><style>'+
-    '@page{size:A4;margin:16mm 14mm}*{box-sizing:border-box}'+
-    'body{font:11px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#1C1817;margin:0}'+
-    '.cab{display:flex;justify-content:space-between;align-items:flex-start;'+
-      'border-bottom:3px solid #1C1817;padding-bottom:8px;margin-bottom:12px}'+
-    '.marca{font-weight:800;font-size:15px}.marca span{color:#C98F08}'+
-    'h1{font-size:17px;margin:2px 0 0}h2{font-size:12px;margin:14px 0 5px;'+
-      'border-bottom:2px solid #FCBA1D;padding-bottom:3px}'+
-    'table{width:100%;border-collapse:collapse;margin:0 0 8px}'+
-    'th,td{border:1px solid #d8d4d0;padding:4px 6px;text-align:left;vertical-align:top}'+
-    'thead th{background:#F3F2F0;font-size:9.5px;text-transform:uppercase;letter-spacing:.03em}'+
-    '.datos th{background:none;border:none;width:110px;color:#6B6560;font-weight:500}'+
-    '.datos td{border:none}'+
-    '.num{text-align:right;white-space:nowrap}'+
-    '.tot td{border:none;padding:2px 6px}.tot .g{font-size:14px;font-weight:800}'+
-    '.caja{border:1px solid #d8d4d0;border-radius:5px;padding:8px 11px;margin:0 0 10px;background:#FAF9F8}'+
-    '.acepta{display:flex;gap:14px;align-items:center;border:2px solid #FCBA1D;border-radius:6px;padding:10px 12px;margin:12px 0}'+
-    '.firma{margin-top:18px;display:flex;gap:18px}'+
-    '.firma div{flex:1;border-top:1px solid #1C1817;padding-top:3px;font-size:9.5px;color:#6B6560}'+
-    '.pie{margin-top:14px;border-top:1px solid #d8d4d0;padding-top:6px;font-size:9px;color:#6B6560}'+
+    '<title>Presupuesto '+esc(p.referencia || 'borrador')+'</title><style>'+
+    /* Margen de página grande arriba y abajo: ahí es donde se meten la cabecera
+       y el pie fijos, que así se repiten en todas las hojas. */
+    '@page{size:A4;margin:34mm 14mm 18mm}*{box-sizing:border-box}'+
+    'body{font:10.5px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#1C1817;margin:0;'+
+      'padding:14mm 14mm 10mm}'+
+    CSS_CABECERA+
+    '.piefijo{font-size:8.5px;color:#6B6560;border-top:1px solid #FCBA1D;padding-top:4px;'+
+      'margin-top:14px;display:flex;justify-content:space-between}'+
+    'h2{font-size:11.5px;margin:14px 0 5px;color:#C98F08;text-transform:uppercase;'+
+      'letter-spacing:.04em;border-bottom:1px solid #d8d4d0;padding-bottom:3px}'+
+    '.dos{display:flex;gap:8mm;margin:4px 0 12px}'+
+    '.dos>div{flex:1}.dos h3{font-size:9.5px;margin:0 0 4px;color:#C98F08;'+
+      'text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid #d8d4d0;padding-bottom:2px}'+
+    '.d{font-size:10px;line-height:1.6}.d span{color:#6B6560}'+
+    'table{width:100%;border-collapse:collapse;margin:0}'+
+    'thead th{font-size:8.5px;text-transform:uppercase;letter-spacing:.03em;color:#6B6560;'+
+      'text-align:left;border-bottom:1px solid #1C1817;padding:4px 5px}'+
+    'tbody td{padding:5px;border-bottom:1px solid #ece9e6;vertical-align:top}'+
+    '.num{text-align:right;white-space:nowrap}.n{color:#A49E99;width:16px}'+
+    '.ref{font-size:9px;color:#6B6560;width:66px;word-break:break-word}'+
+    '.det{color:#6B6560;font-size:9.5px;margin-top:2px;white-space:pre-wrap}'+
+    '.libre{color:#3A3330;font-style:italic}'+
+    '.cap td{background:#FEF6E0;color:#8A6200;font-weight:700;text-transform:uppercase;'+
+      'letter-spacing:.03em;font-size:10px;border-bottom:none;padding-top:9px}'+
+    '.cap-txt{display:block;font-weight:400;text-transform:none;letter-spacing:0;'+
+      'color:#6B6560;font-size:9.5px;margin-top:2px;white-space:pre-wrap}'+
+    '.cap-tot td{text-align:right;border-bottom:none;padding-top:2px;color:#3A3330}'+
+    '.tot{width:auto;margin:10px 0 0 auto}'+
+    '.tot td{border:none;padding:2px 6px}.tot .et{color:#6B6560}'+
+    '.tot .g{font-size:14px;font-weight:800;color:#8A6200;border-top:1px solid #FCBA1D;padding-top:5px}'+
+    '.caja{border:1px solid #d8d4d0;border-radius:5px;padding:8px 11px;margin:10px 0 0;background:#FAF9F8}'+
+    '.acepta{display:flex;gap:14px;align-items:center;border:2px solid #FCBA1D;border-radius:6px;'+
+      'padding:10px 12px;margin:12px 0}'+
+    '.firma{margin-top:20px;display:flex;gap:18px}'+
+    '.firma div{flex:1;border-top:1px solid #1C1817;padding-top:3px;font-size:9px;color:#6B6560}'+
+    '.largo{white-space:pre-wrap;margin:0}'+
     '.barra{position:fixed;top:0;left:0;right:0;background:#1C1817;color:#fff;padding:8px 12px;z-index:9}'+
     '.barra button{font:inherit;padding:5px 10px;border:0;border-radius:5px;background:#FCBA1D;cursor:pointer}'+
-    'body{padding-top:44px}@media print{.barra{display:none}body{padding-top:0}}'+
+    'body{padding-top:52px}'+
     /* La marca de borrador va impresa, no solo en pantalla: un borrador que se
        imprime y se enseña sin querer tiene que delatarse él solo. */
     '.marcaagua{position:fixed;top:45%;left:0;right:0;text-align:center;font-size:76px;'+
       'font-weight:800;color:rgba(28,24,23,.09);letter-spacing:.12em;transform:rotate(-24deg);'+
       'pointer-events:none;z-index:0}'+
+    '@media print{.barra{display:none}body{padding:0}'+
+      /* Fijas y metidas en el margen de la hoja: se repiten en cada página */
+      '.cabfija{position:fixed;top:-28mm;left:0;right:0}'+
+      '.piefijo{position:fixed;bottom:-13mm;left:0;right:0;margin:0}'+
+      'tr,.caja,.acepta,.firma{page-break-inside:avoid}'+
+      'thead{display:table-header-group}}'+
     '</style></head><body>'+
     '<div class="barra"><button onclick="window.print()">Imprimir o guardar en PDF</button></div>'+
     (esBorrador ? '<div class="marcaagua">BORRADOR</div>' : '')+
-    '<div class="cab"><div><div class="marca">ARIZA <span>puertas automáticas</span></div>'+
-      '<h1>Presupuesto'+(p.referencia ? ' '+esc(p.referencia) : '')+'</h1></div>'+
-      '<div style="text-align:right;font-size:9.5px;color:#6B6560">'+
-      esc(em.razon_social || '')+'<br>NIF '+esc(em.nif || '')+'<br>'+
-      esc([em.domicilio, em.cp, em.poblacion].filter(Boolean).join(', '))+'<br>'+
-      esc(em.telefono || '')+' · '+esc(em.email || '')+'</div></div>'+
 
-    '<table class="datos">'+
-      fila('Cliente', cli ? cli.nombre : '')+
-      (cli && cli.nif ? fila('NIF', cli.nif) : '')+
-      (cli && cli.direccion ? fila('Dirección', cli.direccion) : '')+
-      (pu ? fila('Puerta', [pu.codigo, pu.tipo, pu.ubicacion].filter(Boolean).join(' · ')) : '')+
-      fila('Fecha', p.fecha ? fechaCorta(p.fecha) : fechaCorta(hoy()))+
-      (p.valido_hasta ? fila('Válido hasta', fechaCorta(p.valido_hasta)) : '')+
-      (p.estado !== 'borrador' ? fila('Situación', est.t) : '')+
-    '</table>'+
+    '<div class="cabfija">'+cabeceraDocumento(em, '', '')+'</div>'+
+    '<h1 class="doc-tit">PRESUPUESTO DE VENTA</h1>'+
+    (p.subtitulo || p.titulo ? '<p class="doc-sub">'+esc(p.subtitulo || p.titulo)+'</p>' : '')+
 
-    '<h2>'+esc(p.titulo)+'</h2>'+
-    (p.descripcion ? '<p style="white-space:pre-wrap;margin:0 0 10px">'+esc(p.descripcion)+'</p>' : '')+
+    '<div class="dos">'+
+      '<div><h3>Datos del presupuesto</h3>'+
+        dato('Número', p.referencia || 'Sin emitir')+
+        dato('Fecha', fechaCorta(p.fecha || hoy()))+
+        dato('Válido hasta', p.valido_hasta ? fechaCorta(p.valido_hasta) : '')+
+        dato('Puerta', pu ? [pu.codigo, pu.tipo, pu.ubicacion].filter(Boolean).join(' · ') : '')+
+        dato('Situación', p.estado && p.estado !== 'borrador' ? est.t : '')+
+      '</div>'+
+      '<div><h3>Datos del cliente</h3>'+
+        dato('Cliente', cli ? cli.nombre : '')+
+        dato('NIF', cli ? cli.nif : '')+
+        dato('Dirección', cli ? cli.direccion : '')+
+        dato('Teléfono', cli ? cli.telefono : '')+
+        (cont ? dato('A la atención de', [cont.nombre, cont.cargo].filter(Boolean).join(', ')) : '')+
+      '</div>'+
+    '</div>'+
 
+    (p.descripcion ? '<h2>Qué proponemos</h2><p class="largo">'+esc(p.descripcion)+'</p>' : '')+
+
+    '<h2>Detalle de la oferta</h2>'+
     (conDetalle
-      ? '<table><thead><tr><th>Concepto</th><th class="num" style="width:60px">Cantidad</th>'+
-        (conPrecios ? '<th class="num" style="width:80px">Precio</th><th class="num" style="width:85px">Importe</th>' : '')+
-        '</tr></thead><tbody>'+
-        lineas.map(l => l.tipo === 'texto'
-          ? '<tr><td colspan="'+(conPrecios?4:2)+'">'+esc(l.descripcion)+'</td></tr>'
-          : '<tr><td>'+esc(l.descripcion)+'</td>'+
-            '<td class="num">'+esc(l.cantidad)+' '+esc(l.unidad||'')+'</td>'+
-            (conPrecios ? '<td class="num">'+eur(l.precio)+'</td>'+
-              '<td class="num">'+eur(l.importe)+'</td>' : '')+'</tr>').join('')+
-        '</tbody></table>'
+      ? '<table><thead><tr><th></th><th>Ref.</th><th>Concepto</th>'+
+        (conPrecios
+          ? '<th class="num">Precio</th><th class="num">Dto.</th><th class="num">Uds.</th><th class="num">Subtotal</th>'
+          : '<th class="num">Uds.</th>')+
+        '</tr></thead><tbody>'+filas+'</tbody></table>'
       : '<div class="caja">El detalle de materiales y horas no se desglosa en este documento. '+
         'Si lo quiere ver, pídanoslo y se lo mandamos partida por partida.</div>')+
 
     (conPrecios
-      ? '<table class="tot" style="width:auto;margin-left:auto">'+
-        '<tr><td>Base imponible</td><td class="num">'+eur(p.base)+'</td></tr>'+
-        (Number(p.descuento) ? '<tr><td>Descuento aplicado</td><td class="num">-'+eur(p.descuento)+'</td></tr>' : '')+
-        '<tr><td>IVA ('+esc(p.tipo_iva)+'%)</td><td class="num">'+eur(p.iva)+'</td></tr>'+
+      ? '<table class="tot">'+
+        '<tr><td class="et">Base imponible</td><td class="num">'+eur(p.base)+'</td></tr>'+
+        (Number(p.descuento) ? '<tr><td class="et">Descuento aplicado</td><td class="num">-'+eur(p.descuento)+'</td></tr>' : '')+
+        '<tr><td class="et">IVA ('+esc(p.tipo_iva)+'%)</td><td class="num">'+eur(p.iva)+'</td></tr>'+
         '<tr><td class="g">TOTAL</td><td class="num g">'+eur(p.total)+'</td></tr>'+
         '</table>'
       : '<div class="caja">Documento sin valorar: aquí está lo que se propone hacer, no lo que cuesta. '+
         'El importe va en el presupuesto valorado.</div>')+
 
     (op.qr && p.token && !['aceptado','convertido','rechazado'].includes(p.estado)
-      ? '<div class="acepta">'+svgQR(enlacePresu(p), '28mm')+
+      ? '<div class="acepta">'+svgQR(enlacePresu(p), '26mm')+
         '<div><b>Puede aceptarlo desde el móvil.</b><br>'+
         'Escanee este código o entre en<br><b>'+esc(enlacePresu(p).replace('https://',''))+'</b><br>'+
         'Queda registrado quién lo acepta y cuándo.</div></div>'
       : '')+
 
-    (p.aceptado_el
+    (p.aceptado_el && !p.firma_el
       ? '<div class="caja"><b>Aceptado</b> por '+esc(p.aceptado_por||'')+' el '+esc(fechaHora(p.aceptado_el))+'.</div>'
       : '')+
 
     (op.condiciones && p.condiciones
-      ? '<h2>Condiciones</h2><p style="white-space:pre-wrap;margin:0 0 10px">'+esc(p.condiciones)+'</p>' : '')+
+      ? '<h2>Condiciones</h2><p class="largo">'+esc(p.condiciones)+'</p>' : '')+
 
     (op.anexos && p.anexos
-      ? '<h2>Anexos</h2><p style="white-space:pre-wrap;margin:0 0 10px">'+esc(p.anexos)+'</p>' : '')+
+      ? '<h2>Anexos</h2><p class="largo">'+esc(p.anexos)+'</p>' : '')+
 
     '<div class="caja">Presupuesto sin compromiso.'+
     (conPrecios ? ' Los precios son sin IVA salvo donde se indica, y el total lo incluye.' : '')+
@@ -17121,12 +17643,13 @@ function documentoPresupuesto(id, op){
       ? '<div class="caja"><b>Aceptado y firmado</b> por '+esc(p.firma_nombre||'')+
         (p.firma_nif ? ' ('+esc(p.firma_nif)+')' : '')+' el '+esc(fechaHora(p.firma_el))+
         (p.firma_info ? '. '+esc(p.firma_info) : '')+'.</div>'
-      : '<div class="firma"><div>Por Ariza Puertas y Automatismos<br>'+esc(em.representante || '')+'</div>'+
+      : '<div class="firma"><div>Por '+esc(em.razon_social || 'Ariza Puertas y Automatismos')+'<br>'+
+        esc(em.representante || '')+'</div>'+
         '<div>Conforme, el cliente<br>Nombre, fecha y firma</div></div>')+
 
-    '<div class="pie">'+esc(em.razon_social||'')+' · NIF '+esc(em.nif||'')+' · '+
-    esc([em.domicilio, em.cp, em.poblacion, em.provincia].filter(Boolean).join(', '))+' · '+
-    esc(em.telefono||'')+' · '+esc(em.email||'')+'</div>'+
+    '<div class="piefijo"><span>'+esc(p.referencia || 'Borrador')+
+      ' · '+esc(fechaCorta(p.fecha || hoy()))+'</span>'+
+      '<span>'+esc(em.razon_social||'')+' · NIF '+esc(em.nif||'')+' · '+esc(em.telefono||'')+'</span></div>'+
     '</body></html>');
   w.document.close();
 }
@@ -18819,6 +19342,17 @@ raiz.addEventListener('click', async e => {
       toast(esEmp ? 'Datos de la empresa guardados.' : 'Límites guardados.');
     } catch(err){ fallo(err); }
   }
+  else if (a === 'quitar-logo' || a === 'quitar-sello'){
+    if (!armar(b, 'Confirmar')) return;
+    try {
+      const m = marcaEmpresa();
+      if (a === 'quitar-logo') m.logo = '';
+      else m.sellos = (m.sellos || []).filter((_, i) => i !== +b.dataset.i);
+      await guardarMarca(m);
+      pintar(); toast('Quitado.');
+    } catch(err){ fallo(err); }
+  }
+  else if (a === 'ver-cabecera') vistaPreviaCabecera();
   else if (a === 'copia-datos'){ b.disabled = true; await copiaSeguridad(false); b.disabled = false; }
   else if (a === 'copia-completa'){ b.disabled = true; await copiaSeguridad(true); b.disabled = false; }
   /* Apartado 16: corregir una fecha normativa sin tocar el código */
@@ -18910,6 +19444,25 @@ raiz.addEventListener('change', e => {
   if (e.target.dataset.act === 'hist-hasta'){ S.histHasta = e.target.value; pintar(); return; }
   if (e.target.dataset.act === 'subir-cara' && e.target.files.length){
     subirCara(e.target.dataset.id, e.target.files[0]); e.target.value = '';
+  }
+  if ((e.target.dataset.act === 'subir-logo' || e.target.dataset.act === 'subir-sello') && e.target.files.length){
+    const esLogo = e.target.dataset.act === 'subir-logo';
+    const f = e.target.files[0]; e.target.value = '';
+    (async () => {
+      try {
+        const d = await marcaImagen(f, esLogo ? 560 : 360);
+        const m = marcaEmpresa();
+        if (esLogo) m.logo = d;
+        else {
+          m.sellos = (m.sellos || []).filter(Boolean);
+          if (m.sellos.length >= MAX_SELLOS) return toast('Ya hay '+MAX_SELLOS+' sellos. Quita uno antes.');
+          m.sellos.push(d);
+        }
+        await guardarMarca(m);
+        pintar();
+        toast(esLogo ? 'Logo guardado.' : 'Sello guardado.');
+      } catch(err){ fallo(err); }
+    })();
   }
   /* ---- Expediente ---- */
   if (e.target.dataset.exp && e.target.tagName === 'SELECT'){
@@ -19156,6 +19709,22 @@ dlgForm.addEventListener('click', async e => {
   }
   /* ---- Presupuestos ---- */
   if (a === 'pz-add'){ leerEditorPresu(); dlgLineaPresu(b.dataset.tipo); return; }
+  if (a === 'pz-linea'){ dlgDetalleLinea(+b.dataset.i); return; }
+  /* ---- Contactos del cliente ---- */
+  if (a === 'contacto-nuevo'){ dlgContacto(null, b.dataset.cli); return; }
+  if (a === 'contacto-edit'){ dlgContacto(b.dataset.id); return; }
+  if (a === 'contacto-volver'){ dlgCliente(b.dataset.cli); return; }
+  if (a === 'contacto-borrar'){
+    if (!armar(b, 'Confirmar el borrado')) return;
+    const x = contactoDe(b.dataset.id);
+    try {
+      await sb.from('contactos').delete().eq('id', b.dataset.id);
+      await cargar();
+      if (x) dlgCliente(x.cliente_id); else cerrarDlg();
+      toast('Contacto borrado.');
+    } catch(e){ fallo(e); }
+    return;
+  }
   if (a === 'pz-quitar'){ leerEditorPresu(); S.presu.lineas.splice(+b.dataset.i, 1); pintarEditorPresu(); return; }
   if (a === 'pz-guardar'){ await guardarPresupuesto(false); return; }
   if (a === 'pz-emitir' || a === 'pz-emitir-ficha'){
