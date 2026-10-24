@@ -223,8 +223,11 @@ bloque('6. El orden de los paneles de Equipo');
    los límites de obra, el orden que le di estaba mal y se puso a buscar cinco
    paneles más abajo de donde están. Si el orden cambia, esto se pone en rojo y
    obliga a corregir también lo que se le haya contado. */
+/* Cambiado a propósito el 24-10-2026: entre «Datos de la empresa» y la tabla de
+   protección entra «Logo y sellos», que es donde se suben el logo y los
+   distintivos que salen en la cabecera de los documentos. */
 const esperado = ['Técnicos con acceso', 'Dar de alta a alguien del equipo',
-  'Versión de la aplicación', 'Datos de la empresa',
+  'Versión de la aplicación', 'Datos de la empresa', 'Logo y sellos',
   'Protección exigida según accionamiento y usuario', 'Límites de fuerza',
   'Límites de obra', 'Fechas que deciden', 'Copia de seguridad',
   'Control de producción en fábrica', 'Elementos de seguridad',

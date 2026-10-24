@@ -602,6 +602,178 @@ paso('al elegirlo se pega en el campo',
   /50% al aceptar/.test(textos.pegado || ''), textos.pegado);
 
 /* ================================================================
+   11. El documento como oferta comercial
+   ================================================================
+   Un presupuesto no solo tiene que ser correcto: tiene que convencer.
+   De ahí el logo, los sellos, el subtítulo, los capítulos con su
+   subtotal y la explicación larga debajo de cada concepto. */
+bloque('11. El documento como oferta');
+
+const comercial = await T(async () => {
+  const g = window.__T;
+  /* Un logo y un sello de pega, hechos aquí mismo */
+  const lienzo = document.createElement('canvas');
+  lienzo.width = 120; lienzo.height = 40;
+  const cx = lienzo.getContext('2d');
+  cx.fillStyle = '#FCBA1D'; cx.fillRect(0, 0, 120, 40);
+  const png = lienzo.toDataURL('image/png');
+  await g.guardarMarca({ logo: png, sellos: [png, png] });
+  const m = g.marcaEmpresa();
+
+  /* Un presupuesto con capítulo, referencia, detalle largo y descuento */
+  g.dlgPresupuesto(null, { cliente_id: g.S.clientes[0].id, titulo:'Cierre enrollable' });
+  await new Promise(r => setTimeout(r, 200));
+  g.S.presu.subtitulo = 'Instalación de cierre enrollable de aluminio en verde';
+  g.S.presu.lineas.push(
+    { tipo:'capitulo', descripcion:'Suministro', nombre:'Suministro',
+      detalle:'Material puesto en obra.', cantidad:0, unidad:'', precio:0, importe:0, coste:0 },
+    { tipo:'material', articulo_id:'art-foto', descripcion:'Cierre enrollable Innova',
+      nombre:'Cierre enrollable Innova', referencia:'INNOVA',
+      detalle:'Aluminio extrusionado de alta resistencia, lama de 100x2 mm.\nConforme a UNE-EN 13241.',
+      cantidad:1, unidad:'ud', precio:1000, dto:10, importe:900, coste:500 },
+    { tipo:'capitulo', descripcion:'Instalación', nombre:'Instalación',
+      cantidad:0, unidad:'', precio:0, importe:0, coste:0 },
+    { tipo:'mano_obra', descripcion:'Colocación', nombre:'Colocación', cantidad:4, unidad:'h',
+      precio:45, dto:0, importe:180, coste:88 });
+  g.pintarPresupuesto();
+  await new Promise(r => setTimeout(r, 150));
+  await g.guardarPresupuesto(false);
+  await new Promise(r => setTimeout(r, 700));
+  const id = g.S.presu.id;
+
+  const abierto = [];
+  const open0 = window.open;
+  window.open = () => ({ document:{ write: t => abierto.push(t), close(){} } });
+  g.documentoPresupuesto(id, { formato:'valorado', condiciones:true, anexos:true, qr:true });
+  window.open = open0;
+  const html = abierto.join('');
+  g.cerrarDlg();
+  return { logo: !!m.logo, sellos: (m.sellos||[]).length,
+    conLogo: html.includes(png.slice(0, 60)),
+    sellosEnPapel: (html.match(new RegExp(png.slice(0,40).replace(/[+/]/g,'.'),'g'))||[]).length,
+    numero: /Número:<\/span> <b>PR-/.test(html) || /Número/.test(html),
+    subtitulo: /cierre enrollable de aluminio en verde/.test(html),
+    capitulos: (html.match(/class="cap"/g)||[]).length,
+    subtotales: (html.match(/Subtotal /g)||[]).length,
+    referencia: /INNOVA/.test(html),
+    detalle: /UNE-EN 13241/.test(html),
+    dto: /10 %/.test(html),
+    importe: g.lineasDe(id).find(l => l.referencia === 'INNOVA').importe,
+    cabFija: /class="cabfija"/.test(html) && /position:fixed;top:-28mm/.test(html) };
+});
+paso('el logo y los sellos se guardan en los ajustes',
+  comercial.logo === true && comercial.sellos === 2);
+paso('y salen en el papel', comercial.conLogo === true);
+paso('la cabecera va fija, para repetirse en todas las páginas',
+  comercial.cabFija === true);
+paso('el documento lleva el número del presupuesto', comercial.numero === true);
+paso('y el subtítulo que dice de qué va la oferta', comercial.subtitulo === true);
+paso('los capítulos agrupan y cada uno lleva su subtotal',
+  comercial.capitulos === 2 && comercial.subtotales === 2,
+  'capítulos '+comercial.capitulos+', subtotales '+comercial.subtotales);
+paso('cada línea sale con su referencia', comercial.referencia === true);
+paso('y con la explicación larga debajo, que es lo que convence',
+  comercial.detalle === true);
+paso('el descuento por línea se imprime', comercial.dto === true);
+paso('y el importe de la línea ya lleva ese descuento aplicado',
+  comercial.importe === 900, comercial.importe);
+
+const calculo = await T(() => {
+  const g = window.__T;
+  return { normal: g.importeLinea({ tipo:'material', cantidad:2, precio:50, dto:0 }),
+    conDto: g.importeLinea({ tipo:'material', cantidad:2, precio:50, dto:25 }),
+    pasado: g.importeLinea({ tipo:'material', cantidad:2, precio:50, dto:140 }),
+    capitulo: g.importeLinea({ tipo:'capitulo', cantidad:9, precio:9 }),
+    texto: g.importeLinea({ tipo:'texto', cantidad:9, precio:9 }) };
+});
+paso('sin descuento, cantidad por precio', calculo.normal === 100, calculo.normal);
+paso('con descuento, se aplica', calculo.conDto === 75, calculo.conDto);
+paso('un descuento imposible se queda en el 100%', calculo.pasado === 0, calculo.pasado);
+paso('un capítulo y una línea de texto no suman: son rótulos',
+  calculo.capitulo === 0 && calculo.texto === 0);
+
+/* ================================================================
+   12. A quién va y si lo han abierto
+   ================================================================ */
+bloque('12. Contactos y seguimiento');
+
+const seguimiento = await T(async () => {
+  const g = window.__T;
+  const cid = g.S.clientes[0].id;
+  await g.sb.from('contactos').insert([
+    { cliente_id:cid, nombre:'Eduardo Ruiz', cargo:'Jefe de obra',
+      email:'jefeobra@ejemplo.es', principal:true, activo:true },
+    { cliente_id:cid, nombre:'Marta Gil', cargo:'Administración',
+      email:'admin@ejemplo.es', principal:false, activo:true }]);
+  await g.cargar();
+  const lista = g.contactosDe(cid).map(c => c.nombre);
+  const pri = (g.contactoPrincipal(cid) || {}).nombre;
+
+  /* Un presupuesto emitido, listo para mandar */
+  g.dlgPresupuesto(null, { cliente_id: cid, titulo:'Oferta con contactos' });
+  await new Promise(r => setTimeout(r, 200));
+  g.S.presu.lineas.push({ tipo:'material', descripcion:'Fotocélula', nombre:'Fotocélula',
+    cantidad:1, unidad:'ud', precio:60, importe:60, coste:25 });
+  g.pintarPresupuesto();
+  await new Promise(r => setTimeout(r, 150));
+  await g.guardarPresupuesto(true);
+  await new Promise(r => setTimeout(r, 700));
+  const id = g.S.presu.id;
+
+  g.cerrarDlg();
+  g.dlgEnlacePresu(id);
+  await new Promise(r => setTimeout(r, 250));
+  const sel = document.getElementById('pe-cont');
+  const propuesto = (document.getElementById('pe-a') || {}).value;
+  const opciones = sel ? [...sel.options].map(o => o.text) : [];
+  /* Se cambia a la otra persona: su correo tiene que bajar solo */
+  const otra = [...sel.options].find(o => /Marta/.test(o.text));
+  sel.value = otra.value;
+  sel.dispatchEvent(new Event('change'));
+  await new Promise(r => setTimeout(r, 120));
+  const traskCambio = document.getElementById('pe-a').value;
+  document.querySelector('[data-act="pz-marcar-enviado"]').click();
+  await new Promise(r => setTimeout(r, 800));
+  const envios = g.enviosDe(id);
+  const p = g.presuDe(id);
+
+  /* Y ahora el cliente lo abre dos veces */
+  await g.sb.rpc('presupuesto_publico', { p_token: p.token });
+  await g.sb.rpc('presupuesto_publico', { p_token: p.token });
+  await g.cargar();
+  const visitas = g.visitasDe(id).length;
+  g.dlgPresupuesto(id);
+  await new Promise(r => setTimeout(r, 250));
+  const txt = document.getElementById('dlg-form').innerText;
+  g.cerrarDlg();
+  return { lista, pri, opciones, propuesto, traskCambio,
+    envios: envios.map(e => ({ a:e.destino, n:e.nombre })),
+    estado: p.estado, visitas, txt };
+});
+paso('el contacto principal sale el primero de la lista',
+  seguimiento.lista[0] === 'Eduardo Ruiz' && seguimiento.pri === 'Eduardo Ruiz',
+  JSON.stringify(seguimiento.lista));
+paso('al mandar, se propone el correo del principal',
+  seguimiento.propuesto === 'jefeobra@ejemplo.es', seguimiento.propuesto);
+paso('se puede elegir a otra persona del cliente',
+  seguimiento.opciones.some(o => /Marta Gil/.test(o)) &&
+  seguimiento.opciones.some(o => /Jefe de obra/.test(o)));
+paso('y escribir una dirección a mano si no es ninguna de ellas',
+  seguimiento.opciones.some(o => /a mano/i.test(o)));
+paso('al cambiar de persona, su correo baja solo al campo',
+  seguimiento.traskCambio === 'admin@ejemplo.es', seguimiento.traskCambio);
+paso('cada envío queda apuntado, con nombre y destino',
+  seguimiento.envios.length === 1 && seguimiento.envios[0].n === 'Marta Gil' &&
+  seguimiento.envios[0].a === 'admin@ejemplo.es', JSON.stringify(seguimiento.envios));
+paso('y el presupuesto pasa a enviado', seguimiento.estado === 'enviado');
+paso('cada vez que el cliente abre el enlace, queda la hora',
+  seguimiento.visitas === 2, seguimiento.visitas);
+paso('la ficha lo dice, para saber cuándo toca llamar',
+  /abierto 2 veces/.test(seguimiento.txt), (seguimiento.txt.match(/abierto[^.]*/)||[''])[0]);
+paso('y deja claro que eso cuenta aperturas de la página, no del correo',
+  /no el correo/.test(seguimiento.txt));
+
+/* ================================================================
    Final
    ================================================================ */
 console.log('\n'+ok+' bien, '+mal+' mal.');

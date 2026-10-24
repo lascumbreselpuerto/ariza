@@ -80,6 +80,9 @@ function semilla(){
     presupuestos: [],
     presupuesto_lineas: [],
     textos_presu: [],
+    contactos: [],
+    presupuesto_envios: [],
+    presupuesto_visitas: [],
     movimientos_material: [],
     materiales_previstos: [],
   };
@@ -370,8 +373,12 @@ const RPC = {
     const cli = DB.clientes.find(c => c.id === p.cliente_id);
     const pu = DB.puertas.find(x => x.id === p.puerta_id);
     const hoyISO = new Date().toISOString().slice(0,10);
+    /* Igual que en el servidor: cada apertura del enlace queda apuntada */
+    DB.presupuesto_visitas.push({ id:'vis-'+DB.presupuesto_visitas.length,
+      presupuesto_id:p.id, cuando: ahora() });
     return {
-      ok:true, referencia:p.referencia, titulo:p.titulo, descripcion:p.descripcion,
+      ok:true, referencia:p.referencia, titulo:p.titulo, subtitulo:p.subtitulo,
+      descripcion:p.descripcion,
       estado:p.estado, fecha:p.fecha, valido_hasta:p.valido_hasta,
       caducado: !!(p.valido_hasta && p.valido_hasta < hoyISO &&
                    !['aceptado','convertido'].includes(p.estado)),
@@ -383,7 +390,8 @@ const RPC = {
       rechazado_el:p.rechazado_el,
       lineas: DB.presupuesto_lineas.filter(l => l.presupuesto_id === p.id)
         .sort((a,b) => (a.orden||0)-(b.orden||0))
-        .map(l => ({ descripcion:l.descripcion, cantidad:l.cantidad, unidad:l.unidad,
+        .map(l => ({ descripcion:l.descripcion, nombre:l.nombre, referencia:l.referencia,
+                     cantidad:l.cantidad, unidad:l.unidad,
                      precio:l.precio, importe:l.importe, tipo:l.tipo })),
     };
   },
