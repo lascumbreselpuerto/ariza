@@ -428,6 +428,177 @@ paso('y no intenta descontar de un almacén que no existe',
   sinSql.desc.bajas === 0, JSON.stringify(sinSql.desc));
 
 /* ================================================================
+   El almacén como catálogo de ventas
+   ================================================================
+   El almacén sabe lo que hay, lo que cuesta y dónde está. Lo que no
+   sabía era CÓMO SE VENDE, y por eso el presupuesto salía pobre. */
+bloque('El almacén como catálogo de ventas');
+
+const venta = await T(async () => {
+  const g = window.__T;
+  /* Un artículo con foto, explicación y precio de venta fijo. Se escribe en la
+     base, no en memoria: luego se recarga y lo de memoria se perdería. */
+  await g.sb.from('articulos').update({
+    detalle: 'Fotocélula de espejo con alcance de 8 m. Conforme a UNE-EN 12978.',
+    foto_ruta: 'catalogo/art-foto-1.jpg', coste: 50, recargo: 40, precio_venta: 72
+  }).eq('id', 'art-foto');
+  await g.cargar();
+  const precioFijo = g.precioVentaMaterial('art-foto');
+  /* Sin precio fijo, vuelve a salir del coste más el recargo: 50 + 40% = 70 */
+  await g.sb.from('articulos').update({ precio_venta: null }).eq('id', 'art-foto');
+  await g.cargar();
+  const precioCalculado = g.precioVentaMaterial('art-foto');
+  await g.sb.from('articulos').update({ precio_venta: 72 }).eq('id', 'art-foto');
+  await g.cargar();
+  const url = g.fotoArticulo(g.articuloDe('art-foto'));
+
+  /* Al meterlo en un presupuesto, se trae todo solo */
+  g.dlgPresupuesto(null, { cliente_id: g.S.clientes[0].id, titulo:'Catálogo de ventas' });
+  await new Promise(r => setTimeout(r, 250));
+  document.querySelector('[data-act="pz-add"][data-tipo="material"]').click();
+  await new Promise(r => setTimeout(r, 300));
+  const sel = document.getElementById('pl-art');
+  sel.value = 'art-foto'; sel.dispatchEvent(new Event('change', { bubbles:true }));
+  await new Promise(r => setTimeout(r, 200));
+  const descAuto = document.getElementById('pl-desc').value;
+  const precioAuto = document.getElementById('pl-prec').value;
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 350));
+  const l = g.S.presu.lineas[g.S.presu.lineas.length - 1];
+  g.cerrarDlg();
+  return { precioFijo, precioCalculado, url, descAuto, precioAuto,
+    linea: { det:l.detalle, foto:l.foto_ruta, ref:l.referencia, p:l.precio } };
+});
+paso('un precio de venta fijo manda sobre el coste más el recargo',
+  venta.precioFijo === 72, venta.precioFijo);
+paso('y si no lo hay, se sigue calculando como siempre: 50 más el 40% son 70',
+  venta.precioCalculado === 70, venta.precioCalculado);
+paso('la foto tiene enlace público, porque la ve el cliente sin entrar',
+  /ofertas\/catalogo\//.test(venta.url), venta.url);
+paso('al elegir el material en el presupuesto se rellena solo el concepto',
+  /Fotocélula/.test(venta.descAuto), venta.descAuto);
+paso('y el precio', venta.precioAuto === '72', venta.precioAuto);
+paso('la línea se lleva la explicación comercial escrita en el almacén',
+  /UNE-EN 12978/.test(venta.linea.det || ''), venta.linea.det);
+paso('y la foto, copiada a la línea para que el presupuesto mandado no cambie',
+  venta.linea.foto === 'catalogo/art-foto-1.jpg', venta.linea.foto);
+paso('con la referencia del catálogo', !!venta.linea.ref, venta.linea.ref);
+
+/* ================================================================
+   Conjuntos: la receta de venta
+   ================================================================ */
+bloque('Conjuntos');
+
+const conjunto = await T(async () => {
+  const g = window.__T;
+  /* Se monta un conjunto desde su pantalla */
+  g.dlgConjunto(null);
+  await new Promise(r => setTimeout(r, 250));
+  document.getElementById('cj-nom').value = 'Seccional 3x3 motorizada';
+  document.getElementById('cj-det').value = 'Incluye puerta, automatismo y puesta en marcha.';
+  /* Un material del catálogo */
+  document.querySelector('[data-act="cj-add"][data-tipo="material"]').click();
+  await new Promise(r => setTimeout(r, 300));
+  const s1 = document.getElementById('cl-art');
+  s1.value = 'art-foto'; s1.dispatchEvent(new Event('change'));
+  await new Promise(r => setTimeout(r, 150));
+  const nombreAuto = document.getElementById('cl-nom').value;
+  document.getElementById('cl-cant').value = '2';
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 350));
+  /* Y unas horas */
+  document.querySelector('[data-act="cj-add"][data-tipo="mano_obra"]').click();
+  await new Promise(r => setTimeout(r, 300));
+  const cant = document.querySelectorAll('.cj-cant');
+  cant[cant.length - 1].value = '6';
+  document.querySelector('[data-act="cj-guardar"]').click();
+  await new Promise(r => setTimeout(r, 900));
+  const c = g.S.conjuntos[0];
+  const ls = c ? g.lineasConjunto(c.id) : [];
+  const sinPrecio = ls.every(l => !('precio' in l) || l.precio == null);
+
+  /* Y ahora se mete en un presupuesto de un cliente de industria */
+  const cli = g.S.clientes[0];
+  cli.tipo = 'Industria';
+  Object.assign(g.S.tarifas, { precio_hora_industria: 62, coste_hora: 22 });
+  g.dlgPresupuesto(null, { cliente_id: cli.id, titulo:'Con conjunto' });
+  await new Promise(r => setTimeout(r, 250));
+  const hayBoton = !!document.querySelector('[data-act="pz-conjunto"]');
+  document.querySelector('[data-act="pz-conjunto"]').click();
+  await new Promise(r => setTimeout(r, 300));
+  const enLista = document.getElementById('dlg-form').innerText;
+  document.querySelector('[data-act="pz-conjunto-usar"]').click();
+  await new Promise(r => setTimeout(r, 400));
+  const L = g.S.presu.lineas;
+  const tot = g.totalesPresu(L, 0, 21);
+  g.cerrarDlg();
+  return { nombreAuto, nLineas: ls.length, sinPrecio, hayBoton, enLista,
+    tipos: L.map(x => x.tipo),
+    capitulo: L[0] && { n:L[0].nombre, d:L[0].detalle },
+    material: L[1] && { n:L[1].nombre, c:L[1].cantidad, p:L[1].precio, det:L[1].detalle, f:L[1].foto_ruta },
+    horas: L[2] && { c:L[2].cantidad, p:L[2].precio, v:L[2].variante, co:L[2].coste },
+    mano_obra: tot.mano_obra, materiales: tot.materiales };
+});
+paso('al elegir un material del catálogo, el conjunto coge su nombre',
+  /Fotocélula/.test(conjunto.nombreAuto), conjunto.nombreAuto);
+paso('el conjunto se guarda con sus dos líneas', conjunto.nLineas === 2, conjunto.nLineas);
+paso('y NO guarda precios: envejecerían a escondidas', conjunto.sinPrecio === true);
+paso('en el presupuesto aparece el botón de añadir conjunto', conjunto.hayBoton === true);
+paso('la lista avisa de a qué tarifa se van a valorar las horas',
+  /Industria/.test(conjunto.enLista));
+paso('al usarlo entran el capítulo y sus líneas',
+  conjunto.tipos.join(',') === 'capitulo,material,mano_obra', conjunto.tipos.join(','));
+paso('el capítulo lleva el nombre y el texto del conjunto',
+  /Seccional 3x3/.test(conjunto.capitulo.n) && /puesta en marcha/.test(conjunto.capitulo.d || ''));
+paso('el material entra con su cantidad y su precio de hoy',
+  conjunto.material.c === 2 && conjunto.material.p === 72,
+  conjunto.material.c+' × '+conjunto.material.p);
+paso('con su explicación y su foto', /UNE-EN 12978/.test(conjunto.material.det || '') &&
+  !!conjunto.material.f);
+paso('y las horas se valoran a la tarifa del cliente, no a una copiada',
+  conjunto.horas.v === 'industria' && conjunto.horas.p === 62 && conjunto.horas.c === 6,
+  conjunto.horas.c+' h a '+conjunto.horas.p+' ('+conjunto.horas.v+')');
+paso('con su coste, para que el margen sea real', conjunto.horas.co === 22);
+paso('y todo suma donde le toca',
+  conjunto.materiales === 144 && conjunto.mano_obra === 372,
+  'materiales '+conjunto.materiales+', mano de obra '+conjunto.mano_obra);
+
+/* ================================================================
+   Proveedores
+   ================================================================ */
+bloque('Proveedores');
+
+const prov = await T(async () => {
+  const g = window.__T;
+  g.dlgProveedor(null);
+  await new Promise(r => setTimeout(r, 250));
+  document.getElementById('pv-nom').value = 'Collbaix';
+  document.getElementById('pv-tel').value = '938 000 000';
+  document.getElementById('pv-plazo').value = '15';
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 800));
+  const p = g.S.proveedores[0];
+  const enLista = document.getElementById('dlg-form').innerText;
+  /* Y se le asigna a un material */
+  g.cerrarDlg();
+  g.dlgArticulo('art-foto');
+  await new Promise(r => setTimeout(r, 300));
+  const sel = document.getElementById('x-prov');
+  const esDesplegable = sel && sel.tagName === 'SELECT';
+  const opciones = esDesplegable ? [...sel.options].map(o => o.text) : [];
+  g.cerrarDlg();
+  return { nombre: p && p.nombre, plazo: p && p.plazo_dias, enLista, esDesplegable, opciones };
+});
+paso('se crea un proveedor con su plazo de entrega',
+  prov.nombre === 'Collbaix' && prov.plazo === 15, prov.nombre+', '+prov.plazo+' días');
+paso('y la lista lo enseña con sus datos y cuántos materiales tiene',
+  /Collbaix/.test(prov.enLista) && /15 días/.test(prov.enLista));
+paso('en la ficha del material el proveedor pasa a ser un desplegable',
+  prov.esDesplegable === true);
+paso('con los proveedores dados de alta',
+  prov.opciones.some(o => /Collbaix/.test(o)), prov.opciones.join(' | '));
+
+/* ================================================================
    Final
    ================================================================ */
 console.log('\n'+ok+' bien, '+mal+' mal.');

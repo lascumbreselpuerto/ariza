@@ -84,6 +84,9 @@ function semilla(){
     presupuesto_envios: [],
     presupuesto_visitas: [],
     presupuesto_adjuntos: [],
+    proveedores: [],
+    conjuntos: [],
+    conjunto_lineas: [],
     movimientos_material: [],
     materiales_previstos: [],
   };

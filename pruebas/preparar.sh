@@ -148,6 +148,10 @@ sitioActual indiceEquipo
 TARIFAS_MO TARIFA_POR_CLIENTE_DEF repartoTarifas tarifaMODe nombreTarifaMO
 precioHoraDe RUTAS nombreRuta importeRuta costeRuta importePorKm costePorKm
 dlgManoObra dlgDesplazamiento panelReparto dlgTarifas CLIENTES
+fotoArticulo fichaArticulo proveedorDe proveedoresActivos conjuntoDe lineasConjunto
+conjuntosActivos dlgProveedores dlgProveedor dlgConjuntos dlgConjunto pintarConjunto
+leerConjunto dlgLineaConjunto guardarConjunto dlgMeterConjunto meterConjunto
+subirFotoArticulo dlgArticulo
 sumaDias iso deIso
 vistaManual cargarManual mdAHtml MANUALES
 guardarBorradorPuerta aplicarBorradorPuerta CAMPOS_PUERTA dlgPuerta dlgCliente
