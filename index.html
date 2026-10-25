@@ -236,6 +236,11 @@ img{max-width:100%}
   background-size:14px 14px;background-position:0 0,7px 7px}
 .marca-hueco.sello{width:104px;height:84px}
 .marca-hueco img{max-width:100%;max-height:100%;object-fit:contain}
+/* Los botones de cada línea del presupuesto, apretados para que quepan en la
+   fila sin empujar las columnas que llevan números. */
+.lin-bs{display:flex;gap:1px;flex-wrap:wrap}
+.lin-bs .lin-b{padding:3px 6px;font-size:13px;min-width:26px;line-height:1.2}
+.lin-bs .lin-b:disabled{opacity:.3;cursor:default}
 .mat-fila{display:grid;grid-template-columns:1fr 76px 60px 34px;gap:6px;margin-bottom:6px;align-items:center}
 /* Con almacén, la línea lleva además el material elegido del catálogo, que va
    arriba y a todo lo ancho: en el móvil no caben cinco columnas. */
@@ -639,6 +644,7 @@ const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etique
             buscaMat:'', matFamilia:'', matProveedor:'', matFiltro:'', fichaMat:null,
             sinPresupuestos:false, presupuestos:[], presuLineas:[], articulos:[], textosPresu:[], sinTextos:false,
             presuEnvios:[], presuVisitas:[], sinSeguimiento:false, contactos:[], sinContactos:false,
+            presuAdjuntos:[], sinAdjuntos:false,
             presu:null, presuFiltro:'', buscaPresu:'' };
 /* Importes: solo existen para el administrador. Si no hay tarifas cargadas, no se enseña nada. */
 const valoracionDe = id => S.valoraciones[id] || null;
@@ -1027,9 +1033,22 @@ async function vistaPresupuestoPublico(tok){
   if (d.condiciones)
     h += '<div class="tarjeta"><h2 style="font-size:20px">Condiciones</h2>'+
       '<p style="margin:0;white-space:pre-wrap">'+esc(d.condiciones)+'</p></div>';
-  if (d.anexos)
-    h += '<div class="tarjeta"><h2 style="font-size:20px">Anexos</h2>'+
-      '<p style="margin:0;white-space:pre-wrap">'+esc(d.anexos)+'</p></div>';
+  /* Los papeles del presupuesto, para que se los pueda descargar sin pedirlos */
+  if ((d.adjuntos || []).length){
+    h += '<div class="tarjeta"><h2 style="font-size:20px">Documentación</h2>'+
+      '<p class="mini" style="margin:0 0 10px">Puede descargar estos documentos:</p>';
+    (d.adjuntos || []).forEach(x => {
+      let url = '';
+      try { url = sb.storage.from('ofertas').getPublicUrl(x.ruta).data.publicUrl; } catch(_){}
+      h += '<div class="fila" style="gap:8px;padding:8px 0;border-bottom:1px solid var(--line)">'+
+        '<span class="sp"><b>'+esc(x.nombre || 'Documento')+'</b>'+
+        (x.descripcion ? '<span class="mini" style="display:block">'+esc(x.descripcion)+'</span>' : '')+
+        '</span>'+
+        (url ? '<a class="btn sm" href="'+esc(url)+'" target="_blank" rel="noopener">Descargar</a>' : '')+
+        '</div>';
+    });
+    h += '</div>';
+  }
 
   const puedeResponder = d.ok && !d.caducado &&
     !['aceptado','convertido','rechazado'].includes(d.estado);
@@ -1260,14 +1279,17 @@ async function cargar(){
      siquiera aparece. Los artículos CON su coste se leen aparte de la vista del
      catálogo, que es la que no los trae, y solo para quien puede verlos. */
   if (esGestion()){
-    const [pr, pl, ar, tx, pe, pv] = await Promise.all([
+    const [pr, pl, ar, tx, pe, pv, ad] = await Promise.all([
       sb.from('presupuestos').select('*').order('creado', { ascending:false }).range(0, 4999),
       sb.from('presupuesto_lineas').select('*').order('orden').range(0, 19999),
       sb.from('articulos').select('*').order('descripcion').range(0, 19999),
       sb.from('textos_presu').select('*').order('orden').range(0, 999),
       sb.from('presupuesto_envios').select('*').order('cuando', { ascending:false }).range(0, 4999),
       sb.from('presupuesto_visitas').select('*').order('cuando', { ascending:false }).range(0, 9999),
+      sb.from('presupuesto_adjuntos').select('*').order('orden').range(0, 9999),
     ]);
+    S.presuAdjuntos = ad.error ? [] : (ad.data || []);
+    S.sinAdjuntos = !!ad.error;
     S.presuEnvios  = pe.error ? [] : (pe.data || []);
     S.presuVisitas = pv.error ? [] : (pv.data || []);
     S.sinSeguimiento = !!(pe.error || pv.error);
@@ -1283,6 +1305,7 @@ async function cargar(){
     S.sinPresupuestos = true; S.presupuestos = []; S.presuLineas = []; S.articulos = [];
     S.textosPresu = []; S.sinTextos = true;
     S.presuEnvios = []; S.presuVisitas = []; S.sinSeguimiento = true;
+    S.presuAdjuntos = []; S.sinAdjuntos = true;
   }
   /* Los contactos los ve todo el equipo: el técnico también necesita saber a
      quién preguntar por el portón cuando llega a la obra. */
@@ -1342,7 +1365,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.10.24-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.10.25-1';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -1444,9 +1467,21 @@ const yo = () => (S.perfil && S.perfil.nombre) || (S.user && S.user.email) || 'T
 const raiz = $('#vista');
 let pend = 0;
 function pintar(){ if (pend) return; pend = requestAnimationFrame(()=>{ pend=0; render(); }); }
+/* Dónde estaba uno antes del último repintado. Repintar es barato para la
+   máquina y caro para quien está trabajando: si la pantalla salta arriba, hay
+   que volver a buscar la línea que se estaba rellenando. Así que la pantalla
+   se queda donde estaba, salvo cuando el sitio ha cambiado de verdad. */
+let SITIO = '';
+const sitioActual = () => [S.tab, S.ficha || '', S.fichaCliente || '', S.exp || ''].join('|');
 function render(){
   const act = document.activeElement, keep = act && act.id && raiz.contains(act)
     ? {id:act.id, v:act.value, s:act.selectionStart, e:act.selectionEnd, txt:/^(text|email|password|search|number|date)$/.test(act.type)||act.tagName==='TEXTAREA'} : null;
+  /* Cambiar de pestaña o abrir una ficha SÍ debe llevar arriba: ahí lo que
+     quiere uno es empezar a leer, no seguir donde estaba en otra pantalla. */
+  const sitio = sitioActual();
+  const mismoSitio = sitio === SITIO;
+  const scroll = window.scrollY || document.documentElement.scrollTop || 0;
+  SITIO = sitio;
   document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab===S.tab ? 'true':'false'));
   let h = '';
   if (S.cargando) h = '<p class="cargando">Cargando datos…</p>';
@@ -1469,6 +1504,13 @@ function render(){
   raiz.innerHTML = h;
   activarCombos(raiz);
   if (keep){ const el = document.getElementById(keep.id); if (el){ if(keep.txt) el.value = keep.v; el.focus(); if(keep.txt){ try{ el.setSelectionRange(keep.s,keep.e); }catch(_){} } } }
+  /* Volver a la altura de antes. Se hace después de pintar, porque hasta que no
+     está el contenido la página no es tan alta como para poder bajar. */
+  if (mismoSitio && scroll > 0){
+    try { window.scrollTo(0, scroll); } catch(_){ /* navegador raro, se queda arriba */ }
+  } else if (!mismoSitio){
+    try { window.scrollTo(0, 0); } catch(_){}
+  }
 }
 
 /* ---- Puertas ---- */
@@ -3651,10 +3693,8 @@ function dlgPresupuesto(id, pre, editando){
     puerta_id: p ? p.puerta_id : (pre && pre.puerta_id) || null,
     aviso_id: p ? p.aviso_id : (pre && pre.aviso_id) || null,
     titulo: p ? p.titulo : (pre && pre.titulo) || '',
-    subtitulo: p ? p.subtitulo : (pre && pre.subtitulo) || '',
     descripcion: p ? p.descripcion : (pre && pre.descripcion) || '',
     condiciones: p ? p.condiciones : ((pre && pre.condiciones) || t.condiciones_presu || ''),
-    anexos: p ? p.anexos : ((pre && pre.anexos) || t.anexos_presu || ''),
     notas_internas: p ? p.notas_internas : '',
     validez_dias: p ? p.validez_dias : 30,
     descuento: p ? Number(p.descuento || 0) : 0,
@@ -3768,9 +3808,19 @@ function pintarFichaPresu(){
   if (p.condiciones)
     h += '<div class="grupo"><h3>Condiciones</h3>'+
       '<p style="margin:0;white-space:pre-wrap">'+esc(p.condiciones)+'</p></div>';
-  if (p.anexos)
-    h += '<div class="grupo"><h3>Anexos</h3>'+
-      '<p style="margin:0;white-space:pre-wrap">'+esc(p.anexos)+'</p></div>';
+  {
+    const adj = adjuntosDe(p.id);
+    if (adj.length)
+      h += '<div class="grupo"><h3>Documentos adjuntos</h3><div class="lista">'+
+        adj.map(x => '<div class="item"><div class="item-in"><div class="fila" style="gap:8px;flex-wrap:wrap">'+
+          '<b>'+esc(x.nombre||'Documento')+'</b>'+
+          (x.publico ? '<span class="chip ok sin">Lo ve el cliente</span>'
+                     : '<span class="chip gris sin">Solo oficina</span>')+
+          '<span class="sp"></span><a class="btn sm plana" href="'+esc(enlaceAdjunto(x))+
+          '" target="_blank" rel="noopener">Abrir</a></div>'+
+          '<div class="mini">'+esc(pesoCorto(x.bytes) || '')+'</div></div></div>').join('')+
+        '</div></div>';
+  }
   if (p.notas_internas)
     h += '<div class="grupo"><h3>Notas internas</h3>'+
       '<p class="mini" style="margin:0 0 6px">No salen en el documento.</p>'+
@@ -3860,14 +3910,11 @@ function pintarEditorPresu(){
       puertasCli.map(x => '<option value="'+x.id+'"'+(x.id===d.puerta_id?' selected':'')+'>'+
         esc([x.codigo, x.tipo, x.ubicacion].filter(Boolean).join(' · '))+'</option>').join('')+
       '</select></div>'+
-    '<div class="campo full"><label for="pz-titulo">Título</label>'+
-      '<input id="pz-titulo" type="text" maxlength="160" value="'+esc(d.titulo)+'"'+(editable?'':' disabled')+
-      ' placeholder="Ej.: Adecuación a normativa de la puerta del garaje"></div>'+
-    '<div class="campo full"><label for="pz-subtitulo">Subtítulo del documento</label>'+
-      '<input id="pz-subtitulo" type="text" maxlength="200" value="'+esc(d.subtitulo||'')+'"'+(editable?'':' disabled')+
-      ' placeholder="Ej.: Instalación de cierre enrollable de aluminio Collbaix en verde">'+
-      '<span class="pista">Va bajo el título en el papel. De un vistazo dice de qué va la oferta sin leer una línea. '+
-      'Si lo dejas vacío sale el título.</span></div>'+
+    '<div class="campo full"><label for="pz-titulo">Título de la oferta</label>'+
+      '<input id="pz-titulo" type="text" maxlength="200" value="'+esc(d.titulo)+'"'+(editable?'':' disabled')+
+      ' placeholder="Ej.: Instalación de cierre enrollable de aluminio en el garaje">'+
+      '<span class="pista">Es el mismo texto que sale bajo «PRESUPUESTO DE VENTA» en el papel y el que '+
+      'identifica la oferta en la lista. Uno solo: escríbelo como quieres que lo lea el cliente.</span></div>'+
     '<div class="campo full"><label for="pz-desc">Qué se propone</label>'+
       '<textarea id="pz-desc" rows="3"'+(editable?'':' disabled')+
       ' placeholder="Lo que va a leer el cliente: qué se va a hacer y por qué">'+esc(d.descripcion||'')+'</textarea></div>'+
@@ -3894,8 +3941,7 @@ function pintarEditorPresu(){
           '<b style="text-transform:uppercase;letter-spacing:.03em">'+esc(nombre || 'Capítulo sin nombre')+'</b>'+
           (l.detalle ? '<span class="sub" style="display:block">'+esc(l.detalle)+'</span>' : '')+
           '<span class="sub" style="display:block">Capítulo</span></td>'+
-          (editable ? '<td><button type="button" class="btn sm plana" data-act="pz-linea" data-i="'+i+'">Abrir</button>'+
-            '<button type="button" class="btn sm plana" data-act="pz-quitar" data-i="'+i+'">✕</button></td>' : '')+
+          (editable ? '<td>'+botonesLinea(i, d.lineas.length)+'</td>' : '')+
           '</tr>';
         return;
       }
@@ -3918,13 +3964,13 @@ function pintarEditorPresu(){
           ? '<input type="number" step="any" min="0" max="100" class="pz-l-dto" data-i="'+i+'" value="'+esc(l.dto||0)+'" style="width:100%">'
           : (l.tipo === 'texto' || !Number(l.dto) ? '' : esc(l.dto)+' %'))+'</td>'+
         '<td>'+(l.tipo === 'texto' ? '' : '<b>'+eur(l.importe)+'</b>')+'</td>'+
-        (editable ? '<td><button type="button" class="btn sm plana" data-act="pz-linea" data-i="'+i+'">Abrir</button>'+
-          '<button type="button" class="btn sm plana" data-act="pz-quitar" data-i="'+i+'">✕</button></td>' : '')+
+        (editable ? '<td>'+botonesLinea(i, d.lineas.length)+'</td>' : '')+
         '</tr>';
     });
     h += '</tbody></table></div>'+
-      (editable ? '<p class="mini" style="margin:6px 0 0">«Abrir» es donde se pone la referencia y la '+
-       'explicación larga que convence al que lee. Aquí solo cambias lo de cada día.</p>' : '');
+      (editable ? '<p class="mini" style="margin:6px 0 0">Con las flechas cambias el orden, y el papel sale '+
+       'en ese mismo orden. «Abrir» es donde se pone la referencia y la explicación larga que convence al '+
+       'que lee; aquí solo cambias lo de cada día.</p>' : '');
   }
   if (editable)
     h += '<div class="fila" style="gap:6px;flex-wrap:wrap;margin-top:8px">'+
@@ -3966,15 +4012,13 @@ function pintarEditorPresu(){
 
   /* Los textos que se repiten en todas las ofertas se escriben una vez. El
      botón de al lado los pega aquí; el de guardar los mete en la lista. */
-  h += '<div class="grupo"><h3>Condiciones, anexos y notas</h3><div class="campos">'+
+  h += bloqueAdjuntos(d, editable);
+
+  h += '<div class="grupo"><h3>Condiciones y notas</h3><div class="campos">'+
     '<div class="campo full"><label for="pz-cond">Condiciones comerciales (las lee el cliente)</label>'+
       '<textarea id="pz-cond" rows="3"'+(editable?'':' disabled')+
       ' placeholder="Ej.: plazo de ejecución, forma de pago, garantía">'+esc(d.condiciones||'')+'</textarea>'+
       (editable ? botonesTexto('condiciones') : '')+'</div>'+
-    '<div class="campo full"><label for="pz-anexos">Anexos (al final del documento)</label>'+
-      '<textarea id="pz-anexos" rows="3"'+(editable?'':' disabled')+
-      ' placeholder="Alcance, exclusiones, garantía, normativa aplicable">'+esc(d.anexos||'')+'</textarea>'+
-      (editable ? botonesTexto('anexos') : '')+'</div>'+
     '<div class="campo full"><label for="pz-notas">Notas internas (no salen en el documento)</label>'+
       '<textarea id="pz-notas" rows="2"'+(editable?'':' disabled')+'>'+esc(d.notas_internas||'')+'</textarea></div>'+
     '</div></div>';
@@ -3995,6 +4039,76 @@ function pintarEditorPresu(){
   abrirDlg(h, null);
 }
 
+/* ---- Los documentos que acompañan a la oferta ----
+   Un anexo no es un párrafo: es la ficha técnica del fabricante, el plano, el
+   certificado de la banda, el folleto del modelo. Papeles. Y el cliente los
+   abre desde el mismo enlace del presupuesto, sin tener que pedirlos. */
+const adjuntosDe = id => (S.presuAdjuntos || []).filter(x => x.presupuesto_id === id)
+  .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+const enlaceAdjunto = a => {
+  try { return sb.storage.from('ofertas').getPublicUrl(a.ruta).data.publicUrl; }
+  catch(_){ return ''; }
+};
+const pesoCorto = n => !n ? '' : (n > 1048576
+  ? (n / 1048576).toFixed(1).replace('.', ',') + ' MB'
+  : Math.max(1, Math.round(n / 1024)) + ' KB');
+
+function bloqueAdjuntos(d, editable){
+  if (S.sinAdjuntos) return '';
+  let h = '<div class="grupo"><h3>Documentos adjuntos</h3>'+
+    '<p class="mini" style="margin:0 0 10px">La ficha técnica del fabricante, el plano, el certificado, '+
+    'el folleto del modelo. El cliente los ve y los descarga desde el mismo enlace del presupuesto, '+
+    'y el documento impreso los lista.</p>';
+  if (!d.id){
+    h += '<p class="muted" style="margin:0">Guarda el borrador y podrás adjuntar documentos: cada papel '+
+      'tiene que colgar de un presupuesto, y este todavía no existe.</p></div>';
+    return h;
+  }
+  const lista = adjuntosDe(d.id);
+  if (!lista.length)
+    h += '<p class="muted" style="margin:0 0 10px">Todavía no hay ninguno.</p>';
+  else {
+    h += '<div class="lista">'+lista.map(a =>
+      '<div class="item"><div class="item-in"><div class="fila" style="gap:8px;flex-wrap:wrap">'+
+      '<b>'+esc(a.nombre || 'Documento')+'</b>'+
+      (a.publico ? '<span class="chip ok sin">Lo ve el cliente</span>'
+                 : '<span class="chip gris sin">Solo oficina</span>')+
+      '<span class="sp"></span>'+
+      '<a class="btn sm plana" href="'+esc(enlaceAdjunto(a))+'" target="_blank" rel="noopener">Abrir</a>'+
+      (editable ? '<button type="button" class="btn sm plana" data-act="adj-privado" data-id="'+a.id+
+        '" data-v="'+(a.publico ? '0' : '1')+'">'+(a.publico ? 'Ocultar al cliente' : 'Enseñar al cliente')+'</button>'+
+        '<button type="button" class="btn sm plana" data-act="adj-borrar" data-id="'+a.id+'">Quitar</button>' : '')+
+      '</div>'+
+      '<div class="mini">'+esc([a.descripcion, pesoCorto(a.bytes)].filter(Boolean).join(' · ') || 'Sin descripción')+
+      '</div></div></div>').join('')+'</div>';
+  }
+  if (editable)
+    h += '<div class="fila" style="gap:8px;margin-top:10px;flex-wrap:wrap">'+
+      '<label class="btn sm" style="cursor:pointer">Adjuntar documento'+
+      '<input type="file" hidden multiple data-act="subir-adjunto" data-presu="'+d.id+'"></label>'+
+      '<span class="sp"></span></div>'+
+      '<p class="mini" style="margin:8px 0 0">Lo que marques como visible para el cliente podrá abrirlo '+
+      'cualquiera que tenga el enlace de ese fichero. Para una ficha técnica o un folleto da igual; '+
+      'si es un plano con datos de otro cliente, márcalo como solo oficina.</p>';
+  return h + '</div>';
+}
+
+/* Los botones de cada línea: subirla, bajarla, abrirla, duplicarla y quitarla.
+   El orden de las líneas es el del papel, así que cambiarlo tiene que costar un
+   toque y no rehacer la línea en otro sitio. */
+function botonesLinea(i, total){
+  const b = (act, txt, titulo, off) =>
+    '<button type="button" class="btn sm plana lin-b"'+(off?' disabled':'')+
+    ' data-act="'+act+'" data-i="'+i+'" title="'+esc(titulo)+'" aria-label="'+esc(titulo)+'">'+txt+'</button>';
+  return '<div class="lin-bs">'+
+    b('pz-subir', '↑', 'Subir esta línea', i === 0)+
+    b('pz-bajar', '↓', 'Bajar esta línea', i === total - 1)+
+    b('pz-linea', 'Abrir', 'Referencia y explicación larga')+
+    b('pz-duplicar-linea', '⧉', 'Duplicar esta línea')+
+    b('pz-quitar', '✕', 'Quitar esta línea')+
+    '</div>';
+}
+
 /* Los dos botones que acompañan a un campo con textos guardados */
 function botonesTexto(destino){
   /* Si todavía no se ha ejecutado el SQL de esta entrega, no se ofrece algo
@@ -4010,7 +4124,7 @@ function botonesTexto(destino){
 
 /* Elegir uno de los textos guardados y pegarlo en el campo */
 function dlgPegarTexto(destino){
-  const campo = { condiciones:'pz-cond', anexos:'pz-anexos', descripcion:'pz-desc' }[destino];
+  const campo = { condiciones:'pz-cond', descripcion:'pz-desc' }[destino];
   const lista = (S.textosPresu || []).filter(t => t.destino === destino && t.activo !== false)
     .sort((a, b) => (a.orden || 0) - (b.orden || 0) || (a.titulo||'').localeCompare(b.titulo||'', 'es'));
   if (!lista.length) return toast('Todavía no hay textos guardados para esto.');
@@ -4029,7 +4143,7 @@ function dlgPegarTexto(destino){
 /* Guardar lo que hay escrito en un campo como texto reutilizable */
 function dlgGuardarTexto(destino){
   leerEditorPresu();
-  const cuerpo = { condiciones: S.presu.condiciones, anexos: S.presu.anexos,
+  const cuerpo = { condiciones: S.presu.condiciones,
                    descripcion: S.presu.descripcion }[destino] || '';
   if (!String(cuerpo).trim()) return toast('Escribe primero el texto que quieres guardar.');
   abrirDlg('<h3>Guardar este texto</h3>'+
@@ -4060,10 +4174,8 @@ function leerEditorPresu(){
   if (v('pz-cli') !== null) d.cliente_id = v('pz-cli') || null;
   if (v('pz-puerta') !== null) d.puerta_id = v('pz-puerta') || null;
   if (v('pz-titulo') !== null) d.titulo = v('pz-titulo');
-  if (v('pz-subtitulo') !== null) d.subtitulo = v('pz-subtitulo');
   if (v('pz-desc') !== null) d.descripcion = v('pz-desc');
   if (v('pz-cond') !== null) d.condiciones = v('pz-cond');
-  if (v('pz-anexos') !== null) d.anexos = v('pz-anexos');
   if (v('pz-notas') !== null) d.notas_internas = v('pz-notas');
   if (v('pz-descuento') !== null) d.descuento = parseFloat(v('pz-descuento')) || 0;
   if (v('pz-iva') !== null) d.tipo_iva = parseFloat(v('pz-iva')) || 0;
@@ -4151,6 +4263,37 @@ function dlgLineaPresu(tipo){
       coste: a && a.coste != null ? Number(a.coste) : 0 });
     pintarEditorPresu();
   });
+}
+
+/* Subir papeles a una oferta. Se pueden soltar varios de una vez, que es como
+   llega la documentación de un fabricante: ficha, despiece y certificado. */
+async function subirAdjuntos(presupuestoId, files){
+  if (!presupuestoId || !files.length) return;
+  const n0 = adjuntosDe(presupuestoId).length;
+  let subidos = 0, fallos = [];
+  for (let i = 0; i < files.length; i++){
+    const f = files[i];
+    try {
+      if (f.size > 25 * 1024 * 1024) throw new Error('pasa de 25 MB');
+      const ext = ((f.name || '').split('.').pop() || 'bin').toLowerCase().slice(0, 6);
+      /* Token en la ruta: el cubo es de lectura abierta, así que lo que evita
+         que nadie dé con el fichero es que la ruta no se pueda adivinar. */
+      const ruta = presupuestoId + '/' + token() + token() + token() + '.' + ext;
+      const { error: e1 } = await sb.storage.from('ofertas')
+        .upload(ruta, f, { contentType: f.type || 'application/octet-stream' });
+      if (e1) throw e1;
+      const { error } = await sb.from('presupuesto_adjuntos').insert({
+        presupuesto_id: presupuestoId, nombre: f.name || 'Documento',
+        ruta, tipo: f.type || null, bytes: f.size || null,
+        orden: n0 + i, publico: true, creado_por: yo() });
+      if (error){ await sb.storage.from('ofertas').remove([ruta]); throw error; }
+      subidos++;
+    } catch(e){ fallos.push((f.name || 'documento') + ': ' + (e.message || 'no se pudo subir')); }
+  }
+  await cargar();
+  pintarPresupuesto();
+  if (subidos) toast(subidos + (subidos === 1 ? ' documento adjuntado.' : ' documentos adjuntados.'));
+  if (fallos.length) toast('No se han podido subir: ' + fallos.join('; '));
 }
 
 /* ---- Una línea por dentro ----
@@ -4244,10 +4387,8 @@ async function guardarPresupuesto(emitiendo){
   const tot = totalesPresu(d.lineas, d.descuento, d.tipo_iva);
   const o = {
     cliente_id: d.cliente_id, puerta_id: d.puerta_id || null, aviso_id: d.aviso_id || null,
-    titulo: d.titulo.trim(), subtitulo: d.subtitulo || null,
-    descripcion: d.descripcion || null,
-    condiciones: d.condiciones || null, anexos: d.anexos || null,
-    notas_internas: d.notas_internas || null,
+    titulo: d.titulo.trim(), descripcion: d.descripcion || null,
+    condiciones: d.condiciones || null, notas_internas: d.notas_internas || null,
     validez_dias: d.validez_dias, descuento: tot.descuento, tipo_iva: tot.tipo_iva,
     materiales: tot.materiales, mano_obra: tot.mano_obra, desplazamiento: tot.desplazamiento,
     base: tot.base, iva: tot.iva, total: tot.total, coste: tot.coste,
@@ -4351,7 +4492,7 @@ function dlgDocumentoPresu(id, modo){
     '</div>'+
     '<div class="grupo" style="margin-top:10px"><h3>Qué incluye</h3><div class="checks">'+
       '<label><input type="checkbox" id="pd-cond"'+(op.condiciones?' checked':'')+'>Las condiciones comerciales</label>'+
-      '<label><input type="checkbox" id="pd-anexos"'+(op.anexos?' checked':'')+'>Los anexos</label>'+
+      '<label><input type="checkbox" id="pd-anexos"'+(op.anexos?' checked':'')+'>La lista de documentos adjuntos</label>'+
       '<label><input type="checkbox" id="pd-qr"'+(op.qr?' checked':'')+'>El QR para aceptarlo desde el móvil</label>'+
       '<label><input type="checkbox" id="pd-def">Dejar estas opciones puestas para la próxima vez</label>'+
     '</div></div>'+
@@ -4971,7 +5112,7 @@ const TABLAS_COPIA = [
   'expedientes', 'expediente_fotos', 'expediente_docs',
 ];
 /* Carpetas de ficheros */
-const BUCKETS_COPIA = ['expedientes', 'fotos', 'documentos', 'firmas', 'equipo'];
+const BUCKETS_COPIA = ['expedientes', 'fotos', 'documentos', 'firmas', 'equipo', 'ofertas'];
 
 /* ---- CRC32, que es lo que el formato ZIP usa para detectar corrupción ---- */
 let TABLA_CRC = null;
@@ -15693,10 +15834,36 @@ let alGuardar = null;
    (los centros del cliente, los materiales ya usados) y en el primer pase
    todavía están vacíos. */
 function abrirDlg(html, guardar){
-  dlgForm.innerHTML = html; alGuardar = guardar; dlg.showModal();
+  /* Un diálogo que ya está abierto y se vuelve a pintar no es un diálogo nuevo:
+     es la misma pantalla puesta al día. Si al repintar salta arriba y el foco se
+     va al primer campo, el que estaba escribiendo en la línea doce pierde el
+     sitio y, peor, lo que acababa de teclear. Así que se guarda dónde estaba. */
+  /* Es el mismo diálogo si lleva el mismo encabezado. Abrir OTRO diálogo encima
+     sí debe empezar por arriba: ahí hay algo nuevo que leer. */
+  const titulo = s => { const m = String(s || '').match(/<h3[^>]*>([\s\S]*?)<\/h3>/); return m ? m[1] : ''; };
+  const yaAbierto = dlg.open && titulo(html) !== '' && titulo(html) === titulo(dlgForm.innerHTML);
+  const alto = yaAbierto ? dlg.scrollTop : 0;
+  const act = document.activeElement;
+  const foco = yaAbierto && act && act.id && dlgForm.contains(act)
+    ? { id: act.id, s: act.selectionStart, e: act.selectionEnd,
+        txt: /^(text|email|password|search|number|date|tel)$/.test(act.type) || act.tagName === 'TEXTAREA' }
+    : null;
+
+  dlgForm.innerHTML = html; alGuardar = guardar;
+  if (!dlg.open) dlg.showModal();
   activarCombos(dlgForm);
   setTimeout(() => activarCombos(dlgForm), 60);
-  const f = dlgForm.querySelector('input,select,textarea'); if (f) f.focus();
+
+  if (foco){
+    const el = document.getElementById(foco.id);
+    if (el){
+      el.focus();
+      if (foco.txt){ try { el.setSelectionRange(foco.s, foco.e); } catch(_){} }
+    }
+  } else if (!yaAbierto){
+    const f = dlgForm.querySelector('input,select,textarea'); if (f) f.focus();
+  }
+  if (alto > 0){ try { dlg.scrollTop = alto; } catch(_){} }
 }
 function cerrarDlg(){ dlg.close(); alGuardar = null; }
 /* Un solo envío por vez. Con red lenta, dos toques en «Cerrar visita» lanzaban
@@ -17574,7 +17741,7 @@ function documentoPresupuesto(id, op){
 
     '<div class="cabfija">'+cabeceraDocumento(em, '', '')+'</div>'+
     '<h1 class="doc-tit">PRESUPUESTO DE VENTA</h1>'+
-    (p.subtitulo || p.titulo ? '<p class="doc-sub">'+esc(p.subtitulo || p.titulo)+'</p>' : '')+
+    (p.titulo ? '<p class="doc-sub">'+esc(p.titulo)+'</p>' : '')+
 
     '<div class="dos">'+
       '<div><h3>Datos del presupuesto</h3>'+
@@ -17629,8 +17796,16 @@ function documentoPresupuesto(id, op){
     (op.condiciones && p.condiciones
       ? '<h2>Condiciones</h2><p class="largo">'+esc(p.condiciones)+'</p>' : '')+
 
-    (op.anexos && p.anexos
-      ? '<h2>Anexos</h2><p class="largo">'+esc(p.anexos)+'</p>' : '')+
+    /* Los papeles que acompañan a la oferta: en el documento solo se listan,
+       porque el cliente los descarga desde su enlace. Así sabe qué le hemos
+       mandado aunque esté mirando la hoja impresa. */
+    (op.anexos && adjuntosDe(id).filter(x => x.publico).length
+      ? '<h2>Documentación adjunta</h2><ul style="margin:0;padding-left:18px">'+
+        adjuntosDe(id).filter(x => x.publico).map(x =>
+          '<li><b>'+esc(x.nombre || 'Documento')+'</b>'+
+          (x.descripcion ? '. '+esc(x.descripcion) : '')+'</li>').join('')+
+        '</ul><p style="margin:6px 0 0;color:#6B6560">Se descargan desde el enlace del presupuesto.</p>'
+      : '')+
 
     '<div class="caja">Presupuesto sin compromiso.'+
     (conPrecios ? ' Los precios son sin IVA salvo donde se indica, y el total lo incluye.' : '')+
@@ -19445,6 +19620,11 @@ raiz.addEventListener('change', e => {
   if (e.target.dataset.act === 'subir-cara' && e.target.files.length){
     subirCara(e.target.dataset.id, e.target.files[0]); e.target.value = '';
   }
+  if (e.target.dataset.act === 'subir-adjunto' && e.target.files.length){
+    const presu = e.target.dataset.presu;
+    const files = [...e.target.files]; e.target.value = '';
+    subirAdjuntos(presu, files);
+  }
   if ((e.target.dataset.act === 'subir-logo' || e.target.dataset.act === 'subir-sello') && e.target.files.length){
     const esLogo = e.target.dataset.act === 'subir-logo';
     const f = e.target.files[0]; e.target.value = '';
@@ -19710,6 +19890,28 @@ dlgForm.addEventListener('click', async e => {
   /* ---- Presupuestos ---- */
   if (a === 'pz-add'){ leerEditorPresu(); dlgLineaPresu(b.dataset.tipo); return; }
   if (a === 'pz-linea'){ dlgDetalleLinea(+b.dataset.i); return; }
+  /* ---- Documentos de la oferta ---- */
+  if (a === 'adj-privado'){
+    leerEditorPresu();
+    try {
+      await sb.from('presupuesto_adjuntos').update({ publico: b.dataset.v === '1' }).eq('id', b.dataset.id);
+      await cargar(); pintarPresupuesto();
+      toast(b.dataset.v === '1' ? 'El cliente ya lo ve.' : 'Ya no lo ve el cliente.');
+    } catch(e){ fallo(e); }
+    return;
+  }
+  if (a === 'adj-borrar'){
+    if (!armar(b, 'Confirmar')) return;
+    leerEditorPresu();
+    const x = (S.presuAdjuntos || []).find(y => y.id === b.dataset.id);
+    try {
+      await sb.from('presupuesto_adjuntos').delete().eq('id', b.dataset.id);
+      if (x) { try { await sb.storage.from('ofertas').remove([x.ruta]); } catch(_){ /* la fila ya no está */ } }
+      await cargar(); pintarPresupuesto();
+      toast('Documento quitado.');
+    } catch(e){ fallo(e); }
+    return;
+  }
   /* ---- Contactos del cliente ---- */
   if (a === 'contacto-nuevo'){ dlgContacto(null, b.dataset.cli); return; }
   if (a === 'contacto-edit'){ dlgContacto(b.dataset.id); return; }
@@ -19726,6 +19928,28 @@ dlgForm.addEventListener('click', async e => {
     return;
   }
   if (a === 'pz-quitar'){ leerEditorPresu(); S.presu.lineas.splice(+b.dataset.i, 1); pintarEditorPresu(); return; }
+  /* Mover y duplicar. Se lee el formulario antes de tocar nada: si no, lo que
+     se acabara de teclear en otra línea se perdería al repintar. */
+  if (a === 'pz-subir' || a === 'pz-bajar'){
+    leerEditorPresu();
+    const i = +b.dataset.i, j = a === 'pz-subir' ? i - 1 : i + 1;
+    const L = S.presu.lineas;
+    if (j < 0 || j >= L.length) return;
+    const t = L[i]; L[i] = L[j]; L[j] = t;
+    pintarEditorPresu();
+    return;
+  }
+  if (a === 'pz-duplicar-linea'){
+    leerEditorPresu();
+    const i = +b.dataset.i;
+    const l = S.presu.lineas[i];
+    if (!l) return;
+    /* La copia va justo debajo, sin id propio: todavía no existe en la base */
+    S.presu.lineas.splice(i + 1, 0, Object.assign({}, l, { id: undefined }));
+    pintarEditorPresu();
+    toast('Línea duplicada.');
+    return;
+  }
   if (a === 'pz-guardar'){ await guardarPresupuesto(false); return; }
   if (a === 'pz-emitir' || a === 'pz-emitir-ficha'){
     if (!armar(b, 'Confirmar: ya no se podrá cambiar')) return;
@@ -19760,8 +19984,7 @@ dlgForm.addEventListener('click', async e => {
   if (a === 'pz-texto-usar'){
     const t = (S.textosPresu || []).find(x => x.id === b.dataset.id);
     if (t){
-      const campo = b.dataset.campo === 'pz-anexos' ? 'anexos'
-        : b.dataset.campo === 'pz-desc' ? 'descripcion' : 'condiciones';
+      const campo = b.dataset.campo === 'pz-desc' ? 'descripcion' : 'condiciones';
       const ya = String(S.presu[campo] || '').trim();
       S.presu[campo] = (ya ? ya + '\n' : '') + String(t.cuerpo || '');
     }
@@ -19780,7 +20003,7 @@ dlgForm.addEventListener('click', async e => {
     cerrarDlg();
     dlgPresupuesto(null, { cliente_id:p.cliente_id, puerta_id:p.puerta_id,
       titulo: p.titulo+' (copia)', descripcion:p.descripcion,
-      condiciones: p.condiciones, anexos: p.anexos,
+      condiciones: p.condiciones,
       lineas: lineasDe(p.id).map(l => ({ ...l, id:undefined, presupuesto_id:undefined })) });
     return;
   }
