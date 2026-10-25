@@ -241,6 +241,12 @@ img{max-width:100%}
 .lin-bs{display:flex;gap:1px;flex-wrap:wrap}
 .lin-bs .lin-b{padding:3px 6px;font-size:13px;min-width:26px;line-height:1.2}
 .lin-bs .lin-b:disabled{opacity:.3;cursor:default}
+/* El índice de Equipo: botones en rejilla, alineados a la izquierda para que
+   se lean como una lista y no como una botonera. */
+.eq-indice .eq-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:4px}
+.eq-indice .eq-lista .btn{justify-content:flex-start;text-align:left;padding:7px 10px}
+.eq-destacado{animation:eq-flash 1.4s ease-out}
+@keyframes eq-flash{0%{box-shadow:0 0 0 3px var(--amarillo)}100%{box-shadow:0 0 0 0 transparent}}
 .mat-fila{display:grid;grid-template-columns:1fr 76px 60px 34px;gap:6px;margin-bottom:6px;align-items:center}
 /* Con almacén, la línea lleva además el material elegido del catálogo, que va
    arriba y a todo lo ancho: en el móvil no caben cinco columnas. */
@@ -1365,7 +1371,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.10.25-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.10.25-2';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -1502,6 +1508,7 @@ function render(){
   else if (S.tab === 'manual') h = vistaManual();
   else h = vistaPuertas();
   raiz.innerHTML = h;
+  if (S.tab === 'equipo' && !S.exp && !S.ficha && !S.fichaCliente) indiceEquipo();
   activarCombos(raiz);
   if (keep){ const el = document.getElementById(keep.id); if (el){ if(keep.txt) el.value = keep.v; el.focus(); if(keep.txt){ try{ el.setSelectionRange(keep.s,keep.e); }catch(_){} } } }
   /* Volver a la altura de antes. Se hace después de pintar, porque hasta que no
@@ -3747,11 +3754,19 @@ function pintarFichaPresu(){
       (p.valido_hasta ? '; caduca el '+esc(fechaCorta(p.valido_hasta)) : '')+'.</div>';
 
   /* La botonera, que es a lo que se viene */
+  /* Las mismas cuatro palabras que en el editor, para no tener que aprender dos
+     vocabularios según por dónde se entre. */
   h += '<div class="fila" style="gap:6px;flex-wrap:wrap;margin-bottom:12px">'+
     (esBorrador ? '<button type="button" class="btn sm pri" data-act="pz-editar">Editar</button>' : '')+
-    '<button type="button" class="btn sm" data-act="pz-documento" data-id="'+p.id+'">Ver el documento</button>'+
-    (esBorrador ? '' : '<button type="button" class="btn sm'+(p.estado==='emitido'?' pri':'')+
-      '" data-act="pz-enviar" data-id="'+p.id+'">Mandárselo al cliente</button>')+
+    '<button type="button" class="btn sm" data-act="pz-documento" data-id="'+p.id+
+      '" title="Verlo tal como saldría impreso">Ver</button>'+
+    (esBorrador
+      ? '<button type="button" class="btn sm pri" data-act="pz-enviar-ficha" data-id="'+p.id+
+        '" title="Cerrarlo y mandárselo al cliente">Enviar</button>'
+      : '<button type="button" class="btn sm'+(p.estado==='emitido'?' pri':'')+
+        '" data-act="pz-enviar" data-id="'+p.id+'" title="Mandárselo al cliente">Enviar</button>')+
+    '<button type="button" class="btn sm" data-act="pz-duplicar" data-id="'+p.id+
+      '" title="Sacar otra oferta a partir de esta">Duplicar</button>'+
     (puedeResponder ? '<button type="button" class="btn sm" data-act="pz-firmar" data-id="'+p.id+'">Que lo firme aquí</button>' : '')+
     (p.estado === 'aceptado' && !p.convertido_aviso
       ? '<button type="button" class="btn sm pri" data-act="pz-convertir" data-id="'+p.id+'">Abrir el trabajo</button>' : '')+
@@ -3760,8 +3775,8 @@ function pintarFichaPresu(){
   /* Lo de menos uso, recogido */
   h += '<details class="grupo" style="margin-bottom:12px"><summary style="cursor:pointer;font-weight:600">Más cosas que hacer</summary>'+
     '<div class="fila" style="gap:6px;flex-wrap:wrap;margin-top:10px">'+
-    (esBorrador ? '<button type="button" class="btn sm pri" data-act="pz-emitir-ficha" data-id="'+p.id+'">Emitir</button>' : '')+
-    '<button type="button" class="btn sm plana" data-act="pz-duplicar" data-id="'+p.id+'">Duplicar</button>'+
+    (esBorrador ? '<button type="button" class="btn sm plana" data-act="pz-emitir-ficha" data-id="'+p.id+
+      '" title="Cerrarlo y ponerle número, sin mandarlo todavía">Emitir sin mandar</button>' : '')+
     (p.token ? '<button type="button" class="btn sm plana" data-act="pz-enlace" data-id="'+p.id+'">Enlace y QR</button>' : '')+
     (puedeResponder ? '<button type="button" class="btn sm plana" data-act="pz-acepta-mano" data-id="'+p.id+'">Aceptado por teléfono</button>' : '')+
     (puedeResponder ? '<button type="button" class="btn sm plana" data-act="pz-rechazado" data-id="'+p.id+'">Lo ha rechazado</button>' : '')+
@@ -4023,18 +4038,28 @@ function pintarEditorPresu(){
       '<textarea id="pz-notas" rows="2"'+(editable?'':' disabled')+'>'+esc(d.notas_internas||'')+'</textarea></div>'+
     '</div></div>';
 
-  /* Pie: aquí solo se monta el presupuesto. Verlo, mandarlo y lo demás está en
-     la ficha, que es donde se vuelve una y otra vez. */
-  h += '<p class="err"></p><div class="pie" style="flex-wrap:wrap;gap:6px">';
-  if (d.id)
-    h += '<button type="button" class="btn sm plana" data-act="pz-ver-doc">Ver el documento</button>';
-  h += '<span class="sp"></span>'+
-    '<button type="button" class="btn plana" data-act="pz-cancelar">'+(d.id ? 'Dejarlo como estaba' : 'Cancelar')+'</button>';
+  /* Pie: cuatro acciones y un nombre para cada una. Ver es el papel, Crear lo
+     deja guardado para seguir otro día, Enviar pregunta a quién, y Duplicar
+     saca otra oferta de esta sin volver a teclearla. */
+  h += '<p class="err"></p><div class="pie" style="flex-wrap:wrap;gap:6px">'+
+    '<button type="button" class="btn plana" data-act="pz-cancelar">'+
+      (d.id ? 'Dejarlo como estaba' : 'Cancelar')+'</button>'+
+    '<span class="sp"></span>'+
+    '<button type="button" class="btn sm" data-act="pz-ver-doc" title="Verlo tal como saldría impreso">Ver</button>'+
+    (d.id ? '<button type="button" class="btn sm" data-act="pz-duplicar-editor" '+
+      'title="Sacar otra oferta igual que esta para cambiarle lo que haga falta">Duplicar</button>' : '');
   if (editable){
-    h += '<button type="button" class="btn" data-act="pz-guardar">Guardar borrador</button>'+
-         '<button type="button" class="btn pri" data-act="pz-emitir">Emitir</button>';
+    h += '<button type="button" class="btn" data-act="pz-guardar" '+
+      'title="Dejarlo guardado para revisarlo, completarlo o mandarlo otro día">'+
+      (d.id ? 'Guardar' : 'Crear')+'</button>'+
+      '<button type="button" class="btn pri" data-act="pz-enviar-ya" '+
+      'title="Cerrarlo y mandárselo al cliente">Enviar</button>';
   }
-  h += '</div>';
+  h += '</div>'+
+    (editable ? '<p class="mini" style="margin:8px 0 0"><b>Ver</b> enseña el papel sin mandar nada. '+
+      '<b>'+(d.id ? 'Guardar' : 'Crear')+'</b> lo deja apuntado para seguir otro día. '+
+      '<b>Enviar</b> lo cierra, le pone número y pregunta a quién. '+
+      (d.id ? '<b>Duplicar</b> saca otra oferta a partir de esta.' : '')+'</p>' : '');
 
   abrirDlg(h, null);
 }
@@ -4754,6 +4779,38 @@ async function convertirPresupuesto(id){
 }
 
 /* ---- Equipo ---- */
+/* ---- El índice de Equipo ----
+   Equipo ha acabado teniendo quince apartados, y el que entra a cambiar una
+   cosa concreta se los tiene que pasar todos con el dedo. El índice se arma
+   solo, leyendo los títulos que hay en pantalla: así no hay una lista escrita
+   a mano que se quede desfasada en cuanto se añada un panel nuevo.
+
+   No se usan anclas con almohadilla porque la almohadilla de la dirección es
+   la que abre la ficha de una puerta por QR: pisarla rompería los enlaces. */
+function indiceEquipo(){
+  const stack = raiz.querySelector('.stack');
+  if (!stack) return;
+  const paneles = [...stack.querySelectorAll(':scope > .panel')];
+  if (paneles.length < 4) return;   // con cuatro cosas el índice estorba más que ayuda
+  const entradas = [];
+  paneles.forEach((p, i) => {
+    const t = p.querySelector('.panel-h h2, .panel-h h3, h2, h3');
+    if (!t) return;
+    const id = 'eq-p' + i;
+    p.id = id;
+    entradas.push([id, t.textContent.trim()]);
+  });
+  if (entradas.length < 4) return;
+  const nav = document.createElement('div');
+  nav.className = 'panel eq-indice';
+  nav.innerHTML = '<div class="panel-h"><h2>Qué hay en Equipo</h2>'+
+    '<span class="mini">'+entradas.length+' apartados</span></div>'+
+    '<div class="eq-lista">'+entradas.map(([id, t]) =>
+      '<button type="button" class="btn sm plana" data-act="eq-ir" data-ir="'+id+'">'+esc(t)+'</button>').join('')+
+    '</div>';
+  stack.insertBefore(nav, stack.firstChild);
+}
+
 function vistaEquipo(){
   let h = '<div class="stack"><div class="panel"><div class="panel-h"><h2>Técnicos con acceso</h2><span class="mini">'+S.equipo.length+'</span></div>';
   if (!S.equipo.length) h += '<p class="muted" style="margin:0">Todavía no hay técnicos dados de alta.</p>';
@@ -19527,6 +19584,17 @@ raiz.addEventListener('click', async e => {
       pintar(); toast('Quitado.');
     } catch(err){ fallo(err); }
   }
+  else if (a === 'eq-ir'){
+    const dest = document.getElementById(b.dataset.ir);
+    if (!dest) return;
+    dest.scrollIntoView({ behavior:'smooth', block:'start' });
+    /* Un destello: con quince paneles parecidos, conviene que se vea a cuál
+       se ha llegado y no tener que buscar el título con la vista. */
+    dest.classList.remove('eq-destacado');
+    void dest.offsetWidth;
+    dest.classList.add('eq-destacado');
+    setTimeout(() => dest.classList.remove('eq-destacado'), 1600);
+  }
   else if (a === 'ver-cabecera') vistaPreviaCabecera();
   else if (a === 'copia-datos'){ b.disabled = true; await copiaSeguridad(false); b.disabled = false; }
   else if (a === 'copia-completa'){ b.disabled = true; await copiaSeguridad(true); b.disabled = false; }
@@ -19968,8 +20036,47 @@ dlgForm.addEventListener('click', async e => {
     if (S.presu && S.presu.id) dlgDocumentoPresu(S.presu.id, 'ver');
     return;
   }
+  /* Enviar desde el editor: guarda, lo cierra con su número si todavía era un
+     borrador, y pasa al envío. Un solo botón para lo que son tres pasos, que es
+     lo que se hace cuando el presupuesto ya está terminado. */
+  if (a === 'pz-enviar-ya'){
+    const antes = S.presu && S.presu.id ? presuDe(S.presu.id) : null;
+    const yaSalido = antes && antes.estado !== 'borrador';
+    if (!yaSalido){
+      if (!armar(b, 'Confirmar: se cierra y ya no se podrá cambiar')) return;
+      await guardarPresupuesto(true);
+      /* Si no se ha podido guardar, el error ya está en pantalla y el
+         presupuesto sigue siendo borrador: no se manda nada. */
+      const ahora = S.presu && S.presu.id ? presuDe(S.presu.id) : null;
+      if (!ahora || ahora.estado === 'borrador') return;
+    }
+    dlgDocumentoPresu(S.presu.id, 'enviar');
+    return;
+  }
+  /* Duplicar desde el editor: primero se guarda lo que haya escrito, para que
+     la copia salga de lo que se ve y no de lo último guardado. */
+  if (a === 'pz-duplicar-editor'){
+    if (S.presu && S.presu.estado === 'borrador') await guardarPresupuesto(false);
+    const p = S.presu && S.presu.id ? presuDe(S.presu.id) : null;
+    if (!p) return;
+    dlgPresupuesto(null, { cliente_id:p.cliente_id, puerta_id:p.puerta_id,
+      titulo: p.titulo+' (copia)', descripcion:p.descripcion,
+      condiciones: p.condiciones,
+      lineas: lineasDe(p.id).map(l => ({ ...l, id:undefined, presupuesto_id:undefined })) });
+    toast('Copia hecha. Cámbiale lo que necesites y guárdala.');
+    return;
+  }
   if (a === 'pz-documento'){ dlgDocumentoPresu(b.dataset.id, 'ver'); return; }
   if (a === 'pz-enviar'){ dlgDocumentoPresu(b.dataset.id, 'enviar'); return; }
+  /* Enviar un borrador desde su ficha: se cierra con su número y se manda */
+  if (a === 'pz-enviar-ficha'){
+    if (!armar(b, 'Confirmar: se cierra y ya no se podrá cambiar')) return;
+    await guardarPresupuesto(true);
+    const p = presuDe(b.dataset.id);
+    if (!p || p.estado === 'borrador') return;
+    dlgDocumentoPresu(b.dataset.id, 'enviar');
+    return;
+  }
   if (a === 'pd-ver'){ documentoPresupuesto(b.dataset.id, leerOpcionesDoc()); return; }
   if (a === 'pd-siguiente'){
     const op = leerOpcionesDoc();
