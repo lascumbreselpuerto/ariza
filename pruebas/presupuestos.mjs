@@ -427,7 +427,7 @@ const nuevoBorrador = await T(async () => {
     subtitulo: !!document.getElementById('pz-subtitulo'),
     adjuntos: /Documentos adjuntos/.test(document.getElementById('dlg-form').innerText),
     guardar: !!document.querySelector('[data-act="pz-guardar"]'),
-    emitir: (document.querySelector('[data-act="pz-emitir"]')||{}).textContent };
+    enviar: (document.querySelector('[data-act="pz-enviar-ya"]')||{}).textContent };
   g.cerrarDlg();
   return { id, verTxt, enVista, enEditor, condGuardadas: g.presuDe(id).condiciones };
 });
@@ -441,8 +441,11 @@ paso('un borrador todavía no se puede mandar: primero se emite',
 paso('la ficha avisa de que es un borrador', /borrador/i.test(nuevoBorrador.verTxt));
 paso('el botón Editar lleva al formulario, con sus campos',
   nuevoBorrador.enEditor.campos > 0 && nuevoBorrador.enEditor.guardar === true);
-paso('y el botón ya no dice «Emitir y mandar», porque emitir no manda',
-  nuevoBorrador.enEditor.emitir === 'Emitir', nuevoBorrador.enEditor.emitir);
+/* Cambiado a propósito el 25-10-2026: el pie del editor pasa a ser Ver, Crear,
+   Enviar y Duplicar. «Emitir» sin mandar sigue existiendo, pero en la ficha,
+   que es donde se va cuando se quiere cerrar la oferta y repasarla antes. */
+paso('y el botón de mandar se llama «Enviar», que es lo que hace',
+  nuevoBorrador.enEditor.enviar === 'Enviar', nuevoBorrador.enEditor.enviar);
 /* Cambiado a propósito el 25-10-2026: el campo de texto «anexos» desaparece.
    Un anexo es un papel que se adjunta, no un párrafo, así que ahora el editor
    enseña los documentos adjuntos y lo que era texto vive en las condiciones. */
@@ -868,6 +871,63 @@ paso('sin cerrarse ni parpadear', sitio.sigueAbierto === true);
 paso('pero abrir otro diálogo distinto sí empieza por el principio',
   sitio.enOtro === 0, sitio.enOtro);
 
+/* El caso que de verdad molesta: añadir material. Son TRES diálogos seguidos,
+   el editor, el de elegir el material y el editor otra vez. Si el de vuelta
+   empieza arriba, hay que buscar con el dedo la línea que se estaba
+   rellenando, y eso en una oferta de veinte líneas es un suplicio. */
+const ida = await T(async () => {
+  const g = window.__T;
+  g.dlgPresupuesto(null, { cliente_id: g.S.clientes[0].id, titulo:'Añadir material sin perder el sitio' });
+  await new Promise(r => setTimeout(r, 200));
+  for (let i = 0; i < 20; i++)
+    g.S.presu.lineas.push({ tipo:'material', descripcion:'Pieza '+i, nombre:'Pieza '+i,
+      cantidad:1, unidad:'ud', precio:10, importe:10, coste:0 });
+  g.pintarPresupuesto();
+  await new Promise(r => setTimeout(r, 250));
+  const caja = document.getElementById('dlg');
+  caja.scrollTop = 420;
+  const antes = caja.scrollTop;
+
+  /* Se pulsa «Añadir material» */
+  document.querySelector('[data-act="pz-add"][data-tipo="material"]').click();
+  await new Promise(r => setTimeout(r, 300));
+  const enElegir = caja.scrollTop;
+  const hayLista = !!document.getElementById('pl-art');
+
+  /* Se elige uno y se acepta */
+  document.getElementById('pl-art').value = 'art-foto';
+  document.getElementById('pl-art').dispatchEvent(new Event('change'));
+  await new Promise(r => setTimeout(r, 150));
+  document.getElementById('pl-desc').value = 'Fotocélula de espejo';
+  document.getElementById('pl-cant').value = '2';
+  document.getElementById('pl-prec').value = '40';
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 400));
+
+  const vuelta = caja.scrollTop;
+  const lineas = g.S.presu.lineas.length;
+  /* Y otra vez: mano de obra, que no pasa por diálogo intermedio */
+  document.querySelector('[data-act="pz-add"][data-tipo="mano_obra"]').click();
+  await new Promise(r => setTimeout(r, 300));
+  const trasManoObra = caja.scrollTop;
+  g.cerrarDlg();
+  /* Al cerrar del todo y volver a abrir, se empieza por el principio */
+  g.dlgPresupuesto(null, { cliente_id: g.S.clientes[0].id, titulo:'Otra cualquiera' });
+  await new Promise(r => setTimeout(r, 250));
+  const alVolverAAbrir = caja.scrollTop;
+  g.cerrarDlg();
+  return { antes, enElegir, hayLista, vuelta, lineas, trasManoObra, alVolverAAbrir };
+});
+paso('el diálogo de elegir material se abre por el principio',
+  ida.hayLista === true && ida.enElegir === 0, ida.enElegir);
+paso('y al volver, el editor sigue donde estaba',
+  ida.vuelta === ida.antes, 'antes '+ida.antes+', al volver '+ida.vuelta);
+paso('con el material añadido', ida.lineas === 21, ida.lineas);
+paso('y añadir mano de obra tampoco mueve la pantalla',
+  ida.trasManoObra === ida.antes, ida.trasManoObra);
+paso('pero abrir otro presupuesto después sí empieza por el principio',
+  ida.alVolverAAbrir === 0, ida.alVolverAAbrir);
+
 /* ================================================================
    14. Los anexos son papeles
    ================================================================ */
@@ -936,6 +996,93 @@ paso('y NO ve el que se dejó para la oficina',
 paso('el papel los lista, para que sepa qué se le ha mandado',
   adjuntos.enPapel === true);
 paso('y el de oficina tampoco sale en el papel', adjuntos.planoEnPapel === false);
+
+/* ================================================================
+   15. Cuatro botones con nombre
+   ================================================================
+   Ver, Crear, Enviar y Duplicar. Cada uno hace una cosa y se llama
+   igual en el editor y en la ficha, para no tener que aprender dos
+   vocabularios según por dónde se entre. */
+bloque('15. Ver, Crear, Enviar, Duplicar');
+
+const botones = await T(async () => {
+  const g = window.__T;
+  g.dlgPresupuesto(null, { cliente_id: g.S.clientes[0].id, titulo:'Oferta de botones' });
+  await new Promise(r => setTimeout(r, 250));
+  const txtAct = act => { const e = document.querySelector('[data-act="'+act+'"]'); return e ? e.textContent.trim() : null; };
+  const nuevo = { ver: txtAct('pz-ver-doc'), crear: txtAct('pz-guardar'),
+    enviar: txtAct('pz-enviar-ya'), duplicar: txtAct('pz-duplicar-editor') };
+
+  g.S.presu.lineas.push({ tipo:'material', descripcion:'Motor', nombre:'Motor',
+    cantidad:1, unidad:'ud', precio:500, importe:500, coste:300 });
+  g.pintarPresupuesto();
+  await new Promise(r => setTimeout(r, 150));
+  /* Crear: se guarda y sigue siendo borrador, sin mandarse */
+  document.querySelector('[data-act="pz-guardar"]').click();
+  await new Promise(r => setTimeout(r, 800));
+  const id = g.S.presu.id;
+  const trasCrear = { estado: g.presuDe(id).estado, enviado: !!g.presuDe(id).enviado_el };
+  const guardado = { guardar: txtAct('pz-guardar'), duplicar: txtAct('pz-duplicar-editor') };
+
+  /* Duplicar: sale una copia nueva, con las líneas y sin número */
+  document.querySelector('[data-act="pz-duplicar-editor"]').click();
+  await new Promise(r => setTimeout(r, 500));
+  const copia = { id: g.S.presu.id, titulo: g.S.presu.titulo,
+    lineas: g.S.presu.lineas.length, cliente: g.S.presu.cliente_id === g.S.clientes[0].id };
+
+  /* Enviar: desde el editor cierra el presupuesto y pasa al envío */
+  g.dlgPresupuesto(id, null, true);
+  await new Promise(r => setTimeout(r, 250));
+  const bot = document.querySelector('[data-act="pz-enviar-ya"]');
+  bot.click();                                    // primero arma
+  await new Promise(r => setTimeout(r, 150));
+  const armado = bot.textContent.trim();
+  bot.click();                                    // y confirma
+  await new Promise(r => setTimeout(r, 900));
+  const trasEnviar = { estado: g.presuDe(id).estado,
+    ref: !!g.presuDe(id).referencia,
+    enDialogo: !!document.getElementById('pd-formato') };
+  g.cerrarDlg();
+  return { nuevo, trasCrear, guardado, copia, armado, trasEnviar, id };
+});
+paso('en un presupuesto nuevo el botón dice «Crear»',
+  botones.nuevo.crear === 'Crear', botones.nuevo.crear);
+paso('y están Ver y Enviar',
+  botones.nuevo.ver === 'Ver' && botones.nuevo.enviar === 'Enviar',
+  JSON.stringify(botones.nuevo));
+paso('todavía sin Duplicar, porque no hay nada que duplicar',
+  botones.nuevo.duplicar === null);
+paso('Crear lo deja guardado como borrador, sin mandar nada',
+  botones.trasCrear.estado === 'borrador' && botones.trasCrear.enviado === false,
+  JSON.stringify(botones.trasCrear));
+paso('una vez guardado, el botón pasa a decir «Guardar» y aparece Duplicar',
+  botones.guardado.guardar === 'Guardar' && botones.guardado.duplicar === 'Duplicar',
+  JSON.stringify(botones.guardado));
+paso('Duplicar abre una oferta nueva, sin número todavía',
+  botones.copia.id === null, botones.copia.id);
+paso('con el mismo cliente, las mismas líneas y el título marcado como copia',
+  botones.copia.cliente === true && botones.copia.lineas === 1 &&
+  /\(copia\)$/.test(botones.copia.titulo), botones.copia.titulo);
+paso('Enviar avisa de que el presupuesto se cierra, y pide confirmación',
+  /Confirmar/.test(botones.armado), botones.armado);
+paso('al confirmar queda emitido, con su número',
+  botones.trasEnviar.estado === 'emitido' && botones.trasEnviar.ref === true,
+  JSON.stringify(botones.trasEnviar));
+paso('y encadena con las opciones del documento antes de mandarlo',
+  botones.trasEnviar.enDialogo === true);
+
+const enFicha = await T(async (id) => {
+  const g = window.__T;
+  g.dlgPresupuesto(id);
+  await new Promise(r => setTimeout(r, 250));
+  const t = act => { const e = document.querySelector('[data-act="'+act+'"]'); return e ? e.textContent.trim() : null; };
+  const r = { ver: t('pz-documento'), enviar: t('pz-enviar'), duplicar: t('pz-duplicar') };
+  g.cerrarDlg();
+  return r;
+}, botones.id);
+paso('la ficha usa las mismas palabras que el editor',
+  enFicha.ver === 'Ver' && enFicha.enviar === 'Enviar' && enFicha.duplicar === 'Duplicar',
+  JSON.stringify(enFicha));
 
 /* ================================================================
    Final
