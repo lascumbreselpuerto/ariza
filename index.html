@@ -1371,7 +1371,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.10.25-3';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.10.25-4';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -3558,6 +3558,58 @@ function precioVentaMaterial(articuloId){
   return Math.round(Number(a.coste) * (1 + Number(rec) / 100) * 100) / 100;
 }
 
+/* ---- Tres manos de obra y tres rutas ----
+   Una hora en un chalet no se cobra como una hora en una nave, y salir al
+   polígono de al lado no es salir a Jerez. Con un solo número, o se cobra de
+   menos en lo grande o de más en lo pequeño. */
+const TARIFAS_MO = [
+  ['particular', 'Particulares', 'Vivienda, chalet, comunidad de vecinos'],
+  ['retail',     'Retail',       'Comercio, oficina, empresa de servicios'],
+  ['industria',  'Industria',    'Nave, polígono, administración'],
+];
+/* Qué tarifa le toca a cada tipo de cliente. Es un reparto de fábrica, y se
+   cambia en Equipo sin tocar el código: cada casa vende distinto. */
+const TARIFA_POR_CLIENTE_DEF = {
+  'Particular':            'particular',
+  'Comunidad':             'particular',
+  'Empresa de servicios':  'retail',
+  'Industria':             'industria',
+  'Administración':        'industria',
+};
+const repartoTarifas = () => Object.assign({}, TARIFA_POR_CLIENTE_DEF, S.ajustes.tarifa_cliente || {});
+/* La tarifa que le toca a un cliente. Si su tipo no está repartido, la de
+   particulares: cobrar de menos se arregla con una llamada, cobrar de más
+   se arregla perdiendo al cliente. */
+function tarifaMODe(clienteId){
+  const c = clienteId ? clienteDe(clienteId) : null;
+  const r = repartoTarifas();
+  return (c && r[c.tipo]) || 'particular';
+}
+const nombreTarifaMO = k => (TARIFAS_MO.find(x => x[0] === k) || TARIFAS_MO[0])[1];
+/* El precio de la hora de esa tarifa. Si está sin rellenar, el de siempre */
+function precioHoraDe(k){
+  const t = S.tarifas || {};
+  const v = t['precio_hora_' + k];
+  return Number(v != null && v !== '' ? v : (t.precio_hora || 0));
+}
+
+const RUTAS = ['ruta1', 'ruta2', 'ruta3'];
+const nombreRuta = k => {
+  const t = S.tarifas || {};
+  if (k === 'km') return 'Por kilómetros';
+  return (t[k + '_nombre'] || '').trim() || ('Ruta ' + k.slice(-1));
+};
+const importeRuta = k => {
+  const t = S.tarifas || {};
+  const v = t[k + '_importe'];
+  return Number(v != null && v !== '' ? v : (k === 'ruta1' ? (t.desplazamiento_fijo || 0) : 0));
+};
+const costeRuta = k => Number((S.tarifas || {})[k + '_coste'] || 0);
+/* Lo que se cobra por kilómetros: ida y vuelta. Se teclea la ida, que es el
+   número que se lee en el mapa, y la aplicación hace el doble. */
+const importePorKm = km => Math.round(Number(km || 0) * 2 * Number((S.tarifas || {}).precio_km || 0) * 100) / 100;
+const costePorKm   = km => Math.round(Number(km || 0) * 2 * Number((S.tarifas || {}).coste_km || 0) * 100) / 100;
+
 /* Lo que suma un presupuesto. Se calcula a partir de sus líneas, siempre igual,
    lo mismo para pintarlo en pantalla que para guardarlo al emitir. */
 function totalesPresu(lineas, descuento, tipoIva){
@@ -4232,7 +4284,7 @@ function importeLinea(l){
    y su coste; la mano de obra y el desplazamiento salen de las tarifas. */
 function dlgLineaPresu(tipo){
   const t = S.tarifas || {};
-  if (tipo === 'texto' || tipo === 'capitulo' || tipo === 'mano_obra' || tipo === 'desplazamiento'){
+  if (tipo === 'texto' || tipo === 'capitulo'){
     const d = S.presu;
     if (tipo === 'texto')
       d.lineas.push({ tipo:'texto', descripcion:'', cantidad:0, unidad:'', precio:0, importe:0, coste:0 });
@@ -4242,17 +4294,13 @@ function dlgLineaPresu(tipo){
       leerEditorPresu();
       return dlgDetalleLinea(d.lineas.length - 1);
     }
-    if (tipo === 'mano_obra')
-      d.lineas.push({ tipo:'mano_obra', descripcion:'Mano de obra', cantidad:1, unidad:'h',
-        precio: Number(t.precio_hora || 0), importe: Number(t.precio_hora || 0),
-        coste: Number(t.coste_hora || 0) });
-    if (tipo === 'desplazamiento')
-      d.lineas.push({ tipo:'desplazamiento', descripcion:'Desplazamiento', cantidad:1, unidad:'ud',
-        precio: Number(t.desplazamiento_fijo || 0), importe: Number(t.desplazamiento_fijo || 0),
-        coste: 0 });
     pintarEditorPresu();
     return;
   }
+  /* Mano de obra y desplazamiento tienen ahora de dónde elegir, así que se
+     preguntan en vez de ponerse solos */
+  if (tipo === 'mano_obra') return dlgManoObra();
+  if (tipo === 'desplazamiento') return dlgDesplazamiento();
   /* Material: se elige del almacén */
   const cat = (S.articulos || []).filter(a => a.activo !== false)
     .sort((x, y) => (x.descripcion||'').localeCompare(y.descripcion||'', 'es'));
@@ -4319,6 +4367,167 @@ async function subirAdjuntos(presupuestoId, files){
   pintarPresupuesto();
   if (subidos) toast(subidos + (subidos === 1 ? ' documento adjuntado.' : ' documentos adjuntados.'));
   if (fallos.length) toast('No se han podido subir: ' + fallos.join('; '));
+}
+
+/* ---- Mano de obra ----
+   Sale ya marcada la tarifa que le toca al cliente por su tipo, y se puede
+   cambiar: el reparto acierta casi siempre, pero el que está delante del
+   cliente sabe más que un reparto. */
+function dlgManoObra(){
+  leerEditorPresu();
+  const t = S.tarifas || {};
+  const d = S.presu;
+  const sug = tarifaMODe(d.cliente_id);
+  const cli = d.cliente_id ? clienteDe(d.cliente_id) : null;
+  const min = Number(t.minimo_horas || 0);
+  abrirDlg('<h3>Añadir mano de obra</h3>'+
+    (cli ? '<p class="mini" style="margin:0 0 10px">'+esc(cli.nombre)+
+      (cli.tipo ? ' · '+esc(cli.tipo)+', así que se propone la tarifa de '+esc(nombreTarifaMO(sug)) : '')+
+      '</p>' : '')+
+    '<div class="campos">'+
+    '<div class="campo full"><label for="mo-tarifa">Tarifa</label><select id="mo-tarifa">'+
+      TARIFAS_MO.map(x => '<option value="'+x[0]+'"'+(x[0]===sug?' selected':'')+'>'+
+        esc(x[1])+' · '+eur(precioHoraDe(x[0]))+'/h</option>').join('')+
+    '</select><span class="pista" id="mo-pista">'+
+      esc((TARIFAS_MO.find(x => x[0] === sug) || TARIFAS_MO[0])[2])+'</span></div>'+
+    '<div class="campo"><label for="mo-horas">Horas</label>'+
+      '<input id="mo-horas" type="number" step="any" min="0" value="'+(min > 0 ? min : 1)+'">'+
+      (min > 0 ? '<span class="pista">El mínimo facturable son '+min+' h</span>' : '')+'</div>'+
+    '<div class="campo"><label for="mo-precio">Precio por hora (€)</label>'+
+      '<input id="mo-precio" type="number" step="0.01" min="0" value="'+esc(precioHoraDe(sug))+'">'+
+      '<span class="pista">Sale de la tarifa; cámbialo si este trabajo es otra cosa</span></div>'+
+    '<div class="campo"><label for="mo-dto">Descuento (%)</label>'+
+      '<input id="mo-dto" type="number" step="any" min="0" max="100" value="0"></div>'+
+    '<div class="campo full"><label for="mo-desc">Cómo sale en el presupuesto</label>'+
+      '<input id="mo-desc" type="text" maxlength="160" value="Mano de obra"></div>'+
+    '</div>'+
+    '<p class="mini" id="mo-resumen" style="margin:10px 0 0"></p>'+
+    '<p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-act="pz-volver-editor">Cancelar</button>'+
+    '<button type="submit" class="btn pri">Añadir</button></div>', () => {
+    const k = val('mo-tarifa') || 'particular';
+    const horas = parseFloat(val('mo-horas')) || 0;
+    const precio = parseFloat(val('mo-precio'));
+    const dto = Math.min(100, Math.max(0, parseFloat(val('mo-dto')) || 0));
+    if (!(horas > 0)) return setErr('Pon las horas.');
+    if (isNaN(precio)) return setErr('Pon el precio por hora.');
+    const l = { tipo:'mano_obra', variante:k,
+      descripcion: val('mo-desc') || 'Mano de obra',
+      nombre: val('mo-desc') || 'Mano de obra',
+      detalle: 'Tarifa de '+nombreTarifaMO(k)+'.',
+      cantidad: horas, unidad:'h', precio, dto,
+      coste: Number(t.coste_hora || 0) };
+    l.importe = importeLinea(l);
+    S.presu.lineas.push(l);
+    pintarPresupuesto();
+  });
+  /* Al cambiar de tarifa baja su precio y se explica a qué corresponde */
+  const sel = document.getElementById('mo-tarifa');
+  const refresca = () => {
+    const k = sel.value;
+    const pi = document.getElementById('mo-pista');
+    const x = TARIFAS_MO.find(y => y[0] === k);
+    if (pi && x) pi.textContent = x[2];
+    const pr = document.getElementById('mo-precio');
+    if (pr) pr.value = precioHoraDe(k);
+    resumenMO();
+  };
+  const resumenMO = () => {
+    const c = document.getElementById('mo-resumen');
+    if (!c) return;
+    const horas = parseFloat(val('mo-horas')) || 0;
+    const precio = parseFloat(val('mo-precio')) || 0;
+    const dto = Math.min(100, Math.max(0, parseFloat(val('mo-dto')) || 0));
+    const imp = Math.round(horas * precio * (1 - dto/100) * 100) / 100;
+    const coste = horas * Number(t.coste_hora || 0);
+    c.innerHTML = '<b>'+eur(imp)+'</b>'+(dto ? ' (con el '+dto+'% de descuento)' : '')+
+      '. Te cuesta '+eur(coste)+', deja '+eur(Math.round((imp - coste)*100)/100)+'.' +
+      (imp < coste ? ' <b>Así se pierde dinero.</b>' : '');
+  };
+  if (sel) sel.addEventListener('change', refresca);
+  ['mo-horas','mo-precio','mo-dto'].forEach(id => {
+    const e = document.getElementById(id);
+    if (e) e.addEventListener('input', resumenMO);
+  });
+  resumenMO();
+}
+
+/* ---- Desplazamiento ----
+   Tres rutas con su importe, y lo que cae fuera se cobra por kilómetros: se
+   teclea la ida, que es lo que se lee en el mapa, y se cobra ida y vuelta. */
+function dlgDesplazamiento(){
+  leerEditorPresu();
+  const t = S.tarifas || {};
+  abrirDlg('<h3>Añadir desplazamiento</h3>'+
+    '<div class="campos">'+
+    '<div class="campo full"><label for="de-ruta">Zona</label><select id="de-ruta">'+
+      RUTAS.map(k => '<option value="'+k+'">'+esc(nombreRuta(k))+' · '+eur(importeRuta(k))+'</option>').join('')+
+      '<option value="km">Por kilómetros</option>'+
+    '</select></div>'+
+    '<div class="campo" id="de-caja-km" hidden><label for="de-km">Kilómetros hasta el sitio (solo ida)</label>'+
+      '<input id="de-km" type="number" step="any" min="0" value="0">'+
+      '<span class="pista">Se cobra la ida y la vuelta: la aplicación hace el doble</span></div>'+
+    '<div class="campo"><label for="de-cant">Número de salidas</label>'+
+      '<input id="de-cant" type="number" step="1" min="1" value="1"></div>'+
+    '<div class="campo"><label for="de-dto">Descuento (%)</label>'+
+      '<input id="de-dto" type="number" step="any" min="0" max="100" value="0"></div>'+
+    '<div class="campo full"><label for="de-desc">Cómo sale en el presupuesto</label>'+
+      '<input id="de-desc" type="text" maxlength="160" value="'+esc('Desplazamiento · '+nombreRuta('ruta1'))+'"></div>'+
+    '</div>'+
+    '<p class="mini" id="de-resumen" style="margin:10px 0 0"></p>'+
+    '<p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-act="pz-volver-editor">Cancelar</button>'+
+    '<button type="submit" class="btn pri">Añadir</button></div>', () => {
+    const k = val('de-ruta') || 'ruta1';
+    const km = parseFloat(val('de-km')) || 0;
+    const cant = parseInt(val('de-cant'), 10) || 1;
+    const dto = Math.min(100, Math.max(0, parseFloat(val('de-dto')) || 0));
+    if (k === 'km' && !(km > 0)) return setErr('Pon los kilómetros de ida.');
+    const precio = k === 'km' ? importePorKm(km) : importeRuta(k);
+    const coste  = k === 'km' ? costePorKm(km)   : costeRuta(k);
+    if (!(precio > 0))
+      return setErr('Esa zona no tiene importe cargado. Ponlo en Equipo, en Tarifas y costes.');
+    const l = { tipo:'desplazamiento', variante:k, km: k === 'km' ? km : null,
+      descripcion: val('de-desc') || 'Desplazamiento',
+      nombre: val('de-desc') || 'Desplazamiento',
+      detalle: k === 'km'
+        ? km+' km de ida, '+(km*2)+' km de ida y vuelta, a '+eur(t.precio_km || 0)+' el km.'
+        : 'Zona: '+nombreRuta(k)+'.',
+      cantidad: cant, unidad:'ud', precio, dto, coste };
+    l.importe = importeLinea(l);
+    S.presu.lineas.push(l);
+    pintarPresupuesto();
+  });
+  const sel = document.getElementById('de-ruta');
+  const resumen = () => {
+    const k = sel ? sel.value : 'ruta1';
+    const caja = document.getElementById('de-caja-km');
+    if (caja) caja.hidden = k !== 'km';
+    const km = parseFloat(val('de-km')) || 0;
+    const cant = parseInt(val('de-cant'), 10) || 1;
+    const dto = Math.min(100, Math.max(0, parseFloat(val('de-dto')) || 0));
+    const precio = k === 'km' ? importePorKm(km) : importeRuta(k);
+    const coste  = (k === 'km' ? costePorKm(km) : costeRuta(k)) * cant;
+    const imp = Math.round(precio * cant * (1 - dto/100) * 100) / 100;
+    const desc = document.getElementById('de-desc');
+    if (desc && !desc.dataset.tocado)
+      desc.value = 'Desplazamiento · ' + nombreRuta(k);
+    const c = document.getElementById('de-resumen');
+    if (!c) return;
+    c.innerHTML = k === 'km' && !(km > 0)
+      ? 'Pon los kilómetros de ida y se calcula el importe.'
+      : '<b>'+eur(imp)+'</b>'+(dto ? ' (con el '+dto+'% de descuento)' : '')+
+        (k === 'km' ? ' · '+km+' km de ida, '+(km*2)+' ida y vuelta' : '')+
+        '. Te cuesta '+eur(Math.round(coste*100)/100)+'.';
+  };
+  if (sel) sel.addEventListener('change', resumen);
+  ['de-km','de-cant','de-dto'].forEach(id => {
+    const e = document.getElementById(id);
+    if (e) e.addEventListener('input', resumen);
+  });
+  const desc = document.getElementById('de-desc');
+  if (desc) desc.addEventListener('input', () => { desc.dataset.tocado = '1'; });
+  resumen();
 }
 
 /* ---- Una línea por dentro ----
@@ -4456,6 +4665,7 @@ async function guardarPresupuesto(emitiendo){
         descripcion: l.descripcion || '', nombre: l.nombre || l.descripcion || '',
         referencia: l.referencia || null, detalle: l.detalle || null,
         cantidad: Number(l.cantidad || 0), dto: Number(l.dto || 0),
+        variante: l.variante || null, km: l.km != null ? Number(l.km) : null,
         unidad: l.unidad || 'ud', precio: Number(l.precio || 0),
         importe: Number(l.importe || 0), coste: Number(l.coste || 0) }));
       const { error } = await sb.from('presupuesto_lineas').insert(filas);
@@ -4923,6 +5133,37 @@ function panelMarca(){
   return h + '</div>';
 }
 
+/* Qué tarifa de mano de obra le toca a cada tipo de cliente. Esto no decide
+   nada por su cuenta: solo propone, y en el presupuesto se puede cambiar. */
+function panelReparto(){
+  const r = repartoTarifas();
+  const t = S.tarifas || {};
+  const sinPrecio = TARIFAS_MO.filter(x => t['precio_hora_'+x[0]] == null);
+  let h = '<div class="panel"><div class="panel-h"><h3>Qué tarifa le toca a cada cliente</h3></div>'+
+    '<p class="mini" style="margin:0 0 12px">Al añadir mano de obra a un presupuesto sale ya marcada la '+
+    'tarifa que corresponde al tipo de cliente. Se puede cambiar siempre: esto acierta casi todas las '+
+    'veces, y quien está delante del cliente sabe más que un reparto.</p>';
+  h += '<div class="tabla-wrap"><table class="tabla"><thead><tr>'+
+    '<th>Tipo de cliente</th><th>Tarifa</th><th style="width:110px">Precio hora</th>'+
+    '</tr></thead><tbody>'+
+    CLIENTES.map(c => {
+      const k = r[c] || 'particular';
+      return '<tr><td>'+esc(c)+'</td>'+
+        '<td><select class="cal-sel" data-act="reparto" data-tipo="'+esc(c)+'">'+
+        TARIFAS_MO.map(x => '<option value="'+x[0]+'"'+(x[0]===k?' selected':'')+'>'+esc(x[1])+'</option>').join('')+
+        '</select></td>'+
+        '<td>'+eur(precioHoraDe(k))+'</td></tr>';
+    }).join('')+
+    '</tbody></table></div>';
+  if (sinPrecio.length)
+    h += '<p class="nota-oficina" style="margin:12px 0 0">'+
+      (sinPrecio.length === 1 ? 'La tarifa de ' : 'Las tarifas de ')+
+      esc(sinPrecio.map(x => x[1]).join(' y '))+
+      (sinPrecio.length === 1 ? ' no tiene precio' : ' no tienen precio')+
+      ' cargado, así que de momento cobran el precio de referencia. Se rellenan en Tarifas y costes.</p>';
+  return h + '</div>';
+}
+
 /* Ver la cabecera en papel antes de mandar nada con ella */
 function vistaPreviaCabecera(){
   const em = datosEmpresa();
@@ -4982,6 +5223,7 @@ function panelEmpresa(){
     '<button class="btn pri" data-act="guardar-empresa">Guardar datos de la empresa</button></div></div>';
 
   h += panelMarca();
+  h += panelReparto();
 
   /* Tabla de protección exigida por combinación. Vacía de fábrica: la rellena quien
      tiene la norma delante. La aplicación no inventa qué exige cada casilla. */
@@ -17569,17 +17811,40 @@ function dlgTarifas(){
     '<p class="mini" style="margin:0 0 12px">Esto no lo ve nadie más que tú. Con estos números la aplicación valora '+
     'cada visita y calcula el margen.</p>';
 
-  h += '<div class="grupo"><h3>Mano de obra</h3><div class="campos">'+
-    campo('t-ph', 'Precio hora de técnico (€)', t.precio_hora, '0.01', 'Lo que cobras al cliente') +
+  /* Tres precios de hora, un solo coste: el técnico cuesta lo mismo esté en un
+     chalet o en una nave; lo que cambia es lo que se cobra. */
+  h += '<div class="grupo"><h3>Mano de obra</h3>'+
+    '<p class="mini" style="margin:0 0 10px">Tres precios según dónde se trabaje. El que se propone al hacer '+
+    'un presupuesto sale del tipo de cliente, y se puede cambiar en el momento.</p><div class="campos">'+
+    campo('t-php', 'Particulares (€/h)', t.precio_hora_particular, '0.01', 'Vivienda, chalet, comunidad') +
+    campo('t-phr', 'Retail (€/h)', t.precio_hora_retail, '0.01', 'Comercio, oficina, servicios') +
+    campo('t-phi', 'Industria (€/h)', t.precio_hora_industria, '0.01', 'Nave, polígono, administración') +
+    campo('t-ph', 'Precio hora de referencia (€)', t.precio_hora, '0.01',
+          'El de toda la vida. Se usa si alguno de los tres queda vacío') +
     campo('t-ch', 'Coste hora de técnico (€)', t.coste_hora, '0.01', 'Sueldo, seguridad social y estructura') +
     campo('t-min', 'Mínimo facturable (horas)', t.minimo_horas, '1', 'Horas completas, aunque la visita dure menos') +
     campo('t-urg', 'Recargo de urgencia (%)', t.recargo_urgencia, '1', 'Se aplica al tipo «Urgencia fuera de horario»') +
     '</div></div>';
 
-  h += '<div class="grupo"><h3>Desplazamiento</h3><div class="campos">'+
-    campo('t-df', 'Importe fijo por salida (€)', t.desplazamiento_fijo, '0.01') +
-    campo('t-pkm', 'Precio por km (€)', t.precio_km, '0.01', 'Lo que cobras') +
+  const texto = (id, eti, v, pista) =>
+    '<div class="campo"><label for="'+id+'">'+eti+'</label>'+
+    '<input id="'+id+'" type="text" maxlength="40" value="'+esc(v != null ? v : '')+'">'+
+    (pista ? '<span class="pista">'+pista+'</span>' : '')+'</div>';
+  h += '<div class="grupo"><h3>Desplazamiento</h3>'+
+    '<p class="mini" style="margin:0 0 10px">Tres zonas con su importe, y lo que caiga fuera se cobra por '+
+    'kilómetros. Ponles el nombre que uséis vosotros: dentro de un año «Ruta 2» no le dice nada a nadie, '+
+    'y «El Puerto y Jerez» sí. El coste de cada ruta es lo que te cuesta esa salida en combustible y '+
+    'vehículo; sin él, el margen sale más alto de lo que es.</p>'+
+    RUTAS.map((k, i) => '<div class="campos" style="margin-bottom:6px">'+
+      texto('t-'+k+'-n', 'Zona '+(i+1), t[k+'_nombre'] || ('Ruta '+(i+1))) +
+      campo('t-'+k+'-i', 'Lo que cobras (€)', t[k+'_importe'], '0.01') +
+      campo('t-'+k+'-c', 'Lo que te cuesta (€)', t[k+'_coste'], '0.01') +
+      '</div>').join('')+
+    '<div class="campos">'+
+    campo('t-pkm', 'Precio por km (€)', t.precio_km, '0.01', 'Para el cobro por kilómetros: se multiplica por la ida y la vuelta') +
     campo('t-ckm', 'Coste por km (€)', t.coste_km, '0.01', 'Combustible, seguro y vehículo') +
+    campo('t-df', 'Importe fijo por salida (€)', t.desplazamiento_fijo, '0.01',
+          'El de toda la vida. Se usa si la zona 1 queda vacía') +
     '</div></div>';
 
   h += '<div class="grupo"><h3>Materiales</h3><div class="campos">'+
@@ -17600,10 +17865,34 @@ function dlgTarifas(){
                 recargo_urgencia:n('t-urg'), desplazamiento_fijo:n('t-df'), precio_km:n('t-pkm'),
                 coste_km:n('t-ckm'), recargo_material:n('t-rm'), iva:n('t-iva'),
                 actualizado:new Date().toISOString(), actualizado_por: yo() };
+    /* Lo de la segunda vuelta puede quedarse a medias sin romper nada: si una
+       tarifa o una ruta está vacía, se cae a la de referencia. Por eso se
+       comprueba aparte y no entra en el «faltan campos». */
+    const extra = { precio_hora_particular:n('t-php'), precio_hora_retail:n('t-phr'),
+                    precio_hora_industria:n('t-phi') };
+    RUTAS.forEach(k => {
+      extra[k+'_nombre']  = val('t-'+k+'-n') || null;
+      extra[k+'_importe'] = n('t-'+k+'-i');
+      extra[k+'_coste']   = n('t-'+k+'-c');
+    });
     for (const [k, v] of Object.entries(o))
       if (v === null && !['actualizado_por'].includes(k)) return setErr('Faltan campos por rellenar.');
     if (o.coste_hora >= o.precio_hora)
       return setErr('El coste por hora es mayor o igual que el precio: así se pierde dinero en cada visita. Revísalo.');
+    /* Un precio de venta por debajo del coste es un error de tecleo nueve de
+       cada diez veces, y la décima conviene que sea a sabiendas. */
+    for (const [k, et] of [['precio_hora_particular','particulares'],
+                           ['precio_hora_retail','retail'],
+                           ['precio_hora_industria','industria']])
+      if (extra[k] != null && extra[k] <= o.coste_hora)
+        return setErr('El precio de '+et+' ('+extra[k]+' €) no llega al coste de la hora ('+o.coste_hora+' €).');
+    for (let i = 0; i < RUTAS.length; i++){
+      const k = RUTAS[i];
+      if (extra[k+'_importe'] != null && extra[k+'_coste'] != null &&
+          extra[k+'_coste'] > extra[k+'_importe'])
+        return setErr('La zona '+(i+1)+' cuesta más de lo que se cobra. Revísalo.');
+    }
+    Object.assign(o, extra);
     try {
       const { error } = await sb.from('tarifas').upsert(o, { onConflict:'id' });
       if (error) throw error;
@@ -19696,6 +19985,20 @@ raiz.addEventListener('change', e => {
       toast(rol === 'oficina' ? 'Ahora es oficina: verá precios y podrá expedir contratos.'
                               : 'Ahora es técnico: deja de ver precios y contratos.');
     });
+    return;
+  }
+  if (e.target.dataset.act === 'reparto'){
+    const sel = e.target;
+    const o = Object.assign({}, repartoTarifas());
+    o[sel.dataset.tipo] = sel.value;
+    sel.disabled = true;
+    sb.from('ajustes').upsert({ clave:'tarifa_cliente', valor:o }, { onConflict:'clave' })
+      .then(async ({ error }) => {
+        if (error){ fallo(error); sel.disabled = false; return; }
+        S.ajustes.tarifa_cliente = o;
+        pintar();
+        toast(sel.dataset.tipo + ': tarifa de ' + nombreTarifaMO(sel.value) + '.');
+      });
     return;
   }
   if (e.target.dataset.act === 'filtro-tec'){ S.filtroTec = e.target.value; pintar(); return; }
