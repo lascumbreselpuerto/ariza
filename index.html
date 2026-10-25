@@ -1371,7 +1371,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.10.25-2';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.10.25-3';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -15895,13 +15895,21 @@ function abrirDlg(html, guardar){
      es la misma pantalla puesta al día. Si al repintar salta arriba y el foco se
      va al primer campo, el que estaba escribiendo en la línea doce pierde el
      sitio y, peor, lo que acababa de teclear. Así que se guarda dónde estaba. */
-  /* Es el mismo diálogo si lleva el mismo encabezado. Abrir OTRO diálogo encima
-     sí debe empezar por arriba: ahí hay algo nuevo que leer. */
+  /* Cada pantalla de diálogo recuerda a qué altura se quedó, y la pantalla se
+     reconoce por su encabezado. Hace falta porque ir a elegir un material y
+     volver pasa por TRES diálogos: el editor, el de elegir, y el editor otra
+     vez. Sin esto, el de vuelta empieza arriba y hay que buscar con el dedo la
+     línea que se estaba rellenando, que es lo que pasaba. */
   const titulo = s => { const m = String(s || '').match(/<h3[^>]*>([\s\S]*?)<\/h3>/); return m ? m[1] : ''; };
-  const yaAbierto = dlg.open && titulo(html) !== '' && titulo(html) === titulo(dlgForm.innerHTML);
-  const alto = yaAbierto ? dlg.scrollTop : 0;
+  const antes = dlg.open ? titulo(dlgForm.innerHTML) : '';
+  const ahora = titulo(html);
+  if (dlg.open && antes) ALTURAS[antes] = dlg.scrollTop;
+
+  /* Es el mismo diálogo, no uno encima: entonces también se conserva el campo
+     en el que se estaba escribiendo, con el cursor donde estaba. */
+  const mismo = dlg.open && ahora !== '' && ahora === antes;
   const act = document.activeElement;
-  const foco = yaAbierto && act && act.id && dlgForm.contains(act)
+  const foco = mismo && act && act.id && dlgForm.contains(act)
     ? { id: act.id, s: act.selectionStart, e: act.selectionEnd,
         txt: /^(text|email|password|search|number|date|tel)$/.test(act.type) || act.tagName === 'TEXTAREA' }
     : null;
@@ -15917,12 +15925,22 @@ function abrirDlg(html, guardar){
       el.focus();
       if (foco.txt){ try { el.setSelectionRange(foco.s, foco.e); } catch(_){} }
     }
-  } else if (!yaAbierto){
+  } else if (!mismo){
     const f = dlgForm.querySelector('input,select,textarea'); if (f) f.focus();
   }
-  if (alto > 0){ try { dlg.scrollTop = alto; } catch(_){} }
+  /* Y a la altura que tuviera esta pantalla la última vez que se vio. El foco
+     se pone antes porque enfocar un campo desplaza solo, y lo que manda es la
+     altura guardada, no a dónde quiera llevarnos el navegador. */
+  const alto = ahora ? (ALTURAS[ahora] || 0) : 0;
+  try { dlg.scrollTop = alto; } catch(_){}
+  /* En algunos navegadores el alto real no está hasta el siguiente fotograma */
+  if (alto > 0) requestAnimationFrame(() => { try { dlg.scrollTop = alto; } catch(_){} });
 }
-function cerrarDlg(){ dlg.close(); alGuardar = null; }
+/* A qué altura se quedó cada pantalla de diálogo. Se vacía al cerrar del todo:
+   el siguiente presupuesto que se abra empieza por el principio, que es lo que
+   uno espera al abrir algo nuevo. */
+let ALTURAS = {};
+function cerrarDlg(){ dlg.close(); alGuardar = null; ALTURAS = {}; }
 /* Un solo envío por vez. Con red lenta, dos toques en «Cerrar visita» lanzaban
    dos guardados en paralelo: dos borrados y dos altas de los mismos materiales. */
 let enviando = false;
