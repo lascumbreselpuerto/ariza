@@ -144,7 +144,10 @@ CSS_CABECERA panelMarca vistaPreviaCabecera
 contactosDe contactoDe contactoPrincipal rotuloContacto enviosDe visitasDe
 dlgContacto dlgDetalleLinea importeLinea
 adjuntosDe enlaceAdjunto pesoCorto bloqueAdjuntos subirAdjuntos botonesLinea
-sitioActual
+sitioActual indiceEquipo
+TARIFAS_MO TARIFA_POR_CLIENTE_DEF repartoTarifas tarifaMODe nombreTarifaMO
+precioHoraDe RUTAS nombreRuta importeRuta costeRuta importePorKm costePorKm
+dlgManoObra dlgDesplazamiento panelReparto dlgTarifas CLIENTES
 sumaDias iso deIso
 vistaManual cargarManual mdAHtml MANUALES
 guardarBorradorPuerta aplicarBorradorPuerta CAMPOS_PUERTA dlgPuerta dlgCliente

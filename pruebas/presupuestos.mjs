@@ -906,8 +906,8 @@ const ida = await T(async () => {
 
   const vuelta = caja.scrollTop;
   const lineas = g.S.presu.lineas.length;
-  /* Y otra vez: mano de obra, que no pasa por diálogo intermedio */
-  document.querySelector('[data-act="pz-add"][data-tipo="mano_obra"]').click();
+  /* Y otra vez, con una línea de texto, que se añade sin diálogo de por medio */
+  document.querySelector('[data-act="pz-add"][data-tipo="texto"]').click();
   await new Promise(r => setTimeout(r, 300));
   const trasManoObra = caja.scrollTop;
   g.cerrarDlg();
@@ -923,7 +923,9 @@ paso('el diálogo de elegir material se abre por el principio',
 paso('y al volver, el editor sigue donde estaba',
   ida.vuelta === ida.antes, 'antes '+ida.antes+', al volver '+ida.vuelta);
 paso('con el material añadido', ida.lineas === 21, ida.lineas);
-paso('y añadir mano de obra tampoco mueve la pantalla',
+/* Cambiado a propósito el 25-10-2026: mano de obra ya no se añade de golpe,
+   pregunta la tarifa, así que aquí sirve la línea de texto, que sí es directa. */
+paso('y añadir una línea de texto tampoco mueve la pantalla',
   ida.trasManoObra === ida.antes, ida.trasManoObra);
 paso('pero abrir otro presupuesto después sí empieza por el principio',
   ida.alVolverAAbrir === 0, ida.alVolverAAbrir);
@@ -1083,6 +1085,169 @@ const enFicha = await T(async (id) => {
 paso('la ficha usa las mismas palabras que el editor',
   enFicha.ver === 'Ver' && enFicha.enviar === 'Enviar' && enFicha.duplicar === 'Duplicar',
   JSON.stringify(enFicha));
+
+/* ================================================================
+   16. Tres manos de obra y tres rutas
+   ================================================================
+   Una hora en un chalet no se cobra como una hora en una nave, y
+   salir al polígono de al lado no es salir a Jerez. */
+bloque('16. Tarifas de mano de obra y rutas');
+
+const tarifas = await T(async () => {
+  const g = window.__T;
+  /* Precios de las tres tarifas y de las tres rutas */
+  Object.assign(g.S.tarifas, {
+    precio_hora: 45, coste_hora: 22, minimo_horas: 1,
+    precio_hora_particular: 48, precio_hora_retail: 55, precio_hora_industria: 62,
+    ruta1_nombre:'El Puerto', ruta1_importe: 30, ruta1_coste: 9,
+    ruta2_nombre:'Bahía',     ruta2_importe: 55, ruta2_coste: 20,
+    ruta3_nombre:'Provincia', ruta3_importe: 90, ruta3_coste: 38,
+    precio_km: 0.45, coste_km: 0.2 });
+  const precios = g.TARIFAS_MO.map(x => [x[0], g.precioHoraDe(x[0])]);
+  /* Una tarifa sin rellenar cae a la de referencia */
+  const guardado = g.S.tarifas.precio_hora_retail;
+  g.S.tarifas.precio_hora_retail = null;
+  const caida = g.precioHoraDe('retail');
+  g.S.tarifas.precio_hora_retail = guardado;
+  /* El reparto por tipo de cliente */
+  const cli = g.S.clientes[0];
+  const antes = cli.tipo;
+  const porTipo = {};
+  ['Particular', 'Empresa de servicios', 'Industria', 'Administración'].forEach(t => {
+    cli.tipo = t; porTipo[t] = g.tarifaMODe(cli.id);
+  });
+  cli.tipo = antes;
+  return { precios, caida, porTipo,
+    nombres: g.RUTAS.map(k => g.nombreRuta(k)),
+    importes: g.RUTAS.map(k => g.importeRuta(k)),
+    costes: g.RUTAS.map(k => g.costeRuta(k)),
+    km20: g.importePorKm(20), km20coste: g.costePorKm(20), km0: g.importePorKm(0) };
+});
+paso('cada tarifa tiene su precio por hora',
+  JSON.stringify(tarifas.precios) === JSON.stringify([['particular',48],['retail',55],['industria',62]]),
+  JSON.stringify(tarifas.precios));
+paso('y si una se queda sin rellenar, cobra el precio de referencia',
+  tarifas.caida === 45, tarifas.caida);
+paso('un particular va a la tarifa de particulares',
+  tarifas.porTipo['Particular'] === 'particular');
+paso('una empresa de servicios, a retail',
+  tarifas.porTipo['Empresa de servicios'] === 'retail');
+paso('industria y administración, a industria',
+  tarifas.porTipo['Industria'] === 'industria' &&
+  tarifas.porTipo['Administración'] === 'industria');
+paso('las rutas llevan el nombre que se les ponga',
+  tarifas.nombres.join(',') === 'El Puerto,Bahía,Provincia', tarifas.nombres.join(','));
+paso('con su importe y su coste',
+  tarifas.importes.join(',') === '30,55,90' && tarifas.costes.join(',') === '9,20,38');
+paso('por kilómetros se cobra la ida y la vuelta',
+  tarifas.km20 === 18, '20 km de ida → '+tarifas.km20+' € (20 × 2 × 0,45)');
+paso('y cuesta también la ida y la vuelta',
+  tarifas.km20coste === 8, tarifas.km20coste);
+paso('sin kilómetros no hay importe', tarifas.km0 === 0);
+
+const lineasTarifa = await T(async () => {
+  const g = window.__T;
+  const cli = g.S.clientes[0];
+  cli.tipo = 'Industria';
+  g.dlgPresupuesto(null, { cliente_id: cli.id, titulo:'Nave con tres tarifas' });
+  await new Promise(r => setTimeout(r, 250));
+
+  /* Mano de obra: tiene que venir propuesta la de industria */
+  document.querySelector('[data-act="pz-add"][data-tipo="mano_obra"]').click();
+  await new Promise(r => setTimeout(r, 300));
+  const propuesta = document.getElementById('mo-tarifa').value;
+  const precioPuesto = document.getElementById('mo-precio').value;
+  /* Se cambia a particulares: el precio tiene que bajar solo */
+  const sel = document.getElementById('mo-tarifa');
+  sel.value = 'particular'; sel.dispatchEvent(new Event('change'));
+  await new Promise(r => setTimeout(r, 150));
+  const trasCambiar = document.getElementById('mo-precio').value;
+  /* Se vuelve a industria, 4 horas con un 10% de descuento */
+  sel.value = 'industria'; sel.dispatchEvent(new Event('change'));
+  await new Promise(r => setTimeout(r, 120));
+  document.getElementById('mo-horas').value = '4';
+  document.getElementById('mo-dto').value = '10';
+  document.getElementById('mo-dto').dispatchEvent(new Event('input'));
+  await new Promise(r => setTimeout(r, 120));
+  const resumen = document.getElementById('mo-resumen').textContent;
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 350));
+  const mo = g.S.presu.lineas[g.S.presu.lineas.length - 1];
+
+  /* Desplazamiento por kilómetros */
+  document.querySelector('[data-act="pz-add"][data-tipo="desplazamiento"]').click();
+  await new Promise(r => setTimeout(r, 300));
+  const kmOculto = document.getElementById('de-caja-km').hidden;
+  const selR = document.getElementById('de-ruta');
+  const opciones = [...selR.options].map(o => o.text);
+  selR.value = 'km'; selR.dispatchEvent(new Event('change'));
+  await new Promise(r => setTimeout(r, 150));
+  const kmVisible = !document.getElementById('de-caja-km').hidden;
+  const sinKm = document.getElementById('de-resumen').textContent;
+  document.getElementById('de-km').value = '35';
+  document.getElementById('de-km').dispatchEvent(new Event('input'));
+  await new Promise(r => setTimeout(r, 150));
+  const conKm = document.getElementById('de-resumen').textContent;
+  const descAuto = document.getElementById('de-desc').value;
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 350));
+  const de = g.S.presu.lineas[g.S.presu.lineas.length - 1];
+
+  /* Y una ruta normal */
+  document.querySelector('[data-act="pz-add"][data-tipo="desplazamiento"]').click();
+  await new Promise(r => setTimeout(r, 300));
+  const selR2 = document.getElementById('de-ruta');
+  selR2.value = 'ruta2'; selR2.dispatchEvent(new Event('change'));
+  await new Promise(r => setTimeout(r, 150));
+  const descRuta = document.getElementById('de-desc').value;
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 350));
+  const r2 = g.S.presu.lineas[g.S.presu.lineas.length - 1];
+  const tot = g.totalesPresu(g.S.presu.lineas, 0, 21);
+  g.cerrarDlg();
+  return { propuesta, precioPuesto, trasCambiar, resumen,
+    mo: { v:mo.variante, c:mo.cantidad, p:mo.precio, d:mo.dto, i:mo.importe, co:mo.coste, det:mo.detalle },
+    kmOculto, opciones, kmVisible, sinKm, conKm, descAuto,
+    de: { v:de.variante, km:de.km, p:de.precio, i:de.importe, co:de.coste },
+    r2: { v:r2.variante, p:r2.precio, co:r2.coste }, descRuta,
+    mano_obra: tot.mano_obra, desplazamiento: tot.desplazamiento };
+});
+paso('a un cliente de industria se le propone la tarifa de industria',
+  lineasTarifa.propuesta === 'industria' && lineasTarifa.precioPuesto === '62',
+  lineasTarifa.propuesta+' a '+lineasTarifa.precioPuesto+' €');
+paso('al cambiar de tarifa, el precio baja solo',
+  lineasTarifa.trasCambiar === '48', lineasTarifa.trasCambiar);
+paso('el resumen dice lo que deja antes de añadirla',
+  /deja/.test(lineasTarifa.resumen), lineasTarifa.resumen);
+paso('la línea guarda qué tarifa se usó, no solo el importe',
+  lineasTarifa.mo.v === 'industria' && /Industria/.test(lineasTarifa.mo.det || ''),
+  lineasTarifa.mo.v);
+paso('4 horas a 62 con el 10% de descuento son 223,20',
+  lineasTarifa.mo.i === 223.2, lineasTarifa.mo.i);
+paso('y el coste de la hora es el mismo para las tres tarifas',
+  lineasTarifa.mo.co === 22, lineasTarifa.mo.co);
+paso('el desplazamiento ofrece las tres rutas por su nombre y el cobro por km',
+  lineasTarifa.opciones.some(o => /El Puerto/.test(o)) &&
+  lineasTarifa.opciones.some(o => /Bahía/.test(o)) &&
+  lineasTarifa.opciones.some(o => /Provincia/.test(o)) &&
+  lineasTarifa.opciones.some(o => /Por kilómetros/.test(o)),
+  lineasTarifa.opciones.join(' | '));
+paso('el campo de kilómetros solo aparece al elegir «Por kilómetros»',
+  lineasTarifa.kmOculto === true && lineasTarifa.kmVisible === true);
+paso('y hasta que no hay kilómetros, no hay importe',
+  /Pon los kilómetros/.test(lineasTarifa.sinKm), lineasTarifa.sinKm);
+paso('35 km de ida son 70 de ida y vuelta, a 0,45: 31,50 €',
+  lineasTarifa.de.i === 31.5 && lineasTarifa.de.km === 35, lineasTarifa.conKm);
+paso('con su coste real, no cero',
+  lineasTarifa.de.co === 14, lineasTarifa.de.co);
+paso('el concepto se rellena solo con el nombre de la zona',
+  /Por kilómetros/.test(lineasTarifa.descAuto) && /Bahía/.test(lineasTarifa.descRuta),
+  lineasTarifa.descRuta);
+paso('una ruta normal trae su importe y su coste',
+  lineasTarifa.r2.v === 'ruta2' && lineasTarifa.r2.p === 55 && lineasTarifa.r2.co === 20);
+paso('y todo suma en el sitio que le toca',
+  lineasTarifa.mano_obra === 223.2 && lineasTarifa.desplazamiento === 86.5,
+  'mano de obra '+lineasTarifa.mano_obra+', desplazamiento '+lineasTarifa.desplazamiento);
 
 /* ================================================================
    Final

@@ -225,9 +225,12 @@ bloque('6. El orden de los paneles de Equipo');
    obliga a corregir también lo que se le haya contado. */
 /* Cambiado a propósito el 24-10-2026: entre «Datos de la empresa» y la tabla de
    protección entra «Logo y sellos», que es donde se suben el logo y los
-   distintivos que salen en la cabecera de los documentos. */
+   distintivos que salen en la cabecera de los documentos.
+   Y el 25-10-2026, detrás, «Qué tarifa le toca a cada cliente»: el reparto que
+   decide qué precio por hora se propone en cada presupuesto. */
 const esperado = ['Técnicos con acceso', 'Dar de alta a alguien del equipo',
   'Versión de la aplicación', 'Datos de la empresa', 'Logo y sellos',
+  'Qué tarifa le toca a cada cliente',
   'Protección exigida según accionamiento y usuario', 'Límites de fuerza',
   'Límites de obra', 'Fechas que deciden', 'Copia de seguridad',
   'Control de producción en fábrica', 'Elementos de seguridad',
@@ -239,6 +242,45 @@ paso('«Límites de obra» va justo detrás de «Límites de fuerza»',
   enEquipo.titulos.indexOf('Límites de obra') === enEquipo.titulos.indexOf('Límites de fuerza') + 1);
 paso('y los dos están POR ENCIMA de «Tipos de puerta», que es donde se buscaron mal',
   enEquipo.titulos.indexOf('Límites de obra') < enEquipo.titulos.indexOf('Tipos de puerta'));
+
+/* ================================================================
+   7. El índice de Equipo
+   ================================================================
+   Quince apartados son demasiados para pasarlos con el dedo buscando
+   uno. El índice se arma solo leyendo los títulos que hay en pantalla,
+   así que añadir un panel nuevo no obliga a acordarse de nada. */
+bloque('7. El índice de Equipo');
+
+const indice = await T(async () => {
+  const g = window.__T;
+  g.S.tab = 'equipo';
+  g.pintar();
+  await new Promise(r => setTimeout(r, 400));
+  const nav = document.querySelector('.eq-indice');
+  const botones = nav ? [...nav.querySelectorAll('[data-act="eq-ir"]')] : [];
+  const paneles = [...document.querySelectorAll('#vista .stack > .panel')];
+  /* Cada botón tiene que apuntar a un panel que exista de verdad */
+  const apuntanBien = botones.every(b => !!document.getElementById(b.dataset.ir));
+  const esElPrimero = paneles[0] === nav;
+  /* Y el orden del índice tiene que ser el de la pantalla */
+  const enIndice = botones.map(b => b.textContent.trim());
+  const enPantalla = paneles.slice(1)
+    .map(p => { const t = p.querySelector('.panel-h h2, .panel-h h3, h2, h3'); return t ? t.textContent.trim() : null; })
+    .filter(Boolean);
+  const nombres = ['Límites de obra', 'Copia de seguridad', 'Tipos de puerta'];
+  const lleva = nombres.every(n => enIndice.includes(n));
+  return { hay: !!nav, n: botones.length, apuntanBien, esElPrimero,
+           ordenIgual: JSON.stringify(enIndice) === JSON.stringify(enPantalla),
+           lleva, enIndice };
+});
+paso('al abrir Equipo hay un índice', indice.hay === true);
+paso('y es lo primero que se ve', indice.esElPrimero === true);
+paso('con un apartado por cada panel de la pantalla',
+  indice.n >= 14, indice.n+' apartados');
+paso('en el mismo orden en que están abajo', indice.ordenIgual === true,
+  indice.enIndice.slice(0, 4).join(' | '));
+paso('cada entrada apunta a un panel que existe', indice.apuntanBien === true);
+paso('y están los que más cuesta encontrar', indice.lleva === true);
 
 console.log('\n'+ok+' bien, '+mal+' mal.');
 const graves = errores.filter(x => !/fonts\.googleapis|ERR_TUNNEL|ERR_NAME|net::ERR|provocado por la prueba/.test(x));
