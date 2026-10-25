@@ -651,6 +651,8 @@ const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etique
             sinPresupuestos:false, presupuestos:[], presuLineas:[], articulos:[], textosPresu:[], sinTextos:false,
             presuEnvios:[], presuVisitas:[], sinSeguimiento:false, contactos:[], sinContactos:false,
             presuAdjuntos:[], sinAdjuntos:false,
+            proveedores:[], sinProveedores:false, conjuntos:[], conjuntoLineas:[],
+            sinConjuntos:false, sinCatalogoVentas:false, conjunto:null,
             presu:null, presuFiltro:'', buscaPresu:'' };
 /* Importes: solo existen para el administrador. Si no hay tarifas cargadas, no se enseña nada. */
 const valoracionDe = id => S.valoraciones[id] || null;
@@ -1314,11 +1316,27 @@ async function cargar(){
     S.presuAdjuntos = []; S.sinAdjuntos = true;
   }
   /* Los contactos los ve todo el equipo: el técnico también necesita saber a
-     quién preguntar por el portón cuando llega a la obra. */
+     quién preguntar por el portón cuando llega a la obra. Los proveedores y
+     los conjuntos, lo mismo: no llevan precios, así que no hay nada que
+     esconder y al técnico le sirven para saber qué lleva una puerta. */
   {
-    const co = await sb.from('contactos').select('*').order('nombre').range(0, 9999);
+    const [co, pv, cj, cl] = await Promise.all([
+      sb.from('contactos').select('*').order('nombre').range(0, 9999),
+      sb.from('proveedores').select('*').order('nombre').range(0, 999),
+      sb.from('conjuntos').select('*').order('nombre').range(0, 999),
+      sb.from('conjunto_lineas').select('*').order('orden').range(0, 9999),
+    ]);
     S.contactos = co.error ? [] : (co.data || []);
     S.sinContactos = !!co.error;
+    S.proveedores = pv.error ? [] : (pv.data || []);
+    S.sinProveedores = !!pv.error;
+    S.conjuntos = cj.error ? [] : (cj.data || []);
+    S.conjuntoLineas = cl.error ? [] : (cl.data || []);
+    S.sinConjuntos = !!(cj.error || cl.error);
+    /* La foto y la explicación comercial son de esta entrega: si todavía no se
+       ha ejecutado su SQL, la aplicación sigue funcionando sin ellas. */
+    S.sinCatalogoVentas = !(S.catalogo || []).some(a => 'detalle' in a || 'foto_ruta' in a)
+      && (S.catalogo || []).length > 0;
   }
   if (!j.error){ S.ajustes = {}; (j.data || []).forEach(x => { S.ajustes[x.clave] = x.valor; }); }
   // materiales ya usados, para ir sugiriéndolos al técnico
@@ -1371,7 +1389,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.10.25-4';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.10.25-5';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -3150,6 +3168,15 @@ function vistaAlmacen(){
                       '<button class="btn" data-act="mat-etiquetas">Etiquetas QR</button>' : '')+
        (esGestion() ? '<button class="btn pri" data-act="mat-nuevo">Nuevo material</button>' : '')+'</div>';
 
+  /* Lo que no es material suelto: a quién se le compra y las recetas de venta */
+  if (esGestion())
+    h += '<div class="fila" style="gap:6px;flex-wrap:wrap">'+
+      (S.sinProveedores ? '' : '<button class="btn sm" data-act="proveedores">Proveedores · '+
+        proveedoresActivos().length+'</button>')+
+      (S.sinConjuntos ? '' : '<button class="btn sm" data-act="conjuntos">Conjuntos · '+
+        conjuntosActivos().length+'</button>')+
+      '<span class="sp"></span></div>';
+
   h += '<p class="mini" style="margin:0">'+todos.length+' materiales en el catálogo'+
        (faltan.length ? ' · <b>'+faltan.length+' por debajo del mínimo</b>' : '')+
        (fur ? ' · tu furgoneta: '+esc(fur.nombre) : ' · todavía no tienes furgoneta: se crea sola al coger material')+
@@ -3548,15 +3575,42 @@ const estadoPresu = p => presuCaducado(p) ? 'caducado' : (p ? p.estado : 'borrad
 /* El artículo CON su coste. S.catalogo no lo trae nunca; S.articulos solo lo
    tiene quien puede verlo. */
 const articuloConCoste = id => (S.articulos || []).find(a => a.id === id) || null;
-/* Precio de venta de un material: su coste más el recargo. El del propio
-   artículo manda sobre el general, que es para lo que está. */
+/* Precio de venta de un material. Si tiene precio fijo puesto, ese: hay
+   material que se vende a tarifa del fabricante y no a lo que a ti te salga.
+   Si no, su coste más el recargo, y el del propio artículo manda sobre el
+   general, que es para lo que está. */
 function precioVentaMaterial(articuloId){
   const a = articuloConCoste(articuloId);
   const t = S.tarifas || {};
-  if (!a || a.coste == null) return null;
+  if (!a) return null;
+  if (a.precio_venta != null && a.precio_venta !== '') return Number(a.precio_venta);
+  if (a.coste == null) return null;
   const rec = (a.recargo != null ? a.recargo : (t.recargo_material != null ? t.recargo_material : 0));
   return Math.round(Number(a.coste) * (1 + Number(rec) / 100) * 100) / 100;
 }
+
+/* ---- El almacén como catálogo de ventas ----
+   La foto y el párrafo que lee el cliente viven en el artículo, no en cada
+   presupuesto: escribirlo cada vez es lo que hace que no se escriba nunca. */
+const fotoArticulo = a => {
+  const r = a && (a.foto_ruta || a.foto);
+  if (!r) return '';
+  try { return sb.storage.from('ofertas').getPublicUrl(r).data.publicUrl; }
+  catch(_){ return ''; }
+};
+/* La ficha completa del artículo: la del catálogo, que es la que ve todo el
+   equipo, y si eres gestión también la que trae coste y precio de venta. */
+const fichaArticulo = id => articuloConCoste(id) || articuloDe(id) || null;
+
+const proveedorDe = id => (S.proveedores || []).find(p => p.id === id) || null;
+const proveedoresActivos = () => (S.proveedores || []).filter(p => p.activo !== false)
+  .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+
+const conjuntoDe = id => (S.conjuntos || []).find(c => c.id === id) || null;
+const lineasConjunto = id => (S.conjuntoLineas || []).filter(l => l.conjunto_id === id)
+  .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+const conjuntosActivos = () => (S.conjuntos || []).filter(c => c.activo !== false)
+  .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es'));
 
 /* ---- Tres manos de obra y tres rutas ----
    Una hora en un chalet no se cobra como una hora en una nave, y salir al
@@ -4041,6 +4095,8 @@ function pintarEditorPresu(){
   }
   if (editable)
     h += '<div class="fila" style="gap:6px;flex-wrap:wrap;margin-top:8px">'+
+      (S.sinConjuntos || !conjuntosActivos().length ? ''
+        : '<button type="button" class="btn sm" data-act="pz-conjunto">Añadir conjunto</button>')+
       '<button type="button" class="btn sm" data-act="pz-add" data-tipo="material">Añadir material</button>'+
       '<button type="button" class="btn sm" data-act="pz-add" data-tipo="mano_obra">Mano de obra</button>'+
       '<button type="button" class="btn sm" data-act="pz-add" data-tipo="desplazamiento">Desplazamiento</button>'+
@@ -4330,12 +4386,44 @@ function dlgLineaPresu(tipo){
     if (!desc) return setErr('Elige un material o escribe el concepto.');
     if (!(cant > 0)) return setErr('Pon la cantidad.');
     if (isNaN(prec)) return setErr('Pon el precio.');
-    S.presu.lineas.push({ tipo:'material', articulo_id: art, descripcion: desc,
-      cantidad: cant, unidad: a ? (a.unidad || 'ud') : 'ud', precio: prec,
-      importe: Math.round(cant * prec * 100) / 100,
-      coste: a && a.coste != null ? Number(a.coste) : 0 });
-    pintarEditorPresu();
+    /* La explicación, la referencia y la foto vienen del catálogo: escritas
+       una vez, puestas solas aquí. La foto se copia a la línea para que el
+       presupuesto mandado siga enseñando la que enseñaba aunque mañana se
+       cambie la del catálogo, igual que se congela el precio. */
+    const ficha = art ? (articuloDe(art) || a) : null;
+    const l = { tipo:'material', articulo_id: art, descripcion: desc, nombre: desc,
+      referencia: ficha ? (ficha.codigo || ficha.referencia || null) : null,
+      detalle: ficha ? (ficha.detalle || null) : null,
+      foto_ruta: ficha ? (ficha.foto_ruta || null) : null,
+      cantidad: cant, unidad: a ? (a.unidad || 'ud') : 'ud', precio: prec, dto: 0,
+      coste: a && a.coste != null ? Number(a.coste) : 0 };
+    l.importe = importeLinea(l);
+    S.presu.lineas.push(l);
+    pintarPresupuesto();
   });
+}
+
+/* La foto del producto. Va al cubo «ofertas» y no al de fotos de puertas
+   porque la ve el cliente desde el enlace de su presupuesto, sin haber
+   entrado en la aplicación. */
+async function subirFotoArticulo(articuloId, file){
+  const a = articuloDe(articuloId);
+  if (!a) return;
+  try {
+    const blob = await reducir(file, 900, 0.82);
+    const ruta = 'catalogo/' + articuloId + '-' + Date.now() + '.jpg';
+    const { error: e1 } = await sb.storage.from('ofertas')
+      .upload(ruta, blob, { contentType:'image/jpeg' });
+    if (e1) throw e1;
+    const { error } = await sb.from('articulos').update({ foto_ruta: ruta }).eq('id', articuloId);
+    if (error){ await sb.storage.from('ofertas').remove([ruta]); throw error; }
+    /* La anterior se borra después de que la nueva esté guardada: si algo
+       falla, siempre queda una foto en vez de ninguna. */
+    if (a.foto_ruta){ try { await sb.storage.from('ofertas').remove([a.foto_ruta]); } catch(_){} }
+    await cargar();
+    dlgArticulo(articuloId);
+    toast('Foto guardada.');
+  } catch(e){ fallo(e); }
 }
 
 /* Subir papeles a una oferta. Se pueden soltar varios de una vez, que es como
@@ -4666,6 +4754,7 @@ async function guardarPresupuesto(emitiendo){
         referencia: l.referencia || null, detalle: l.detalle || null,
         cantidad: Number(l.cantidad || 0), dto: Number(l.dto || 0),
         variante: l.variante || null, km: l.km != null ? Number(l.km) : null,
+        foto_ruta: l.foto_ruta || null,
         unidad: l.unidad || 'ud', precio: Number(l.precio || 0),
         importe: Number(l.importe || 0), coste: Number(l.coste || 0) }));
       const { error } = await sb.from('presupuesto_lineas').insert(filas);
@@ -4688,7 +4777,7 @@ async function guardarPresupuesto(emitiendo){
 /* ---- Opciones del documento ----
    Un solo sitio donde se decide qué sale en el papel, y dos salidas: verlo o
    mandarlo. Verlo nunca manda nada, y mandar siempre pasa por verlo. */
-const OPC_DOC_DEF = { formato:'valorado', condiciones:true, anexos:true, qr:true };
+const OPC_DOC_DEF = { formato:'valorado', condiciones:true, anexos:true, qr:true, fotos:true };
 function opcionesDoc(){
   /* Es una preferencia del puesto, no un dato del presupuesto: va al navegador
      y, si el navegador no deja, se usan las de siempre. */
@@ -4728,6 +4817,7 @@ function dlgDocumentoPresu(id, modo){
     '<div class="grupo" style="margin-top:10px"><h3>Qué incluye</h3><div class="checks">'+
       '<label><input type="checkbox" id="pd-cond"'+(op.condiciones?' checked':'')+'>Las condiciones comerciales</label>'+
       '<label><input type="checkbox" id="pd-anexos"'+(op.anexos?' checked':'')+'>La lista de documentos adjuntos</label>'+
+      '<label><input type="checkbox" id="pd-fotos"'+(op.fotos!==false?' checked':'')+'>Las fotos de los productos</label>'+
       '<label><input type="checkbox" id="pd-qr"'+(op.qr?' checked':'')+'>El QR para aceptarlo desde el móvil</label>'+
       '<label><input type="checkbox" id="pd-def">Dejar estas opciones puestas para la próxima vez</label>'+
     '</div></div>'+
@@ -4749,7 +4839,7 @@ function dlgDocumentoPresu(id, modo){
 function leerOpcionesDoc(){
   const c = id => { const e = document.getElementById(id); return e ? !!e.checked : true; };
   const op = { formato: val('pd-formato') || 'valorado',
-    condiciones: c('pd-cond'), anexos: c('pd-anexos'), qr: c('pd-qr') };
+    condiciones: c('pd-cond'), anexos: c('pd-anexos'), qr: c('pd-qr'), fotos: c('pd-fotos') };
   const def = document.getElementById('pd-def');
   if (def && def.checked) guardarOpcionesDoc(op);
   return op;
@@ -17921,16 +18011,51 @@ function dlgArticulo(id){
       ['ud','m','kg','l','h'].map(u=>'<option'+(a&&a.unidad===u?' selected':'')+'>'+u+'</option>').join('')+'</select></div>'+
     '<div class="campo"><label for="x-marca">Marca</label><input id="x-marca" type="text" maxlength="60" value="'+esc(a&&a.marca?a.marca:'')+'"></div>'+
     '<div class="campo"><label for="x-ref">Referencia del fabricante</label><input id="x-ref" type="text" maxlength="60" value="'+esc(a&&a.referencia?a.referencia:'')+'"></div>'+
-    '<div class="campo"><label for="x-prov">Proveedor</label><input id="x-prov" type="text" maxlength="80" list="prov-lista"></div>'+
-    '<datalist id="prov-lista">'+proveedoresMaterial().map(p => '<option value="'+esc(p)+'">').join('')+'</datalist>'+
+    '<div class="campo"><label for="x-prov">Proveedor</label>'+
+      (S.sinProveedores
+        ? '<input id="x-prov" type="text" maxlength="80" list="prov-lista" value="'+esc(a&&a.proveedor?a.proveedor:'')+'">'+
+          '<datalist id="prov-lista">'+proveedoresMaterial().map(p => '<option value="'+esc(p)+'">').join('')+'</datalist>'
+        : '<select id="x-prov"><option value="">Sin proveedor</option>'+
+          (S.proveedores||[]).filter(p => p.activo !== false).map(p =>
+            '<option value="'+p.id+'"'+(a && a.proveedor_id === p.id ? ' selected':'')+'>'+esc(p.nombre)+'</option>').join('')+
+          '</select><span class="pista">Las fichas de proveedor se llevan en el almacén</span>')+
+      '</div>'+
     '<div class="campo"><label for="x-min">Mínimo en almacén</label><input id="x-min" type="number" step="any" min="0" value="'+esc(a&&a.minimo!=null?a.minimo:'')+'"><span class="pista">Por debajo de esto, el almacén avisa</span></div>'+
     '<div class="campo"><label for="x-sitio">Dónde está en la nave</label><input id="x-sitio" type="text" maxlength="60" value="'+esc(a&&a.ubicacion?a.ubicacion:'')+'" placeholder="Ej.: estantería B, balda 3"></div>'+
     (esGestion()
       ? '<div class="campo"><label for="x-coste">Precio de compra (€)</label><input id="x-coste" type="number" step="0.01" min="0" placeholder="Sin IVA"></div>'+
         '<div class="campo"><label for="x-rec">Recargo propio (%)</label><input id="x-rec" type="number" step="1" min="0" placeholder="Si lo dejas vacío, el general"></div>'
       : '')+
-    '<div class="campo full"><label for="x-notas">Notas</label><input id="x-notas" type="text" maxlength="200" value="'+esc(a&&a.notas?a.notas:'')+'"></div>'+
+    '<div class="campo full"><label for="x-notas">Notas internas</label><input id="x-notas" type="text" maxlength="200" value="'+esc(a&&a.notas?a.notas:'')+'"><span class="pista">No salen en el presupuesto</span></div>'+
     '</div>'+
+    /* Lo que convierte el almacén en un catálogo de ventas: la foto y el
+       párrafo que lee el cliente. Se escribe UNA vez, aquí, y se repite solo
+       en cada presupuesto donde salga este material. */
+    (S.sinCatalogoVentas ? '' :
+      '<div class="grupo"><h3>Cómo se vende</h3>'+
+      '<p class="mini" style="margin:0 0 10px">Esto es lo que sale en el presupuesto del cliente. '+
+      'Se escribe una vez y se repite solo en todas las ofertas donde uses este material.</p>'+
+      '<div class="fila" style="gap:14px;align-items:flex-start;flex-wrap:wrap">'+
+      '<div><div class="marca-hueco sello" style="width:120px;height:120px">'+
+        (a && a.foto_ruta ? '<img src="'+esc(fotoArticulo(a))+'" alt="">' : '<span class="mini">Sin foto</span>')+
+      '</div>'+
+      (a ? '<div class="fila" style="gap:6px;margin-top:6px">'+
+        '<label class="btn sm" style="cursor:pointer">'+(a.foto_ruta?'Cambiar':'Subir foto')+
+        '<input type="file" accept="image/*" hidden data-act="subir-foto-art" data-id="'+a.id+'"></label>'+
+        (a.foto_ruta ? '<button type="button" class="btn sm plana" data-act="quitar-foto-art" data-id="'+a.id+'">Quitar</button>' : '')+
+        '</div>'
+        : '<p class="mini" style="margin:6px 0 0;max-width:120px">Guarda primero y podrás ponerle foto.</p>')+
+      '</div>'+
+      '<div class="sp" style="min-width:240px"><div class="campos">'+
+      '<div class="campo full"><label for="x-det">Explicación para el cliente</label>'+
+      '<textarea id="x-det" rows="6" placeholder="Marca, modelo, medidas, materiales, qué incluye y qué norma cumple. '+
+      'Esto es lo que diferencia tu oferta de la del de al lado.">'+esc(a&&a.detalle?a.detalle:'')+'</textarea></div>'+
+      (esGestion()
+        ? '<div class="campo"><label for="x-pv">Precio de venta fijo (€)</label>'+
+          '<input id="x-pv" type="number" step="0.01" min="0" value="'+esc(a&&a.precio_venta!=null?a.precio_venta:'')+'">'+
+          '<span class="pista">Si lo pones, manda sobre el coste más el recargo. Déjalo vacío para que se calcule</span></div>'
+        : '')+
+      '</div></div></div></div>')+
     (a && esGestion() ? '<p class="mini" style="margin:10px 0 0">El precio de compra no se muestra aquí por seguridad. '+
          'Si escribes uno nuevo, sustituye al anterior.</p>' : '')+
     (!a ? '<p class="mini" style="margin:10px 0 0">Al guardar se le asigna el código '+
@@ -17941,9 +18066,22 @@ function dlgArticulo(id){
     '<button type="submit" class="btn pri">Guardar</button></div>';
   abrirDlg(h, async () => {
     const o = { descripcion: val('x-desc'), unidad: val('x-uni') || 'ud',
-                referencia: val('x-ref') || null, proveedor: val('x-prov') || null,
+                referencia: val('x-ref') || null,
                 familia: val('x-fam') || null, marca: val('x-marca') || null,
                 ubicacion: val('x-sitio') || null, notas: val('x-notas') || null };
+    /* Con fichas de proveedor se guarda el enlace y, de paso, su nombre: así
+       el listado y la búsqueda siguen funcionando igual que antes. */
+    if (S.sinProveedores) o.proveedor = val('x-prov') || null;
+    else {
+      const pid = val('x-prov') || null;
+      o.proveedor_id = pid;
+      const pr = pid ? (S.proveedores||[]).find(x => x.id === pid) : null;
+      o.proveedor = pr ? pr.nombre : null;
+    }
+    if (!S.sinCatalogoVentas){
+      o.detalle = val('x-det') || null;
+      if (esGestion()) o.precio_venta = val('x-pv') === '' ? null : +val('x-pv');
+    }
     if (val('x-min') !== '') o.minimo = +val('x-min');
     if (esGestion() && val('x-coste') !== '') o.coste = +val('x-coste');
     if (esGestion() && val('x-rec') !== '') o.recargo = +val('x-rec');
@@ -17957,6 +18095,411 @@ function dlgArticulo(id){
       cerrarDlg(); await cargar(); pintar(); toast('Material guardado.');
     } catch(e){ setErr(e.message.includes('duplicate') ? 'Ya existe un material con esa descripción.' : e.message); }
   });
+}
+
+/* ---- Proveedores ----
+   Antes el proveedor era un nombre suelto repetido en cada artículo, así que
+   para pedir había que buscar el teléfono en el correo de hace seis meses. */
+function dlgProveedores(){
+  const lista = (S.proveedores || []).slice()
+    .sort((a, b) => (a.activo === false ? 1 : 0) - (b.activo === false ? 1 : 0) ||
+                    (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+  let h = '<h3>Proveedores</h3>'+
+    '<p class="mini" style="margin:0 0 12px">A quién se le compra, con su teléfono y su plazo de entrega. '+
+    'El plazo sirve para no prometerle al cliente una fecha que depende de un material que todavía no ha '+
+    'salido del almacén del proveedor.</p>';
+  if (!lista.length)
+    h += '<p class="muted" style="margin:0 0 10px">Todavía no hay ninguno.</p>';
+  else {
+    h += '<div class="lista">'+lista.map(p => {
+      const n = (S.catalogo || []).filter(a => a.proveedor_id === p.id).length;
+      return '<div class="item" data-act="proveedor-edit" data-id="'+p.id+'" style="cursor:pointer">'+
+        '<div class="item-in"><div class="fila" style="gap:8px;flex-wrap:wrap">'+
+        '<b>'+esc(p.nombre || 'Sin nombre')+'</b>'+
+        (p.activo === false ? '<span class="chip gris sin">De baja</span>' : '')+
+        '<span class="sp"></span>'+
+        '<span class="chip gris sin">'+n+' material'+(n===1?'':'es')+'</span>'+
+        (p.plazo_dias != null ? '<span class="chip gris sin">'+p.plazo_dias+' días</span>' : '')+
+        '</div><div class="mini">'+
+        esc([p.contacto, p.telefono, p.email].filter(Boolean).join(' · ') || 'Sin datos de contacto')+
+        '</div></div></div>';
+    }).join('')+'</div>';
+  }
+  h += '<div class="pie"><button type="button" class="btn" data-act="proveedor-nuevo">Nuevo proveedor</button>'+
+    '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cerrar</button></div>';
+  abrirDlg(h, null);
+}
+
+function dlgProveedor(id){
+  const p = id ? proveedorDe(id) : null;
+  const d = p || {};
+  const n = p ? (S.catalogo || []).filter(a => a.proveedor_id === p.id).length : 0;
+  abrirDlg('<h3>'+(p ? 'Proveedor' : 'Nuevo proveedor')+'</h3>'+
+    (p ? '<p class="mini" style="margin:0 0 10px">'+n+' material'+(n===1?'':'es')+' suyo'+(n===1?'':'s')+
+      ' en el catálogo</p>' : '')+
+    '<div class="campos">'+
+    '<div class="campo full"><label for="pv-nom">Nombre</label>'+
+      '<input id="pv-nom" type="text" maxlength="120" value="'+esc(d.nombre||'')+'"></div>'+
+    '<div class="campo"><label for="pv-nif">NIF o CIF</label>'+
+      '<input id="pv-nif" type="text" maxlength="20" value="'+esc(d.nif||'')+'"></div>'+
+    '<div class="campo"><label for="pv-contacto">Persona de contacto</label>'+
+      '<input id="pv-contacto" type="text" maxlength="100" value="'+esc(d.contacto||'')+'"></div>'+
+    '<div class="campo"><label for="pv-tel">Teléfono</label>'+
+      '<input id="pv-tel" type="tel" maxlength="20" value="'+esc(d.telefono||'')+'"></div>'+
+    '<div class="campo"><label for="pv-mail">Correo</label>'+
+      '<input id="pv-mail" type="email" maxlength="160" value="'+esc(d.email||'')+'"></div>'+
+    '<div class="campo full"><label for="pv-dir">Dirección</label>'+
+      '<input id="pv-dir" type="text" maxlength="200" value="'+esc(d.direccion||'')+'"></div>'+
+    '<div class="campo"><label for="pv-web">Web</label>'+
+      '<input id="pv-web" type="text" maxlength="160" value="'+esc(d.web||'')+'"></div>'+
+    '<div class="campo"><label for="pv-plazo">Plazo de entrega (días)</label>'+
+      '<input id="pv-plazo" type="number" step="1" min="0" value="'+esc(d.plazo_dias!=null?d.plazo_dias:'')+'">'+
+      '<span class="pista">Lo que suele tardar en servir</span></div>'+
+    '<div class="campo full"><label for="pv-cond">Condiciones</label>'+
+      '<textarea id="pv-cond" rows="2" placeholder="Ej.: portes pagados a partir de 300 €, pago a 30 días">'+
+      esc(d.condiciones||'')+'</textarea></div>'+
+    '<div class="campo full"><label for="pv-notas">Notas</label>'+
+      '<textarea id="pv-notas" rows="2">'+esc(d.notas||'')+'</textarea></div>'+
+    (p ? '<div class="campo full"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+      '<input type="checkbox" id="pv-activo"'+(d.activo!==false?' checked':'')+
+      ' style="accent-color:var(--amarillo);width:18px;height:18px">En activo</label>'+
+      '<span class="pista">Dar de baja no borra nada: deja de salir al elegir proveedor</span></div>' : '')+
+    '</div><p class="err"></p><div class="pie">'+
+    '<span class="sp"></span><button type="button" class="btn plana" data-act="proveedores">Volver</button>'+
+    '<button type="submit" class="btn pri">Guardar</button></div>', async () => {
+    const o = { nombre: val('pv-nom'), nif: val('pv-nif')||null, contacto: val('pv-contacto')||null,
+      telefono: val('pv-tel')||null, email: val('pv-mail')||null, direccion: val('pv-dir')||null,
+      web: val('pv-web')||null, condiciones: val('pv-cond')||null, notas: val('pv-notas')||null,
+      plazo_dias: val('pv-plazo') === '' ? null : +val('pv-plazo') };
+    if (p) o.activo = !!(document.getElementById('pv-activo')||{}).checked;
+    if (!o.nombre) return setErr('El proveedor necesita un nombre.');
+    try {
+      if (p){
+        const { error } = await sb.from('proveedores').update(o).eq('id', p.id);
+        if (error) throw error;
+        /* El nombre está copiado en los artículos para que la búsqueda siga
+           funcionando: si cambia aquí, se cambia también allí. */
+        if (o.nombre !== p.nombre)
+          await sb.from('articulos').update({ proveedor: o.nombre }).eq('proveedor_id', p.id);
+      } else {
+        o.creado_por = yo();
+        const { error } = await sb.from('proveedores').insert(o); if (error) throw error;
+      }
+      await cargar(); dlgProveedores(); toast(p ? 'Proveedor guardado.' : 'Proveedor creado.');
+    } catch(e){
+      setErr((e.message||'').includes('duplicate') ? 'Ya hay un proveedor con ese nombre.'
+        : ((e.message||'').match(/proveedores/i) ? 'Falta ejecutar catalogo.sql en la base de datos.'
+        : (e.message || 'No se pudo guardar.')));
+    }
+  });
+}
+
+/* ---- Conjuntos ----
+   Una receta de venta: «Seccional 3x3 motorizada» con sus materiales y sus
+   horas. No tiene existencias ni etiqueta; lo que se descuenta del almacén
+   cuando se instala son sus materiales, uno a uno.
+
+   Y no guarda precios a propósito: el del material sale de su ficha el día
+   que se use, y el de la hora de la tarifa que le toque a ese cliente. Un
+   precio copiado aquí envejecería a escondidas. */
+function dlgConjuntos(){
+  const lista = (S.conjuntos || []).slice()
+    .sort((a, b) => (a.activo === false ? 1 : 0) - (b.activo === false ? 1 : 0) ||
+                    (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+  let h = '<h3>Conjuntos</h3>'+
+    '<p class="mini" style="margin:0 0 12px">Vender la misma puerta son siempre las mismas líneas: motor, '+
+    'cuadro, fotocélulas, banda y las horas de montaje. Aquí se montan una vez y en el presupuesto entran '+
+    'todas de golpe, agrupadas en su capítulo. Después se quita o se cambia lo que haga falta.</p>';
+  if (!lista.length)
+    h += '<p class="muted" style="margin:0 0 10px">Todavía no hay ninguno.</p>';
+  else {
+    h += '<div class="lista">'+lista.map(c => {
+      const ls = lineasConjunto(c.id);
+      const mats = ls.filter(l => l.tipo === 'material').length;
+      const horas = ls.filter(l => l.tipo === 'mano_obra').reduce((a, l) => a + Number(l.cantidad||0), 0);
+      return '<div class="item" data-act="conjunto-edit" data-id="'+c.id+'" style="cursor:pointer">'+
+        '<div class="item-in"><div class="fila" style="gap:8px;flex-wrap:wrap">'+
+        '<b>'+esc(c.nombre || 'Sin nombre')+'</b>'+
+        (c.familia ? '<span class="chip gris sin">'+esc(c.familia)+'</span>' : '')+
+        (c.activo === false ? '<span class="chip gris sin">De baja</span>' : '')+
+        '<span class="sp"></span>'+
+        '<span class="chip gris sin">'+mats+' material'+(mats===1?'':'es')+'</span>'+
+        (horas ? '<span class="chip gris sin">'+horas+' h</span>' : '')+
+        '</div>'+
+        (c.detalle ? '<div class="mini">'+esc(String(c.detalle).slice(0,110))+'</div>' : '')+
+        '</div></div>';
+    }).join('')+'</div>';
+  }
+  h += '<div class="pie"><button type="button" class="btn" data-act="conjunto-nuevo">Nuevo conjunto</button>'+
+    '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cerrar</button></div>';
+  abrirDlg(h, null);
+}
+
+/* El conjunto por dentro. Las líneas se manejan en memoria y se guardan todas
+   juntas, igual que en un presupuesto: media receta no es nada. */
+function dlgConjunto(id){
+  const c = id ? conjuntoDe(id) : null;
+  S.conjunto = {
+    id: c ? c.id : null,
+    nombre: c ? c.nombre : '',
+    detalle: c ? c.detalle : '',
+    familia: c ? c.familia : '',
+    notas: c ? c.notas : '',
+    activo: c ? c.activo !== false : true,
+    lineas: c ? lineasConjunto(c.id).map(l => ({ ...l })) : [],
+  };
+  pintarConjunto();
+}
+
+function pintarConjunto(){
+  const d = S.conjunto;
+  const fams = familiasMaterial();
+  let h = '<h3>'+(d.id ? 'Conjunto' : 'Nuevo conjunto')+'</h3>'+
+    '<div class="campos">'+
+    '<div class="campo full"><label for="cj-nom">Nombre</label>'+
+      '<input id="cj-nom" type="text" maxlength="120" value="'+esc(d.nombre||'')+'" '+
+      'placeholder="Ej.: Seccional 3x3 motorizada con fotocélulas"></div>'+
+    '<div class="campo"><label for="cj-fam">Familia</label><select id="cj-fam"><option value=""></option>'+
+      fams.map(f => '<option'+(d.familia===f?' selected':'')+'>'+esc(f)+'</option>').join('')+'</select></div>'+
+    '<div class="campo full"><label for="cj-det">Texto del capítulo</label>'+
+      '<textarea id="cj-det" rows="3" placeholder="Lo que encabeza el grupo en el presupuesto: qué incluye '+
+      'y qué no">'+esc(d.detalle||'')+'</textarea></div>'+
+    '<div class="campo full"><label for="cj-notas">Notas internas</label>'+
+      '<input id="cj-notas" type="text" maxlength="200" value="'+esc(d.notas||'')+'"></div>'+
+    '</div>';
+
+  h += '<div class="grupo"><h3>Qué lleva</h3>';
+  if (!d.lineas.length)
+    h += '<p class="muted" style="margin:0 0 10px">Todavía no lleva nada.</p>';
+  else {
+    h += '<div class="tabla-wrap"><table class="tabla"><thead><tr>'+
+      '<th>Concepto</th><th style="width:80px">Cantidad</th><th style="width:96px"></th>'+
+      '</tr></thead><tbody>'+
+      d.lineas.map((l, i) => {
+        const tipoTxt = { material:'Material', mano_obra:'Mano de obra', texto:'Texto' }[l.tipo] || '';
+        const art = l.articulo_id ? articuloDe(l.articulo_id) : null;
+        return '<tr><td><b>'+esc(l.nombre || '')+'</b>'+
+          '<span class="sub" style="display:block">'+esc(tipoTxt)+
+          (art && art.codigo ? ' · '+esc(art.codigo) : '')+
+          (l.tipo === 'material' && !l.articulo_id ? ' · suelto, no sale del catálogo' : '')+'</span></td>'+
+          '<td>'+(l.tipo === 'texto' ? ''
+            : '<input type="number" step="any" min="0" class="cj-cant" data-i="'+i+'" value="'+esc(l.cantidad)+'" style="width:100%">')+
+          '</td>'+
+          '<td><div class="lin-bs">'+
+          '<button type="button" class="btn sm plana lin-b"'+(i===0?' disabled':'')+' data-act="cj-subir" data-i="'+i+'">↑</button>'+
+          '<button type="button" class="btn sm plana lin-b"'+(i===d.lineas.length-1?' disabled':'')+' data-act="cj-bajar" data-i="'+i+'">↓</button>'+
+          '<button type="button" class="btn sm plana lin-b" data-act="cj-quitar" data-i="'+i+'">✕</button>'+
+          '</div></td></tr>';
+      }).join('')+
+      '</tbody></table></div>';
+  }
+  h += '<div class="fila" style="gap:6px;flex-wrap:wrap;margin-top:8px">'+
+    '<button type="button" class="btn sm" data-act="cj-add" data-tipo="material">Añadir material</button>'+
+    '<button type="button" class="btn sm" data-act="cj-add" data-tipo="mano_obra">Horas de montaje</button>'+
+    '<button type="button" class="btn sm plana" data-act="cj-add" data-tipo="texto">Línea de texto</button>'+
+    '</div>'+
+    '<p class="mini" style="margin:8px 0 0">Aquí no se ponen precios a propósito. El del material sale de '+
+    'su ficha el día que se use, y el de la hora, de la tarifa que le toque a ese cliente. Un precio '+
+    'copiado aquí envejecería sin que nadie se diera cuenta.</p></div>';
+
+  if (d.id)
+    h += '<div class="campos"><div class="campo full">'+
+      '<label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+      '<input type="checkbox" id="cj-activo"'+(d.activo?' checked':'')+
+      ' style="accent-color:var(--amarillo);width:18px;height:18px">En activo</label></div></div>';
+
+  h += '<p class="err"></p><div class="pie" style="flex-wrap:wrap;gap:6px">'+
+    (d.id ? '<button type="button" class="btn sm plana" data-act="cj-borrar" data-id="'+d.id+'">Borrar</button>' : '')+
+    '<span class="sp"></span><button type="button" class="btn plana" data-act="conjuntos">Volver</button>'+
+    '<button type="button" class="btn pri" data-act="cj-guardar">Guardar</button></div>';
+  abrirDlg(h, null);
+}
+
+function leerConjunto(){
+  const d = S.conjunto; if (!d) return;
+  const v = id => { const e = document.getElementById(id); return e ? e.value : null; };
+  if (v('cj-nom') !== null) d.nombre = v('cj-nom');
+  if (v('cj-fam') !== null) d.familia = v('cj-fam');
+  if (v('cj-det') !== null) d.detalle = v('cj-det');
+  if (v('cj-notas') !== null) d.notas = v('cj-notas');
+  const ac = document.getElementById('cj-activo');
+  if (ac) d.activo = !!ac.checked;
+  dlgForm.querySelectorAll('.cj-cant').forEach(e => {
+    d.lineas[+e.dataset.i].cantidad = parseFloat(e.value) || 0;
+  });
+}
+
+/* Añadir una pieza a la receta */
+function dlgLineaConjunto(tipo){
+  leerConjunto();
+  const d = S.conjunto;
+  if (tipo === 'mano_obra'){
+    d.lineas.push({ tipo:'mano_obra', nombre:'Montaje', detalle:null, cantidad:1, unidad:'h' });
+    pintarConjunto();
+    return;
+  }
+  if (tipo === 'texto'){
+    abrirDlg('<h3>Línea de texto del conjunto</h3>'+
+      '<div class="campos"><div class="campo full"><label for="cl-txt">Qué pone</label>'+
+      '<input id="cl-txt" type="text" maxlength="200" placeholder="Ej.: Incluye puesta en marcha y entrega de documentación"></div></div>'+
+      '<p class="err"></p><div class="pie"><span class="sp"></span>'+
+      '<button type="button" class="btn plana" data-act="cj-volver">Cancelar</button>'+
+      '<button type="submit" class="btn pri">Añadir</button></div>', () => {
+      const t = val('cl-txt');
+      if (!t) return setErr('Escribe el texto.');
+      d.lineas.push({ tipo:'texto', nombre:t, detalle:null, cantidad:0, unidad:'' });
+      pintarConjunto();
+    });
+    return;
+  }
+  const cat = (S.catalogo || []).filter(a => a.activo !== false)
+    .sort((x, y) => (x.descripcion||'').localeCompare(y.descripcion||'', 'es'));
+  abrirDlg('<h3>Añadir material al conjunto</h3>'+
+    '<div class="campos">'+
+    '<div class="campo full"><label for="cl-art">Material</label><select id="cl-art">'+
+      '<option value="">Lo escribo a mano</option>'+
+      cat.map(a => '<option value="'+a.id+'">'+esc(a.descripcion + (a.codigo ? ' · '+a.codigo : ''))+'</option>').join('')+
+      '</select><span class="pista">Si sale del catálogo, trae su precio, su foto y su explicación cada vez '+
+      'que se use</span></div>'+
+    '<div class="campo full"><label for="cl-nom">Cómo se llama en el conjunto</label>'+
+      '<input id="cl-nom" type="text" maxlength="200" placeholder="Se rellena solo al elegir"></div>'+
+    '<div class="campo"><label for="cl-cant">Cantidad</label>'+
+      '<input id="cl-cant" type="number" step="any" min="0" value="1"></div>'+
+    '</div>'+
+    '<p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-act="cj-volver">Cancelar</button>'+
+    '<button type="submit" class="btn pri">Añadir</button></div>', () => {
+    const art = val('cl-art') || null;
+    const a = art ? articuloDe(art) : null;
+    const nom = val('cl-nom') || (a ? a.descripcion : '');
+    const cant = parseFloat(val('cl-cant')) || 0;
+    if (!nom) return setErr('Elige un material o escribe el concepto.');
+    if (!(cant > 0)) return setErr('Pon la cantidad.');
+    d.lineas.push({ tipo:'material', articulo_id: art, nombre: nom, detalle: null,
+      cantidad: cant, unidad: a ? (a.unidad || 'ud') : 'ud' });
+    pintarConjunto();
+  });
+  const sel = document.getElementById('cl-art');
+  if (sel) sel.addEventListener('change', () => {
+    const a = sel.value ? articuloDe(sel.value) : null;
+    const n = document.getElementById('cl-nom');
+    if (n && a) n.value = a.descripcion || '';
+  });
+}
+
+async function guardarConjunto(){
+  leerConjunto();
+  const d = S.conjunto;
+  if (!d.nombre.trim()) return setErr('Ponle un nombre al conjunto.');
+  if (!d.lineas.length) return setErr('Un conjunto sin nada dentro no sirve de nada.');
+  const o = { nombre: d.nombre.trim(), detalle: d.detalle || null,
+              familia: d.familia || null, notas: d.notas || null, activo: !!d.activo };
+  try {
+    let id = d.id;
+    if (id){ const { error } = await sb.from('conjuntos').update(o).eq('id', id); if (error) throw error; }
+    else {
+      o.creado_por = yo();
+      const { data, error } = await sb.from('conjuntos').insert(o).select().maybeSingle();
+      if (error) throw error;
+      id = data ? data.id : null;
+    }
+    if (!id) throw new Error('No se ha podido guardar el conjunto.');
+    /* Las líneas se rehacen enteras: son la receta, no piezas sueltas */
+    await sb.from('conjunto_lineas').delete().eq('conjunto_id', id);
+    if (d.lineas.length){
+      const filas = d.lineas.map((l, i) => ({
+        conjunto_id: id, orden: i, tipo: l.tipo, articulo_id: l.articulo_id || null,
+        nombre: l.nombre || '', detalle: l.detalle || null,
+        cantidad: Number(l.cantidad || 0), unidad: l.unidad || 'ud' }));
+      const { error } = await sb.from('conjunto_lineas').insert(filas);
+      if (error) throw error;
+    }
+    await cargar(); pintar();
+    dlgConjuntos();
+    toast('Conjunto guardado.');
+  } catch(e){
+    setErr((e.message||'').match(/conjunto/i) && (e.message||'').match(/relation|exist/i)
+      ? 'Falta ejecutar catalogo.sql en la base de datos.'
+      : (e.message || 'No se ha podido guardar.'));
+  }
+}
+
+/* ---- Meter un conjunto en un presupuesto ----
+   Entra como un capítulo con sus líneas debajo. Los precios se resuelven
+   AHORA: el del material de su ficha, el de la hora de la tarifa que le toca
+   a este cliente. */
+function dlgMeterConjunto(){
+  leerEditorPresu();
+  const lista = conjuntosActivos();
+  if (!lista.length) return toast('Todavía no hay conjuntos. Se montan en el almacén.');
+  const k = tarifaMODe(S.presu.cliente_id);
+  abrirDlg('<h3>Añadir un conjunto</h3>'+
+    '<p class="mini" style="margin:0 0 10px">Entra como un capítulo con todas sus líneas. Después quitas o '+
+    'cambias lo que haga falta. Las horas se valoran a la tarifa de '+esc(nombreTarifaMO(k))+
+    ', que es la de este cliente.</p>'+
+    '<div class="lista">'+lista.map(c => {
+      const ls = lineasConjunto(c.id);
+      const mats = ls.filter(l => l.tipo === 'material').length;
+      const horas = ls.filter(l => l.tipo === 'mano_obra').reduce((a, l) => a + Number(l.cantidad||0), 0);
+      return '<div class="item" data-act="pz-conjunto-usar" data-id="'+c.id+'" style="cursor:pointer">'+
+        '<div class="item-in"><div class="fila" style="gap:8px;flex-wrap:wrap">'+
+        '<b>'+esc(c.nombre)+'</b><span class="sp"></span>'+
+        '<span class="chip gris sin">'+mats+' material'+(mats===1?'':'es')+'</span>'+
+        (horas ? '<span class="chip gris sin">'+horas+' h</span>' : '')+
+        '</div>'+(c.detalle ? '<div class="mini">'+esc(String(c.detalle).slice(0,120))+'</div>' : '')+
+        '</div></div>';
+    }).join('')+'</div>'+
+    '<div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-act="pz-volver-editor">Cancelar</button></div>', null);
+}
+
+function meterConjunto(id){
+  const c = conjuntoDe(id);
+  if (!c) return;
+  const d = S.presu;
+  const t = S.tarifas || {};
+  const k = tarifaMODe(d.cliente_id);
+  const nuevas = [];
+  /* El capítulo, que es lo que agrupa y lleva el subtotal en el papel */
+  nuevas.push({ tipo:'capitulo', nombre: c.nombre, descripcion: c.nombre,
+    detalle: c.detalle || null, cantidad:0, unidad:'', precio:0, importe:0, coste:0 });
+  lineasConjunto(id).forEach(l => {
+    if (l.tipo === 'texto'){
+      nuevas.push({ tipo:'texto', nombre:l.nombre, descripcion:l.nombre,
+        cantidad:0, unidad:'', precio:0, importe:0, coste:0 });
+      return;
+    }
+    if (l.tipo === 'mano_obra'){
+      const n = { tipo:'mano_obra', variante:k, nombre:l.nombre || 'Mano de obra',
+        descripcion: l.nombre || 'Mano de obra',
+        detalle: l.detalle || ('Tarifa de '+nombreTarifaMO(k)+'.'),
+        cantidad: Number(l.cantidad || 0), unidad:'h',
+        precio: precioHoraDe(k), dto: 0, coste: Number(t.coste_hora || 0) };
+      n.importe = importeLinea(n);
+      nuevas.push(n);
+      return;
+    }
+    const a = l.articulo_id ? fichaArticulo(l.articulo_id) : null;
+    const precio = l.articulo_id ? precioVentaMaterial(l.articulo_id) : null;
+    const n = { tipo:'material', articulo_id: l.articulo_id || null,
+      nombre: l.nombre, descripcion: l.nombre,
+      referencia: a ? (a.codigo || a.referencia || null) : null,
+      detalle: l.detalle || (a ? (a.detalle || null) : null),
+      foto_ruta: a ? (a.foto_ruta || null) : null,
+      cantidad: Number(l.cantidad || 0), unidad: l.unidad || 'ud',
+      precio: precio != null ? precio : 0, dto: 0,
+      coste: a && a.coste != null ? Number(a.coste) : 0 };
+    n.importe = importeLinea(n);
+    nuevas.push(n);
+  });
+  d.lineas = d.lineas.concat(nuevas);
+  /* Si algún material del catálogo no tiene precio, mejor decirlo ahora que
+     descubrirlo cuando el presupuesto ya está mandado. */
+  const sinPrecio = nuevas.filter(l => l.tipo === 'material' && !(l.precio > 0)).length;
+  pintarPresupuesto();
+  toast(sinPrecio
+    ? 'Conjunto añadido. Ojo: '+sinPrecio+' material'+(sinPrecio===1?'':'es')+' sin precio, revísalo.'
+    : 'Conjunto añadido.');
 }
 
 /* El QR de un material, en pantalla: para enseñárselo a alguien o escanearlo
@@ -18032,9 +18575,13 @@ function documentoPresupuesto(id, op){
     if (!conDetalle){ sumaGrupo += Number(l.importe || 0); return; }
     n++;
     sumaGrupo += Number(l.importe || 0);
+    /* La foto del producto, pequeña y debajo de la referencia: el cliente
+       entiende de un vistazo qué le estás vendiendo. */
+    const foto = op.fotos !== false && l.foto_ruta ? fotoArticulo(l) : '';
     filas += '<tr>'+
       '<td class="n">'+n+'</td>'+
-      '<td class="ref">'+esc(l.referencia || '')+'</td>'+
+      '<td class="ref">'+esc(l.referencia || '')+
+        (foto ? '<img class="fprod" src="'+esc(foto)+'" alt="">' : '')+'</td>'+
       '<td><b>'+esc(nombre)+'</b>'+
         (l.detalle ? '<div class="det">'+esc(l.detalle)+'</div>' : '')+'</td>'+
       (conPrecios
@@ -18069,6 +18616,8 @@ function documentoPresupuesto(id, op){
     'tbody td{padding:5px;border-bottom:1px solid #ece9e6;vertical-align:top}'+
     '.num{text-align:right;white-space:nowrap}.n{color:#A49E99;width:16px}'+
     '.ref{font-size:9px;color:#6B6560;width:66px;word-break:break-word}'+
+    '.fprod{display:block;width:18mm;height:18mm;object-fit:cover;border:1px solid #e0dcd8;'+
+      'border-radius:3px;margin-top:3px}'+
     '.det{color:#6B6560;font-size:9.5px;margin-top:2px;white-space:pre-wrap}'+
     '.libre{color:#3A3330;font-style:italic}'+
     '.cap td{background:#FEF6E0;color:#8A6200;font-weight:700;text-transform:uppercase;'+
@@ -20009,6 +20558,10 @@ raiz.addEventListener('change', e => {
   if (e.target.dataset.act === 'subir-cara' && e.target.files.length){
     subirCara(e.target.dataset.id, e.target.files[0]); e.target.value = '';
   }
+  if (e.target.dataset.act === 'subir-foto-art' && e.target.files.length){
+    const id = e.target.dataset.id, f = e.target.files[0]; e.target.value = '';
+    subirFotoArticulo(id, f);
+  }
   if (e.target.dataset.act === 'subir-adjunto' && e.target.files.length){
     const presu = e.target.dataset.presu;
     const files = [...e.target.files]; e.target.value = '';
@@ -20279,6 +20832,36 @@ dlgForm.addEventListener('click', async e => {
   /* ---- Presupuestos ---- */
   if (a === 'pz-add'){ leerEditorPresu(); dlgLineaPresu(b.dataset.tipo); return; }
   if (a === 'pz-linea'){ dlgDetalleLinea(+b.dataset.i); return; }
+  if (a === 'pz-conjunto'){ dlgMeterConjunto(); return; }
+  if (a === 'pz-conjunto-usar'){ meterConjunto(b.dataset.id); return; }
+  /* ---- Proveedores y conjuntos ---- */
+  if (a === 'proveedores'){ dlgProveedores(); return; }
+  if (a === 'proveedor-nuevo'){ dlgProveedor(null); return; }
+  if (a === 'proveedor-edit'){ dlgProveedor(b.dataset.id); return; }
+  if (a === 'conjuntos'){ dlgConjuntos(); return; }
+  if (a === 'conjunto-nuevo'){ dlgConjunto(null); return; }
+  if (a === 'conjunto-edit'){ dlgConjunto(b.dataset.id); return; }
+  if (a === 'cj-add'){ dlgLineaConjunto(b.dataset.tipo); return; }
+  if (a === 'cj-volver'){ pintarConjunto(); return; }
+  if (a === 'cj-quitar'){ leerConjunto(); S.conjunto.lineas.splice(+b.dataset.i, 1); pintarConjunto(); return; }
+  if (a === 'cj-subir' || a === 'cj-bajar'){
+    leerConjunto();
+    const i = +b.dataset.i, j = a === 'cj-subir' ? i - 1 : i + 1;
+    const L = S.conjunto.lineas;
+    if (j < 0 || j >= L.length) return;
+    const x = L[i]; L[i] = L[j]; L[j] = x;
+    pintarConjunto();
+    return;
+  }
+  if (a === 'cj-guardar'){ await guardarConjunto(); return; }
+  if (a === 'cj-borrar'){
+    if (!armar(b, 'Confirmar el borrado')) return;
+    try {
+      await sb.from('conjuntos').delete().eq('id', b.dataset.id);
+      await cargar(); pintar(); dlgConjuntos(); toast('Conjunto borrado.');
+    } catch(e){ fallo(e); }
+    return;
+  }
   /* ---- Documentos de la oferta ---- */
   if (a === 'adj-privado'){
     leerEditorPresu();
@@ -20448,6 +21031,16 @@ dlgForm.addEventListener('click', async e => {
     if (!av) return;
     cerrarDlg();
     presupuestoDesdeAsistencia(av);
+    return;
+  }
+  if (a === 'quitar-foto-art'){
+    if (!armar(b, 'Confirmar')) return;
+    const art = articuloDe(b.dataset.id);
+    try {
+      await sb.from('articulos').update({ foto_ruta: null }).eq('id', b.dataset.id);
+      if (art && art.foto_ruta){ try { await sb.storage.from('ofertas').remove([art.foto_ruta]); } catch(_){} }
+      await cargar(); dlgArticulo(b.dataset.id); toast('Foto quitada.');
+    } catch(e){ fallo(e); }
     return;
   }
   if (a === 'mat-mover'){ cerrarDlg(); dlgMover(b.dataset.id, b.dataset.modo || 'entrada', b.dataset.aviso || null); return; }
