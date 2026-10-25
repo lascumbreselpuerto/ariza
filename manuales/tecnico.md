@@ -6,7 +6,7 @@ Esto no explica el oficio: explica la aplicación. Da por hecho que sabes de pue
 Lo tienes siempre a mano en la pestaña **Manual** de la propia aplicación, también
 sin cobertura una vez que lo has abierto la primera vez.
 
-> **Versión de la aplicación que describe este manual: 2026.10.25-4**
+> **Versión de la aplicación que describe este manual: 2026.10.25-5**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -216,4 +216,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.10.25-4 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.10.25-5 de ARIZA SAT*
