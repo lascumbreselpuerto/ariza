@@ -83,6 +83,7 @@ function semilla(){
     contactos: [],
     presupuesto_envios: [],
     presupuesto_visitas: [],
+    presupuesto_adjuntos: [],
     movimientos_material: [],
     materiales_previstos: [],
   };
@@ -377,8 +378,12 @@ const RPC = {
     DB.presupuesto_visitas.push({ id:'vis-'+DB.presupuesto_visitas.length,
       presupuesto_id:p.id, cuando: ahora() });
     return {
-      ok:true, referencia:p.referencia, titulo:p.titulo, subtitulo:p.subtitulo,
+      ok:true, referencia:p.referencia, titulo:p.titulo,
       descripcion:p.descripcion,
+      adjuntos: DB.presupuesto_adjuntos.filter(a => a.presupuesto_id === p.id && a.publico)
+        .sort((x,y) => (x.orden||0)-(y.orden||0))
+        .map(a => ({ nombre:a.nombre, descripcion:a.descripcion, ruta:a.ruta,
+                     tipo:a.tipo, bytes:a.bytes })),
       estado:p.estado, fecha:p.fecha, valido_hasta:p.valido_hasta,
       caducado: !!(p.valido_hasta && p.valido_hasta < hoyISO &&
                    !['aceptado','convertido'].includes(p.estado)),

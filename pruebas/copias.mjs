@@ -150,8 +150,10 @@ const bajarCopia = async (pag, act) => {
   paso('dice qué NO está en la copia, como las contraseñas',
        /QUÉ NO ESTÁ EN ESTA COPIA/.test(leeme) && /contraseñas/.test(leeme));
   paso('y cada cuánto hacerla', /CADA CUÁNTO HACERLA/.test(leeme));
-  paso('nombra las cinco carpetas de ficheros del Storage',
-       /expedientes, fotos, documentos, firmas, equipo/.test(leeme));
+  /* Cambiado a propósito el 25-10-2026: entra «ofertas», el cubo donde viven
+     los documentos que se adjuntan a un presupuesto. */
+  paso('nombra las seis carpetas de ficheros del Storage',
+       /expedientes, fotos, documentos, firmas, equipo, ofertas/.test(leeme));
 
   /* ---- Los datos ---- */
   const d = JSON.parse(zipLeer(ruta, 'datos.json'));
@@ -287,7 +289,7 @@ const bajarCopia = async (pag, act) => {
   paso('el ZIP se construye y tiene tamaño', R.bytes > 100, String(R.bytes));
   paso('y se marca como application/zip', R.tipo === 'application/zip', R.tipo);
   paso('se copian veintiuna tablas', R.tablas === 21, String(R.tablas));
-  paso('y las cinco carpetas de ficheros', R.buckets.length === 5, R.buckets.join(', '));
+  paso('y las seis carpetas de ficheros', R.buckets.length === 6, R.buckets.join(', '));
   /* Lo que no está en esta lista no entra en la copia, y no se nota hasta el día
      que haya que restaurar. Al meter los centros se vio que los componentes
      llevaban fuera desde su alta. */

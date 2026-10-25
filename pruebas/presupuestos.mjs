@@ -405,7 +405,7 @@ const nuevoBorrador = await T(async () => {
   await new Promise(r => setTimeout(r, 200));
   g.S.presu.lineas.push({ tipo:'material', articulo_id:'art-foto', descripcion:'Fotocélula de espejo',
     cantidad:2, unidad:'ud', precio:40, importe:80, coste:25 });
-  g.S.presu.anexos = 'Se excluye la obra civil y la toma de corriente.';
+  g.S.presu.condiciones = 'Se excluye la obra civil y la toma de corriente.';
   g.pintarPresupuesto();
   await new Promise(r => setTimeout(r, 150));
   await g.guardarPresupuesto(false);
@@ -424,11 +424,12 @@ const nuevoBorrador = await T(async () => {
   document.querySelector('[data-act="pz-editar"]').click();
   await new Promise(r => setTimeout(r, 250));
   const enEditor = { campos: document.querySelectorAll('#dlg-form input,#dlg-form textarea').length,
-    anexos: !!document.getElementById('pz-anexos'),
+    subtitulo: !!document.getElementById('pz-subtitulo'),
+    adjuntos: /Documentos adjuntos/.test(document.getElementById('dlg-form').innerText),
     guardar: !!document.querySelector('[data-act="pz-guardar"]'),
     emitir: (document.querySelector('[data-act="pz-emitir"]')||{}).textContent };
   g.cerrarDlg();
-  return { id, verTxt, enVista, enEditor, anexosGuardados: g.presuDe(id).anexos };
+  return { id, verTxt, enVista, enEditor, condGuardadas: g.presuDe(id).condiciones };
 });
 paso('un borrador se abre para verlo, no en un formulario',
   nuevoBorrador.enVista.campos === 0 && nuevoBorrador.enVista.editar === true,
@@ -442,9 +443,15 @@ paso('el botón Editar lleva al formulario, con sus campos',
   nuevoBorrador.enEditor.campos > 0 && nuevoBorrador.enEditor.guardar === true);
 paso('y el botón ya no dice «Emitir y mandar», porque emitir no manda',
   nuevoBorrador.enEditor.emitir === 'Emitir', nuevoBorrador.enEditor.emitir);
-paso('el editor tiene el campo de anexos, y se guardan',
-  nuevoBorrador.enEditor.anexos === true &&
-  /obra civil/.test(nuevoBorrador.anexosGuardados || ''), nuevoBorrador.anexosGuardados);
+/* Cambiado a propósito el 25-10-2026: el campo de texto «anexos» desaparece.
+   Un anexo es un papel que se adjunta, no un párrafo, así que ahora el editor
+   enseña los documentos adjuntos y lo que era texto vive en las condiciones. */
+paso('ya no hay campo de subtítulo: el título es uno solo',
+  nuevoBorrador.enEditor.subtitulo === false);
+paso('y en su lugar el editor enseña los documentos adjuntos',
+  nuevoBorrador.enEditor.adjuntos === true);
+paso('las condiciones se guardan', /obra civil/.test(nuevoBorrador.condGuardadas || ''),
+  nuevoBorrador.condGuardadas);
 
 const formatos = await T(async (id) => {
   const g = window.__T;
@@ -459,24 +466,24 @@ const formatos = await T(async (id) => {
   window.open = open0;
   return {
     valorado:{ precio:/40,00/.test(valorado), agua:/BORRADOR/.test(valorado),
-               anexos:/obra civil/.test(valorado) },
+               condiciones:/obra civil/.test(valorado) },
     sinVal:{ precio:/40,00/.test(sinVal), total:/TOTAL/.test(sinVal),
              concepto:/Fotocélula/.test(sinVal) },
     resumen:{ concepto:/Fotocélula/.test(resumen), total:/TOTAL/.test(resumen) },
-    pelado:{ anexos:/obra civil/.test(pelado) },
+    pelado:{ condiciones:/obra civil/.test(pelado) },
   };
 }, nuevoBorrador.id);
 paso('el documento de un borrador sale marcado como BORRADOR',
   formatos.valorado.agua === true);
-paso('el valorado lleva precios y anexos',
-  formatos.valorado.precio === true && formatos.valorado.anexos === true);
+paso('el valorado lleva precios y condiciones',
+  formatos.valorado.precio === true && formatos.valorado.condiciones === true);
 paso('el formato sin valorar dice qué se hace, pero ni un precio',
   formatos.sinVal.concepto === true && formatos.sinVal.precio === false &&
   formatos.sinVal.total === false, JSON.stringify(formatos.sinVal));
 paso('el resumen deja fuera el detalle y conserva el total',
   formatos.resumen.concepto === false && formatos.resumen.total === true,
   JSON.stringify(formatos.resumen));
-paso('y si se quitan los anexos, no salen', formatos.pelado.anexos === false);
+paso('y si se quitan las condiciones, no salen', formatos.pelado.condiciones === false);
 
 const envio = await T(async (id) => {
   const g = window.__T;
@@ -623,7 +630,7 @@ const comercial = await T(async () => {
   /* Un presupuesto con capítulo, referencia, detalle largo y descuento */
   g.dlgPresupuesto(null, { cliente_id: g.S.clientes[0].id, titulo:'Cierre enrollable' });
   await new Promise(r => setTimeout(r, 200));
-  g.S.presu.subtitulo = 'Instalación de cierre enrollable de aluminio en verde';
+  g.S.presu.titulo = 'Instalación de cierre enrollable de aluminio en verde';
   g.S.presu.lineas.push(
     { tipo:'capitulo', descripcion:'Suministro', nombre:'Suministro',
       detalle:'Material puesto en obra.', cantidad:0, unidad:'', precio:0, importe:0, coste:0 },
@@ -652,7 +659,7 @@ const comercial = await T(async () => {
     conLogo: html.includes(png.slice(0, 60)),
     sellosEnPapel: (html.match(new RegExp(png.slice(0,40).replace(/[+/]/g,'.'),'g'))||[]).length,
     numero: /Número:<\/span> <b>PR-/.test(html) || /Número/.test(html),
-    subtitulo: /cierre enrollable de aluminio en verde/.test(html),
+    tituloEnPapel: /cierre enrollable de aluminio en verde/.test(html),
     capitulos: (html.match(/class="cap"/g)||[]).length,
     subtotales: (html.match(/Subtotal /g)||[]).length,
     referencia: /INNOVA/.test(html),
@@ -667,7 +674,9 @@ paso('y salen en el papel', comercial.conLogo === true);
 paso('la cabecera va fija, para repetirse en todas las páginas',
   comercial.cabFija === true);
 paso('el documento lleva el número del presupuesto', comercial.numero === true);
-paso('y el subtítulo que dice de qué va la oferta', comercial.subtitulo === true);
+/* Cambiado a propósito el 25-10-2026: título y subtítulo eran dos campos que
+   acababan diciendo lo mismo. Queda uno, y es el que sale en el papel. */
+paso('y el título, que es el que dice de qué va la oferta', comercial.tituloEnPapel === true);
 paso('los capítulos agrupan y cada uno lleva su subtotal',
   comercial.capitulos === 2 && comercial.subtotales === 2,
   'capítulos '+comercial.capitulos+', subtotales '+comercial.subtotales);
@@ -772,6 +781,161 @@ paso('la ficha lo dice, para saber cuándo toca llamar',
   /abierto 2 veces/.test(seguimiento.txt), (seguimiento.txt.match(/abierto[^.]*/)||[''])[0]);
 paso('y deja claro que eso cuenta aperturas de la página, no del correo',
   /no el correo/.test(seguimiento.txt));
+
+/* ================================================================
+   13. Mover, duplicar y no perder el sitio
+   ================================================================
+   Tres cosas que no se ven en una captura pero que deciden si la
+   aplicación se usa o se abandona: que el orden del papel se pueda
+   cambiar sin rehacer la línea, que una línea parecida se copie, y
+   que al repintar no salte todo arriba. */
+bloque('13. Orden de las líneas y el sitio');
+
+const orden = await T(async () => {
+  const g = window.__T;
+  g.dlgPresupuesto(null, { cliente_id: g.S.clientes[0].id, titulo:'Orden de líneas' });
+  await new Promise(r => setTimeout(r, 200));
+  ['Uno','Dos','Tres'].forEach((n, i) => g.S.presu.lineas.push(
+    { tipo:'material', descripcion:n, nombre:n, cantidad:1, unidad:'ud',
+      precio:(i+1)*10, importe:(i+1)*10, coste:0 }));
+  g.pintarPresupuesto();
+  await new Promise(r => setTimeout(r, 200));
+  const nombres = () => g.S.presu.lineas.map(l => l.nombre || l.descripcion);
+  const inicial = nombres();
+  /* La primera no se puede subir y la última no se puede bajar */
+  const arribaTope = document.querySelector('[data-act="pz-subir"][data-i="0"]').disabled;
+  const abajoTope = document.querySelector('[data-act="pz-bajar"][data-i="2"]').disabled;
+  /* Se baja la primera */
+  document.querySelector('[data-act="pz-bajar"][data-i="0"]').click();
+  await new Promise(r => setTimeout(r, 200));
+  const trasBajar = nombres();
+  /* Se sube la última */
+  document.querySelector('[data-act="pz-subir"][data-i="2"]').click();
+  await new Promise(r => setTimeout(r, 200));
+  const trasSubir = nombres();
+  /* Y se duplica la primera */
+  document.querySelector('[data-act="pz-duplicar-linea"][data-i="0"]').click();
+  await new Promise(r => setTimeout(r, 200));
+  const trasDuplicar = nombres();
+  const copiaSinId = g.S.presu.lineas[1].id === undefined;
+  g.cerrarDlg();
+  return { inicial, arribaTope, abajoTope, trasBajar, trasSubir, trasDuplicar, copiaSinId };
+});
+paso('las flechas de los extremos están apagadas',
+  orden.arribaTope === true && orden.abajoTope === true);
+paso('bajar una línea la intercambia con la de debajo',
+  orden.trasBajar.join(',') === 'Dos,Uno,Tres', orden.trasBajar.join(','));
+paso('subir una línea la intercambia con la de encima',
+  orden.trasSubir.join(',') === 'Dos,Tres,Uno', orden.trasSubir.join(','));
+paso('duplicar deja la copia justo debajo',
+  orden.trasDuplicar.join(',') === 'Dos,Dos,Tres,Uno', orden.trasDuplicar.join(','));
+paso('y la copia es nueva, no la misma fila guardada otra vez',
+  orden.copiaSinId === true);
+
+const sitio = await T(async () => {
+  const g = window.__T;
+  /* Un presupuesto largo, para que el diálogo tenga que desplazarse */
+  g.dlgPresupuesto(null, { cliente_id: g.S.clientes[0].id, titulo:'Presupuesto largo' });
+  await new Promise(r => setTimeout(r, 200));
+  for (let i = 0; i < 18; i++)
+    g.S.presu.lineas.push({ tipo:'material', descripcion:'Línea '+i, nombre:'Línea '+i,
+      cantidad:1, unidad:'ud', precio:10, importe:10, coste:0 });
+  g.pintarPresupuesto();
+  await new Promise(r => setTimeout(r, 250));
+  const caja = document.getElementById('dlg');
+  caja.scrollTop = 300;
+  const antes = caja.scrollTop;
+  /* Se pone el foco en un campo de abajo, como quien está escribiendo */
+  const campo = document.querySelectorAll('.pz-l-cant')[12];
+  campo.focus();
+  const idFoco = campo.id || 'sin-id';
+  /* Y se repinta, que es lo que pasaba al tocar cualquier cosa */
+  g.pintarPresupuesto();
+  await new Promise(r => setTimeout(r, 250));
+  const despues = caja.scrollTop;
+  const sigueAbierto = caja.open;
+  /* Abrir OTRO diálogo distinto sí tiene que empezar por arriba */
+  g.dlgDetalleLinea(0);
+  await new Promise(r => setTimeout(r, 250));
+  const enOtro = caja.scrollTop;
+  g.cerrarDlg();
+  return { antes, despues, sigueAbierto, enOtro, idFoco };
+});
+paso('el diálogo largo se puede desplazar', sitio.antes === 300, sitio.antes);
+paso('y al repintarlo se queda donde estaba, no salta arriba',
+  sitio.despues === sitio.antes, 'antes '+sitio.antes+', después '+sitio.despues);
+paso('sin cerrarse ni parpadear', sitio.sigueAbierto === true);
+paso('pero abrir otro diálogo distinto sí empieza por el principio',
+  sitio.enOtro === 0, sitio.enOtro);
+
+/* ================================================================
+   14. Los anexos son papeles
+   ================================================================ */
+bloque('14. Documentos adjuntos');
+
+const adjuntos = await T(async () => {
+  const g = window.__T;
+  g.dlgPresupuesto(null, { cliente_id: g.S.clientes[0].id, titulo:'Oferta con ficha técnica' });
+  await new Promise(r => setTimeout(r, 200));
+  const sinGuardar = document.getElementById('dlg-form').innerText;
+  g.S.presu.lineas.push({ tipo:'material', descripcion:'Puerta', nombre:'Puerta',
+    cantidad:1, unidad:'ud', precio:1000, importe:1000, coste:600 });
+  g.pintarPresupuesto();
+  await new Promise(r => setTimeout(r, 150));
+  await g.guardarPresupuesto(false);
+  await new Promise(r => setTimeout(r, 700));
+  const id = g.S.presu.id;
+
+  const ficha = new File([new Uint8Array(2048)], 'ficha-tecnica.pdf', { type:'application/pdf' });
+  const plano = new File([new Uint8Array(1024)], 'plano-obra.pdf', { type:'application/pdf' });
+  await g.subirAdjuntos(id, [ficha, plano]);
+  await new Promise(r => setTimeout(r, 500));
+  const lista = g.adjuntosDe(id);
+  /* El plano se marca como solo oficina */
+  await g.sb.from('presupuesto_adjuntos').update({ publico:false })
+    .eq('id', lista.find(x => x.nombre === 'plano-obra.pdf').id);
+  await g.cargar();
+
+  /* Se emite y se mira qué ve el cliente */
+  g.dlgPresupuesto(id, null, true);
+  await new Promise(r => setTimeout(r, 200));
+  await g.guardarPresupuesto(true);
+  await new Promise(r => setTimeout(r, 700));
+  const p = g.presuDe(id);
+  const { data: publico } = await g.sb.rpc('presupuesto_publico', { p_token: p.token });
+
+  const abierto = [];
+  const open0 = window.open;
+  window.open = () => ({ document:{ write: t => abierto.push(t), close(){} } });
+  g.documentoPresupuesto(id, { formato:'valorado', condiciones:true, anexos:true, qr:true });
+  window.open = open0;
+  const papel = abierto.join('');
+  g.cerrarDlg();
+  return { sinGuardar,
+    nombres: lista.map(x => x.nombre).sort(),
+    rutas: lista.map(x => x.ruta),
+    bytes: (lista.find(x => x.nombre === 'ficha-tecnica.pdf')||{}).bytes,
+    enPublico: (publico.adjuntos || []).map(x => x.nombre),
+    enPapel: /Documentación adjunta/.test(papel) && /ficha-tecnica\.pdf/.test(papel),
+    planoEnPapel: /plano-obra\.pdf/.test(papel),
+    peso: g.pesoCorto(2048) };
+});
+paso('sin guardar el borrador todavía no se puede adjuntar, y lo dice',
+  /Guarda el borrador/.test(adjuntos.sinGuardar));
+paso('se pueden subir varios documentos de una vez',
+  adjuntos.nombres.join(',') === 'ficha-tecnica.pdf,plano-obra.pdf', adjuntos.nombres.join(','));
+paso('cada uno va a una ruta que no se puede adivinar',
+  adjuntos.rutas.every(r => /\/[A-Z0-9]{12}\.pdf$/i.test(r)), adjuntos.rutas[0]);
+paso('se guarda el tamaño, para avisar de un fichero enorme',
+  adjuntos.bytes === 2048, adjuntos.bytes);
+paso('el peso se enseña en claro', adjuntos.peso === '2 KB', adjuntos.peso);
+paso('el cliente ve los documentos marcados como suyos',
+  adjuntos.enPublico.join(',') === 'ficha-tecnica.pdf', adjuntos.enPublico.join(','));
+paso('y NO ve el que se dejó para la oficina',
+  !adjuntos.enPublico.includes('plano-obra.pdf'));
+paso('el papel los lista, para que sepa qué se le ha mandado',
+  adjuntos.enPapel === true);
+paso('y el de oficina tampoco sale en el papel', adjuntos.planoEnPapel === false);
 
 /* ================================================================
    Final

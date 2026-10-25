@@ -143,6 +143,8 @@ MAX_SELLOS marcaEmpresa hayLogo marcaImagen guardarMarca cabeceraDocumento
 CSS_CABECERA panelMarca vistaPreviaCabecera
 contactosDe contactoDe contactoPrincipal rotuloContacto enviosDe visitasDe
 dlgContacto dlgDetalleLinea importeLinea
+adjuntosDe enlaceAdjunto pesoCorto bloqueAdjuntos subirAdjuntos botonesLinea
+sitioActual
 sumaDias iso deIso
 vistaManual cargarManual mdAHtml MANUALES
 guardarBorradorPuerta aplicarBorradorPuerta CAMPOS_PUERTA dlgPuerta dlgCliente
