@@ -637,6 +637,228 @@ paso('el componente también ofrece su foto y su papel dentro del diálogo',
   compInput.f === true && compInput.d === true);
 
 /* ================================================================
+   El dintel
+   ================================================================
+   La medida que decide si una seccional entra o no entra. Se pide
+   solo donde manda algo: en todo lo que sube. */
+bloque('El dintel');
+
+const dintel = await T(async () => {
+  const g = window.__T;
+  const donde = {};
+  ['Seccional', 'Enrollable', 'Puerta rápida', 'Basculante', 'Guillotina',
+   'Corredera', 'Batiente', 'Barrera'].forEach(t => { donde[t] = g.pideDintel(t); });
+  /* En la ficha de una puerta seccional el campo tiene que estar visible */
+  const pu = g.S.puertas.find(x => /seccional/i.test(x.tipo || '')) || g.S.puertas[0];
+  await g.sb.from('puertas').update({ tipo:'Seccional' }).eq('id', pu.id);
+  await g.cargar();
+  g.dlgPuerta(pu.id);
+  await new Promise(r => setTimeout(r, 400));
+  const caja = document.getElementById('f-caja-dintel');
+  const visibleSeccional = !!caja && !caja.hidden;
+  /* Se escribe y se guarda */
+  document.getElementById('f-dintel').value = '420';
+  /* Y al cambiar a corredera, el campo se esconde solo */
+  const tipo = document.getElementById('f-tipo');
+  const antes = tipo.value;
+  tipo.value = 'Corredera';
+  tipo.dispatchEvent(new Event('change', { bubbles:true }));
+  await new Promise(r => setTimeout(r, 150));
+  const visibleCorredera = !!caja && !caja.hidden;
+  tipo.value = antes;
+  tipo.dispatchEvent(new Event('change', { bubbles:true }));
+  await new Promise(r => setTimeout(r, 150));
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 900));
+  const guardado = (g.puertaDe(pu.id) || {}).dintel_mm;
+  g.cerrarDlg();
+  return { donde, visibleSeccional, visibleCorredera, guardado };
+});
+paso('el dintel se pide en todo lo que sube',
+  dintel.donde['Seccional'] && dintel.donde['Enrollable'] && dintel.donde['Puerta rápida'] &&
+  dintel.donde['Basculante'] && dintel.donde['Guillotina'],
+  JSON.stringify(dintel.donde));
+paso('y no se pide donde no decide nada',
+  !dintel.donde['Corredera'] && !dintel.donde['Batiente'] && !dintel.donde['Barrera']);
+paso('en la ficha de una seccional el campo está a la vista',
+  dintel.visibleSeccional === true);
+paso('y al cambiar el tipo a corredera desaparece solo',
+  dintel.visibleCorredera === false);
+paso('el dintel se guarda con la puerta', dintel.guardado === 420, dintel.guardado);
+
+/* ================================================================
+   Obras de varios días
+   ================================================================
+   Una obra de cuatro días no cabía en una sola jornada. El técnico
+   tenía que acordarse el jueves de lo que hizo el lunes. */
+bloque('Obras de varios días');
+
+const obraLarga = await T(async () => {
+  const g = window.__T;
+  const av = g.S.avisos[0];
+  /* Lunes */
+  g.dlgJornada(av.id, null);
+  await new Promise(r => setTimeout(r, 300));
+  const sinJornadas = document.getElementById('dlg-form').innerText;
+  document.getElementById('j-fecha').value = '2026-10-19';
+  document.getElementById('j-horas').value = '8';
+  document.getElementById('j-trab').value = 'Montadas las guías y el eje.';
+  document.getElementById('j-prox').value = 'Falta traer el cuadro de maniobra y dos emisores.';
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 900));
+  const unaJornada = g.jornadasDe(av.id).length;
+  const marcada = (g.S.avisos.find(x => x.id === av.id) || {}).obra_larga;
+
+  /* Martes: al abrir el parte tiene que leerse lo que se dejó dicho el lunes */
+  g.dlgJornada(av.id, null);
+  await new Promise(r => setTimeout(r, 300));
+  const avisoPrevio = document.getElementById('dlg-form').innerText;
+  document.getElementById('j-fecha').value = '2026-10-20';
+  document.getElementById('j-horas').value = '6';
+  document.getElementById('j-trab').value = 'Puesto el cuadro y probada la maniobra.';
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 900));
+  const js = g.jornadasDe(av.id);
+
+  /* Material del martes */
+  const j2 = js[1];
+  g.dlgMaterialJornada(j2.id, av.id);
+  await new Promise(r => setTimeout(r, 300));
+  document.getElementById('jm-desc').value = 'Cuadro de maniobra';
+  document.getElementById('jm-cant').value = '1';
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 1100));
+  /* Los materiales no están en memoria: se piden por jornada, igual que hace
+     la propia aplicación al abrir el parte. */
+  const { data: matsJ } = await g.sb.from('materiales').select('*').eq('jornada_id', j2.id);
+  const mats = matsJ || [];
+  const enParte = document.getElementById('dlg-form').innerText;
+
+  /* Y al cerrar, el resumen de las dos jornadas */
+  g.cerrarDlg();
+  g.dlgCierre(av.id);
+  await new Promise(r => setTimeout(r, 500));
+  const enCierre = document.getElementById('dlg-form').innerText;
+  const sinFirmaDiaria = !document.getElementById('j-firma');
+  g.cerrarDlg();
+  return { sinJornadas, unaJornada, marcada, avisoPrevio,
+    n: js.length, horas: g.horasObra(av.id),
+    mats: mats.length, enParte, enCierre, sinFirmaDiaria,
+    proxima: (g.avisoProxima(av.id) || {}).proxima };
+});
+paso('el parte del día no pide firma: la firma es del cierre',
+  obraLarga.sinFirmaDiaria === true && /no se firma/.test(obraLarga.sinJornadas));
+paso('se guarda la primera jornada', obraLarga.unaJornada === 1);
+paso('y la asistencia queda marcada como obra de varios días',
+  obraLarga.marcada === true);
+paso('al abrir el parte del día siguiente, lo primero es lo que se dejó dicho',
+  /Falta traer el cuadro/.test(obraLarga.avisoPrevio), 'avisó de lo pendiente');
+paso('se guardan las dos jornadas con sus horas',
+  obraLarga.n === 2 && obraLarga.horas === 14, obraLarga.n+' jornadas, '+obraLarga.horas+' horas');
+paso('el material se apunta al día en que se gastó', obraLarga.mats === 1);
+paso('y el parte de ese día lo enseña',
+  /Cuadro de maniobra/.test(obraLarga.enParte || ''), 'en el parte del martes');
+paso('al cerrar, el diálogo se llama «Cerrar la obra» y resume las jornadas',
+  /Cerrar la obra/.test(obraLarga.enCierre) && /Jornadas de esta obra/.test(obraLarga.enCierre));
+paso('diciendo las horas totales, que son las que se facturan',
+  /14 horas en total/.test(obraLarga.enCierre), (obraLarga.enCierre.match(/\d+ jornadas?[^.]*/)||[''])[0]);
+paso('y lo que quedó dicho sigue disponible',
+  /cuadro de maniobra/i.test(obraLarga.proxima || ''), obraLarga.proxima);
+
+/* ================================================================
+   Entrega en obra
+   ================================================================ */
+bloque('Entrega en obra');
+
+const entrega = await T(async () => {
+  const g = window.__T;
+  /* El guión sale del tipo de puerta */
+  const guiones = {
+    seccional: g.guionEntrega('Seccional').length,
+    barrera: g.guionEntrega('Barrera').length,
+    peatonal: g.guionEntrega('Peatonal automática').length,
+    raro: g.guionEntrega('Algo que no existe').length };
+  const hayMuelle = g.guionEntrega('Seccional').some(x => /muelle/i.test(x));
+  const hayMastil = g.guionEntrega('Barrera').some(x => /mástil/i.test(x));
+
+  const av = g.S.avisos[0];
+  await g.sb.from('avisos').update({ tipo:'instalacion' }).eq('id', av.id);
+  await g.sb.from('puertas').update({ tipo:'Seccional' }).eq('id', av.puerta_id);
+  await g.cargar();
+
+  g.dlgEntregaObra(av.id, null);
+  await new Promise(r => setTimeout(r, 450));
+  const txt = document.getElementById('dlg-form').innerText;
+  const nPuntos = document.querySelectorAll('#dlg-form input[type="radio"]').length / 3;
+
+  /* Firmar sin marcar nada tiene que fallar */
+  document.getElementById('eo-que').value = 'Puerta seccional 3x3 con motor y cuadro';
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 300));
+  const sinMarcar = document.querySelector('#dlg-form .err').textContent;
+
+  /* Se marca todo bien menos uno, y se deja «Conforme» a propósito */
+  document.querySelectorAll('#dlg-form input[type="radio"][value="bien"]').forEach(r => { r.checked = true; });
+  const malo = document.querySelector('#dlg-form input[type="radio"][value="mal"]');
+  malo.checked = true;
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 300));
+  const contradice = document.querySelector('#dlg-form .err').textContent;
+
+  /* Se corrige la conformidad y se firma */
+  document.getElementById('eo-conf').value = 'con_reparos';
+  document.getElementById('eo-com').value = 'El desbloqueo cuesta. Vuelven el jueves.';
+  document.getElementById('eo-form').checked = true;
+  g.FIRMA.ctx.beginPath(); g.FIRMA.ctx.moveTo(10,10);
+  g.FIRMA.ctx.lineTo(120,60); g.FIRMA.ctx.stroke(); g.FIRMA.pintado = true;
+  document.getElementById('eo-nom').value = 'Antonio Gil';
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 1000));
+  const e = g.entregasObraDe(av.id)[0];
+
+  /* Y el acta en papel */
+  const abierto = [];
+  const open0 = window.open;
+  window.open = () => ({ document:{ write: t => abierto.push(t), close(){} } });
+  g.documentoEntrega(e.id);
+  window.open = open0;
+  const papel = abierto.join('');
+  /* Volver a abrirla: ya no se puede tocar */
+  g.dlgEntregaObra(av.id, e.id);
+  await new Promise(r => setTimeout(r, 400));
+  const cerrada = document.getElementById('dlg-form').innerText;
+  const sinRadios = document.querySelectorAll('#dlg-form input[type="radio"]').length === 0;
+  g.cerrarDlg();
+  return { guiones, hayMuelle, hayMastil, txt, nPuntos, sinMarcar, contradice,
+    e: { conf:e.conformidad, firma:!!e.firma_ruta, nom:e.firma_nombre, com:e.comentario,
+         malos: (e.pruebas||[]).filter(x => x.resultado === 'mal').length },
+    papel, cerrada, sinRadios };
+});
+paso('cada tipo de puerta tiene su propio guión de pruebas',
+  entrega.guiones.seccional !== entrega.guiones.barrera &&
+  entrega.hayMuelle === true && entrega.hayMastil === true,
+  JSON.stringify(entrega.guiones));
+paso('y lo que no tiene lista propia usa la general',
+  entrega.guiones.raro === 12, entrega.guiones.raro);
+paso('el acta sale con los puntos de la seccional',
+  entrega.nPuntos === entrega.guiones.seccional && /muelle/i.test(entrega.txt),
+  entrega.nPuntos+' puntos');
+paso('no deja firmar con puntos sin marcar',
+  /sin marcar/.test(entrega.sinMarcar), entrega.sinMarcar);
+paso('ni firmar «Conforme» con un punto marcado como mal',
+  /Con reparos/.test(entrega.contradice), entrega.contradice);
+paso('firmada, queda con reparos, con su firma y su nombre',
+  entrega.e.conf === 'con_reparos' && entrega.e.firma === true && entrega.e.nom === 'Antonio Gil');
+paso('guardando lo que dijo el cliente, tal cual',
+  /desbloqueo cuesta/.test(entrega.e.com || ''), entrega.e.com);
+paso('y qué punto falló', entrega.e.malos === 1);
+paso('el acta en papel lleva las pruebas y la conformidad',
+  /ACTA DE ENTREGA EN OBRA/.test(entrega.papel) && /Con reparos/.test(entrega.papel) &&
+  /Antonio Gil/.test(entrega.papel));
+paso('una entrega firmada ya no se toca',
+  entrega.sinRadios === true && /no se cambia/.test(entrega.cerrada));
+
+/* ================================================================
    Final
    ================================================================ */
 console.log('\n'+ok+' bien, '+mal+' mal.');

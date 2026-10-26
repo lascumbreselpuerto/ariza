@@ -231,6 +231,9 @@ bloque('6. El orden de los paneles de Equipo');
 const esperado = ['Técnicos con acceso', 'Dar de alta a alguien del equipo',
   'Versión de la aplicación', 'Datos de la empresa', 'Logo y sellos',
   'Qué tarifa le toca a cada cliente',
+  /* Y el 26-10-2026, detrás, la lista de funciones que se prueban al entregar
+     una puerta terminada, que el técnico usa en el acta y el cliente firma. */
+  'Qué se prueba al entregar una puerta',
   'Protección exigida según accionamiento y usuario', 'Límites de fuerza',
   'Límites de obra', 'Fechas que deciden', 'Copia de seguridad',
   'Control de producción en fábrica', 'Elementos de seguridad',

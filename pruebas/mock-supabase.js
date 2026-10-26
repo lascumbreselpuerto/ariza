@@ -87,6 +87,8 @@ function semilla(){
     proveedores: [],
     conjuntos: [],
     conjunto_lineas: [],
+    jornadas: [],
+    entregas_obra: [],
     movimientos_material: [],
     materiales_previstos: [],
   };
