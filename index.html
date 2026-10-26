@@ -653,6 +653,7 @@ const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etique
             presuAdjuntos:[], sinAdjuntos:false,
             proveedores:[], sinProveedores:false, conjuntos:[], conjuntoLineas:[],
             sinConjuntos:false, sinCatalogoVentas:false, conjunto:null,
+            jornadas:[], sinJornadas:false, entregasObra:[], sinEntregas:false,
             presu:null, presuFiltro:'', buscaPresu:'' };
 /* Importes: solo existen para el administrador. Si no hay tarifas cargadas, no se enseña nada. */
 const valoracionDe = id => S.valoraciones[id] || null;
@@ -1320,12 +1321,20 @@ async function cargar(){
      los conjuntos, lo mismo: no llevan precios, así que no hay nada que
      esconder y al técnico le sirven para saber qué lleva una puerta. */
   {
-    const [co, pv, cj, cl] = await Promise.all([
+    const [co, pv, cj, cl, jo, eo] = await Promise.all([
       sb.from('contactos').select('*').order('nombre').range(0, 9999),
       sb.from('proveedores').select('*').order('nombre').range(0, 999),
       sb.from('conjuntos').select('*').order('nombre').range(0, 999),
       sb.from('conjunto_lineas').select('*').order('orden').range(0, 9999),
+      sb.from('jornadas').select('*').order('fecha').range(0, 9999),
+      sb.from('entregas_obra').select('*').order('fecha', { ascending:false }).range(0, 4999),
     ]);
+    /* Las jornadas y las entregas son de esta entrega: si todavía no se ha
+       ejecutado su SQL, la aplicación sigue funcionando sin ellas. */
+    S.jornadas = jo.error ? [] : (jo.data || []);
+    S.sinJornadas = !!jo.error;
+    S.entregasObra = eo.error ? [] : (eo.data || []);
+    S.sinEntregas = !!eo.error;
     S.contactos = co.error ? [] : (co.data || []);
     S.sinContactos = !!co.error;
     S.proveedores = pv.error ? [] : (pv.data || []);
@@ -1389,7 +1398,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.10.25-5';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.10.26-1';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -2035,6 +2044,11 @@ function tarjetaTrabajo(a){
     (p.codigo ? '<div class="mini">'+esc([p.codigo, p.tipo, p.marca, p.modelo].filter(Boolean).join(' · '))+'</div>' : '')+
     (a.descripcion ? '<p class="trab-desc">'+esc(a.descripcion)+'</p>' : '')+
     (a.notas_oficina ? '<p class="nota-oficina">Oficina: '+esc(a.notas_oficina)+'</p>' : '')+
+    /* Lo que el técnico dejó dicho el último día. Va arriba del todo porque
+       es lo que hay que leer ANTES de ponerse, no después. */
+    (() => { const j = avisoProxima(a.id);
+      return j ? '<p class="nota-oficina"><b>De la jornada del '+esc(fechaCorta(j.fecha))+
+        ':</b> '+esc(j.proxima)+'</p>' : ''; })()+
     bloqueSitio(p)+
     /* ---- Aviso de alta en obra ----
        Sale en la tarjeta, antes de salir de casa, y no al llegar al parte: si el
@@ -2065,7 +2079,12 @@ function tarjetaTrabajo(a){
       (a.puerta_id ? '<button class="btn sm" data-act="abrir" data-id="'+a.puerta_id+'">Ficha de la puerta</button>' : '')+
       '<button class="btn sm plana" data-act="aviso-editar" data-id="'+a.id+'">Detalles</button>'+
       '<span class="sp"></span>'+
-      '<button class="btn sm pri" data-act="cerrar-asistencia" data-id="'+a.id+'">Cerrar visita</button>'+
+      /* Una obra que dura varios días se cierra una sola vez, al final. Lo de
+         cada día es el parte, que no lleva firma ni cobro. */
+      (S.sinJornadas ? ''
+        : '<button class="btn sm" data-act="jornada-hoy" data-id="'+a.id+'">Parte de hoy</button>')+
+      '<button class="btn sm pri" data-act="cerrar-asistencia" data-id="'+a.id+'">'+
+        (jornadasDe(a.id).length ? 'Cerrar la obra' : 'Cerrar visita')+'</button>'+
     '</div></div>';
 }
 
@@ -5254,6 +5273,42 @@ function panelReparto(){
   return h + '</div>';
 }
 
+/* Qué se prueba delante del cliente al entregar, por tipo de puerta. Lo que
+   trae de fábrica es un punto de partida: quien sabe qué hay que probar en una
+   barrera es el que las monta, no la aplicación. */
+const GRUPOS_ENTREGA = [
+  ['general',    'General, para lo que no tenga lista propia'],
+  ['seccional',  'Seccional y basculante'],
+  ['enrollable', 'Enrollable, vertical y rápida'],
+  ['corredera',  'Corredera'],
+  ['batiente',   'Batiente'],
+  ['barrera',    'Barrera'],
+  ['peatonal',   'Peatonal automática'],
+];
+function panelGuionEntrega(){
+  const g = Object.assign({}, GUION_ENTREGA_FABRICA, S.ajustes.guion_entrega || {});
+  const tocados = Object.keys(S.ajustes.guion_entrega || {}).length;
+  let h = '<div class="panel"><div class="panel-h"><h3>Qué se prueba al entregar una puerta</h3></div>'+
+    '<p class="mini" style="margin:0 0 12px">Esta es la lista que le sale al técnico en el acta de entrega, '+
+    'y la que firma el cliente. Un punto por línea. Lo que viene de fábrica es un punto de partida: '+
+    'quien sabe qué hay que probar en una barrera eres tú, no la aplicación.</p>';
+  h += GRUPOS_ENTREGA.map(([k, et]) =>
+    '<div class="campo full" style="margin-bottom:12px"><label for="ge-'+k+'">'+esc(et)+
+    ' <span class="mini">('+(g[k]||[]).length+' puntos)</span></label>'+
+    '<textarea id="ge-'+k+'" rows="'+Math.min(14, Math.max(4, (g[k]||[]).length))+'" '+
+    'data-ge="'+k+'">'+esc((g[k]||[]).join('\n'))+'</textarea></div>').join('');
+  h += '<div class="fila" style="margin-top:4px"><span class="mini">'+
+    (tocados ? tocados+' lista'+(tocados===1?'':'s')+' cambiada'+(tocados===1?'':'s')+' por vosotros'
+             : 'Todas como vienen de fábrica')+
+    '</span><span class="sp"></span>'+
+    '<button class="btn sm plana" data-act="guion-entrega-fabrica">Volver a las de fábrica</button>'+
+    '<button class="btn pri" data-act="guardar-guion-entrega">Guardar las listas</button></div>';
+  h += '<p class="mini" style="margin:12px 0 0">Si borras todos los puntos de una lista, esa puerta pasa a '+
+    'usar la general. Cambiar la lista no toca las entregas ya firmadas: cada acta guarda lo que se probó '+
+    'el día que se firmó.</p>';
+  return h + '</div>';
+}
+
 /* Ver la cabecera en papel antes de mandar nada con ella */
 function vistaPreviaCabecera(){
   const em = datosEmpresa();
@@ -5314,6 +5369,7 @@ function panelEmpresa(){
 
   h += panelMarca();
   h += panelReparto();
+  h += panelGuionEntrega();
 
   /* Tabla de protección exigida por combinación. Vacía de fábrica: la rellena quien
      tiene la norma delante. La aplicación no inventa qué exige cada casilla. */
@@ -8783,6 +8839,10 @@ const formaDePuerta = t => {
   return f ? f[0] : '';
 };
 const nombreForma = clave => (FORMAS_PUERTA.find(x => x[0] === clave) || [,''])[1];
+/* Dónde el dintel decide algo: en todo lo que sube. En una corredera o una
+   batiente no se pide, porque ahí no manda nada y solo estorbaría. */
+const FORMAS_CON_DINTEL = ['seccional', 'enrollable', 'guillotina', 'rapida', 'basculante'];
+const pideDintel = tipo => FORMAS_CON_DINTEL.includes(formaDePuerta(tipo));
 /* Una corredera puede ir sobre guía en el suelo o en voladizo. No se deduce de la
    nada: solo se afirma cuando el tipo lo dice. null = no consta. */
 const correderaGuiada = t => {
@@ -11571,6 +11631,10 @@ function expSecPuerta(e, p){
       'El mismo que irá en el marcado CE')+
     expNum('puerta.ancho', 'Ancho del hueco (mm)')+
     expNum('puerta.alto', 'Alto del hueco (mm)')+
+    /* El dintel solo se pregunta donde decide algo: en todo lo que sube */
+    (pideDintel(expVal('puerta.tipo', '') || (puertaDe(e.puerta_id) || {}).tipo || '')
+      ? expNum('puerta.dintel', 'Dintel (mm)', 'Del hueco al techo. Decide el tipo de guía')
+      : '')+
     expNum('puerta.peso', 'Peso de la hoja (kg)')+
     expNum('puerta.hojas', 'Número de hojas', '', '1')+
     expSel('puerta.motorizada', '¿Es motorizada?',
@@ -13883,7 +13947,12 @@ async function libroExpediente(id){
       campo('Marca', pu.marca || p.marca)+
       campo('Modelo', pu.modelo || p.modelo)+
       campo('Número de serie', pu.serie)+
-      campo('Dimensiones del hueco', [pu.ancho && (pu.ancho+' mm de ancho'), pu.alto && (pu.alto+' mm de alto')].filter(Boolean).join(' × '))+
+      campo('Dimensiones del hueco', [pu.ancho && (pu.ancho+' mm de ancho'), pu.alto && (pu.alto+' mm de alto')]
+             .filter(Boolean).join(' × '))+
+      /* El dintel sale del expediente si lo tiene y, si no, de la ficha viva
+         de la puerta: es el dato que más veces se toma en obra y se apunta
+         allí antes de que exista expediente. */
+      campo('Dintel', (pu.dintel || p.dintel_mm) ? (pu.dintel || p.dintel_mm)+' mm' : '')+
       campo('Peso de la hoja', pu.peso ? pu.peso+' kg' : '')+
       campo('Número de hojas', pu.hojas)+
       campo('Accionamiento', pu.motorizada === 'no' ? 'Manual' : 'Motorizada')+
@@ -16337,6 +16406,12 @@ dlgForm.addEventListener('change', e => {
   if (t.id === 'a-puerta'){ clienteDeLaPuertaDelAviso(); return; }
   // Puerta: al elegir centro, su dirección baja a la puerta
   if (t.id === 'f-centro'){ centroElegido(); return; }
+  /* El dintel aparece o desaparece según el tipo de puerta que se elija */
+  if (t.id === 'f-tipo'){
+    const caja = document.getElementById('f-caja-dintel');
+    if (caja) caja.hidden = !pideDintel(t.value);
+    return;
+  }
   if (t.id === 'pl-art'){
     const a = articuloConCoste(t.value);
     const d = document.getElementById('pl-desc');
@@ -16551,7 +16626,7 @@ async function guardarLista(clave, arr){
 
 /* Campos del alta de puerta, para poder recuperarlos si se sale a crear un cliente */
 const CAMPOS_PUERTA = ['f-cod','f-cbusca','f-clid','f-centro','f-dir','f-ubi','f-tcliente','f-tipo','f-uso',
-  'f-marca','f-modelo','f-anio','f-instalador','f-ancho','f-alto','f-peso',
+  'f-marca','f-modelo','f-anio','f-instalador','f-ancho','f-alto','f-dintel','f-peso',
   'f-motor-marca','f-motor-modelo','f-cuadro-marca','f-cuadro-modelo','f-modo','f-usuarios',
   'f-matricula','f-sinmat','f-ult','f-prox','f-notas'];
 function guardarBorradorPuerta(){
@@ -16856,6 +16931,12 @@ function dlgPuerta(id, avisoId){
     '<div class="campo"><label for="f-instalador">Instalada por</label><input id="f-instalador" type="text" value="'+esc(d.instalador||'')+'"></div>'+
     '<div class="campo"><label for="f-ancho">Ancho (mm)</label><input id="f-ancho" type="number" value="'+esc(d.ancho_mm||'')+'"></div>'+
     '<div class="campo"><label for="f-alto">Alto (mm)</label><input id="f-alto" type="number" value="'+esc(d.alto_mm||'')+'"></div>'+
+    /* El dintel es lo que decide si la puerta entra. Se pide solo en lo que
+       sube, y el campo aparece o desaparece al cambiar el tipo. */
+    '<div class="campo" id="f-caja-dintel"'+(pideDintel(d.tipo)?'':' hidden')+'>'+
+      '<label for="f-dintel">Dintel (mm)</label>'+
+      '<input id="f-dintel" type="number" value="'+esc(d.dintel_mm||'')+'">'+
+      '<span class="pista">Del hueco al techo. Decide el tipo de guía</span></div>'+
     '<div class="campo"><label for="f-peso">Peso hoja (kg)</label><input id="f-peso" type="number" step="0.1" value="'+esc(d.peso_kg||'')+'"></div>'+
     '</div></div>';
 
@@ -16937,7 +17018,8 @@ function dlgPuerta(id, avisoId){
       cuadro: [val('f-cuadro-marca'), val('f-cuadro-modelo')].filter(Boolean).join(' '),
       motor:  [val('f-motor-marca'),  val('f-motor-modelo')].filter(Boolean).join(' '),
       anio: val('f-anio')?+val('f-anio'):null, instalador: val('f-instalador'),
-      ancho_mm: val('f-ancho')?+val('f-ancho'):null, alto_mm: val('f-alto')?+val('f-alto'):null, peso_kg: val('f-peso')?+val('f-peso'):null,
+      ancho_mm: val('f-ancho')?+val('f-ancho'):null, alto_mm: val('f-alto')?+val('f-alto'):null,
+      dintel_mm: val('f-dintel')?+val('f-dintel'):null, peso_kg: val('f-peso')?+val('f-peso'):null,
       seguridad: seg, ultima_revision: val('f-ult')||null, proxima_revision: val('f-prox')||null, notas: val('f-notas')
     };
     /* El centro solo se guarda si la base de datos lo tiene: así una copia de la
@@ -18742,6 +18824,95 @@ function documentoPresupuesto(id, op){
   w.document.close();
 }
 
+/* El acta de entrega en papel. Lo que el cliente firma y se lleva: qué se le
+   entrega, qué se probó delante de él y qué dijo. */
+function documentoEntrega(id){
+  const e = (S.entregasObra || []).find(x => x.id === id);
+  if (!e) return;
+  const em = datosEmpresa();
+  const cli = e.cliente_id ? clienteDe(e.cliente_id) : null;
+  const pu = e.puerta_id ? puertaDe(e.puerta_id) : null;
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana.'); return; }
+  const conf = CONFORMIDADES.find(c => c[0] === e.conformidad) || CONFORMIDADES[0];
+  const pruebas = Array.isArray(e.pruebas) ? e.pruebas : [];
+  const marca = r => ({ bien:'Bien', mal:'Mal', na:'No aplica' })[r] || 'Sin marcar';
+  const dato = (a, b) => b ? '<div class="d"><span>'+esc(a)+':</span> <b>'+esc(b)+'</b></div>' : '';
+
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
+    '<title>Entrega en obra</title><style>'+
+    '@page{size:A4;margin:16mm 14mm}*{box-sizing:border-box}'+
+    'body{font:10.5px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#1C1817;margin:0;padding:14mm}'+
+    CSS_CABECERA+
+    'h2{font-size:11.5px;margin:14px 0 5px;color:#C98F08;text-transform:uppercase;'+
+      'letter-spacing:.04em;border-bottom:1px solid #d8d4d0;padding-bottom:3px}'+
+    '.dos{display:flex;gap:8mm;margin:4px 0 12px}.dos>div{flex:1}'+
+    '.d{font-size:10px;line-height:1.6}.d span{color:#6B6560}'+
+    'table{width:100%;border-collapse:collapse}'+
+    'th,td{border-bottom:1px solid #ece9e6;padding:5px;text-align:left;vertical-align:top}'+
+    'thead th{font-size:8.5px;text-transform:uppercase;color:#6B6560;border-bottom:1px solid #1C1817}'+
+    '.r{width:72px;white-space:nowrap}.r.mal{color:#B3261E;font-weight:700}'+
+    '.caja{border:1px solid #d8d4d0;border-radius:5px;padding:9px 11px;margin:10px 0 0;background:#FAF9F8}'+
+    '.sello{display:inline-block;padding:5px 12px;border-radius:5px;font-weight:800;'+
+      'letter-spacing:.04em;text-transform:uppercase}'+
+    '.sello.ok{background:#e8f3ec;color:#2E7D46}'+
+    '.sello.aviso{background:#fdf3e0;color:#8a5a06}'+
+    '.sello.mal{background:#fbeae9;color:#B3261E}'+
+    '.firmas{display:flex;gap:18mm;margin-top:16mm}'+
+    '.firmas>div{flex:1;border-top:1px solid #1C1817;padding-top:4px;font-size:9px;color:#6B6560}'+
+    '.firmaimg{max-height:26mm;display:block;margin-bottom:3px}'+
+    '.barra{position:fixed;top:0;left:0;right:0;background:#1C1817;color:#fff;padding:8px 12px;z-index:9}'+
+    '.barra button{font:inherit;padding:5px 10px;border:0;border-radius:5px;background:#FCBA1D;cursor:pointer}'+
+    'body{padding-top:52px}@media print{.barra{display:none}body{padding:0}tr{page-break-inside:avoid}}'+
+    '</style></head><body>'+
+    '<div class="barra"><button onclick="window.print()">Imprimir o guardar en PDF</button></div>'+
+    cabeceraDocumento(em, 'ACTA DE ENTREGA EN OBRA', '')+
+    '<div class="dos">'+
+      '<div><h2>La instalación</h2>'+
+        dato('Fecha', fechaCorta(e.fecha))+
+        dato('Puerta', pu ? [pu.codigo, pu.tipo, pu.ubicacion].filter(Boolean).join(' · ') : '')+
+        dato('Emplazamiento', pu ? (pu.direccion || '') : '')+
+        dato('Entregado por', e.entregado_por || '')+
+      '</div>'+
+      '<div><h2>El cliente</h2>'+
+        dato('Cliente', cli ? cli.nombre : '')+
+        dato('NIF', cli ? cli.nif : '')+
+        dato('Dirección', cli ? cli.direccion : '')+
+      '</div>'+
+    '</div>'+
+
+    '<h2>Qué se entrega</h2><p style="white-space:pre-wrap;margin:0">'+esc(e.entregado || '')+'</p>'+
+
+    '<h2>Funciones probadas delante del cliente</h2>'+
+    '<table><thead><tr><th>Función</th><th class="r">Resultado</th><th>Observación</th></tr></thead><tbody>'+
+    pruebas.map(x => '<tr><td>'+esc(x.texto||'')+'</td>'+
+      '<td class="r'+(x.resultado==='mal'?' mal':'')+'">'+esc(marca(x.resultado))+'</td>'+
+      '<td>'+esc(x.nota||'')+'</td></tr>').join('')+
+    '</tbody></table>'+
+
+    '<div class="caja">'+
+      (e.formacion ? 'Se le ha explicado el manejo de la puerta. ' : '')+
+      (e.documentacion ? 'Se le ha entregado la documentación. ' : '')+
+      (!e.formacion && !e.documentacion ? 'No consta que se haya explicado el manejo ni entregado la documentación.' : '')+
+    '</div>'+
+
+    '<h2>Conformidad del cliente</h2>'+
+    '<p style="margin:0 0 8px"><span class="sello '+conf[2]+'">'+esc(conf[1])+'</span></p>'+
+    (e.comentario ? '<p style="white-space:pre-wrap;margin:0"><b>Dice el cliente:</b> '+
+      esc(e.comentario)+'</p>' : '<p class="d" style="margin:0"><span>Sin comentarios del cliente.</span></p>')+
+
+    '<div class="firmas">'+
+      '<div>Por '+esc(em.razon_social || '')+'<br>'+esc(e.entregado_por || em.representante || '')+'</div>'+
+      '<div>'+
+        (e.firma_ruta ? '<span class="d"><span>Firmado el '+esc(fechaHora(e.firma_el))+'</span></span><br>' : '')+
+        'Recibí conforme, el cliente<br>'+esc(e.firma_nombre || 'Nombre, fecha y firma')+
+        (e.firma_nif ? ' · '+esc(e.firma_nif) : '')+
+      '</div>'+
+    '</div>'+
+    '</body></html>');
+  w.document.close();
+}
+
 /* Hoja de etiquetas de material, para imprimir y pegar. Más pequeñas que las de
    las puertas: estas van en una caja o en una balda, no en una puerta. */
 function hojaEtiquetasMaterial(){
@@ -18913,6 +19084,447 @@ function textoFallo(d){
   return 'No se ha podido completar.';
 }
 
+/* ---- La entrega en obra ----
+   Al terminar una instalación se entrega la puerta y se prueba delante del
+   cliente: abre, cierra, invierte al topar, el desbloqueo funciona. Si eso no
+   queda por escrito y tres meses después el cliente dice que el desbloqueo
+   nunca fue, no hay nada que enseñar.
+
+   El guión de pruebas es de fábrica pero se edita en Equipo: la aplicación no
+   sabe mejor que tú qué hay que probar en una barrera. */
+const GUION_ENTREGA_FABRICA = {
+  general: [
+    'Apertura completa y sin rozamientos',
+    'Cierre completo y sin rozamientos',
+    'Parada en los finales de carrera, arriba y abajo',
+    'Inversión al encontrar un obstáculo',
+    'Fotocélulas: la puerta se detiene o invierte al cortarlas',
+    'Desbloqueo manual: se acciona y la puerta se mueve a mano',
+    'Rebloqueo: vuelve a quedar motorizada',
+    'Mandos a distancia entregados y probados',
+    'Pulsador o selector de maniobra',
+    'Seta o paro de emergencia',
+    'Señalización y avisos colocados',
+    'Zona de trabajo recogida y limpia',
+  ],
+  seccional: [
+    'Apertura y cierre completos, sin rozamientos ni ruidos anómalos',
+    'Equilibrado de muelles: la hoja se queda donde se deja, a media altura',
+    'Guías, rodamientos y cables sin holguras',
+    'Parada en los finales de carrera, arriba y abajo',
+    'Inversión al encontrar un obstáculo',
+    'Fotocélulas: la puerta se detiene o invierte al cortarlas',
+    'Protección contra rotura de muelle y contra rotura de cable',
+    'Protección contra aplastamiento de dedos en los paneles',
+    'Desbloqueo manual: se acciona y la puerta se mueve a mano',
+    'Puerta peatonal, si la lleva: cierre y contacto de seguridad',
+    'Mandos a distancia entregados y probados',
+    'Seta o paro de emergencia',
+    'Zona de trabajo recogida y limpia',
+  ],
+  enrollable: [
+    'Subida y bajada completas, sin rozamientos',
+    'Parada en los finales de carrera, arriba y abajo',
+    'Inversión al encontrar un obstáculo',
+    'Fotocélulas o banda del canto de cierre',
+    'Paracaídas o freno de seguridad',
+    'Desbloqueo manual y maniobra de socorro',
+    'Mandos a distancia entregados y probados',
+    'Zona de trabajo recogida y limpia',
+  ],
+  corredera: [
+    'Apertura y cierre completos, sin rozamientos',
+    'Parada en los finales de carrera',
+    'Inversión al encontrar un obstáculo',
+    'Fotocélulas en el hueco de paso',
+    'Protección en el canto de cierre y en el de arrastre',
+    'Topes mecánicos de fin de recorrido',
+    'Guía y rodamientos sin holguras',
+    'Desbloqueo manual: se acciona y la puerta se mueve a mano',
+    'Mandos a distancia entregados y probados',
+    'Zona de trabajo recogida y limpia',
+  ],
+  batiente: [
+    'Apertura y cierre completos de las dos hojas',
+    'Orden de cierre correcto entre hojas',
+    'Inversión al encontrar un obstáculo',
+    'Fotocélulas en el hueco de paso',
+    'Topes mecánicos de apertura y cierre',
+    'Electrocerradura, si la lleva',
+    'Desbloqueo manual de cada operador',
+    'Mandos a distancia entregados y probados',
+    'Zona de trabajo recogida y limpia',
+  ],
+  barrera: [
+    'Subida y bajada completas del mástil',
+    'Equilibrado: el mástil se queda donde se deja',
+    'Inversión al encontrar un obstáculo',
+    'Fotocélulas y lazo magnético',
+    'Desbloqueo manual del mástil',
+    'Señalización reflectante del mástil',
+    'Mandos a distancia entregados y probados',
+    'Zona de trabajo recogida y limpia',
+  ],
+  peatonal: [
+    'Apertura y cierre completos',
+    'Velocidad de apertura y de cierre dentro de lo admisible',
+    'Radares de apertura y de presencia',
+    'Fuerza y energía de impacto dentro de lo admisible',
+    'Apertura de emergencia y maniobra en caso de fallo',
+    'Antipánico o desbloqueo en evacuación, si procede',
+    'Selector de modos de funcionamiento',
+    'Señalización en el vidrio',
+    'Zona de trabajo recogida y limpia',
+  ],
+};
+/* El guión que de verdad se usa: el de fábrica, pisado por lo que haya puesto
+   la oficina en Equipo. */
+function guionEntrega(tipo){
+  const g = Object.assign({}, GUION_ENTREGA_FABRICA, S.ajustes.guion_entrega || {});
+  const f = formaDePuerta(tipo || '');
+  const porForma = { seccional:'seccional', enrollable:'enrollable', corredera:'corredera',
+    batiente:'batiente', barrera:'barrera', peatonal:'peatonal',
+    guillotina:'enrollable', rapida:'enrollable', basculante:'seccional' };
+  const k = porForma[f];
+  return (k && g[k] && g[k].length ? g[k] : g.general) || GUION_ENTREGA_FABRICA.general;
+}
+const CONFORMIDADES = [
+  ['conforme',     'Conforme',       'ok'],
+  ['con_reparos',  'Con reparos',    'aviso'],
+  ['no_conforme',  'No conforme',    'mal'],
+];
+const entregasObraDe = id => (S.entregasObra || []).filter(e => e.aviso_id === id)
+  .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+
+/* ---- Obras de varios días ----
+   Una asistencia guardaba UNA jornada. Una obra de cuatro días no cabía, así
+   que el técnico tenía que acordarse el jueves de lo que hizo el lunes, o no
+   apuntarlo. Ahora cada día deja su parte, con sus horas, lo que hizo, el
+   material que gastó y lo que hay que saber antes de volver.
+
+   No se firma cada día a propósito: firmar cuatro veces la misma obra no
+   prueba nada y cansa al cliente. Lo que se firma es el cierre. */
+const jornadasDe = id => (S.jornadas || []).filter(j => j.aviso_id === id)
+  .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+const horasObra = id => jornadasDe(id).reduce((n, j) => n + Number(j.horas || 0), 0);
+/* Lo último que se dejó dicho para la próxima visita */
+const avisoProxima = id => {
+  const js = jornadasDe(id).filter(j => (j.proxima || '').trim());
+  return js.length ? js[js.length - 1] : null;
+};
+
+/* El parte de un día. Sin firma y sin cobro: eso es del cierre. */
+async function dlgJornada(avisoId, jornadaId){
+  const a = S.avisos.find(x => x.id === avisoId);
+  if (!a) return;
+  const j = jornadaId ? (S.jornadas || []).find(x => x.id === jornadaId) : null;
+  const p = a.puerta_id ? puertaDe(a.puerta_id) : null;
+  const t = S.tarifas || {};
+  const hhmm = d => d ? new Date(d).toTimeString().slice(0,5) : '';
+  /* Los materiales no viven en memoria: se piden por asistencia, como en el
+     cierre. Aquí se piden los de esta jornada y ya está. */
+  let mats = [];
+  if (jornadaId){
+    try {
+      const { data } = await sb.from('materiales').select('*').eq('jornada_id', jornadaId).order('creado');
+      mats = data || [];
+    } catch(_){ /* sin lista, pero la jornada se puede editar igual */ }
+  }
+  const ant = avisoProxima(avisoId);
+
+  let h = '<h3>'+(j ? 'Jornada del '+esc(fechaCorta(j.fecha)) : 'Parte de hoy')+'</h3>'+
+    '<p class="mini" style="margin:0 0 10px">'+esc(nombreCliente(a))+(p?' · '+esc(p.codigo||''):'')+
+    '. Esto no se firma: es el parte del día. La firma del cliente va en el cierre de la obra.</p>';
+
+  /* Lo que quedó dicho el último día, que es lo primero que hay que leer */
+  if (ant && (!j || ant.id !== j.id))
+    h += '<div class="nota-oficina" style="margin-bottom:10px"><b>De la última jornada ('+
+      esc(fechaCorta(ant.fecha))+'):</b><br>'+esc(ant.proxima)+'</div>';
+
+  h += '<div class="campos">'+
+    '<div class="campo"><label for="j-fecha">Día</label>'+
+      '<input id="j-fecha" type="date" value="'+esc(j ? j.fecha : hoy())+'"></div>'+
+    '<div class="campo"><label for="j-ntec">Técnicos</label>'+
+      '<input id="j-ntec" type="number" step="1" min="1" value="'+esc(j ? (j.num_tecnicos||1) : 1)+'"></div>'+
+    '<div class="campo"><label for="j-ini">Entrada</label>'+
+      '<input id="j-ini" type="time" value="'+esc(j ? hhmm(j.hora_inicio) : '')+'"></div>'+
+    '<div class="campo"><label for="j-fin">Salida</label>'+
+      '<input id="j-fin" type="time" value="'+esc(j ? hhmm(j.hora_fin) : '')+'"></div>'+
+    '<div class="campo"><label for="j-horas">Horas a facturar</label>'+
+      '<input id="j-horas" type="number" step="any" min="0" value="'+esc(j && j.horas!=null?j.horas:'')+'">'+
+      (t.minimo_horas ? '<span class="pista">El mínimo son '+esc(t.minimo_horas)+' h</span>' : '')+'</div>'+
+    '<div class="campo full"><label for="j-trab">Qué se ha hecho hoy</label>'+
+      '<textarea id="j-trab" rows="4" placeholder="Lo que has montado, medido, dejado puesto o dejado a medias">'+
+      esc(j ? (j.trabajo||'') : '')+'</textarea></div>'+
+    '<div class="campo full"><label for="j-prox">Para la próxima vez</label>'+
+      '<textarea id="j-prox" rows="3" placeholder="Qué queda, qué hay que traer, con quién hay que hablar. '+
+      'Esto es lo primero que se lee al volver">'+esc(j ? (j.proxima||'') : '')+'</textarea></div>'+
+    '</div>';
+
+  /* El material del día, si la jornada ya existe */
+  if (j){
+    h += '<div class="grupo"><h3>Material gastado hoy</h3>';
+    if (!mats.length) h += '<p class="muted" style="margin:0 0 8px">Ninguno apuntado.</p>';
+    else h += '<ul class="mini" style="margin:0 0 8px;padding-left:18px">'+
+      mats.map(m => '<li>'+esc(m.descripcion||'')+' · '+esc(m.cantidad)+' '+esc(m.unidad||'')+'</li>').join('')+'</ul>';
+    h += '<button type="button" class="btn sm" data-act="j-material" data-id="'+j.id+'" '+
+      'data-aviso="'+avisoId+'">Apuntar material</button></div>';
+  } else {
+    h += '<p class="mini" style="margin:0 0 10px">Guarda la jornada y podrás apuntarle el material que has gastado.</p>';
+  }
+
+  h += '<p class="err"></p><div class="pie" style="flex-wrap:wrap;gap:6px">'+
+    (j ? '<button type="button" class="btn sm plana" data-act="j-borrar" data-id="'+j.id+'" data-aviso="'+avisoId+'">Borrar</button>' : '')+
+    '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Guardar la jornada</button></div>';
+
+  abrirDlg(h, async () => {
+    const dia = val('j-fecha') || hoy();
+    const hora = id => { const v = val(id); return v ? new Date(dia+'T'+v+':00').toISOString() : null; };
+    const o = { aviso_id: avisoId, fecha: dia,
+      hora_inicio: hora('j-ini'), hora_fin: hora('j-fin'),
+      horas: val('j-horas') ? +val('j-horas') : null,
+      num_tecnicos: val('j-ntec') ? +val('j-ntec') : 1,
+      tecnico_id: (S.perfil || {}).id || null,
+      trabajo: val('j-trab') || null, proxima: val('j-prox') || null };
+    if (!o.trabajo) return setErr('Escribe qué se ha hecho hoy: sin eso, la jornada no vale de nada.');
+    try {
+      if (j){ const { error } = await sb.from('jornadas').update(o).eq('id', j.id); if (error) throw error; }
+      else {
+        o.creado_por = yo();
+        const { error } = await sb.from('jornadas').insert(o); if (error) throw error;
+        /* Si se apunta una jornada, es que la obra dura más de un día */
+        if (!a.obra_larga) await sb.from('avisos').update({ obra_larga:true }).eq('id', avisoId);
+      }
+      cerrarDlg(); await cargar(); pintar();
+      toast('Jornada guardada.');
+    } catch(e){
+      setErr((e.message||'').match(/jornadas/i)
+        ? 'Falta ejecutar obra2.sql en la base de datos.'
+        : (e.message || 'No se ha podido guardar.'));
+    }
+  });
+}
+
+/* El acta de entrega: lo que se prueba delante del cliente y él firma */
+function dlgEntregaObra(avisoId, entregaId){
+  const a = S.avisos.find(x => x.id === avisoId);
+  if (!a) return;
+  const e = entregaId ? (S.entregasObra || []).find(x => x.id === entregaId) : null;
+  const p = a.puerta_id ? puertaDe(a.puerta_id) : null;
+  const cli = a.cliente_id ? clienteDe(a.cliente_id) : (p && p.cliente_id ? clienteDe(p.cliente_id) : null);
+  const guion = guionEntrega(p ? p.tipo : '');
+  /* Si ya hay entrega, se enseñan sus respuestas; si no, el guión en blanco */
+  const pruebas = e && Array.isArray(e.pruebas) && e.pruebas.length
+    ? e.pruebas
+    : guion.map((t, i) => ({ clave:'p'+i, texto:t, resultado:'', nota:'' }));
+  const cerrada = !!(e && e.firma_el);
+
+  let h = '<h3>'+(cerrada ? 'Entrega firmada' : 'Entrega en obra')+'</h3>'+
+    '<p class="mini" style="margin:0 0 10px">'+esc(nombreCliente(a))+
+    (p ? ' · '+esc([p.codigo, p.tipo].filter(Boolean).join(' · ')) : '')+'</p>';
+
+  if (cerrada)
+    h += '<div class="nota-oficina" style="margin-bottom:10px">Firmada por <b>'+esc(e.firma_nombre||'')+
+      '</b> el '+esc(fechaHora(e.firma_el))+'. Una entrega firmada no se cambia: si hay que corregir algo, '+
+      'se hace otra.</div>';
+  else if (!p)
+    h += '<div class="sin-ficha" style="margin-bottom:10px">Esta asistencia no tiene puerta asignada, así que '+
+      'el guión que sale es el general. Asigna la puerta y saldrá el suyo.</div>';
+
+  h += '<div class="campos">'+
+    '<div class="campo full"><label for="eo-que">Qué se entrega</label>'+
+      '<textarea id="eo-que" rows="3"'+(cerrada?' disabled':'')+
+      ' placeholder="Puerta, motor, cuadro, mandos, accesorios: lo que queda instalado y entregado">'+
+      esc(e ? (e.entregado||'') : [p && p.tipo, p && p.marca, p && p.modelo].filter(Boolean).join(' · '))+
+      '</textarea></div>'+
+    '</div>';
+
+  /* Las pruebas, una por una */
+  h += '<div class="grupo"><h3>Se prueba delante del cliente</h3>'+
+    '<p class="mini" style="margin:0 0 10px">Marca cada punto según lo que haya pasado al probarlo. '+
+    'Lo que no aplique a esta puerta, déjalo en «No aplica».</p>'+
+    '<div class="obra-lista">'+
+    pruebas.map((x, i) => '<div class="item"><div class="item-in">'+
+      '<b>'+esc(x.texto)+'</b>'+
+      (cerrada
+        ? '<div class="mini">'+esc({ bien:'Bien', mal:'Mal', na:'No aplica' }[x.resultado] || 'Sin marcar')+
+          (x.nota ? ' · '+esc(x.nota) : '')+'</div>'
+        : '<div class="fila" style="gap:6px;margin-top:6px;flex-wrap:wrap">'+
+          [['bien','Bien'],['mal','Mal'],['na','No aplica']].map(o =>
+            '<label class="mini" style="display:inline-flex;align-items:center;gap:5px">'+
+            '<input type="radio" name="eo-r'+i+'" value="'+o[0]+'"'+(x.resultado===o[0]?' checked':'')+
+            ' style="accent-color:var(--amarillo)">'+o[1]+'</label>').join('')+
+          '<input type="text" class="eo-nota" data-i="'+i+'" maxlength="160" placeholder="Nota, si hace falta" '+
+          'value="'+esc(x.nota||'')+'" style="flex:1;min-width:140px">'+
+          '</div>')+
+      '</div></div>').join('')+
+    '</div></div>';
+
+  h += '<div class="grupo"><h3>Qué dice el cliente</h3><div class="campos">'+
+    '<div class="campo full"><label for="eo-conf">Conformidad</label>'+
+      '<select id="eo-conf"'+(cerrada?' disabled':'')+'>'+
+      CONFORMIDADES.map(c => '<option value="'+c[0]+'"'+
+        ((e ? e.conformidad : 'conforme')===c[0]?' selected':'')+'>'+c[1]+'</option>').join('')+
+      '</select><span class="pista">«Con reparos» existe a propósito: firmar con una pega anotada no es lo '+
+      'mismo que no firmar</span></div>'+
+    '<div class="campo full"><label for="eo-com">Comentario del cliente</label>'+
+      '<textarea id="eo-com" rows="3"'+(cerrada?' disabled':'')+
+      ' placeholder="Lo que quiera decir, bueno o malo. Se escribe tal cual lo diga">'+
+      esc(e ? (e.comentario||'') : '')+'</textarea></div>'+
+    '</div>'+
+    '<div class="checks" style="margin-top:10px">'+
+    '<label><input type="checkbox" id="eo-form"'+(e&&e.formacion?' checked':'')+(cerrada?' disabled':'')+
+      '>Se le ha explicado el manejo</label>'+
+    '<label><input type="checkbox" id="eo-doc"'+(e&&e.documentacion?' checked':'')+(cerrada?' disabled':'')+
+      '>Se le ha entregado la documentación</label>'+
+    '</div></div>';
+
+  if (!cerrada)
+    h += '<div class="grupo"><h3>Firma del cliente</h3><div class="campos">'+
+      '<div class="campo"><label for="eo-nom">Nombre de quien recibe</label>'+
+        '<input id="eo-nom" type="text" maxlength="120" value="'+esc(cli ? (cli.nombre||'') : '')+'"></div>'+
+      '<div class="campo"><label for="eo-nif">DNI o NIF</label>'+
+        '<input id="eo-nif" type="text" maxlength="20"></div>'+
+      '<div class="campo full"><label>Firma</label><canvas id="eo-firma" class="firma-caja"></canvas>'+
+        '<div class="fila" style="margin-top:8px"><button type="button" class="btn sm plana" '+
+        'data-act="eofirma-borrar">Borrar firma</button><span class="sp"></span></div></div>'+
+      '</div>'+
+      '<p class="mini" style="margin:8px 0 0">Se puede guardar sin firmar para terminarla luego. Firmada '+
+      'queda cerrada y ya no se toca.</p></div>';
+
+  h += '<p class="err"></p><div class="pie" style="flex-wrap:wrap;gap:6px">'+
+    (e ? '<button type="button" class="btn sm plana" data-act="eo-documento" data-id="'+e.id+'">Ver el acta</button>' : '')+
+    '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cerrar</button>'+
+    (cerrada ? '' :
+      '<button type="button" class="btn" data-act="eo-guardar" data-aviso="'+avisoId+'"'+
+        (e?' data-id="'+e.id+'"':'')+'>Guardar sin firmar</button>'+
+      '<button type="submit" class="btn pri">Firmar y cerrar</button>')+
+    '</div>';
+
+  abrirDlg(h, () => guardarEntregaObra(avisoId, e ? e.id : null, true));
+  if (!cerrada) lienzoFirma('eo-firma');
+}
+
+/* Lo marcado en el acta */
+function leerEntregaObra(avisoId, entregaId){
+  const a = S.avisos.find(x => x.id === avisoId);
+  const e = entregaId ? (S.entregasObra || []).find(x => x.id === entregaId) : null;
+  const p = a && a.puerta_id ? puertaDe(a.puerta_id) : null;
+  const base = e && Array.isArray(e.pruebas) && e.pruebas.length
+    ? e.pruebas
+    : guionEntrega(p ? p.tipo : '').map((t, i) => ({ clave:'p'+i, texto:t, resultado:'', nota:'' }));
+  const pruebas = base.map((x, i) => {
+    const r = dlgForm.querySelector('input[name="eo-r'+i+'"]:checked');
+    const n = dlgForm.querySelector('.eo-nota[data-i="'+i+'"]');
+    return { clave: x.clave || ('p'+i), texto: x.texto,
+             resultado: r ? r.value : (x.resultado || ''),
+             nota: n ? n.value : (x.nota || '') };
+  });
+  const chk = id => !!(document.getElementById(id)||{}).checked;
+  return { aviso_id: avisoId, puerta_id: a ? (a.puerta_id || null) : null,
+    cliente_id: a ? (a.cliente_id || (p ? p.cliente_id : null)) : null,
+    fecha: hoy(), entregado: val('eo-que') || null, pruebas,
+    conformidad: val('eo-conf') || 'conforme',
+    comentario: val('eo-com') || null,
+    formacion: chk('eo-form'), documentacion: chk('eo-doc'),
+    entregado_por: yo() };
+}
+
+async function guardarEntregaObra(avisoId, entregaId, firmando){
+  const o = leerEntregaObra(avisoId, entregaId);
+  if (!o.entregado) return setErr('Escribe qué se entrega.');
+  const sinMarcar = o.pruebas.filter(x => !x.resultado).length;
+  if (firmando && sinMarcar)
+    return setErr('Quedan '+sinMarcar+' punto'+(sinMarcar===1?'':'s')+' sin marcar. El cliente firma lo que '+
+      'se ha probado, así que no puede quedar nada en blanco: lo que no aplique, márcalo como «No aplica».');
+  const malos = o.pruebas.filter(x => x.resultado === 'mal').length;
+  if (firmando && malos && o.conformidad === 'conforme')
+    return setErr('Hay '+malos+' punto'+(malos===1?'':'s')+' marcado'+(malos===1?'':'s')+' como mal y la '+
+      'conformidad dice «Conforme». O se corrige el punto, o la conformidad es «Con reparos».');
+  try {
+    if (firmando){
+      if (!FIRMA.pintado) return setErr('Falta la firma del cliente.');
+      if (!val('eo-nom')) return setErr('Pon el nombre de quien recibe.');
+    }
+    let id = entregaId;
+    if (id){ const { error } = await sb.from('entregas_obra').update(o).eq('id', id); if (error) throw error; }
+    else {
+      o.creado_por = yo();
+      const { data, error } = await sb.from('entregas_obra').insert(o).select().maybeSingle();
+      if (error) throw error;
+      id = data ? data.id : null;
+    }
+    if (!id) throw new Error('No se ha podido guardar el acta.');
+    if (firmando){
+      const blob = await new Promise(r => FIRMA.canvas.toBlob(r, 'image/png'));
+      const ruta = 'entregas/' + id + '-' + Date.now() + '.png';
+      const { error: e1 } = await sb.storage.from('firmas').upload(ruta, blob, { contentType:'image/png' });
+      if (e1) throw e1;
+      const { error } = await sb.from('entregas_obra').update({
+        firma_ruta: ruta, firma_nombre: val('eo-nom'), firma_nif: val('eo-nif') || null,
+        firma_el: new Date().toISOString() }).eq('id', id);
+      if (error) throw error;
+    }
+    cerrarDlg(); await cargar(); pintar();
+    toast(firmando ? 'Entrega firmada.' : 'Acta guardada sin firmar.');
+  } catch(err){
+    setErr((err.message||'').match(/entregas_obra/i)
+      ? 'Falta ejecutar obra2.sql en la base de datos.'
+      : (err.message || 'No se ha podido guardar.'));
+  }
+}
+
+/* Material gastado en un día concreto. Va contra la misma tabla de siempre,
+   apuntado además a la jornada: así se sabe qué se puso el martes y qué el
+   jueves, que es justo lo que se olvida. */
+function dlgMaterialJornada(jornadaId, avisoId){
+  const sug = [...new Map([...(S.catalogo||[]).map(x=>[(x.descripcion||'').toLowerCase(), x.descripcion]),
+    ...(S.sugerencias||[]).map(x=>[(x.descripcion||'').toLowerCase(), x.descripcion])]).values()].filter(Boolean);
+  abrirDlg('<h3>Material gastado hoy</h3>'+
+    '<datalist id="sug-j">'+sug.map(d=>'<option value="'+esc(d)+'">').join('')+'</datalist>'+
+    '<div class="campos">'+
+    '<div class="campo full"><label for="jm-art">Del almacén</label><select id="jm-art">'+
+      '<option value="">Lo escribo a mano</option>'+
+      (S.catalogo||[]).filter(x => x.activo !== false)
+        .sort((x,y) => (x.descripcion||'').localeCompare(y.descripcion||'', 'es'))
+        .map(x => '<option value="'+x.id+'">'+esc(x.descripcion+(x.codigo?' · '+x.codigo:''))+'</option>').join('')+
+      '</select></div>'+
+    '<div class="campo full"><label for="jm-desc">Material</label>'+
+      '<input id="jm-desc" type="text" maxlength="160" list="sug-j"></div>'+
+    '<div class="campo"><label for="jm-cant">Cantidad</label>'+
+      '<input id="jm-cant" type="number" step="any" min="0" value="1"></div>'+
+    '<div class="campo"><label for="jm-uni">Unidad</label>'+
+      '<input id="jm-uni" type="text" maxlength="12" value="ud"></div>'+
+    '</div>'+
+    '<p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-act="j-volver" data-id="'+jornadaId+'" data-aviso="'+avisoId+'">Cancelar</button>'+
+    '<button type="submit" class="btn pri">Apuntar</button></div>', async () => {
+    const art = val('jm-art') || null;
+    const a2 = art ? articuloDe(art) : null;
+    const desc = val('jm-desc') || (a2 ? a2.descripcion : '');
+    const cant = parseFloat(val('jm-cant')) || 0;
+    if (!desc) return setErr('Elige un material o escribe cuál.');
+    if (!(cant > 0)) return setErr('Pon la cantidad.');
+    try {
+      const { error } = await sb.from('materiales').insert({
+        aviso_id: avisoId, jornada_id: jornadaId, articulo_id: art,
+        descripcion: desc, cantidad: cant, unidad: val('jm-uni') || 'ud' });
+      if (error) throw error;
+      await cargar();
+      await dlgJornada(avisoId, jornadaId);
+      toast('Material apuntado.');
+    } catch(e){ setErr(e.message); }
+  });
+  const sel = document.getElementById('jm-art');
+  if (sel) sel.addEventListener('change', () => {
+    const x = sel.value ? articuloDe(sel.value) : null;
+    const d = document.getElementById('jm-desc');
+    const u = document.getElementById('jm-uni');
+    if (x){ if (d) d.value = x.descripcion || ''; if (u) u.value = x.unidad || 'ud'; }
+  });
+}
+
 function dlgCierre(avisoId){
   const a = S.avisos.find(x => x.id === avisoId);
   if (!a) return;
@@ -18923,7 +19535,29 @@ function dlgCierre(avisoId){
   const ahora = new Date();
   const hhmm = d => d ? new Date(d).toTimeString().slice(0,5) : '';
 
-  let h = '<h3>Cerrar visita · '+esc(tipoAsis(a.tipo))+'</h3>';
+  const js = jornadasDe(a.id);
+  let h = '<h3>'+(js.length ? 'Cerrar la obra' : 'Cerrar visita')+' · '+esc(tipoAsis(a.tipo))+'</h3>';
+
+  /* Si la obra ha durado varios días, lo primero es el resumen de lo que ya
+     está apuntado: nadie debería tener que recordar el lunes el jueves. */
+  if (js.length){
+    const hs = horasObra(a.id);
+    h += '<div class="grupo"><h3>Jornadas de esta obra</h3>'+
+      '<div class="tabla-wrap"><table class="tabla"><thead><tr>'+
+      '<th style="width:94px">Día</th><th>Qué se hizo</th><th style="width:60px">Horas</th>'+
+      '<th style="width:62px"></th></tr></thead><tbody>'+
+      js.map(j => '<tr><td>'+esc(fechaCorta(j.fecha))+'</td>'+
+        '<td>'+esc(String(j.trabajo||'').slice(0,120))+(String(j.trabajo||'').length>120?'…':'')+
+        (j.proxima ? '<span class="sub" style="display:block">Dejó dicho: '+
+          esc(String(j.proxima).slice(0,90))+'</span>' : '')+'</td>'+
+        '<td>'+esc(j.horas != null ? j.horas : '—')+'</td>'+
+        '<td><button type="button" class="btn sm plana" data-act="j-abrir" data-id="'+j.id+
+          '" data-aviso="'+a.id+'">Abrir</button></td></tr>').join('')+
+      '</tbody></table></div>'+
+      '<p class="mini" style="margin:8px 0 0"><b>'+js.length+' jornada'+(js.length===1?'':'s')+
+      ', '+hs+' hora'+(hs===1?'':'s')+' en total.</b> Esas horas son las que se facturan: '+
+      'las de abajo son solo las del último día, por si hoy has rematado algo.</p></div>';
+  }
 
   // Lo que ya se sabía
   h += '<div class="grupo"><h3>'+esc(nombreCliente(a))+(p?(' · '+esc(p.codigo||'')):'')+'</h3>';
@@ -18932,6 +19566,32 @@ function dlgCierre(avisoId){
   if (!p && !obligaAltaObra(a)) h += '<p class="mini" style="margin:8px 0 0">Esta asistencia no tiene puerta asignada. '+
     '<button type="button" class="btn sm" data-act="alta-puerta-asis" data-id="'+a.id+'">Dar de alta la puerta</button></p>';
   h += '</div>';
+
+  /* Lo que se entrega al terminar una instalación. Va aquí arriba porque es
+     parte del trabajo, no papeleo de después: se prueba con el cliente
+     delante y él firma lo que ha visto funcionar. */
+  if (!S.sinEntregas && ['instalacion','puesta_servicio'].includes(a.tipo)){
+    const ent = entregasObraDe(a.id);
+    const firmada = ent.find(x => x.firma_el);
+    h += '<div class="grupo"><h3>Entrega en obra</h3>';
+    if (firmada)
+      h += '<p class="mini" style="margin:0 0 8px">Firmada por <b>'+esc(firmada.firma_nombre||'')+
+        '</b> el '+esc(fechaHora(firmada.firma_el))+'. '+
+        esc((CONFORMIDADES.find(c => c[0] === firmada.conformidad) || CONFORMIDADES[0])[1])+'.</p>'+
+        '<div class="fila" style="gap:6px"><button type="button" class="btn sm plana" '+
+        'data-act="eo-documento" data-id="'+firmada.id+'">Ver el acta</button><span class="sp"></span></div>';
+    else {
+      const borrador = ent[0];
+      h += '<p class="mini" style="margin:0 0 8px">'+
+        (borrador ? 'Hay un acta empezada y sin firmar.'
+                  : 'Al terminar, se prueban las funciones con el cliente delante y él firma lo que ha visto '+
+                    'funcionar. Si no queda por escrito, dentro de tres meses no hay nada que enseñar.')+'</p>'+
+        '<div class="fila" style="gap:6px"><button type="button" class="btn sm'+(borrador?'':' pri')+
+        '" data-act="entrega-obra" data-id="'+a.id+'"'+(borrador?' data-entrega="'+borrador.id+'"':'')+'>'+
+        (borrador ? 'Seguir con el acta' : 'Hacer la entrega')+'</button><span class="sp"></span></div>';
+    }
+    h += '</div>';
+  }
 
   /* El alta en obra va aquí, antes de todo lo demás: en estos tipos de asistencia
      documentar la puerta es parte del trabajo, no un extra. Las fotos se cuentan
@@ -20451,6 +21111,28 @@ raiz.addEventListener('click', async e => {
     dest.classList.add('eq-destacado');
     setTimeout(() => dest.classList.remove('eq-destacado'), 1600);
   }
+  else if (a === 'guardar-guion-entrega'){
+    const o = {};
+    document.querySelectorAll('[data-ge]').forEach(x => {
+      const puntos = String(x.value || '').split('\n').map(l => l.trim()).filter(Boolean);
+      if (puntos.length) o[x.dataset.ge] = puntos;
+    });
+    try {
+      const { error } = await sb.from('ajustes').upsert({ clave:'guion_entrega', valor:o }, { onConflict:'clave' });
+      if (error) throw error;
+      S.ajustes.guion_entrega = o; pintar();
+      toast('Listas de entrega guardadas.');
+    } catch(err){ fallo(err); }
+  }
+  else if (a === 'guion-entrega-fabrica'){
+    if (!armar(b, 'Confirmar: se pierden tus cambios')) return;
+    try {
+      const { error } = await sb.from('ajustes').upsert({ clave:'guion_entrega', valor:{} }, { onConflict:'clave' });
+      if (error) throw error;
+      S.ajustes.guion_entrega = {}; pintar();
+      toast('Listas de fábrica restauradas.');
+    } catch(err){ fallo(err); }
+  }
   else if (a === 'ver-cabecera') vistaPreviaCabecera();
   else if (a === 'copia-datos'){ b.disabled = true; await copiaSeguridad(false); b.disabled = false; }
   else if (a === 'copia-completa'){ b.disabled = true; await copiaSeguridad(true); b.disabled = false; }
@@ -20670,6 +21352,26 @@ raiz.addEventListener('change', e => {
 dlgForm.addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const a = b.dataset.act;
+  /* ---- Jornadas y entrega en obra ---- */
+  if (a === 'jornada-hoy'){ cerrarDlg(); await dlgJornada(b.dataset.id, null); return; }
+  if (a === 'j-abrir'){ await dlgJornada(b.dataset.aviso, b.dataset.id); return; }
+  if (a === 'j-volver'){ await dlgJornada(b.dataset.aviso, b.dataset.id); return; }
+  if (a === 'j-material'){ dlgMaterialJornada(b.dataset.id, b.dataset.aviso); return; }
+  if (a === 'j-borrar'){
+    if (!armar(b, 'Confirmar el borrado')) return;
+    try {
+      await sb.from('jornadas').delete().eq('id', b.dataset.id);
+      cerrarDlg(); await cargar(); pintar(); toast('Jornada borrada.');
+    } catch(e){ fallo(e); }
+    return;
+  }
+  if (a === 'entrega-obra'){ cerrarDlg(); dlgEntregaObra(b.dataset.id, b.dataset.entrega || null); return; }
+  if (a === 'eo-guardar'){ await guardarEntregaObra(b.dataset.aviso, b.dataset.id || null, false); return; }
+  if (a === 'eofirma-borrar'){
+    if (FIRMA.ctx && FIRMA.canvas){ FIRMA.ctx.clearRect(0,0,FIRMA.canvas.width,FIRMA.canvas.height); FIRMA.pintado = false; }
+    return;
+  }
+  if (a === 'eo-documento'){ documentoEntrega(b.dataset.id); return; }
   if (a === 'mat-anadir'){
     const cont = document.getElementById('mats');
     if (cont) cont.insertAdjacentHTML('beforeend', filaMaterial());
