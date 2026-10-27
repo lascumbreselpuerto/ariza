@@ -34,6 +34,23 @@ for s in $SUITES; do
   echo "$s: ${LINEA:-no ha terminado}" >> "$RESUMEN"
 done
 
+# Los SQL también se prueban: son código, y hasta el 27-10-2026 nadie los
+# ejecutaba antes de pegarlos en producción. Van al final porque levantan su
+# propio Postgres y tardan lo suyo.
+if [ -z "${1:-}" ] && [ -x "$AQUI/sql.sh" ]; then
+  echo "── sql ─────────────────────────────────"
+  SALIDA_SQL="$("$AQUI/sql.sh" 2>&1)"
+  CODIGO_SQL=$?
+  echo "$SALIDA_SQL" | grep -aE "FALLA|pasan las|fallos\." || true
+  if [ "$CODIGO_SQL" = "0" ]; then
+    echo "sql: los 13 ficheros pasan las tres vueltas" >> "$RESUMEN"
+  else
+    N="$(echo "$SALIDA_SQL" | grep -acE '^ FALLA')"
+    FALLOS=$((FALLOS + ${N:-1}))
+    echo "sql: ${N:-1} ficheros rotos" >> "$RESUMEN"
+  fi
+fi
+
 echo
 echo "═══════════════════════════════════════"
 cat "$RESUMEN"
