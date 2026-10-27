@@ -766,6 +766,75 @@ paso('y lo que quedó dicho sigue disponible',
   /cuadro de maniobra/i.test(obraLarga.proxima || ''), obraLarga.proxima);
 
 /* ================================================================
+   Lo que se factura de una obra larga
+   ================================================================
+   El agujero que apareció al repasarlo: la valoración de una visita
+   multiplica horas por técnicos y lee SOLO el campo del cierre. Sumar
+   las jornadas en un cartel y dejar el campo con las horas del último
+   día habría hecho facturar de menos en todas las obras largas. */
+bloque('Las horas de la obra llegan a facturación');
+
+const facturacion = await T(async () => {
+  const g = window.__T;
+  const av = g.S.avisos[0];
+  /* Mismos técnicos todos los días: 8 + 6 = 14 h, dos técnicos */
+  await g.sb.from('jornadas').update({ num_tecnicos:2, km:30 }).eq('aviso_id', av.id);
+  await g.cargar();
+  const iguales = g.resumenHorasObra(av.id);
+
+  g.dlgCierre(av.id);
+  await new Promise(r => setTimeout(r, 600));
+  const campoH = document.getElementById('z-horas').value;
+  const campoT = document.getElementById('z-ntec').value;
+  const campoK = document.getElementById('z-km').value;
+  const pista = document.getElementById('z-horas').parentElement.textContent;
+  /* Y que el cálculo automático de entrada y salida no lo pise */
+  document.getElementById('z-ini').value = '09:00';
+  document.getElementById('z-ini').dispatchEvent(new Event('change', { bubbles:true }));
+  document.getElementById('z-fin').value = '11:00';
+  document.getElementById('z-fin').dispatchEvent(new Event('change', { bubbles:true }));
+  await new Promise(r => setTimeout(r, 200));
+  const trasHoras = document.getElementById('z-horas').value;
+  const hayBoton = !!document.querySelector('[data-act="jornada-hoy"]');
+  g.cerrarDlg();
+
+  /* Y ahora con distinto número de técnicos cada día */
+  const js = g.jornadasDe(av.id);
+  await g.sb.from('jornadas').update({ num_tecnicos:1 }).eq('id', js[0].id);
+  await g.cargar();
+  const distintos = g.resumenHorasObra(av.id);
+  g.dlgCierre(av.id);
+  await new Promise(r => setTimeout(r, 600));
+  const campoH2 = document.getElementById('z-horas').value;
+  const campoT2 = document.getElementById('z-ntec').value;
+  const pista2 = document.getElementById('z-horas').parentElement.textContent;
+  g.cerrarDlg();
+  return { iguales, distintos, campoH, campoT, campoK, pista, trasHoras, hayBoton,
+           campoH2, campoT2, pista2 };
+});
+paso('con los mismos técnicos todos los días, se suman las horas tal cual',
+  facturacion.iguales.horas === 14 && facturacion.iguales.tecnicos === 2 &&
+  facturacion.iguales.facturar === 14,
+  JSON.stringify(facturacion.iguales));
+paso('y el cierre las trae puestas, con sus técnicos',
+  facturacion.campoH === '14' && facturacion.campoT === '2',
+  facturacion.campoH+' h × '+facturacion.campoT);
+paso('diciendo de dónde salen', /Suma de las 2 jornadas/.test(facturacion.pista), 'lo explica');
+paso('el cálculo de entrada y salida ya no las pisa',
+  facturacion.trasHoras === '14', facturacion.trasHoras);
+paso('los kilómetros también se suman', facturacion.campoK === '60', facturacion.campoK);
+paso('y hay un botón para apuntar la jornada de hoy antes de cerrar',
+  facturacion.hayBoton === true);
+paso('si el número de técnicos cambió de un día a otro, se pasan a horas de técnico',
+  facturacion.distintos.horasPersona === 20 && facturacion.distintos.facturar === 20 &&
+  facturacion.distintos.tecnicos === 1,
+  '8 h × 1 + 6 h × 2 = '+facturacion.distintos.horasPersona);
+paso('el cierre lo refleja, con un solo técnico para no multiplicar dos veces',
+  facturacion.campoH2 === '20' && facturacion.campoT2 === '1',
+  facturacion.campoH2+' h × '+facturacion.campoT2);
+paso('y explica por qué', /horas de técnico/.test(facturacion.pista2), 'lo explica');
+
+/* ================================================================
    Entrega en obra
    ================================================================ */
 bloque('Entrega en obra');
