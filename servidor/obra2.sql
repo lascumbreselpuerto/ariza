@@ -62,6 +62,9 @@ create table if not exists public.jornadas (
   horas        numeric,
   num_tecnicos integer not null default 1,
   tecnico_id   uuid,
+  -- kilómetros de esa salida: cuatro días de obra son cuatro desplazamientos,
+  -- y cobrar uno solo es regalar tres
+  km           numeric,
   -- lo que se hizo ese día
   trabajo      text,
   -- lo que hay que saber ANTES de volver: sin esto, el jueves se repite el
@@ -74,9 +77,16 @@ create table if not exists public.jornadas (
 comment on table public.jornadas is
   'Un día de trabajo en una obra que dura varios. No se firma: firmar cuatro '
   'veces la misma obra no prueba nada. Lo que se firma es el cierre.';
+comment on column public.jornadas.km is
+  'Kilómetros de la salida de ese día. Se suman al cerrar la obra, igual que '
+  'las horas: un desplazamiento por jornada, no uno por obra.';
 comment on column public.jornadas.proxima is
   'Lo que hay que saber antes de volver: qué queda, qué falta traer, con '
   'quién hay que hablar. Sale en pantalla al abrir la asistencia.';
+
+-- Para quien ya ejecutó este fichero antes del 27-10-2026: la tabla ya existe,
+-- así que el create de arriba no la toca y la columna hay que añadirla aparte.
+alter table public.jornadas add column if not exists km numeric;
 
 create index if not exists jornadas_aviso_idx on public.jornadas (aviso_id, fecha);
 
