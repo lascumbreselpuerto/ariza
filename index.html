@@ -1398,7 +1398,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.10.26-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.10.27-1';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -19207,6 +19207,26 @@ const entregasObraDe = id => (S.entregasObra || []).filter(e => e.aviso_id === i
 const jornadasDe = id => (S.jornadas || []).filter(j => j.aviso_id === id)
   .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
 const horasObra = id => jornadasDe(id).reduce((n, j) => n + Number(j.horas || 0), 0);
+/* Lo que de verdad hay que facturar de una obra de varios días.
+   La valoración de una visita multiplica horas por técnicos, así que sumar
+   solo las horas se queda corto en cuanto un día vais dos. Si todos los días
+   fuisteis los mismos, se devuelve ese número de técnicos y las horas tal
+   cual, que es como mejor se lee en el parte. Si cambió de un día a otro, se
+   devuelven las horas de técnico ya multiplicadas y un solo técnico, para que
+   el importe salga bien sin inventarse una media. */
+function resumenHorasObra(id){
+  const js = jornadasDe(id).filter(j => Number(j.horas || 0) > 0);
+  if (!js.length) return null;
+  const horas = js.reduce((n, j) => n + Number(j.horas || 0), 0);
+  const horasPersona = js.reduce((n, j) => n + Number(j.horas || 0) * Number(j.num_tecnicos || 1), 0);
+  const km = jornadasDe(id).reduce((n, j) => n + Number(j.km || 0), 0);
+  const tecs = [...new Set(js.map(j => Number(j.num_tecnicos || 1)))];
+  const iguales = tecs.length === 1;
+  return { jornadas: js.length, horas, horasPersona, km,
+    tecnicos: iguales ? tecs[0] : 1,
+    facturar: iguales ? horas : horasPersona,
+    iguales };
+}
 /* Lo último que se dejó dicho para la próxima visita */
 const avisoProxima = id => {
   const js = jornadasDe(id).filter(j => (j.proxima || '').trim());
@@ -19250,6 +19270,9 @@ async function dlgJornada(avisoId, jornadaId){
       '<input id="j-ini" type="time" value="'+esc(j ? hhmm(j.hora_inicio) : '')+'"></div>'+
     '<div class="campo"><label for="j-fin">Salida</label>'+
       '<input id="j-fin" type="time" value="'+esc(j ? hhmm(j.hora_fin) : '')+'"></div>'+
+    '<div class="campo"><label for="j-km">Kilómetros de hoy</label>'+
+      '<input id="j-km" type="number" step="1" min="0" value="'+esc(j && j.km!=null?j.km:'')+'">'+
+      '<span class="pista">Los de la salida de hoy. Se suman al cerrar</span></div>'+
     '<div class="campo"><label for="j-horas">Horas a facturar</label>'+
       '<input id="j-horas" type="number" step="any" min="0" value="'+esc(j && j.horas!=null?j.horas:'')+'">'+
       (t.minimo_horas ? '<span class="pista">El mínimo son '+esc(t.minimo_horas)+' h</span>' : '')+'</div>'+
@@ -19284,6 +19307,7 @@ async function dlgJornada(avisoId, jornadaId){
     const o = { aviso_id: avisoId, fecha: dia,
       hora_inicio: hora('j-ini'), hora_fin: hora('j-fin'),
       horas: val('j-horas') ? +val('j-horas') : null,
+      km: val('j-km') ? +val('j-km') : null,
       num_tecnicos: val('j-ntec') ? +val('j-ntec') : 1,
       tecnico_id: (S.perfil || {}).id || null,
       trabajo: val('j-trab') || null, proxima: val('j-prox') || null };
@@ -19555,8 +19579,12 @@ function dlgCierre(avisoId){
           '" data-aviso="'+a.id+'">Abrir</button></td></tr>').join('')+
       '</tbody></table></div>'+
       '<p class="mini" style="margin:8px 0 0"><b>'+js.length+' jornada'+(js.length===1?'':'s')+
-      ', '+hs+' hora'+(hs===1?'':'s')+' en total.</b> Esas horas son las que se facturan: '+
-      'las de abajo son solo las del último día, por si hoy has rematado algo.</p></div>';
+      ', '+hs+' hora'+(hs===1?'':'s')+' en total.</b> Esas son las horas que se facturan, y ya están '+
+      'puestas abajo en «Horas a facturar». Si hoy has rematado algo, apúntalo también como jornada '+
+      'antes de cerrar.</p>'+
+      '<div class="fila" style="margin-top:8px"><button type="button" class="btn sm" '+
+      'data-act="jornada-hoy" data-id="'+a.id+'">Apuntar la jornada de hoy</button><span class="sp"></span></div>'+
+      '</div>';
   }
 
   // Lo que ya se sabía
@@ -19631,9 +19659,39 @@ function dlgCierre(avisoId){
        técnico, que es el único que sabe cuándo empezó de verdad. */
     '<div class="campo"><label for="z-ini">Hora de entrada</label><input id="z-ini" type="time" value="'+esc(hhmm(a.hora_inicio))+'"><span class="pista">A qué hora empezaste la asistencia</span></div>'+
     '<div class="campo"><label for="z-fin">Hora de salida</label><input id="z-fin" type="time" value="'+esc(hhmm(a.hora_fin) || hhmm(ahora))+'"></div>'+
-    '<div class="campo"><label for="z-horas">Horas a facturar</label><input id="z-horas" type="number" step="1" min="0" value="'+esc(a.horas!=null?a.horas:'')+'"><span class="pista">Horas completas. A partir de 30 minutos sube a la hora siguiente</span></div>'+
-    '<div class="campo"><label for="z-ntec">Técnicos</label><input id="z-ntec" type="number" min="1" max="6" value="'+esc(a.num_tecnicos||1)+'"></div>'+
-    '<div class="campo"><label for="z-km">Desplazamiento (km)</label><input id="z-km" type="number" step="1" min="0" value="'+esc(a.desplazamiento!=null?a.desplazamiento:'')+'"></div>'+
+    /* En una obra de varios días lo que se factura NO son las horas de hoy,
+       son las de toda la obra. Se rellenan solas con la suma de las jornadas,
+       porque depender de que alguien las copie a mano es justo lo que esta
+       aplicación tiene que evitar. Se pueden corregir, claro. */
+    (() => {
+      const r = resumenHorasObra(a.id);
+      const hv = r ? r.facturar : (a.horas != null ? a.horas : '');
+      const tv = r ? r.tecnicos : (a.num_tecnicos || 1);
+      const pista = r
+        ? (r.iguales
+            ? 'Suma de las '+r.jornadas+' jornadas: '+r.horas+' h'+
+              (r.tecnicos > 1 ? ' con '+r.tecnicos+' técnicos cada día' : '')+
+              '. Si la cambias, manda lo que escribas'
+            : 'Suma de las '+r.jornadas+' jornadas: '+r.horasPersona+' horas de técnico ('+r.horas+
+              ' h de obra, con distinto número de técnicos según el día). Por eso aquí pone un solo técnico: '+
+              'así el importe sale bien sin inventarse una media')
+        : 'Horas completas. A partir de 30 minutos sube a la hora siguiente';
+      return '<div class="campo"><label for="z-horas">Horas a facturar'+(r?' (toda la obra)':'')+'</label>'+
+        '<input id="z-horas" type="number" step="1" min="0" value="'+esc(hv)+'"'+
+        (r ? ' data-auto="0"' : '')+'>'+
+        '<span class="pista">'+pista+'</span></div>'+
+        '<div class="campo"><label for="z-ntec">Técnicos</label>'+
+        '<input id="z-ntec" type="number" min="1" max="6" value="'+esc(tv)+'"></div>';
+    })()+
+    (() => {
+      const r = resumenHorasObra(a.id);
+      const kv = r && r.km > 0 ? r.km : (a.desplazamiento != null ? a.desplazamiento : '');
+      return '<div class="campo"><label for="z-km">Desplazamiento (km)</label>'+
+        '<input id="z-km" type="number" step="1" min="0" value="'+esc(kv)+'">'+
+        (r && r.km > 0
+          ? '<span class="pista">Suma de los kilómetros de las '+r.jornadas+' jornadas</span>'
+          : '')+'</div>';
+    })()+
     '</div></div>';
 
   if (a.tipo === 'mantenimiento') h += bloqueGuion(a, p);
