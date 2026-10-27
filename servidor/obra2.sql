@@ -74,6 +74,12 @@ create table if not exists public.jornadas (
   creado_por   text default ''
 );
 
+-- Para quien ya ejecutó este fichero antes del 27-10-2026: la tabla ya existe,
+-- así que el «create table if not exists» de arriba NO la toca y la columna de
+-- kilómetros hay que añadirla aparte. Y va AQUÍ, antes de los comentarios: un
+-- comentario sobre una columna que todavía no existe aborta el script entero.
+alter table public.jornadas add column if not exists km numeric;
+
 comment on table public.jornadas is
   'Un día de trabajo en una obra que dura varios. No se firma: firmar cuatro '
   'veces la misma obra no prueba nada. Lo que se firma es el cierre.';
@@ -83,10 +89,6 @@ comment on column public.jornadas.km is
 comment on column public.jornadas.proxima is
   'Lo que hay que saber antes de volver: qué queda, qué falta traer, con '
   'quién hay que hablar. Sale en pantalla al abrir la asistencia.';
-
--- Para quien ya ejecutó este fichero antes del 27-10-2026: la tabla ya existe,
--- así que el create de arriba no la toca y la columna hay que añadirla aparte.
-alter table public.jornadas add column if not exists km numeric;
 
 create index if not exists jornadas_aviso_idx on public.jornadas (aviso_id, fecha);
 
