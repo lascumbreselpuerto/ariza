@@ -245,6 +245,13 @@ img{max-width:100%}
    se lean como una lista y no como una botonera. */
 .eq-indice .eq-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:4px}
 .eq-indice .eq-lista .btn{justify-content:flex-start;text-align:left;padding:7px 10px}
+/* El índice del manual: sangrado por nivel, para que se lea como un índice
+   de verdad y no como una lista de botones sueltos. */
+.man-indice{display:flex;flex-direction:column;gap:2px}
+.man-indice .man-ir{justify-content:flex-start;text-align:left;padding:7px 10px;font-weight:600}
+.man-indice .n2{padding-left:10px}
+.man-indice .n3{padding-left:26px;font-weight:500;font-size:14px}
+.man-indice .n4{padding-left:42px;font-weight:400;font-size:13px;color:var(--muted)}
 .eq-destacado{animation:eq-flash 1.4s ease-out}
 @keyframes eq-flash{0%{box-shadow:0 0 0 3px var(--amarillo)}100%{box-shadow:0 0 0 0 transparent}}
 .mat-fila{display:grid;grid-template-columns:1fr 76px 60px 34px;gap:6px;margin-bottom:6px;align-items:center}
@@ -653,7 +660,7 @@ const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etique
             presuAdjuntos:[], sinAdjuntos:false,
             proveedores:[], sinProveedores:false, conjuntos:[], conjuntoLineas:[],
             sinConjuntos:false, sinCatalogoVentas:false, conjunto:null,
-            jornadas:[], sinJornadas:false, entregasObra:[], sinEntregas:false,
+            jornadas:[], sinJornadas:false, entregasObra:[], sinEntregas:false, buscaManual:'',
             presu:null, presuFiltro:'', buscaPresu:'' };
 /* Importes: solo existen para el administrador. Si no hay tarifas cargadas, no se enseña nada. */
 const valoracionDe = id => S.valoraciones[id] || null;
@@ -1398,7 +1405,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.10.27-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.10.27-2';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -2079,12 +2086,15 @@ function tarjetaTrabajo(a){
       (a.puerta_id ? '<button class="btn sm" data-act="abrir" data-id="'+a.puerta_id+'">Ficha de la puerta</button>' : '')+
       '<button class="btn sm plana" data-act="aviso-editar" data-id="'+a.id+'">Detalles</button>'+
       '<span class="sp"></span>'+
-      /* Una obra que dura varios días se cierra una sola vez, al final. Lo de
-         cada día es el parte, que no lleva firma ni cobro. */
+      /* Al acabar el día hay dos finales distintos, y conviene que se elija a
+         propósito en vez de deducirlo. «Obra sin terminar» deja el parte del
+         día y la obra abierta; «Cerrar» es el final, con firma y cobro. */
       (S.sinJornadas ? ''
-        : '<button class="btn sm" data-act="jornada-hoy" data-id="'+a.id+'">Parte de hoy</button>')+
+        : (esObraLarga(a)
+            ? '<button class="btn sm" data-act="jornada-hoy" data-id="'+a.id+'">Parte de hoy</button>'
+            : '<button class="btn sm" data-act="obra-sin-terminar" data-id="'+a.id+'">Obra sin terminar</button>'))+
       '<button class="btn sm pri" data-act="cerrar-asistencia" data-id="'+a.id+'">'+
-        (jornadasDe(a.id).length ? 'Cerrar la obra' : 'Cerrar visita')+'</button>'+
+        (esObraLarga(a) ? 'Cerrar la obra' : 'Cerrar visita')+'</button>'+
     '</div></div>';
 }
 
@@ -2853,7 +2863,7 @@ function mdAHtml(src){
     .replace(/(^|\s)(https?:\/\/[^\s<]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
   const out = [];
   const filas = String(src || '').replace(/\r/g, '').split('\n');
-  let lista = false, cita = false, tabla = null;
+  let lista = false, cita = false, tabla = null, nTit = 0;
   const cerrar = () => {
     if (lista){ out.push('</ul>'); lista = false; }
     if (cita){ out.push('</blockquote>'); cita = false; }
@@ -2878,7 +2888,10 @@ function mdAHtml(src){
     if (/^---+$/.test(t)){ cerrar(); out.push('<hr>'); continue; }
     const h = /^(#{1,4})\s+(.*)$/.exec(t);
     if (h){ cerrar(); const n = Math.min(h[1].length + 1, 4);
-            out.push('<h'+n+'>'+linea(h[2])+'</h'+n+'>'); continue; }
+            /* Cada encabezado lleva su ancla, para que el índice pueda saltar
+               a él. Se numeran por orden de aparición y no por su texto: dos
+               apartados pueden llamarse igual, y el número nunca falla. */
+            out.push('<h'+n+' id="man-'+(nTit++)+'">'+linea(h[2])+'</h'+n+'>'); continue; }
     if (/^>\s?/.test(t)){
       if (!cita){ cerrar(); out.push('<blockquote>'); cita = true; }
       out.push('<p>'+linea(t.replace(/^>\s?/, ''))+'</p>'); continue;
@@ -2907,6 +2920,76 @@ async function cargarManual(clave){
     S.manuales[clave] = r.ok ? await r.text() : null;
   } catch(_){ S.manuales[clave] = null; }
   pintar();
+}
+
+/* ---- El índice del manual ----
+   El manual ha pasado de dos folios a ocho apartados largos, y buscar algo
+   con el dedo en un móvil es una tortura. El índice se arma solo leyendo los
+   encabezados: añadir un apartado al manual no obliga a tocar nada aquí.
+
+   Devuelve, por cada encabezado, su ancla, su nivel y el texto que hay debajo
+   hasta el siguiente, que es lo que permite buscar por contenido y no solo
+   por título. */
+function indiceManual(src){
+  const filas = String(src || '').replace(/\r/g, '').split('\n');
+  const tit = [];
+  let n = 0, actual = null;
+  for (const f of filas){
+    const h = /^(#{1,4})\s+(.*)$/.exec(f.trim());
+    if (h){
+      actual = { id:'man-'+(n++), nivel:h[1].length, texto:h[2].trim(), cuerpo:'' };
+      tit.push(actual);
+      continue;
+    }
+    if (actual && f.trim()) actual.cuerpo += ' ' + f.trim();
+  }
+  return tit;
+}
+
+function panelIndiceManual(txt){
+  const tit = indiceManual(txt);
+  if (tit.length < 4) return '';
+  const q = normTxt(S.buscaManual || '');
+  /* Con búsqueda se enseña dónde aparece lo buscado, en el título o en el
+     texto. Sin ella, el índice entero. */
+  const hallados = q
+    ? tit.filter(t => normTxt(t.texto).includes(q) || normTxt(t.cuerpo).includes(q))
+    : tit;
+  /* El primer encabezado suele ser el título del manual: ocupa sitio y no
+     lleva a ninguna parte útil. */
+  const util = hallados.filter(t => t.nivel > 1 || hallados.length === 1);
+  const ver = util.length ? util : hallados;
+
+  let h = '<div class="panel"><div class="panel-h"><h2>Índice</h2>'+
+    '<span class="mini">'+tit.filter(t => t.nivel > 1).length+' apartados</span></div>'+
+    '<div class="buscador" style="margin-bottom:10px"><input id="busca-manual" type="search" '+
+    'placeholder="Buscar en el manual: una palabra basta" value="'+esc(S.buscaManual||'')+'" '+
+    'data-act="busca-manual"></div>';
+
+  if (q && !ver.length)
+    h += '<p class="muted" style="margin:0">Nada con esa palabra. Prueba con otra: la búsqueda mira '+
+      'los títulos y el texto de cada apartado.</p>';
+  else {
+    if (q) h += '<p class="mini" style="margin:0 0 8px">'+ver.length+
+      ' apartado'+(ver.length===1?'':'s')+' con «'+esc(S.buscaManual)+'»</p>';
+    h += '<div class="man-indice">'+ver.map(t => {
+      /* Al buscar, un trozo del texto donde aparece la palabra: así se sabe
+         si el apartado sirve antes de abrirlo. */
+      let pista = '';
+      if (q && !normTxt(t.texto).includes(q)){
+        const i = normTxt(t.cuerpo).indexOf(q);
+        if (i >= 0){
+          const desde = Math.max(0, i - 40);
+          pista = (desde ? '…' : '') + t.cuerpo.slice(desde, i + 90).trim() + '…';
+        }
+      }
+      return '<button type="button" class="btn sm plana man-ir n'+Math.min(t.nivel, 4)+'" '+
+        'data-act="man-ir" data-ir="'+t.id+'">'+esc(t.texto)+
+        (pista ? '<span class="mini" style="display:block;font-weight:400">'+esc(pista)+'</span>' : '')+
+        '</button>';
+    }).join('')+'</div>';
+  }
+  return h + '</div>';
 }
 
 function vistaManual(){
@@ -2944,8 +3027,10 @@ function vistaManual(){
     h += '<div class="panel"><p class="muted" style="margin:0">No se ha podido abrir el manual. '+
       'Si estás sin cobertura, ábrelo una vez con conexión y a partir de ahí se queda guardado '+
       'en el aparato.</p></div>';
-  else
+  else {
+    h += panelIndiceManual(txt);
     h += '<div class="panel manual">'+mdAHtml(txt)+'</div>';
+  }
 
   return h + '</div>';
 }
@@ -19206,6 +19291,10 @@ const entregasObraDe = id => (S.entregasObra || []).filter(e => e.aviso_id === i
    prueba nada y cansa al cliente. Lo que se firma es el cierre. */
 const jornadasDe = id => (S.jornadas || []).filter(j => j.aviso_id === id)
   .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+/* Es obra de varias jornadas si está declarada como tal o si ya tiene partes.
+   Lo segundo es por las que se marcaron solas antes de que existiera el botón:
+   lo que ya está apuntado manda sobre la casilla. */
+const esObraLarga = a => !!a && (a.obra_larga === true || jornadasDe(a.id).length > 0);
 const horasObra = id => jornadasDe(id).reduce((n, j) => n + Number(j.horas || 0), 0);
 /* Lo que de verdad hay que facturar de una obra de varios días.
    La valoración de una visita multiplica horas por técnicos, así que sumar
@@ -19232,6 +19321,38 @@ const avisoProxima = id => {
   const js = jornadasDe(id).filter(j => (j.proxima || '').trim());
   return js.length ? js[js.length - 1] : null;
 };
+
+/* Declarar que la obra no se acaba hoy. Se explica antes de marcarlo porque
+   cambia tres cosas de sitio, y enterarse después es peor. */
+function dlgObraSinTerminar(avisoId){
+  const a = S.avisos.find(x => x.id === avisoId);
+  if (!a) return;
+  const p = a.puerta_id ? puertaDe(a.puerta_id) : null;
+  abrirDlg('<h3>Obra sin terminar</h3>'+
+    '<p class="mini" style="margin:0 0 12px">'+esc(nombreCliente(a))+
+    (p ? ' · '+esc(p.codigo||'') : '')+'</p>'+
+    '<p style="margin:0 0 12px">Esta asistencia pasa a ser una obra de varios días. '+
+    'A partir de ahora:</p>'+
+    '<div class="obra-lista">'+
+    '<div class="item"><div class="item-in"><b>Cada día dejas un parte, no un cierre</b>'+
+      '<div class="mini">Horas, qué has hecho, el material que has gastado y lo que hay que saber '+
+      'antes de volver. El parte del día no lleva firma ni cobro.</div></div></div>'+
+    '<div class="item"><div class="item-in"><b>El cliente firma una sola vez, al final</b>'+
+      '<div class="mini">Firmar cuatro veces la misma obra no prueba nada y cansa al cliente.</div></div></div>'+
+    '<div class="item"><div class="item-in"><b>Lo que dejes dicho sale al volver</b>'+
+      '<div class="mini">En la tarjeta del trabajo, arriba, antes de que te pongas. Y al abrir el '+
+      'parte del día siguiente.</div></div></div>'+
+    '<div class="item"><div class="item-in"><b>Se facturan las horas de todos los días</b>'+
+      '<div class="mini">Al cerrar, las horas y los kilómetros salen de la suma de los partes, '+
+      'no de los del último día.</div></div></div>'+
+    '</div>'+
+    '<p class="mini" style="margin:12px 0 0">Mientras no apuntes ningún parte puedes volver atrás. '+
+    'En cuanto haya uno, no: ese parte ya es la obra.</p>'+
+    '<p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Ahora no</button>'+
+    '<button type="button" class="btn pri" data-act="obra-sin-terminar-ok" data-id="'+avisoId+
+    '">Sí, sigo otro día</button></div>', null);
+}
 
 /* El parte de un día. Sin firma y sin cobro: eso es del cierre. */
 async function dlgJornada(avisoId, jornadaId){
@@ -19560,7 +19681,19 @@ function dlgCierre(avisoId){
   const hhmm = d => d ? new Date(d).toTimeString().slice(0,5) : '';
 
   const js = jornadasDe(a.id);
-  let h = '<h3>'+(js.length ? 'Cerrar la obra' : 'Cerrar visita')+' · '+esc(tipoAsis(a.tipo))+'</h3>';
+  const larga = esObraLarga(a);
+  let h = '<h3>'+(larga ? 'Cerrar la obra' : 'Cerrar visita')+' · '+esc(tipoAsis(a.tipo))+'</h3>';
+
+  /* Marcada como obra larga pero todavía sin ningún parte: o se apunta el de
+     hoy, o se deshace. Cerrar así perdería las horas de los días anteriores,
+     que es justo lo que esto venía a evitar. */
+  if (larga && !js.length)
+    h += '<div class="sin-ficha" style="margin-bottom:10px">Esta asistencia está marcada como obra sin '+
+      'terminar y no tiene ningún parte apuntado. Si vas a cerrarla ahora, apunta primero el parte de hoy '+
+      'o quítale la marca.<div class="fila" style="gap:6px;margin-top:8px">'+
+      '<button type="button" class="btn sm pri" data-act="jornada-hoy" data-id="'+a.id+'">Apuntar el parte de hoy</button>'+
+      '<button type="button" class="btn sm plana" data-act="obra-terminada" data-id="'+a.id+'">No era obra larga</button>'+
+      '</div></div>';
 
   /* Si la obra ha durado varios días, lo primero es el resumen de lo que ya
      está apuntado: nadie debería tener que recordar el lunes el jueves. */
@@ -21158,6 +21291,15 @@ raiz.addEventListener('click', async e => {
       pintar(); toast('Quitado.');
     } catch(err){ fallo(err); }
   }
+  else if (a === 'man-ir'){
+    const dest = document.getElementById(b.dataset.ir);
+    if (!dest) return;
+    dest.scrollIntoView({ behavior:'smooth', block:'start' });
+    dest.classList.remove('eq-destacado');
+    void dest.offsetWidth;
+    dest.classList.add('eq-destacado');
+    setTimeout(() => dest.classList.remove('eq-destacado'), 1600);
+  }
   else if (a === 'eq-ir'){
     const dest = document.getElementById(b.dataset.ir);
     if (!dest) return;
@@ -21236,6 +21378,7 @@ raiz.addEventListener('input', e => {
   if (e.target.dataset.act === 'busca-cli'){ S.buscaCli = e.target.value; pintar(); }
   if (e.target.dataset.act === 'busca-mat'){ S.buscaMat = e.target.value; pintar(); }
   if (e.target.dataset.act === 'busca-presu'){ S.buscaPresu = e.target.value; pintar(); }
+  if (e.target.dataset.act === 'busca-manual'){ S.buscaManual = e.target.value; pintar(); }
   if (e.target.dataset.act === 'busca-con'){ S.buscaCon = e.target.value; pintar(); }
   if (e.target.dataset.act === 'busca-hist'){ S.histBusca = e.target.value; pintar(); }
   // Campos del expediente: se guardan solos y sin repintar, para no interrumpir al que escribe
@@ -21411,6 +21554,44 @@ dlgForm.addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const a = b.dataset.act;
   /* ---- Jornadas y entrega en obra ---- */
+  /* Declarar que la obra sigue mañana. Lo que cambia se explica antes de
+     marcarlo, porque cambia bastante: el botón de cerrar, qué se firma y de
+     dónde salen las horas que se facturan. */
+  if (a === 'obra-sin-terminar'){
+    cerrarDlg();
+    dlgObraSinTerminar(b.dataset.id);
+    return;
+  }
+  if (a === 'obra-sin-terminar-ok'){
+    const id = b.dataset.id;
+    try {
+      await sb.from('avisos').update({ obra_larga:true }).eq('id', id);
+      const av = S.avisos.find(x => x.id === id);
+      if (av) av.obra_larga = true;
+      pintar();
+      await dlgJornada(id, null);
+    } catch(e){
+      setErr((e.message||'').match(/obra_larga/i)
+        ? 'Falta ejecutar obra2.sql en la base de datos.'
+        : (e.message || 'No se ha podido marcar.'));
+    }
+    return;
+  }
+  /* Volver atrás: una obra marcada por error se desmarca mientras no tenga
+     partes. Con partes apuntados no, porque esos partes son la obra. */
+  if (a === 'obra-terminada'){
+    const id = b.dataset.id;
+    if (jornadasDe(id).length) return toast('Esta obra ya tiene partes: no se puede deshacer.');
+    if (!armar(b, 'Confirmar')) return;
+    try {
+      await sb.from('avisos').update({ obra_larga:false }).eq('id', id);
+      const av = S.avisos.find(x => x.id === id);
+      if (av) av.obra_larga = false;
+      cerrarDlg(); await cargar(); pintar();
+      toast('Vuelve a ser una visita de un día.');
+    } catch(e){ fallo(e); }
+    return;
+  }
   if (a === 'jornada-hoy'){ cerrarDlg(); await dlgJornada(b.dataset.id, null); return; }
   if (a === 'j-abrir'){ await dlgJornada(b.dataset.aviso, b.dataset.id); return; }
   if (a === 'j-volver'){ await dlgJornada(b.dataset.aviso, b.dataset.id); return; }
