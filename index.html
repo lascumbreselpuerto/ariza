@@ -661,6 +661,7 @@ const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etique
             proveedores:[], sinProveedores:false, conjuntos:[], conjuntoLineas:[],
             sinConjuntos:false, sinCatalogoVentas:false, conjunto:null,
             jornadas:[], sinJornadas:false, entregasObra:[], sinEntregas:false, buscaManual:'',
+            avisoPuertas:[], sinAvisoPuertas:false,
             presu:null, presuFiltro:'', buscaPresu:'' };
 /* Importes: solo existen para el administrador. Si no hay tarifas cargadas, no se enseña nada. */
 const valoracionDe = id => S.valoraciones[id] || null;
@@ -1328,14 +1329,20 @@ async function cargar(){
      los conjuntos, lo mismo: no llevan precios, así que no hay nada que
      esconder y al técnico le sirven para saber qué lleva una puerta. */
   {
-    const [co, pv, cj, cl, jo, eo] = await Promise.all([
+    const [co, pv, cj, cl, jo, eo, ap] = await Promise.all([
       sb.from('contactos').select('*').order('nombre').range(0, 9999),
       sb.from('proveedores').select('*').order('nombre').range(0, 999),
       sb.from('conjuntos').select('*').order('nombre').range(0, 999),
       sb.from('conjunto_lineas').select('*').order('orden').range(0, 9999),
       sb.from('jornadas').select('*').order('fecha').range(0, 9999),
       sb.from('entregas_obra').select('*').order('fecha', { ascending:false }).range(0, 4999),
+      sb.from('aviso_puertas').select('*').order('orden').range(0, 19999),
     ]);
+    /* Las puertas de cada obra. Si todavía no se ha ejecutado obra3.sql, la
+       aplicación sigue funcionando con una puerta por asistencia, que es lo
+       que hacía antes. */
+    S.avisoPuertas = ap.error ? [] : (ap.data || []);
+    S.sinAvisoPuertas = !!ap.error;
     /* Las jornadas y las entregas son de esta entrega: si todavía no se ha
        ejecutado su SQL, la aplicación sigue funcionando sin ellas. */
     S.jornadas = jo.error ? [] : (jo.data || []);
@@ -1391,7 +1398,14 @@ async function sembrarGuiones(){
   faltan.forEach(x => { S.ajustes[x.clave] = x.valor; });
 }
 const puertaDe = id => S.puertas.find(x => x.id === id);
-const avisosDe = id => S.avisos.filter(x => x.puerta_id === id);
+/* Las asistencias de una puerta. Cuenta también las obras donde esa puerta no
+   era la principal: si se montó en una instalación de tres puertas, esa obra es
+   parte de su historia igual que si hubiera ido sola. */
+const avisosDe = id => {
+  const obras = new Set((S.avisoPuertas || [])
+    .filter(ap => ap.puerta_id === id).map(ap => ap.aviso_id));
+  return S.avisos.filter(x => x.puerta_id === id || obras.has(x.id));
+};
 const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comercial');
 
 /* ================= Arranque y sesión ================= */
@@ -1405,7 +1419,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.10.27-2';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.10.28-1';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -2048,7 +2062,9 @@ function tarjetaTrabajo(a){
     '</div>'+
     '<b class="trab-cli">'+esc(cli)+'</b>'+
     (donde ? '<div class="trab-dir">'+esc(donde)+'</div>' : '')+
-    (p.codigo ? '<div class="mini">'+esc([p.codigo, p.tipo, p.marca, p.modelo].filter(Boolean).join(' · '))+'</div>' : '')+
+    (p.codigo ? '<div class="mini">'+esc([p.codigo, p.tipo, p.marca, p.modelo].filter(Boolean).join(' · '))+
+      (nPuertasDeAviso(a.id) > 1 ? ' · y '+(nPuertasDeAviso(a.id)-1)+' puerta'+
+        (nPuertasDeAviso(a.id)-1===1?'':'s')+' más en esta obra' : '')+'</div>' : '')+
     (a.descripcion ? '<p class="trab-desc">'+esc(a.descripcion)+'</p>' : '')+
     (a.notas_oficina ? '<p class="nota-oficina">Oficina: '+esc(a.notas_oficina)+'</p>' : '')+
     /* Lo que el técnico dejó dicho el último día. Va arriba del todo porque
@@ -2064,14 +2080,22 @@ function tarjetaTrabajo(a){
        (haría una consulta por tarjeta); se cuentan en el parte y al cerrar. */
     (() => {
       if (!obligaAltaObra(a)) return '';
-      const m = minimoObra(a.puerta_id ? (puertaDe(a.puerta_id) || null) : null, null);
-      if (m.sinFicha) return '<p class="nota-oficina" style="border-left-color:var(--mal)">'+
+      /* Todas las puertas de la obra, no solo la principal: si la segunda no
+         está documentada, el técnico tiene que saberlo desde la furgoneta. */
+      const xs = puertasDeAviso(a.id);
+      if (!xs.length) return '<p class="nota-oficina" style="border-left-color:var(--mal)">'+
         '<b>Puerta sin documentar.</b> No tiene ficha ni QR: hay que darla de alta en obra, con '+
         'medidas, fotos y matrículas. Sin eso no se cierra la visita.</p>';
-      const f = m.faltan.filter(x => !x.duda);
-      if (!f.length) return '';
-      return '<p class="nota-oficina" style="border-left-color:var(--mal)"><b>Falta documentar la puerta:</b> '+
-        esc(f.map(x => x.texto.toLowerCase()).join('; '))+'.</p>';
+      const ms = xs.map(pu => ({ p: pu, f: minimoObra(pu, null).faltan.filter(x => !x.duda) }))
+        .filter(x => x.f.length);
+      if (!ms.length) return '';
+      if (xs.length === 1)
+        return '<p class="nota-oficina" style="border-left-color:var(--mal)"><b>Falta documentar la puerta:</b> '+
+          esc(ms[0].f.map(x => x.texto.toLowerCase()).join('; '))+'.</p>';
+      return '<p class="nota-oficina" style="border-left-color:var(--mal)"><b>Falta documentar '+
+        ms.length+' de las '+xs.length+' puertas:</b> '+
+        esc(ms.map(x => (x.p.codigo || 'sin etiqueta')+' ('+
+          x.f.map(y => y.texto.toLowerCase()).join('; ')+')').join(' · '))+'.</p>';
     })()+
     '<div class="trab-btns">'+
       (tel ? '<a class="btn sm" href="tel:'+esc(tel.replace(/\s/g,''))+'">Llamar'+
@@ -17158,13 +17182,22 @@ function dlgPuerta(id, avisoId){
          veces. Va después de guardar la puerta, porque una puerta nueva no tiene
          id hasta ese momento. */
       if (puertaId) await guardarCuadroMotor(puertaId, Object.assign({ id: puertaId }, o));
-      // si venimos de una asistencia sin puerta, queda enganchada
+      /* Si venimos de una asistencia, la puerta queda enganchada a ella.
+         Antes esto hacía un update de avisos.puerta_id, y en una obra de varias
+         puertas la segunda soltaba a la primera sin avisar. Ahora se añade a la
+         lista de la obra y la principal solo se escribe si no había ninguna. */
+      let yaEstaba = false;
       if (avisoId && puertaId){
-        await sb.from('avisos').update({ puerta_id: puertaId, cliente_id: o.cliente_id || null }).eq('id', avisoId);
+        yaEstaba = puertasDeAviso(avisoId).some(x => x.id === puertaId);
+        await engancharPuerta(avisoId, puertaId, o.cliente_id || null);
         S.ficha = null;
       }
       cerrarDlg(); await cargar();
-      toast(p ? 'Ficha actualizada.' : (avisoId ? 'Puerta dada de alta y enganchada a la asistencia.' : 'Puerta dada de alta.'));
+      const nP = avisoId ? nPuertasDeAviso(avisoId) : 0;
+      toast(p ? (avisoId && !yaEstaba ? 'Ficha actualizada y puerta añadida a la obra.' : 'Ficha actualizada.')
+              : (avisoId ? (nP > 1 ? 'Puerta dada de alta. La obra ya tiene '+nP+' puertas.'
+                                   : 'Puerta dada de alta y enganchada a la asistencia.')
+                         : 'Puerta dada de alta.'));
       if (avisoId) dlgCierre(avisoId);
     } catch(e){ setErr(e.message || 'No se pudo guardar.'); }
   });
@@ -19280,6 +19313,92 @@ const CONFORMIDADES = [
 ];
 const entregasObraDe = id => (S.entregasObra || []).filter(e => e.aviso_id === id)
   .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+/* Las actas de UNA puerta dentro de una obra: la más nueva primero */
+const entregasObraDePuerta = (avisoId, puertaId) => entregasObraDe(avisoId)
+  .filter(e => (e.puerta_id || null) === (puertaId || null));
+
+/* ---- Una obra, varias puertas ----
+   Una asistencia tenía una puerta y punto: la columna avisos.puerta_id. En una
+   instalación de varios días casi nunca es verdad, y lo peor es cómo fallaba:
+   al dar de alta la segunda puerta, la aplicación escribía su id ahí y la
+   primera se soltaba sin avisar.
+
+   Ahora la lista está en aviso_puertas y avisos.puerta_id se queda con la
+   principal, que es la que sale en la tarjeta y en los documentos. Si todavía
+   no se ha ejecutado obra3.sql, puertasDeAviso devuelve esa sola puerta y la
+   aplicación se porta como antes. */
+function puertasDeAviso(avisoId){
+  const a = S.avisos.find(x => x.id === avisoId);
+  const filas = (S.avisoPuertas || []).filter(x => x.aviso_id === avisoId)
+    .sort((x, y) => (Number(x.orden || 99) - Number(y.orden || 99))
+      || String(x.creado || '').localeCompare(String(y.creado || '')));
+  const ids = [];
+  /* La principal va primera siempre, aunque en la tabla tenga otro orden: es la
+     que el resto de la aplicación sigue leyendo. */
+  if (a && a.puerta_id) ids.push(a.puerta_id);
+  filas.forEach(f => { if (!ids.includes(f.puerta_id)) ids.push(f.puerta_id); });
+  return ids.map(id => puertaDe(id)).filter(Boolean);
+}
+const nPuertasDeAviso = avisoId => puertasDeAviso(avisoId).length;
+/* La puerta que manda en la obra: la de avisos.puerta_id, y si no hay, la primera */
+function puertaPrincipal(a){
+  if (!a) return null;
+  if (a.puerta_id) return puertaDe(a.puerta_id) || null;
+  const xs = puertasDeAviso(a.id);
+  return xs.length ? xs[0] : null;
+}
+
+/* Engancha una puerta a una obra SIN soltar las que ya estaban, que era el
+   agujero. La primera que se engancha pasa además a ser la principal. */
+async function engancharPuerta(avisoId, puertaId, clienteId){
+  const a = S.avisos.find(x => x.id === avisoId);
+  if (!a || !puertaId) return;
+  const ya = puertasDeAviso(avisoId).some(p => p.id === puertaId);
+  /* La principal solo se escribe si la asistencia no tenía ninguna: pisarla es
+     justo lo que hacía desaparecer la primera puerta. */
+  if (!a.puerta_id){
+    const o = { puerta_id: puertaId };
+    if (clienteId && !a.cliente_id) o.cliente_id = clienteId;
+    await sb.from('avisos').update(o).eq('id', avisoId);
+  } else if (clienteId && !a.cliente_id){
+    await sb.from('avisos').update({ cliente_id: clienteId }).eq('id', avisoId);
+  }
+  if (ya) return;
+  const orden = (S.avisoPuertas || []).filter(x => x.aviso_id === avisoId).length + 1;
+  /* Sin obra3.sql ejecutado no hay tabla donde apuntarlo. La principal ya ha
+     quedado guardada arriba, así que la aplicación se queda como antes en vez
+     de romperse. */
+  try {
+    const { error } = await sb.from('aviso_puertas')
+      .insert({ aviso_id: avisoId, puerta_id: puertaId, orden, creado_por: yo() });
+    if (error) S.sinAvisoPuertas = /aviso_puertas|does not exist|relation/i.test(error.message || '');
+  } catch(_){ /* igual: se sigue con la principal */ }
+}
+
+/* Soltar una puerta de la obra. No borra la puerta ni su ficha: solo deja de
+   estar en esta obra. Y no se suelta si ya tiene acta firmada. */
+async function soltarPuerta(avisoId, puertaId){
+  const a = S.avisos.find(x => x.id === avisoId);
+  if (!a) return;
+  const firmada = entregasObraDePuerta(avisoId, puertaId).some(e => e.firma_el);
+  if (firmada) return toast('Esta puerta ya tiene acta firmada: no se quita de la obra.');
+  try {
+    const { error } = await sb.from('aviso_puertas')
+      .delete().eq('aviso_id', avisoId).eq('puerta_id', puertaId);
+    if (error) throw error;
+    if (a.puerta_id === puertaId){
+      /* Si se suelta la principal, manda la siguiente que quede */
+      const resto = puertasDeAviso(avisoId).filter(p => p.id !== puertaId);
+      await sb.from('avisos').update({ puerta_id: resto.length ? resto[0].id : null }).eq('id', avisoId);
+    }
+    await cargar();
+    toast('Puerta quitada de la obra. Su ficha sigue estando.');
+  } catch(e){
+    toast(String(e.message||'').match(/aviso_puertas/i)
+      ? 'Falta ejecutar obra3.sql en la base de datos.'
+      : (e.message || 'No se ha podido quitar.'));
+  }
+}
 
 /* ---- Obras de varios días ----
    Una asistencia guardaba UNA jornada. Una obra de cuatro días no cabía, así
@@ -19373,9 +19492,12 @@ async function dlgJornada(avisoId, jornadaId){
   }
   const ant = avisoProxima(avisoId);
 
+  const nPu = nPuertasDeAviso(avisoId);
   let h = '<h3>'+(j ? 'Jornada del '+esc(fechaCorta(j.fecha)) : 'Parte de hoy')+'</h3>'+
     '<p class="mini" style="margin:0 0 10px">'+esc(nombreCliente(a))+(p?' · '+esc(p.codigo||''):'')+
-    '. Esto no se firma: es el parte del día. La firma del cliente va en el cierre de la obra.</p>';
+    (nPu > 1 ? ' · '+nPu+' puertas en esta obra' : '')+
+    '. Esto no se firma: es el parte del día. La firma del cliente va en el cierre de la obra.'+
+    (nPu > 1 ? ' Las horas son de la obra entera: no hay que repartirlas entre las puertas.' : '')+'</p>';
 
   /* Lo que quedó dicho el último día, que es lo primero que hay que leer */
   if (ant && (!j || ant.id !== j.id))
@@ -19451,12 +19573,55 @@ async function dlgJornada(avisoId, jornadaId){
   });
 }
 
-/* El acta de entrega: lo que se prueba delante del cliente y él firma */
-function dlgEntregaObra(avisoId, entregaId){
+/* De qué puerta es un acta: la que se haya elegido, la que ya tiene el acta, o
+   la única de la obra. Con varias puertas y sin elegir, devuelve null y el
+   diálogo pregunta primero cuál. */
+function puertaDelActa(a, e, puertaId){
+  const id = (e && e.puerta_id) || puertaId || null;
+  if (id) return puertaDe(id) || null;
+  const xs = puertasDeAviso(a.id);
+  if (xs.length === 1) return xs[0];
+  return null;
+}
+
+/* El acta de entrega: lo que se prueba delante del cliente y él firma.
+   Es de UNA puerta. Una obra con tres puertas lleva tres actas, cada una con el
+   guión de su tipo y su propia conformidad: si la peatonal queda con reparos,
+   las dos seccionales no tienen por qué arrastrarlo. */
+function dlgEntregaObra(avisoId, entregaId, puertaId){
   const a = S.avisos.find(x => x.id === avisoId);
   if (!a) return;
   const e = entregaId ? (S.entregasObra || []).find(x => x.id === entregaId) : null;
-  const p = a.puerta_id ? puertaDe(a.puerta_id) : null;
+  const puertas = puertasDeAviso(avisoId);
+  const p = puertaDelActa(a, e, puertaId);
+
+  /* Varias puertas y ninguna elegida: primero se pregunta de cuál es el acta.
+     Adivinarlo sería firmar la puerta equivocada. */
+  if (!p && puertas.length > 1){
+    abrirDlg('<h3>¿De qué puerta es el acta?</h3>'+
+      '<p class="mini" style="margin:0 0 12px">Esta obra lleva '+puertas.length+' puertas y cada una se '+
+      'entrega por separado, con el guión de su tipo. Elige la que vas a entregar ahora.</p>'+
+      '<div class="obra-lista">'+ puertas.map(x => {
+        const ac = entregasObraDePuerta(avisoId, x.id);
+        const fi = ac.find(z => z.firma_el), bo = ac.find(z => !z.firma_el);
+        return '<div class="item"><div class="item-in">'+
+          '<b>'+esc(x.codigo || 'Sin etiqueta')+'</b> '+
+          (fi ? '<span class="chip ok sin">Ya firmada</span>'
+              : (bo ? '<span class="chip aviso sin">Empezada</span>' : ''))+
+          '<div class="mini">'+esc([x.tipo, x.marca, x.modelo].filter(Boolean).join(' · ') || 'Sin tipo')+'</div>'+
+          '<div class="fila" style="gap:6px;margin-top:6px">'+
+          '<button type="button" class="btn sm'+(fi?' plana':' pri')+'" data-act="entrega-obra" '+
+            'data-id="'+avisoId+'" data-puerta="'+esc(x.id)+'"'+(bo?' data-entrega="'+bo.id+'"':'')+'>'+
+            (fi ? 'Hacer otra acta' : (bo ? 'Seguir con el acta' : 'Entregar esta'))+'</button>'+
+          (fi ? '<button type="button" class="btn sm plana" data-act="eo-documento" data-id="'+fi.id+
+            '">Ver la firmada</button>' : '')+
+          '<span class="sp"></span></div></div></div>';
+      }).join('')+'</div>'+
+      '<p class="err"></p><div class="pie"><span class="sp"></span>'+
+      '<button type="button" class="btn plana" data-cerrar>Cancelar</button></div>', null);
+    return;
+  }
+
   const cli = a.cliente_id ? clienteDe(a.cliente_id) : (p && p.cliente_id ? clienteDe(p.cliente_id) : null);
   const guion = guionEntrega(p ? p.tipo : '');
   /* Si ya hay entrega, se enseñan sus respuestas; si no, el guión en blanco */
@@ -19465,9 +19630,16 @@ function dlgEntregaObra(avisoId, entregaId){
     : guion.map((t, i) => ({ clave:'p'+i, texto:t, resultado:'', nota:'' }));
   const cerrada = !!(e && e.firma_el);
 
+  const iP = p ? puertas.findIndex(x => x.id === p.id) : -1;
   let h = '<h3>'+(cerrada ? 'Entrega firmada' : 'Entrega en obra')+'</h3>'+
     '<p class="mini" style="margin:0 0 10px">'+esc(nombreCliente(a))+
-    (p ? ' · '+esc([p.codigo, p.tipo].filter(Boolean).join(' · ')) : '')+'</p>';
+    (p ? ' · '+esc([p.codigo, p.tipo].filter(Boolean).join(' · ')) : '')+
+    (puertas.length > 1
+      ? ' · <b>puerta '+(iP >= 0 ? iP+1 : '?')+' de '+puertas.length+' de esta obra</b>'
+      : '')+'</p>';
+  if (puertas.length > 1 && !cerrada)
+    h += '<p class="mini" style="margin:0 0 10px">Esta acta es solo de esta puerta. Las otras '+
+      (puertas.length-1)+' se entregan con su propia acta, cada una con el guión de su tipo.</p>';
 
   if (cerrada)
     h += '<div class="nota-oficina" style="margin-bottom:10px">Firmada por <b>'+esc(e.firma_nombre||'')+
@@ -19543,19 +19715,19 @@ function dlgEntregaObra(avisoId, entregaId){
     '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cerrar</button>'+
     (cerrada ? '' :
       '<button type="button" class="btn" data-act="eo-guardar" data-aviso="'+avisoId+'"'+
-        (e?' data-id="'+e.id+'"':'')+'>Guardar sin firmar</button>'+
+        (e?' data-id="'+e.id+'"':'')+(p?' data-puerta="'+esc(p.id)+'"':'')+'>Guardar sin firmar</button>'+
       '<button type="submit" class="btn pri">Firmar y cerrar</button>')+
     '</div>';
 
-  abrirDlg(h, () => guardarEntregaObra(avisoId, e ? e.id : null, true));
+  abrirDlg(h, () => guardarEntregaObra(avisoId, e ? e.id : null, true, p ? p.id : null));
   if (!cerrada) lienzoFirma('eo-firma');
 }
 
 /* Lo marcado en el acta */
-function leerEntregaObra(avisoId, entregaId){
+function leerEntregaObra(avisoId, entregaId, puertaId){
   const a = S.avisos.find(x => x.id === avisoId);
   const e = entregaId ? (S.entregasObra || []).find(x => x.id === entregaId) : null;
-  const p = a && a.puerta_id ? puertaDe(a.puerta_id) : null;
+  const p = a ? puertaDelActa(a, e, puertaId) : null;
   const base = e && Array.isArray(e.pruebas) && e.pruebas.length
     ? e.pruebas
     : guionEntrega(p ? p.tipo : '').map((t, i) => ({ clave:'p'+i, texto:t, resultado:'', nota:'' }));
@@ -19567,7 +19739,7 @@ function leerEntregaObra(avisoId, entregaId){
              nota: n ? n.value : (x.nota || '') };
   });
   const chk = id => !!(document.getElementById(id)||{}).checked;
-  return { aviso_id: avisoId, puerta_id: a ? (a.puerta_id || null) : null,
+  return { aviso_id: avisoId, puerta_id: p ? p.id : null,
     cliente_id: a ? (a.cliente_id || (p ? p.cliente_id : null)) : null,
     fecha: hoy(), entregado: val('eo-que') || null, pruebas,
     conformidad: val('eo-conf') || 'conforme',
@@ -19576,8 +19748,8 @@ function leerEntregaObra(avisoId, entregaId){
     entregado_por: yo() };
 }
 
-async function guardarEntregaObra(avisoId, entregaId, firmando){
-  const o = leerEntregaObra(avisoId, entregaId);
+async function guardarEntregaObra(avisoId, entregaId, firmando, puertaId){
+  const o = leerEntregaObra(avisoId, entregaId, puertaId);
   if (!o.entregado) return setErr('Escribe qué se entrega.');
   const sinMarcar = o.pruebas.filter(x => !x.resultado).length;
   if (firmando && sinMarcar)
@@ -19682,6 +19854,10 @@ function dlgCierre(avisoId){
 
   const js = jornadasDe(a.id);
   const larga = esObraLarga(a);
+  /* Las puertas de la obra, no solo la principal: una instalación de varios
+     días suele llevar más de una. */
+  const puertas = puertasDeAviso(a.id);
+  const varias = puertas.length > 1;
   let h = '<h3>'+(larga ? 'Cerrar la obra' : 'Cerrar visita')+' · '+esc(tipoAsis(a.tipo))+'</h3>';
 
   /* Marcada como obra larga pero todavía sin ningún parte: o se apunta el de
@@ -19721,7 +19897,9 @@ function dlgCierre(avisoId){
   }
 
   // Lo que ya se sabía
-  h += '<div class="grupo"><h3>'+esc(nombreCliente(a))+(p?(' · '+esc(p.codigo||'')):'')+'</h3>';
+  h += '<div class="grupo"><h3>'+esc(nombreCliente(a))+
+    (p ? (' · '+esc(p.codigo||'')+(varias ? ' y '+(puertas.length-1)+' puerta'+
+      (puertas.length-1===1?'':'s')+' más' : '')) : '')+'</h3>';
   if (a.descripcion) h += '<p class="mini" style="margin:0 0 8px"><b>Dijo el cliente:</b> '+esc(a.descripcion)+'</p>';
   if (a.notas_oficina) h += '<p class="nota-oficina">Oficina: '+esc(a.notas_oficina)+'</p>';
   if (!p && !obligaAltaObra(a)) h += '<p class="mini" style="margin:8px 0 0">Esta asistencia no tiene puerta asignada. '+
@@ -19731,33 +19909,16 @@ function dlgCierre(avisoId){
   /* Lo que se entrega al terminar una instalación. Va aquí arriba porque es
      parte del trabajo, no papeleo de después: se prueba con el cliente
      delante y él firma lo que ha visto funcionar. */
-  if (!S.sinEntregas && ['instalacion','puesta_servicio'].includes(a.tipo)){
-    const ent = entregasObraDe(a.id);
-    const firmada = ent.find(x => x.firma_el);
-    h += '<div class="grupo"><h3>Entrega en obra</h3>';
-    if (firmada)
-      h += '<p class="mini" style="margin:0 0 8px">Firmada por <b>'+esc(firmada.firma_nombre||'')+
-        '</b> el '+esc(fechaHora(firmada.firma_el))+'. '+
-        esc((CONFORMIDADES.find(c => c[0] === firmada.conformidad) || CONFORMIDADES[0])[1])+'.</p>'+
-        '<div class="fila" style="gap:6px"><button type="button" class="btn sm plana" '+
-        'data-act="eo-documento" data-id="'+firmada.id+'">Ver el acta</button><span class="sp"></span></div>';
-    else {
-      const borrador = ent[0];
-      h += '<p class="mini" style="margin:0 0 8px">'+
-        (borrador ? 'Hay un acta empezada y sin firmar.'
-                  : 'Al terminar, se prueban las funciones con el cliente delante y él firma lo que ha visto '+
-                    'funcionar. Si no queda por escrito, dentro de tres meses no hay nada que enseñar.')+'</p>'+
-        '<div class="fila" style="gap:6px"><button type="button" class="btn sm'+(borrador?'':' pri')+
-        '" data-act="entrega-obra" data-id="'+a.id+'"'+(borrador?' data-entrega="'+borrador.id+'"':'')+'>'+
-        (borrador ? 'Seguir con el acta' : 'Hacer la entrega')+'</button><span class="sp"></span></div>';
-    }
-    h += '</div>';
-  }
+  /* Las puertas de la obra y, con ellas, el acta de entrega de cada una. Sale
+     cuando hay más de una, cuando la obra es de varios días, cuando hay que
+     entregar, o cuando todavía no hay ninguna puerta y hace falta. */
+  if (varias || larga || pideEntrega(a) || (obligaAltaObra(a) && !puertas.length))
+    h += bloquePuertasObra(a, puertas);
 
   /* El alta en obra va aquí, antes de todo lo demás: en estos tipos de asistencia
      documentar la puerta es parte del trabajo, no un extra. Las fotos se cuentan
      después, al preparar el parte, porque hay que preguntarlo a la base de datos. */
-  if (obligaAltaObra(a)) h += bloqueAltaObra(a, p, null);
+  if (obligaAltaObra(a)) h += bloqueAltaObra(a, puertas, null);
 
   h += '<div class="grupo"><h3>Qué has encontrado y qué has hecho</h3><div class="campos">'+
     '<div class="campo full"><label for="z-diag">Diagnóstico</label><textarea id="z-diag" rows="2" placeholder="Ej.: banda de seguridad cortada por roce con el marco">'+esc(a.diagnostico||'')+'</textarea></div>'+
@@ -19889,25 +20050,218 @@ function dlgCierre(avisoId){
    abiertos; los que ya están, cerrados y en verde. No hay ningún punto que se
    pueda marcar a mano: cada uno se pone en verde solo cuando el dato está de
    verdad en la base de datos. */
-function bloqueAltaObra(a, p, nFotos){
-  const m = minimoObra(p, nFotos);
-  let h = '<div class="grupo" id="obra-bloque"><h3>Documentar la puerta en obra</h3>'+
-    '<p class="mini" style="margin:0">Esta visita es de <b>'+esc(tipoAsis(a.tipo))+'</b>, así que la puerta '+
-    'tiene que quedar documentada antes de cerrar. Lo que se toma aquí no se puede tomar después: las '+
-    'medidas, las fotos y la placa están en la puerta, no en la oficina.</p>';
+/* Añadir a la obra una puerta que YA está dada de alta: la segunda seccional de
+   la nave, que se registró el año pasado y no hay que volver a crear. */
+function dlgEngancharPuerta(avisoId){
+  const a = S.avisos.find(x => x.id === avisoId);
+  if (!a) return;
+  const ya = puertasDeAviso(avisoId).map(p => p.id);
+  const pPri = puertaPrincipal(a);
+  const cliId = a.cliente_id || (pPri ? pPri.cliente_id : null);
+  const libres = S.puertas.filter(p => !ya.includes(p.id))
+    .sort((x, y) => String(x.codigo||'').localeCompare(String(y.codigo||''), 'es'));
+  const delCli = cliId ? libres.filter(p => p.cliente_id === cliId) : [];
+  const resto  = libres.filter(p => !delCli.includes(p));
+  const opcion = p => '<option value="'+p.id+'">'+
+    esc([p.codigo || 'sin etiqueta', p.tipo, p.ubicacion || p.direccion].filter(Boolean).join(' · '))+'</option>';
 
-  if (m.sinFicha){
-    h += '<div class="sin-ficha" style="margin-top:10px">Esta puerta no tiene ficha ni etiqueta con QR: '+
-      'para la empresa todavía no existe. Hay que darla de alta ahora, aquí mismo.</div>'+
+  if (!libres.length)
+    return abrirDlg('<h3>Añadir una puerta a la obra</h3>'+
+      '<p style="margin:0 0 12px">No queda ninguna puerta dada de alta que no esté ya en esta obra. '+
+      'Si la que has montado es nueva, dale de alta con «Dar de alta otra puerta».</p>'+
+      '<div class="pie"><span class="sp"></span>'+
+      '<button type="button" class="btn plana" data-cerrar>Cerrar</button></div>', null);
+
+  abrirDlg('<h3>Añadir una puerta a la obra</h3>'+
+    '<p class="mini" style="margin:0 0 12px">'+esc(nombreCliente(a))+
+    (ya.length ? ' · la obra ya lleva '+ya.length+' puerta'+(ya.length===1?'':'s') : '')+'</p>'+
+    '<div class="campos"><div class="campo full"><label for="ep-puerta">Puerta</label>'+
+    '<select id="ep-puerta">'+
+    (delCli.length ? '<optgroup label="De este cliente">'+delCli.map(opcion).join('')+'</optgroup>' : '')+
+    (resto.length ? '<optgroup label="Las demás">'+resto.map(opcion).join('')+'</optgroup>' : '')+
+    '</select><span class="pista">Si la puerta es nueva, no está aquí: hay que darla de alta</span></div></div>'+
+    '<p class="mini" style="margin:10px 0 0">Esto no cambia nada de la ficha de la puerta. Solo dice que '+
+    'esta puerta se toca en esta obra, para que lleve su acta de entrega y entre en la documentación.</p>'+
+    '<p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Añadir a la obra</button></div>', async () => {
+      const id = val('ep-puerta');
+      if (!id) return setErr('Elige una puerta.');
+      try {
+        const pu = puertaDe(id);
+        await engancharPuerta(avisoId, id, pu ? pu.cliente_id : null);
+        await cargar();
+        cerrarDlg();
+        toast('Puerta añadida. La obra lleva '+nPuertasDeAviso(avisoId)+'.');
+        dlgCierre(avisoId);
+      } catch(e){
+        setErr(String(e.message||'').match(/aviso_puertas/i)
+          ? 'Falta ejecutar obra3.sql en la base de datos.'
+          : (e.message || 'No se ha podido añadir.'));
+      }
+    });
+}
+
+/* ¿Esta asistencia tiene que acabar en acta de entrega? */
+const pideEntrega = a => !S.sinEntregas && !!a && ['instalacion','puesta_servicio'].includes(a.tipo);
+
+/* ---- Las puertas de la obra, dentro del parte ----
+   Una instalación de varios días rara vez lleva una sola puerta. Esto es la
+   lista: qué puertas hay en la obra, cómo va el acta de cada una y por dónde se
+   añade otra. El acta es POR PUERTA a propósito: cada una se prueba y se acepta
+   por separado, y si una queda con reparos no arrastra a las demás. */
+function bloquePuertasObra(a, puertas){
+  const entrega = pideEntrega(a);
+  const obliga = obligaAltaObra(a);
+  let h = '<div class="grupo" id="puertas-obra"><h3>Puertas de esta obra</h3>';
+
+  if (!puertas.length){
+    h += '<p class="mini" style="margin:0 0 8px">Esta obra todavía no tiene ninguna puerta. '+
+      (['instalacion','puesta_servicio'].includes(a.tipo)
+        ? 'En una instalación es lo normal al empezar: la puerta se da de alta cuando está montada, '+
+          'con sus medidas reales y su placa delante.'
+        : 'Si el trabajo es sobre una puerta, añádela aquí.')+'</p>';
+  } else {
+    if (entrega) h += '<p class="mini" style="margin:0 0 10px">Cada puerta lleva <b>su propia acta</b>: '+
+      'se prueba y se firma por separado. Si una queda con reparos, no arrastra a las demás.</p>';
+    h += '<div class="obra-lista">'+ puertas.map((p, i) => {
+      const actas = entrega ? entregasObraDePuerta(a.id, p.id) : [];
+      const firmada = actas.find(x => x.firma_el);
+      const borrador = actas.find(x => !x.firma_el);
+      const m = obliga ? minimoObra(p, null) : null;
+      const chips =
+        (i === 0 && puertas.length > 1 ? '<span class="chip gris sin">Principal</span>' : '')+
+        (m ? (m.completo
+                ? '<span class="chip ok sin">Documentada</span>'
+                : (m.bloquean.length
+                    ? '<span class="chip mal sin">Falta documentar</span>'
+                    : '<span class="chip aviso sin">Queda pendiente</span>')) : '')+
+        (entrega ? (firmada
+              ? '<span class="chip ok sin">Acta firmada</span>'
+              : (borrador ? '<span class="chip aviso sin">Acta empezada</span>'
+                          : '<span class="chip mal sin">Sin acta</span>')) : '');
+      let bot = '';
+      if (entrega){
+        if (firmada) bot += '<button type="button" class="btn sm plana" data-act="eo-documento" data-id="'+
+          firmada.id+'">Ver el acta</button>';
+        else bot += '<button type="button" class="btn sm'+(borrador?'':' pri')+'" data-act="entrega-obra" '+
+          'data-id="'+a.id+'" data-puerta="'+esc(p.id)+'"'+(borrador?' data-entrega="'+borrador.id+'"':'')+'>'+
+          (borrador ? 'Seguir con el acta' : 'Hacer la entrega')+'</button>';
+      }
+      bot += '<button type="button" class="btn sm plana" data-act="obra-ficha" data-id="'+a.id+
+        '" data-puerta="'+esc(p.id)+'">Ficha</button>';
+      /* Quitar una puerta de la obra no borra la puerta: solo deja de estar en
+         esta obra. Con acta firmada no se ofrece, porque eso ya está firmado. */
+      if (!firmada && !S.sinAvisoPuertas && puertas.length > 1)
+        bot += '<button type="button" class="btn sm plana" data-act="soltar-puerta" data-id="'+a.id+
+          '" data-puerta="'+esc(p.id)+'">Quitar de la obra</button>';
+      return '<div class="item"><div class="item-in">'+
+        '<b>'+esc(p.codigo || 'Sin etiqueta')+'</b> '+chips+
+        '<div class="mini">'+esc([p.tipo, p.marca, p.modelo, p.ubicacion].filter(Boolean).join(' · ') ||
+          'Sin tipo todavía')+'</div>'+
+        (firmada ? '<div class="mini">Firmada por '+esc(firmada.firma_nombre||'')+' el '+
+          esc(fechaHora(firmada.firma_el))+'. '+
+          esc((CONFORMIDADES.find(c => c[0] === firmada.conformidad) || CONFORMIDADES[0])[1])+'.</div>' : '')+
+        '<div class="fila" style="gap:6px;flex-wrap:wrap;margin-top:6px">'+bot+'<span class="sp"></span></div>'+
+        '</div></div>';
+    }).join('')+'</div>';
+  }
+
+  h += '<div class="fila" style="gap:8px;flex-wrap:wrap;margin-top:10px">'+
+    '<button type="button" class="btn sm'+(puertas.length?'':' pri')+'" data-act="alta-puerta-asis" data-id="'+a.id+
+      '">Dar de alta '+(puertas.length ? 'otra puerta' : 'la puerta')+'</button>'+
+    (S.sinAvisoPuertas ? '' :
+      '<button type="button" class="btn sm" data-act="enganchar-puerta" data-id="'+a.id+
+      '">Añadir una puerta ya dada de alta</button>')+
+    '<span class="sp"></span></div>';
+
+  if (S.sinAvisoPuertas)
+    h += '<p class="mini" style="margin:8px 0 0">Falta ejecutar <b>obra3.sql</b> en la base de datos: '+
+      'hasta entonces cada asistencia solo puede llevar una puerta, que es como funcionaba antes.</p>';
+  else
+    h += '<p class="mini" style="margin:8px 0 0">Las horas, los kilómetros y los partes del día son de la '+
+      'obra entera, no de cada puerta: el técnico pasa el día en la nave, no en una puerta. Lo que va por '+
+      'puerta es la ficha y el acta.</p>';
+
+  return h + '</div>';
+}
+
+function bloqueAltaObra(a, puertas, fotos){
+  /* Acepta una puerta sola o la lista de la obra, y las fotos como número (una
+     puerta) o como {idPuerta: número}. La firma vieja se sigue admitiendo
+     porque la tarjeta de trabajo llama con una sola puerta. */
+  const xs = Array.isArray(puertas) ? puertas.filter(Boolean) : (puertas ? [puertas] : []);
+  const esMapa = fotos && typeof fotos === 'object';
+  const nFotosDe = p => esMapa ? (p && fotos[p.id] != null ? fotos[p.id] : null)
+                               : (fotos == null ? null : fotos);
+  const varias = xs.length > 1;
+
+  let h = '<div class="grupo" id="obra-bloque"><h3>Documentar '+
+    (varias ? 'las puertas' : 'la puerta')+' en obra</h3>'+
+    '<p class="mini" style="margin:0">Esta visita es de <b>'+esc(tipoAsis(a.tipo))+'</b>, así que '+
+    (varias ? 'cada una de las '+xs.length+' puertas de la obra tiene que quedar documentada'
+            : 'la puerta tiene que quedar documentada')+
+    ' antes de cerrar. Lo que se toma aquí no se puede tomar después: las medidas, las fotos y la '+
+    'placa están en la puerta, no en la oficina.</p>';
+
+  /* Sin ninguna puerta todavía. En una instalación esto es lo NORMAL hasta que
+     la puerta está montada: no se documenta lo que aún no existe. */
+  if (!xs.length){
+    const instala = ['instalacion','puesta_servicio'].includes(a.tipo);
+    h += '<div class="sin-ficha" style="margin-top:10px">Esta obra no tiene ninguna puerta dada de alta. '+
+      (instala
+        ? 'Si todavía la estás montando, está bien: la ficha se crea cuando la puerta ya está puesta, '+
+          'con sus medidas reales y su placa. Pero la obra no se cierra sin ella.'
+        : 'Para la empresa esa puerta todavía no existe. Hay que darla de alta ahora, aquí mismo.')+
+      '</div>'+
       '<p class="mini" style="margin:8px 0 0">Se guarda lo que ya hayas escrito en el parte, se abre el '+
       'alta, y al guardarla vuelves a este parte con la puerta ya enganchada.</p>'+
-      '<div class="fila" style="gap:8px;margin-top:10px">'+
+      '<div class="fila" style="gap:8px;flex-wrap:wrap;margin-top:10px">'+
       '<button type="button" class="btn pri sm" data-act="alta-puerta-asis" data-id="'+a.id+'">Dar de alta la puerta</button>'+
+      (S.sinAvisoPuertas ? '' :
+        '<button type="button" class="btn sm" data-act="enganchar-puerta" data-id="'+a.id+
+        '">Ya está dada de alta</button>')+
       '</div></div>';
     return h;
   }
 
-  h += '<div class="obra-lista">'+ m.puntos.map(x => {
+  /* Con una puerta, el bloque de siempre. Con varias, una por una en cajas que
+     se abren: las que les falte algo salen abiertas, las completas cerradas y
+     en verde, para que se vea de un golpe cuál queda. */
+  if (varias) h += '<div class="obra-lista" style="margin-top:10px">'+
+    xs.map(p => cuerpoAltaObra(a, p, nFotosDe(p), true)).join('')+'</div>';
+  else h += cuerpoAltaObra(a, xs[0], nFotosDe(xs[0]), false);
+
+  if (S.sinObra)
+    h += '<p class="mini" style="margin:8px 0 0">Falta ejecutar en la base de datos el SQL de obra, '+
+      'así que la ficha de la puerta todavía no tiene los campos de matrícula. Hasta entonces, la '+
+      'matrícula se toma dando de alta el motor o el cuadro como componente con su número de serie.</p>';
+
+  /* El resumen de todas, que es lo que de verdad decide si se puede cerrar */
+  const ms = xs.map(p => minimoObra(p, nFotosDe(p)));
+  const conFalta = ms.filter(m => m.bloquean.length).length;
+  const pendientes = ms.reduce((n, m) => n + m.faltan.length, 0);
+  if (!pendientes)
+    h += '<p class="mini" style="margin:10px 0 0;color:var(--ok);font-weight:600">'+
+      'El mínimo de obra está completo'+(varias ? ' en las '+xs.length+' puertas' : '')+'.</p>';
+  else if (!conFalta)
+    h += '<div class="sin-ficha" style="margin-top:10px;background:var(--aviso-bg);color:var(--aviso)">'+
+      'Lo que falta no se puede resolver en obra. Se puede cerrar la visita, pero queda como pendiente.</div>';
+  else if (varias)
+    h += '<div class="sin-ficha" style="margin-top:10px">Faltan datos del mínimo de obra en '+conFalta+
+      ' de las '+xs.length+' puertas. La obra no se cierra hasta que estén las '+xs.length+'.</div>';
+  else
+    h += '<div class="sin-ficha" style="margin-top:10px">Falta '+ms[0].bloquean.length+
+      (ms[0].bloquean.length === 1 ? ' punto' : ' puntos')+' del mínimo de obra. La visita no se cierra sin eso.</div>';
+
+  return h + '</div>';
+}
+
+/* Los puntos de UNA puerta. Con «dentro» se envuelve en una caja que se abre,
+   que es como se enseñan cuando la obra lleva varias. */
+function cuerpoAltaObra(a, p, nFotos, dentro){
+  const m = minimoObra(p, nFotos);
+  let h = '<div class="obra-lista">'+ m.puntos.map(x => {
     const estado = x.ok ? 'Hecho' : (x.duda ? 'Contando' : (x.imposible ? 'No se puede' : 'Falta'));
     const clase  = x.ok ? 'hecho' : (x.duda ? '' : 'falta');
     return '<details class="obra-p '+clase+'"'+((!x.ok && !x.duda) ? ' open' : '')+'>'+
@@ -19918,10 +20272,12 @@ function bloqueAltaObra(a, p, nFotos){
   }).join('') +'</div>';
 
   h += '<div class="fila" style="gap:8px;flex-wrap:wrap;margin-top:10px">'+
-    '<button type="button" class="btn sm" data-act="obra-ficha" data-id="'+a.id+'">Rellenar la ficha de la puerta</button>'+
+    '<button type="button" class="btn sm" data-act="obra-ficha" data-id="'+a.id+
+      '" data-puerta="'+esc(p.id)+'">Rellenar la ficha'+(dentro?'':' de la puerta')+'</button>'+
     '<label class="btn sm">Hacer fotos<input type="file" accept="image/*" capture="environment" multiple hidden '+
       'data-act="obra-foto" data-id="'+esc(p.id)+'" data-aviso="'+a.id+'"></label>'+
-    '<button type="button" class="btn sm" data-act="obra-comp" data-id="'+a.id+'">Añadir la matrícula de un elemento</button>'+
+    '<button type="button" class="btn sm" data-act="obra-comp" data-id="'+a.id+
+      '" data-puerta="'+esc(p.id)+'">Añadir la matrícula de un elemento</button>'+
     '</div>'+
     '<p class="mini" style="margin:8px 0 0">Las fotos se suben desde aquí sin salir del parte. '+
     'Para la ficha y las matrículas se guarda lo escrito y se vuelve solo.</p>';
@@ -19939,33 +20295,31 @@ function bloqueAltaObra(a, p, nFotos){
       'arriba porque en obra no hay báscula: se copia de la placa o de la ficha del fabricante, si la hay.</p>'+
       '</details>';
 
-  if (S.sinObra)
-    h += '<p class="mini" style="margin:8px 0 0">Falta ejecutar en la base de datos el SQL de obra, '+
-      'así que la ficha de la puerta todavía no tiene los campos de matrícula. Hasta entonces, la '+
-      'matrícula se toma dando de alta el motor o el cuadro como componente con su número de serie.</p>';
+  if (!dentro) return h;
 
-  if (m.completo)
-    h += '<p class="mini" style="margin:10px 0 0;color:var(--ok);font-weight:600">'+
-      'El mínimo de obra está completo.</p>';
-  else if (!m.bloquean.length)
-    h += '<div class="sin-ficha" style="margin-top:10px;background:var(--aviso-bg);color:var(--aviso)">'+
-      'Lo que falta no se puede resolver en obra. Se puede cerrar la visita, pero queda como pendiente.</div>';
-  else
-    h += '<div class="sin-ficha" style="margin-top:10px">Falta '+m.bloquean.length+
-      (m.bloquean.length === 1 ? ' punto' : ' puntos')+' del mínimo de obra. La visita no se cierra sin eso.</div>';
-
-  return h + '</div>';
+  const estado = m.completo ? 'Documentada'
+    : (m.bloquean.length ? 'Falta '+m.bloquean.length : 'Pendiente');
+  return '<details class="obra-p '+(m.completo ? 'hecho' : 'falta')+'" id="obra-p-'+esc(p.id)+'"'+
+    (m.completo ? '' : ' open')+'>'+
+    '<summary><span class="obra-est">'+estado+'</span><span>'+
+    esc([p.codigo || 'Sin etiqueta', p.tipo, p.ubicacion].filter(Boolean).join(' · '))+
+    '</span></summary>'+ h +'</details>';
 }
 
 /* Vuelve a pintar el recuadro con las fotos contadas de verdad. Se llama al abrir
-   el parte y después de cada foto subida. */
+   el parte y después de cada foto subida. Cuenta las de TODAS las puertas de la
+   obra: si solo contara las de la principal, en una obra de tres puertas dos
+   saldrían siempre en «Contando». */
 async function pintarAltaObra(a){
   if (!document.getElementById('obra-bloque')) return;
-  const p = a.puerta_id ? puertaDe(a.puerta_id) : null;
-  const n = p ? await contarFotos(p.id) : 0;
+  const xs = puertasDeAviso(a.id);
+  const fotos = {};
+  for (const p of xs){
+    try { fotos[p.id] = await contarFotos(p.id); } catch(_){ fotos[p.id] = null; }
+  }
   const cont = document.getElementById('obra-bloque');   // puede haberse cerrado el parte mientras contaba
   if (!cont) return;
-  cont.outerHTML = bloqueAltaObra(a, p, n);
+  cont.outerHTML = bloqueAltaObra(a, xs, fotos);
 }
 
 /* Guión de revisión: los puntos del tipo de puerta, en bloques que se abren y cierran */
@@ -20252,29 +20606,57 @@ async function guardarCierre(a, cerrando){
        la base de datos: un parte abierto hace media hora puede traer un número de
        fotos que ya no es el bueno. */
     if (obligaAltaObra(a)){
-      const pu = a.puerta_id ? puertaDe(a.puerta_id) : null;
-      const nf = pu ? await contarFotos(pu.id) : 0;
-      const m = minimoObra(pu, nf);
-      if (m.sinFicha)
-        return setErr('Esta visita es de '+tipoAsis(a.tipo)+' y la puerta no está dada de alta. '+
+      /* Se comprueban TODAS las puertas de la obra, no solo la principal: en una
+         instalación de tres puertas, dar por documentada la obra porque la
+         primera esté bien sería cerrar dos puertas sin medidas ni fotos. */
+      const xs = puertasDeAviso(a.id);
+      if (!xs.length)
+        return setErr('Esta visita es de '+tipoAsis(a.tipo)+' y no hay ninguna puerta dada de alta. '+
           'Dale a «Dar de alta la puerta» aquí arriba: no se puede cerrar sin ficha.');
-      if (m.bloquean.length){
+      const ms = [];
+      for (const pu of xs) ms.push({ p: pu, m: minimoObra(pu, await contarFotos(pu.id)) });
+      const bloquean = ms.filter(x => x.m.bloquean.length);
+      if (bloquean.length){
         const bl = document.getElementById('obra-bloque');
         if (bl) bl.scrollIntoView({ block:'start' });
-        return setErr('Falta documentar la puerta en obra: '+
-          m.bloquean.map(x => x.texto.toLowerCase()).join('; ')+'. Está arriba, en «Documentar la puerta en obra».');
+        return setErr(xs.length === 1
+          ? 'Falta documentar la puerta en obra: '+
+            bloquean[0].m.bloquean.map(x => x.texto.toLowerCase()).join('; ')+
+            '. Está arriba, en «Documentar la puerta en obra».'
+          : 'Falta documentar en obra '+bloquean.length+' de las '+xs.length+' puertas: '+
+            bloquean.map(x => (x.p.codigo || 'sin etiqueta')+' ('+
+              x.m.bloquean.map(y => y.texto.toLowerCase()).join('; ')+')').join(' · ')+
+            '. Está arriba, en «Documentar las puertas en obra».');
       }
       /* Lo que no se puede resolver allí (que no queden etiquetas libres) no bloquea,
          pero tampoco se queda sin rastro: la visita se cierra señalada como pendiente
          y la oficina lo ve en su lista. */
-      if (m.faltan.length){
-        const texto = m.faltan.map(x => x.texto).join('; ');
+      const conFalta = ms.filter(x => x.m.faltan.length);
+      if (conFalta.length){
+        const texto = conFalta.map(x => (xs.length > 1 ? (x.p.codigo || 'sin etiqueta')+': ' : '')+
+          x.m.faltan.map(y => y.texto).join('; ')).join(' · ');
         o.pendiente = true;
         o.pendiente_texto = o.pendiente_texto
           ? (/obra|etiqueta|matr[íi]cula|foto|medida/i.test(o.pendiente_texto)
               ? o.pendiente_texto : texto+'. '+o.pendiente_texto)
           : texto+' (no se pudo hacer en obra)';
         toast('Se cierra dejándolo pendiente: '+texto+'.');
+      }
+    }
+    /* El acta de entrega es POR PUERTA. No bloquea el cierre, porque puede que el
+       cliente no esté o que quede un remate, pero tampoco se queda sin rastro: la
+       obra se cierra señalada como pendiente, con el código de las que faltan. */
+    if (pideEntrega(a)){
+      const sinActa = puertasDeAviso(a.id)
+        .filter(pu => !entregasObraDePuerta(a.id, pu.id).some(e => e.firma_el));
+      if (sinActa.length){
+        const texto = 'Acta de entrega sin firmar: '+
+          sinActa.map(pu => pu.codigo || 'sin etiqueta').join(', ');
+        o.pendiente = true;
+        o.pendiente_texto = o.pendiente_texto
+          ? (/acta/i.test(o.pendiente_texto) ? o.pendiente_texto : texto+'. '+o.pendiente_texto)
+          : texto;
+        toast(texto+'.');
       }
     }
     /* Sin horas, la visita se valora en 0 € y desaparece de «pendiente de facturar»:
@@ -21604,8 +21986,22 @@ dlgForm.addEventListener('click', async e => {
     } catch(e){ fallo(e); }
     return;
   }
-  if (a === 'entrega-obra'){ cerrarDlg(); dlgEntregaObra(b.dataset.id, b.dataset.entrega || null); return; }
-  if (a === 'eo-guardar'){ await guardarEntregaObra(b.dataset.aviso, b.dataset.id || null, false); return; }
+  if (a === 'entrega-obra'){
+    /* Se sale del parte para hacer el acta, así que primero se guarda el avance:
+       antes se cerraba el diálogo a secas y lo escrito en el parte se perdía. */
+    const id = b.dataset.id;
+    const av = S.avisos.find(x => x.id === id);
+    if (av && document.getElementById('z-trab')){
+      await guardarCierre(av, false);
+      if (document.getElementById('z-trab')) return;   // no se pudo guardar: el error está en pantalla
+    } else cerrarDlg();
+    dlgEntregaObra(id, b.dataset.entrega || null, b.dataset.puerta || null);
+    return;
+  }
+  if (a === 'eo-guardar'){
+    await guardarEntregaObra(b.dataset.aviso, b.dataset.id || null, false, b.dataset.puerta || null);
+    return;
+  }
   if (a === 'eofirma-borrar'){
     if (FIRMA.ctx && FIRMA.canvas){ FIRMA.ctx.clearRect(0,0,FIRMA.canvas.width,FIRMA.canvas.height); FIRMA.pintado = false; }
     return;
@@ -21761,13 +22157,42 @@ dlgForm.addEventListener('click', async e => {
   if (a === 'obra-ficha' || a === 'obra-comp'){
     const id = b.dataset.id;
     const av = S.avisos.find(x => x.id === id);
-    if (!av || !av.puerta_id) return;
+    /* La puerta viene en el botón: en una obra de varias, la principal no es
+       necesariamente la que el técnico está documentando. */
+    const puId = b.dataset.puerta || (av ? av.puerta_id : null);
+    if (!av || !puId) return;
     if (document.getElementById('z-trab')){
       await guardarCierre(av, false);
       if (document.getElementById('z-trab')) return;
     } else cerrarDlg();
-    if (a === 'obra-ficha') dlgPuerta(av.puerta_id, id);
-    else dlgComponente(null, av.puerta_id, '', id);
+    if (a === 'obra-ficha') dlgPuerta(puId, id);
+    else dlgComponente(null, puId, '', id);
+    return;
+  }
+  /* Añadir a la obra una puerta que ya está dada de alta, y quitarla. Ninguna de
+     las dos toca la ficha de la puerta: solo dicen si está en esta obra. */
+  if (a === 'enganchar-puerta'){
+    const id = b.dataset.id;
+    const av = S.avisos.find(x => x.id === id);
+    if (av && document.getElementById('z-trab')){
+      await guardarCierre(av, false);
+      if (document.getElementById('z-trab')) return;
+    } else cerrarDlg();
+    dlgEngancharPuerta(id);
+    return;
+  }
+  if (a === 'soltar-puerta'){
+    if (!armar(b, 'Confirmar')) return;
+    const id = b.dataset.id;
+    const av = S.avisos.find(x => x.id === id);
+    /* Se guarda lo escrito antes de recargar: quitar una puerta no es motivo
+       para perder el diagnóstico. */
+    if (av && document.getElementById('z-trab')){
+      await guardarCierre(av, false);
+      if (document.getElementById('z-trab')) return;
+    }
+    await soltarPuerta(id, b.dataset.puerta);
+    cerrarDlg(); dlgCierre(id);
     return;
   }
   /* ---- Presupuestos ---- */
