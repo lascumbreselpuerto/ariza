@@ -741,7 +741,7 @@ const obraLarga = await T(async () => {
   const enCierre = document.getElementById('dlg-form').innerText;
   const sinFirmaDiaria = !document.getElementById('j-firma');
   g.cerrarDlg();
-  return { sinJornadas, unaJornada, marcada, avisoPrevio,
+  return { avisoId: av.id, sinJornadas, unaJornada, marcada, avisoPrevio,
     n: js.length, horas: g.horasObra(av.id),
     mats: mats.length, enParte, enCierre, sinFirmaDiaria,
     proxima: (g.avisoProxima(av.id) || {}).proxima };
@@ -766,6 +766,78 @@ paso('y lo que quedó dicho sigue disponible',
   /cuadro de maniobra/i.test(obraLarga.proxima || ''), obraLarga.proxima);
 
 /* ================================================================
+   Declarar que la obra no se acaba hoy
+   ================================================================
+   Antes la obra larga se deducía: apuntabas un parte y la aplicación
+   la marcaba sola. Ahora se declara a propósito, porque cambia dónde
+   se firma y de dónde salen las horas que se facturan. */
+bloque('Obra sin terminar');
+
+const declarar = await T(async () => {
+  const g = window.__T;
+  /* Una asistencia nueva, sin partes */
+  const { data: nv } = await g.sb.from('avisos').insert({
+    tipo:'instalacion', estado:'asignado', prioridad:'normal',
+    tecnico_id: g.S.perfil.id, cliente_id: g.S.clientes[0].id,
+    descripcion:'Obra de varios días' }).select().maybeSingle();
+  await g.cargar();
+  const av = g.S.avisos.find(x => x.id === nv.id);
+
+  const tarjeta = g.tarjetaTrabajo(av);
+  const antes = { larga: g.esObraLarga(av),
+    sinTerminar: /data-act="obra-sin-terminar"/.test(tarjeta),
+    parteHoy: /data-act="jornada-hoy"/.test(tarjeta),
+    cerrar: (tarjeta.match(/>Cerrar [^<]*/)||[''])[0] };
+
+  /* Se pulsa: primero explica qué cambia */
+  g.dlgObraSinTerminar(av.id);
+  await new Promise(r => setTimeout(r, 300));
+  const aviso = document.getElementById('dlg-form').innerText;
+  document.querySelector('[data-act="obra-sin-terminar-ok"]').click();
+  await new Promise(r => setTimeout(r, 900));
+  const abreParte = !!document.getElementById('j-trab');
+  g.cerrarDlg();
+  await g.cargar();
+  const av2 = g.S.avisos.find(x => x.id === nv.id);
+  const tarjeta2 = g.tarjetaTrabajo(av2);
+  const despues = { larga: g.esObraLarga(av2),
+    sinTerminar: /data-act="obra-sin-terminar"/.test(tarjeta2),
+    parteHoy: /data-act="jornada-hoy"/.test(tarjeta2),
+    cerrar: (tarjeta2.match(/>Cerrar [^<]*/)||[''])[0] };
+
+  /* Marcada pero sin partes: al cerrar avisa y deja volver atrás */
+  g.dlgCierre(av.id);
+  await new Promise(r => setTimeout(r, 500));
+  const enCierre = document.getElementById('dlg-form').innerText;
+  const hayDeshacer = !!document.querySelector('[data-act="obra-terminada"]');
+  const bot = document.querySelector('[data-act="obra-terminada"]');
+  bot.click(); await new Promise(r => setTimeout(r, 150));
+  bot.click(); await new Promise(r => setTimeout(r, 900));
+  await g.cargar();
+  const av3 = g.S.avisos.find(x => x.id === nv.id);
+  const deshecha = g.esObraLarga(av3);
+  g.cerrarDlg();
+  return { antes, aviso, abreParte, despues, enCierre, hayDeshacer, deshecha };
+});
+paso('una asistencia nueva sale con «Obra sin terminar» y «Cerrar visita»',
+  declarar.antes.larga === false && declarar.antes.sinTerminar === true &&
+  declarar.antes.parteHoy === false && /Cerrar visita/.test(declarar.antes.cerrar),
+  JSON.stringify(declarar.antes));
+paso('antes de marcarla, explica las cuatro cosas que cambian',
+  /parte, no un cierre/.test(declarar.aviso) && /firma una sola vez/.test(declarar.aviso) &&
+  /dejes dicho sale al volver/.test(declarar.aviso) && /horas de todos los días/.test(declarar.aviso));
+paso('al aceptar, abre directamente el parte del día',
+  declarar.abreParte === true);
+paso('y la tarjeta cambia a «Parte de hoy» y «Cerrar la obra»',
+  declarar.despues.larga === true && declarar.despues.parteHoy === true &&
+  declarar.despues.sinTerminar === false && /Cerrar la obra/.test(declarar.despues.cerrar),
+  JSON.stringify(declarar.despues));
+paso('marcada y sin ningún parte, al cerrar avisa en vez de dejarte perder las horas',
+  /no tiene ningún parte/.test(declarar.enCierre) && declarar.hayDeshacer === true);
+paso('y se puede deshacer mientras no haya partes',
+  declarar.deshecha === false);
+
+/* ================================================================
    Lo que se factura de una obra larga
    ================================================================
    El agujero que apareció al repasarlo: la valoración de una visita
@@ -774,9 +846,12 @@ paso('y lo que quedó dicho sigue disponible',
    día habría hecho facturar de menos en todas las obras largas. */
 bloque('Las horas de la obra llegan a facturación');
 
-const facturacion = await T(async () => {
+/* Se trabaja sobre el MISMO aviso que el bloque anterior: ahí quedaron las
+   dos jornadas. Coger «el primero de la lista» va bien hasta que otro bloque
+   crea un aviso y lo adelanta, que es lo que pasó el 27-10-2026. */
+const facturacion = await T(async (avisoId) => {
   const g = window.__T;
-  const av = g.S.avisos[0];
+  const av = g.S.avisos.find(x => x.id === avisoId);
   /* Mismos técnicos todos los días: 8 + 6 = 14 h, dos técnicos */
   await g.sb.from('jornadas').update({ num_tecnicos:2, km:30 }).eq('aviso_id', av.id);
   await g.cargar();
@@ -811,7 +886,7 @@ const facturacion = await T(async () => {
   g.cerrarDlg();
   return { iguales, distintos, campoH, campoT, campoK, pista, trasHoras, hayBoton,
            campoH2, campoT2, pista2 };
-});
+}, obraLarga.avisoId);
 paso('con los mismos técnicos todos los días, se suman las horas tal cual',
   facturacion.iguales.horas === 14 && facturacion.iguales.tecnicos === 2 &&
   facturacion.iguales.facturar === 14,
@@ -839,7 +914,7 @@ paso('y explica por qué', /horas de técnico/.test(facturacion.pista2), 'lo exp
    ================================================================ */
 bloque('Entrega en obra');
 
-const entrega = await T(async () => {
+const entrega = await T(async (avisoId) => {
   const g = window.__T;
   /* El guión sale del tipo de puerta */
   const guiones = {
@@ -850,7 +925,7 @@ const entrega = await T(async () => {
   const hayMuelle = g.guionEntrega('Seccional').some(x => /muelle/i.test(x));
   const hayMastil = g.guionEntrega('Barrera').some(x => /mástil/i.test(x));
 
-  const av = g.S.avisos[0];
+  const av = g.S.avisos.find(x => x.id === avisoId);
   await g.sb.from('avisos').update({ tipo:'instalacion' }).eq('id', av.id);
   await g.sb.from('puertas').update({ tipo:'Seccional' }).eq('id', av.puerta_id);
   await g.cargar();
@@ -902,7 +977,7 @@ const entrega = await T(async () => {
     e: { conf:e.conformidad, firma:!!e.firma_ruta, nom:e.firma_nombre, com:e.comentario,
          malos: (e.pruebas||[]).filter(x => x.resultado === 'mal').length },
     papel, cerrada, sinRadios };
-});
+}, obraLarga.avisoId);
 paso('cada tipo de puerta tiene su propio guión de pruebas',
   entrega.guiones.seccional !== entrega.guiones.barrera &&
   entrega.hayMuelle === true && entrega.hayMastil === true,

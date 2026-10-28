@@ -499,6 +499,73 @@ paso('y que previsto no es lo mismo que gastado',
 paso('deja claro que dar de alta y poner precios es de oficina',
   /cosa de oficina/.test(M));
 
+/* ================================================================
+   El índice del manual
+   ================================================================
+   El manual ha pasado de dos folios a ocho apartados largos. Buscar
+   algo con el dedo en un móvil, en una obra, no es razonable. */
+bloque('El índice del manual');
+
+const indice = await T(async () => {
+  const g = window.__T;
+  g.S.tab = 'manual';
+  g.S.buscaManual = '';
+  g.pintar();
+  await new Promise(r => setTimeout(r, 900));
+  const nav = document.querySelector('.man-indice');
+  const botones = nav ? [...nav.querySelectorAll('[data-act="man-ir"]')] : [];
+  /* Cada entrada tiene que llevar a un encabezado que exista de verdad */
+  const apuntanBien = botones.every(b => !!document.getElementById(b.dataset.ir));
+  const anclas = document.querySelectorAll('.manual h2[id^="man-"], .manual h3[id^="man-"]').length;
+  const textos = botones.map(b => b.textContent.trim());
+
+  /* Saltar a uno */
+  const destino = botones[2] || botones[0];
+  const id = destino.dataset.ir;
+  destino.click();
+  await new Promise(r => setTimeout(r, 400));
+  const destacado = document.getElementById(id).classList.contains('eq-destacado');
+
+  /* Y buscar: «furgoneta» sale siete veces en el manual del técnico y en
+     ningún título, así que prueba la búsqueda por contenido. */
+  /* Hay que volver a pedir el campo cada vez: al repintar, el nodo anterior
+     ya no está en la página y escribir en él no hace nada. */
+  const escribir = async v => {
+    const c = document.getElementById('busca-manual');
+    c.value = v;
+    c.dispatchEvent(new Event('input', { bubbles:true }));
+    await new Promise(r => setTimeout(r, 600));
+  };
+  await escribir('furgoneta');
+  const tras = [...document.querySelectorAll('.man-indice [data-act="man-ir"]')];
+  const conPista = tras.filter(b => /furgoneta/i.test(b.textContent)).length;
+  const txtBusca = document.querySelector('.man-indice') ? document.getElementById('busca-manual').parentElement.parentElement.innerText : '';
+
+  /* Una palabra que no está en ninguna parte */
+  await escribir('zzzqqq');
+  const vacio = document.querySelector('#vista').innerText;
+  /* Se deja limpio */
+  await escribir('');
+  const vuelve = document.querySelectorAll('.man-indice [data-act="man-ir"]').length;
+  return { hay: !!nav, n: botones.length, apuntanBien, anclas, textos,
+    destacado, nBusca: tras.length, conPista, txtBusca, vacio, vuelve };
+});
+paso('el manual tiene índice', indice.hay === true && indice.n > 3, indice.n+' entradas');
+paso('con una entrada por cada apartado del manual',
+  indice.anclas > 0 && indice.n >= indice.anclas - 1,
+  indice.n+' entradas, '+indice.anclas+' encabezados');
+paso('cada entrada lleva a un apartado que existe', indice.apuntanBien === true);
+paso('al pulsar, salta a él y lo destaca', indice.destacado === true);
+paso('el buscador encuentra apartados por una palabra del texto, no solo del título',
+  indice.nBusca > 0 && indice.nBusca < indice.n,
+  indice.nBusca+' de '+indice.n+' apartados hablan de la furgoneta');
+paso('y enseña dónde aparece, para saber si sirve antes de abrirlo',
+  indice.conPista > 0, indice.conPista+' con el trozo de texto');
+paso('si no hay nada, lo dice en vez de dejar la lista vacía',
+  /Nada con esa palabra/.test(indice.vacio));
+paso('y al borrar la búsqueda vuelve el índice entero',
+  indice.vuelve === indice.n, indice.vuelve);
+
 console.log('\n'+ok+' bien, '+mal+' mal.');
 const graves = errores.filter(x => !/fonts\.googleapis|ERR_TUNNEL|ERR_NAME|net::ERR|provocado por la prueba/.test(x));
 if (graves.length) console.log('Errores de JavaScript:\n'+graves.join('\n'));
