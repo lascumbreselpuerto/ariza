@@ -156,8 +156,17 @@ const sinFicha = await T(() => {
 paso('minimoObra de una puerta que no existe lo dice',
   sinFicha.sinFicha === true && sinFicha.completo === false);
 paso('y bloquea', sinFicha.bloquean === 1, sinFicha.bloquean);
-paso('el recuadro dice que para la empresa todavía no existe',
-  /no tiene ficha ni etiqueta con QR/.test(sinFicha.html));
+/* Cambiada a propósito el 28-10-2026. Antes el recuadro decía «no tiene ficha ni
+   etiqueta con QR: para la empresa todavía no existe», y eso estaba mal dicho en
+   una instalación: ahí la puerta normalmente no existe todavía porque aún no está
+   montada. Ahora, en instalación y puesta en servicio, el texto dice que está
+   bien que no exista mientras se monta, y que lo que no se puede es cerrar la
+   obra sin ella. En los demás tipos sigue diciendo que hay que darla de alta ya. */
+paso('el recuadro no da por hecho que la puerta ya exista',
+  /no tiene ninguna puerta dada de alta/.test(sinFicha.html)
+  && /la ficha se crea cuando la puerta ya está puesta/.test(sinFicha.html));
+paso('y avisa de que aun así la obra no se cierra sin ella',
+  /la obra no se cierra sin ella/.test(sinFicha.html));
 paso('y ofrece darla de alta desde el propio parte',
   /data-act="alta-puerta-asis"/.test(sinFicha.html));
 
@@ -168,8 +177,10 @@ paso('y no repite el aviso viejo de «no tiene puerta asignada»',
   !/no tiene puerta asignada/.test(await pag.textContent('#dlg-form')));
 const r2 = await cerrarIntento('av-ps');
 paso('la visita NO se cierra', r2.cerrado === false, r2.cerrado);
+/* Cambiada a propósito el 28-10-2026: el mensaje pasó de hablar de «la puerta»
+   a hablar de la obra, porque una obra puede llevar varias. */
 paso('y el error dice que hay que darla de alta',
-  /no está dada de alta/.test(r2.err), r2.err);
+  /no hay ninguna puerta dada de alta/.test(r2.err), r2.err);
 await T(() => window.__T.cerrarDlg()); await esperar(300);
 
 /* ================================================================
@@ -1001,6 +1012,178 @@ paso('el acta en papel lleva las pruebas y la conformidad',
   /Antonio Gil/.test(entrega.papel));
 paso('una entrega firmada ya no se toca',
   entrega.sinRadios === true && /no se cambia/.test(entrega.cerrada));
+
+/* ================================================================
+   Una obra con varias puertas
+
+   El agujero que cierra este bloque: avisos.puerta_id era UNA puerta. Al dar de
+   alta la segunda desde el parte, la aplicación escribía su id ahí y la primera
+   se soltaba sin avisar. En una instalación de varios días eso es lo normal, no
+   el caso raro: en la misma nave se montan dos seccionales y una peatonal.
+   ================================================================ */
+bloque('Una obra, varias puertas dentro');
+
+const varias = await T(async () => {
+  const g = window.__T;
+  const cli = g.S.clientes[0];
+  /* Tres puertas en la misma nave, como una obra de verdad */
+  const puertas = [
+    { id:'pt-m1', codigo:'AR-0201', tipo:'Seccional', ancho_mm:3000, alto_mm:3000,
+      ubicacion:'Muelle 1', cliente_id:cli.id, cliente:cli.nombre, sin_matricula:'Sin placa' },
+    { id:'pt-m2', codigo:'AR-0202', tipo:'Seccional', ancho_mm:3000, alto_mm:3000,
+      ubicacion:'Muelle 2', cliente_id:cli.id, cliente:cli.nombre, sin_matricula:'Sin placa' },
+    { id:'pt-pe', codigo:'AR-0203', tipo:'Peatonal corredera', ancho_mm:1200, alto_mm:2100,
+      ubicacion:'Acceso oficinas', cliente_id:cli.id, cliente:cli.nombre, sin_matricula:'Sin placa' },
+  ];
+  for (const p of puertas) await g.sb.from('puertas').insert(p);
+  await g.sb.from('avisos').insert({ id:'av-multi', tipo:'instalacion', estado:'asignado',
+    prioridad:'normal', tecnico_id:'usuario-admin', cliente_id:cli.id, puerta_id:'pt-m1',
+    descripcion:'Tres puertas en la nave del polígono',
+    fecha_prevista:new Date().toISOString().slice(0,10), creado:new Date().toISOString() });
+  await g.cargar();
+
+  /* Enganchar la segunda: la principal NO se toca */
+  await g.engancharPuerta('av-multi', 'pt-m2', cli.id);
+  await g.engancharPuerta('av-multi', 'pt-pe', cli.id);
+  await g.cargar();
+  const tras2 = { principal: (g.S.avisos.find(x => x.id==='av-multi')||{}).puerta_id,
+                  n: g.nPuertasDeAviso('av-multi') };
+
+  /* Y la tercera por el camino de verdad: el alta desde el propio parte, que es
+     donde se perdía la anterior. */
+  g.dlgCierre('av-multi');
+  await new Promise(r => setTimeout(r, 700));
+  g.dlgPuerta(null, 'av-multi');
+  await new Promise(r => setTimeout(r, 500));
+  document.getElementById('f-dir').value = 'Polígono El Palmar, nave 12';
+  document.getElementById('f-ubi').value = 'Muelle 3';
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 1400));
+  g.cerrarDlg();
+  await new Promise(r => setTimeout(r, 300));
+  const tras3 = { principal: (g.S.avisos.find(x => x.id==='av-multi')||{}).puerta_id,
+                  n: g.nPuertasDeAviso('av-multi') };
+
+  /* La lista y los dos recuadros del parte */
+  const lista = g.bloquePuertasObra(g.S.avisos.find(x => x.id==='av-multi'),
+                                    g.puertasDeAviso('av-multi'));
+  const docu = g.bloqueAltaObra(g.S.avisos.find(x => x.id==='av-multi'),
+                                g.puertasDeAviso('av-multi'), { 'pt-m1':2, 'pt-m2':2, 'pt-pe':2 });
+  const tarjeta = g.tarjetaTrabajo(g.S.avisos.find(x => x.id==='av-multi'));
+
+  return { tras2, tras3, lista, docu, tarjeta,
+    codigos: g.puertasDeAviso('av-multi').map(p => p.codigo) };
+});
+paso('enganchar otras dos puertas NO suelta la primera',
+  varias.tras2.principal === 'pt-m1' && varias.tras2.n === 3,
+  varias.tras2.principal+', '+varias.tras2.n+' puertas');
+paso('dar de alta una puerta desde el parte la AÑADE, no la sustituye',
+  varias.tras3.principal === 'pt-m1' && varias.tras3.n === 4,
+  varias.tras3.principal+', '+varias.tras3.n+' puertas');
+paso('la principal sigue siendo la primera, que es la que leen los documentos',
+  varias.codigos[0] === 'AR-0201', varias.codigos.join(' · '));
+paso('la lista del parte enseña las tres',
+  /AR-0201/.test(varias.lista) && /AR-0202/.test(varias.lista) && /Muelle 3|AR-0203/.test(varias.lista));
+paso('y dice que cada puerta lleva su propia acta',
+  /su propia acta/.test(varias.lista));
+paso('y que las horas son de la obra, no de cada puerta',
+  /no de cada puerta/.test(varias.lista));
+paso('el recuadro de documentar habla de LAS puertas, en plural',
+  /Documentar las puertas en obra/.test(varias.docu));
+paso('con una caja por puerta', (varias.docu.match(/id="obra-p-/g) || []).length === 4,
+  (varias.docu.match(/id="obra-p-/g) || []).length);
+paso('y el resumen cuenta cuántas quedan sin documentar',
+  /de las 4 puertas/.test(varias.docu));
+paso('la tarjeta de trabajo avisa de que la obra lleva más de una puerta',
+  /3 puertas más en esta obra/.test(varias.tarjeta));
+paso('y nombra las que están sin documentar',
+  /Falta documentar \d+ de las 4 puertas/.test(varias.tarjeta), varias.tarjeta.includes('Falta documentar'));
+
+/* ---- Un acta por puerta ---- */
+const actas = await T(async () => {
+  const g = window.__T;
+  /* Sin decir de qué puerta, lo pregunta: adivinarlo sería firmar la equivocada */
+  g.dlgEntregaObra('av-multi', null);
+  await new Promise(r => setTimeout(r, 400));
+  const pregunta = document.getElementById('dlg-form').innerText;
+  const opciones = document.querySelectorAll('#dlg-form [data-act="entrega-obra"][data-puerta]').length;
+  g.cerrarDlg();
+  await new Promise(r => setTimeout(r, 250));
+
+  /* El acta de la peatonal, con el guión de la peatonal */
+  g.dlgEntregaObra('av-multi', null, 'pt-pe');
+  await new Promise(r => setTimeout(r, 450));
+  const cabecera = document.getElementById('dlg-form').innerText;
+  const nPuntos = document.querySelectorAll('#dlg-form input[type="radio"][value="bien"]').length;
+  document.querySelectorAll('#dlg-form input[type="radio"][value="bien"]').forEach(r => { r.checked = true; });
+  g.FIRMA.ctx.beginPath(); g.FIRMA.ctx.moveTo(10,10);
+  g.FIRMA.ctx.lineTo(120,60); g.FIRMA.ctx.stroke(); g.FIRMA.pintado = true;
+  document.getElementById('eo-nom').value = 'Encargado de la nave';
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 1200));
+
+  const dePe = g.entregasObraDePuerta('av-multi', 'pt-pe');
+  const deM1 = g.entregasObraDePuerta('av-multi', 'pt-m1');
+  const lista = g.bloquePuertasObra(g.S.avisos.find(x => x.id==='av-multi'),
+                                    g.puertasDeAviso('av-multi'));
+  /* La peatonal, ya firmada, no se puede quitar de la obra */
+  await g.soltarPuerta('av-multi', 'pt-pe');
+  const sigue = g.puertasDeAviso('av-multi').some(p => p.id === 'pt-pe');
+  /* La del muelle 2, sin acta, sí */
+  await g.soltarPuerta('av-multi', 'pt-m2');
+  const fuera = !g.puertasDeAviso('av-multi').some(p => p.id === 'pt-m2');
+  /* Y la obra sigue en el historial de la puerta que ya no es principal */
+  const enHistorial = g.avisosDe('pt-pe').some(x => x.id === 'av-multi');
+  return { pregunta, opciones, cabecera, nPuntos,
+    pe: dePe.length ? { puerta: dePe[0].puerta_id, firma: !!dePe[0].firma_ruta,
+                        conf: dePe[0].conformidad, n: dePe.length } : null,
+    m1: deM1.length, lista, sigue, fuera, enHistorial,
+    guionPeatonal: g.guionEntrega('Peatonal corredera').length,
+    guionSeccional: g.guionEntrega('Seccional').length };
+});
+paso('con varias puertas, el acta pregunta primero de cuál es',
+  /De qué puerta es el acta/.test(actas.pregunta) && actas.opciones === 4,
+  actas.opciones+' opciones');
+paso('el acta dice qué puerta de la obra es',
+  /puerta 3 de 4 de esta obra/.test(actas.cabecera), (actas.cabecera.match(/puerta \d de \d[^.]*/)||[''])[0]);
+paso('y avisa de que las otras llevan su propia acta',
+  /con su propia acta/.test(actas.cabecera));
+paso('sale con el guión de SU tipo, no con el de la principal',
+  actas.nPuntos === actas.guionPeatonal && actas.guionPeatonal !== actas.guionSeccional,
+  actas.nPuntos+' puntos, peatonal '+actas.guionPeatonal+' / seccional '+actas.guionSeccional);
+paso('firmada, el acta queda enganchada a esa puerta y no a la principal',
+  actas.pe && actas.pe.puerta === 'pt-pe' && actas.pe.firma === true, actas.pe && actas.pe.puerta);
+paso('una sola acta por puerta: la peatonal tiene una', actas.pe && actas.pe.n === 1);
+paso('y las otras siguen sin acta: firmar una no firma las demás',
+  actas.m1 === 0, actas.m1);
+paso('la lista marca cuál está firmada y cuáles no',
+  /Acta firmada/.test(actas.lista) && /Sin acta/.test(actas.lista));
+paso('una puerta con acta firmada no se quita de la obra', actas.sigue === true);
+paso('una sin acta sí se puede quitar, y su ficha no se borra',
+  actas.fuera === true && await T(() => !!window.__T.puertaDe('pt-m2')));
+paso('la obra sale en el historial de una puerta que no era la principal',
+  actas.enHistorial === true);
+
+/* ---- Y el cierre mira las tres, no solo la primera ---- */
+const cierreMulti = await T(async () => {
+  const g = window.__T;
+  const a = g.S.avisos.find(x => x.id === 'av-multi');
+  g.dlgCierre('av-multi');
+  await new Promise(r => setTimeout(r, 800));
+  document.getElementById('z-trab').value = 'Montadas las tres puertas.';
+  document.getElementById('z-horas').value = '24';
+  document.getElementById('z-sin').value = 'No había nadie para firmar.';
+  await g.guardarCierre(a, true);
+  const e = document.querySelector('#dlg-form .err');
+  const err = e ? e.textContent : '';
+  const cerrado = !!(g.S.avisos.find(x => x.id === 'av-multi') || {}).cerrado;
+  g.cerrarDlg();
+  return { err, cerrado };
+});
+paso('la obra NO se cierra si le falta documentar una puerta cualquiera',
+  cierreMulti.cerrado === false, cierreMulti.cerrado);
+paso('y el error dice CUÁL falta, con su código',
+  /AR-020\d/.test(cierreMulti.err), cierreMulti.err.slice(0, 160));
 
 /* ================================================================
    Final

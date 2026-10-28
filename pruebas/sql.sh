@@ -45,7 +45,7 @@ export PATH="$PGBIN:$PATH"
 # del que la crea. Es el mismo orden en que se fueron entregando.
 ORDEN="componentes.sql centros.sql parte-por-correo.sql obra.sql ficha.sql \
 almacen.sql presupuestos.sql presupuestos2.sql comercial.sql anexos.sql \
-tarifas2.sql catalogo.sql obra2.sql"
+tarifas2.sql catalogo.sql obra2.sql obra3.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1

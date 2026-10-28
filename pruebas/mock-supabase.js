@@ -89,6 +89,7 @@ function semilla(){
     conjunto_lineas: [],
     jornadas: [],
     entregas_obra: [],
+    aviso_puertas: [],
     movimientos_material: [],
     materiales_previstos: [],
   };
