@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.10.27-2**
+> **Versión de la aplicación que describe este manual: 2026.10.28-1**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -78,6 +78,25 @@ El nombre comercial de una puerta importa poco. Lo que decide sus peligros, sus 
 | **Barrera** | Eje paralelo al suelo | Descenso sobre personas o vehículos, mástil poco visible |
 
 **Caso que hay que saber distinguir:** una corredera puede ir **sobre guía en el suelo** o **autoportante**, en voladizo. No es lo mismo: cambia dónde está el riesgo de tropiezo, cómo se sujeta y qué se revisa.
+
+### La medida que solo importa en lo que sube: el dintel
+
+En todo lo que se mueve en vertical (seccional, enrollable, guillotina, rápida y
+basculante) hay una medida que no es ni el ancho ni el alto del hueco y que
+decide la instalación entera: **el dintel**, la altura libre que queda entre el
+hueco y el techo.
+
+De él sale qué tipo de guía se puede montar y, en una seccional, si el conjunto
+entra o no entra. Es también la medida que más veces hay que ir a tomar otra vez,
+porque es la que nadie anota: se mide el hueco, se olvida el dintel, y se descubre
+el día del montaje con el material ya en la furgoneta.
+
+En una corredera o una batiente no se pide, porque ahí no decide nada.
+
+> **Criterio:** una medida que obliga a volver a la obra si no se tomó es una
+> medida que forma parte del levantamiento, no un detalle. Por eso la ficha de la
+> aplicación la pide **solo** en las puertas que suben, y en las demás ni la
+> enseña: un campo que no decide nada solo sirve para dejarlo en blanco.
 
 ---
 
@@ -227,6 +246,83 @@ El peso de la hoja no entra en el mínimo: no se puede pesar una hoja en obra si
 
 Y si no hay placa, o está pintada o ilegible, **eso también es un dato**: se escribe por qué no la hay. Un campo en blanco no distingue entre «no lo mirré» y «no existe»; una frase escrita, sí.
 
+### La obra que dura varios días
+
+Una instalación no se hace en una visita, y eso tiene consecuencias en cómo se
+documenta. Lo que hay que entender es que **el parte de un día y el cierre de una
+obra no son el mismo documento**:
+
+| | Parte del día | Cierre de la obra |
+|---|---|---|
+| Qué recoge | Lo que se hizo ese día, con sus horas y su material | El trabajo entero |
+| Firma del cliente | No lleva | Sí |
+| Cobro | No | Sí, si lo hay |
+| Para qué sirve | Que el equipo sepa por dónde va la obra y que las horas no se pierdan | Cerrar, facturar y dejar constancia |
+
+**Por qué el parte del día no se firma.** Firmar cuatro veces la misma obra no
+prueba nada: el cliente no está aceptando una puerta terminada el martes, porque
+el martes no estaba terminada. Lo que se firma es el resultado, una vez.
+
+**Lo que de verdad se pierde si no se apunta cada día.** Las horas. Una obra de
+cuatro días que se apunta el último día se factura como un día, y nadie lo nota
+porque el número no parece raro: parece el de una visita. Lo mismo con los
+desplazamientos: cuatro días son cuatro salidas, y cobrar una es regalar tres.
+
+**Y lo que hay que saber antes de volver.** Qué quedó a medias, qué material hay
+que traer, con quién hay que hablar en la obra. Eso es lo primero que se lee al
+día siguiente, y es lo que evita el segundo viaje a por la pieza que faltaba.
+
+### La obra con varias puertas
+
+En la misma nave se montan dos seccionales y una peatonal. **Eso es una obra, no
+tres**, y mezclarlo es un error de los dos lados:
+
+- Tratarlo como **tres obras** multiplica los desplazamientos, parte las horas de un día entre tres sitios que son el mismo, y obliga a repetir los datos del cliente y del centro tres veces.
+- Tratarlo como **una puerta** es peor: las otras dos se quedan sin ficha, sin medidas, sin fotos y sin acta. Existen en la nave y no existen en ningún papel.
+
+El criterio es sencillo y conviene tenerlo claro desde el principio:
+
+| Va por obra | Va por puerta |
+|---|---|
+| Las horas y los partes de cada día | La ficha: identificación, tipo, medidas, fotos, matrícula |
+| Los desplazamientos | El acta de entrega |
+| El cliente y el emplazamiento | El expediente técnico y el estado de la puerta |
+| El cobro | Lo que se le entrega al cliente de esa puerta |
+
+**Las horas no se reparten entre las puertas.** El técnico pasa el día en la nave,
+no en una puerta concreta. Repartir ocho horas entre tres puertas es inventarse
+un dato que nadie ha medido, y un dato inventado es peor que no tenerlo: parece
+bueno.
+
+### La entrega de la puerta al cliente
+
+Al terminar, la puerta se entrega. Y entregar no es «dejarla funcionando»: es
+probarla **delante de quien la recibe**, explicarle cómo se maneja y cómo se
+desbloquea, darle la documentación que le toca y dejar por escrito qué ha visto.
+
+Lo que esto resuelve es un problema concreto: tres meses después el cliente dice
+que el desbloqueo nunca funcionó, o que nadie le explicó nada, o que la puerta
+vino ya con el panel rozado. Sin un documento de ese día, no hay nada que
+enseñar, y la discusión se gana o se pierde por quién habla más alto.
+
+**Qué recoge un acta de entrega:**
+
+1. Qué se entrega: la puerta, el motor, el cuadro, los mandos, los accesorios.
+2. Las funciones que se han probado delante de él, una por una, con su resultado.
+3. Si se le ha explicado el manejo y si se le ha entregado la documentación.
+4. Su conformidad, y lo que quiera decir, escrito tal cual lo diga.
+5. Su firma, con nombre y DNI.
+
+**Tres criterios que hay que entender, porque son los que la hacen valer:**
+
+- **Una acta por puerta.** Cada puerta se prueba y se acepta por separado, con la lista de funciones de **su** tipo: lo que se le prueba a una barrera no es lo que se le prueba a una peatonal. Y si la peatonal queda con una pega, las dos seccionales no tienen por qué arrastrarla.
+- **Nada en blanco.** Un punto sin marcar no dice nada: no distingue entre «funciona», «no funciona» y «no lo he probado». Lo que no aplique a esa puerta se marca **No aplica**, que sí es una respuesta.
+- **«Con reparos» no es «no conforme».** Firmar aceptando la puerta con una pega anotada y negarse a firmarla son dos cosas distintas, y las dos tienen que poder decirse. Un acta que solo permite «conforme» o nada obliga a mentir en uno de los dos sentidos.
+
+**Y lo que no hace un acta de entrega:** no sustituye al expediente técnico, que
+es interno, ni convierte en conforme una puerta que no lo está. Es la prueba de
+lo que se entregó y de lo que se probó ese día, nada más y nada menos.
+
 ### La firma no arregla nada
 
 Esto hay que entenderlo bien. Que el cliente firme el parte significa que ha visto lo que se ha hecho. **No** significa que la puerta esté conforme. Un punto marcado «no conforme» sigue siéndolo después de la firma, y el documento tiene que seguir diciéndolo.
@@ -263,6 +359,12 @@ La aplicación no es un cuaderno bonito: está construida sobre lo que acabas de
 - Si un punto queda sin comprobar, el documento lo dice. Si el ensayo no se incluye, también.
 - En instalación, puesta en servicio, adecuación a normativa y preventiva, la aplicación **no deja cerrar la visita** si la puerta no está documentada: identificación, tipo, medidas, dos fotos y matrícula. Cada punto se pone en verde cuando el dato está guardado, nunca porque alguien lo marque.
 - Lo único que no bloquea es lo que el técnico no puede resolver allí, como quedarse sin etiquetas: entonces la visita se cierra señalada como pendiente, que no es lo mismo que cerrarla como si estuviera completa.
+- En **instalación la puerta se da de alta cuando está montada**, no al llegar. Antes no hay medidas que tomar ni placa que leer. Por eso la aplicación lo exige al cerrar y no al empezar, y mientras se monta dice que está bien que todavía no exista.
+- El **dintel** se pide solo en las puertas que suben. En las demás el campo no sale.
+- Una obra puede llevar **varias puertas**, y cada una tiene su ficha, su mínimo de obra y su acta. La obra no se cierra mientras le falte el mínimo a cualquiera de ellas, y el aviso dice el código de la que falta, no «la puerta» en general.
+- Una obra de **varios días** se declara a propósito, no se deduce: cada día deja su parte, sin firma ni cobro, y al cerrar las horas y los kilómetros salen de la suma de todos los partes. El material se apunta al día en que se gastó.
+- El **acta de entrega** lleva la lista de funciones del tipo de puerta, que la mantiene la oficina. No deja firmar con puntos en blanco, ni firmar «Conforme» con un punto marcado como mal.
+- Las puertas que se queden **sin acta firmada** al cerrar la obra la dejan señalada como pendiente, con su código. No bloquea, porque puede que el cliente no estuviera, pero no se pierde.
 
 Para el día a día con la aplicación, el **manual del técnico** es el que toca. Este es el de por qué.
 
@@ -300,6 +402,12 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 **Caso 6.** Llegas a instalar una puerta nueva en una nave y resulta que la cancela de al lado, que también atiendes de paso, no está dada de alta en ningún sitio. ¿Qué datos tienes que tomar antes de irte, y qué pasa con cada uno de ellos si no los tomas hoy? El motor es de los años 90 y no se le lee la placa: ¿qué escribes?
 
+**Caso 7.** Una obra de cuatro días: dos seccionales de muelle y una peatonal en el acceso de oficinas. El lunes y el martes vais dos técnicos, el miércoles uno y el jueves dos. El jueves por la tarde el encargado firma. Contesta: ¿cuántos partes de día hay? ¿cuántas actas de entrega? ¿cuántos desplazamientos se cobran? ¿y qué pasa con las horas si solo se apunta el jueves?
+
+**Caso 8.** En la misma obra del caso 7, la peatonal queda funcionando pero con el sensor de apertura mal ajustado y el cliente lo nota. Las dos seccionales están perfectas. ¿Cómo quedan las tres actas? ¿Se puede cerrar la obra? ¿Qué tiene que leer la oficina al día siguiente para saber que falta volver?
+
+**Caso 9.** Te mandan a medir para presupuestar una seccional en un hueco de 3.000 × 3.000 mm. Vuelves con el ancho y el alto. ¿Qué te falta, qué decide ese dato y qué pasa el día del montaje si no lo tomaste?
+
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.10.27-2 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.10.28-1 de ARIZA SAT*
