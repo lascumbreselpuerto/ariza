@@ -43,7 +43,7 @@ if [ -z "${1:-}" ] && [ -x "$AQUI/sql.sh" ]; then
   CODIGO_SQL=$?
   echo "$SALIDA_SQL" | grep -aE "FALLA|pasan las|fallos\." || true
   if [ "$CODIGO_SQL" = "0" ]; then
-    echo "sql: los 15 ficheros pasan las tres vueltas" >> "$RESUMEN"
+    echo "sql: los 16 ficheros pasan las tres vueltas" >> "$RESUMEN"
   else
     N="$(echo "$SALIDA_SQL" | grep -acE '^ FALLA')"
     FALLOS=$((FALLOS + ${N:-1}))

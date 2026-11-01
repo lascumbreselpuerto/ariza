@@ -433,8 +433,23 @@ paso('el manual pide el mismo número de fotos que exige la aplicación',
 });
 paso('el manual explica las tres maneras de tomar la matrícula',
   /Si no tiene placa/.test(M) && /número de serie del motor o del cuadro/.test(M));
-paso('y que el peso de la hoja NO se exige',
-  /peso de la hoja \*\*no\*\* se exige/.test(M) || /no se puede pesar una hoja en obra/.test(M));
+/* Reescrita el 01-11-2026: el peso de la hoja ya no se exige ni se pide, así
+   que lo que el manual tiene que explicar es otra cosa: qué se pide en su
+   lugar y que lo ya anotado no se ha borrado. */
+/* Los trozos que se buscan van cortos a propósito: el manual está con el texto
+   partido en líneas de 80, así que una frase larga nunca casa aunque esté. */
+paso('el manual explica que el peso de la hoja ya no se pide',
+  /peso de la hoja ya no se pide/i.test(M) && /no hay báscula/.test(M));
+paso('y qué se pide en su lugar: el arrastre del motor',
+  /arrastre máximo del motor/i.test(M) && /sobrado o justo/.test(M));
+paso('y que lo que ya estuviera anotado no se ha borrado',
+  /no se ha borrado/.test(M));
+paso('las vueltas de muelle se explican, y que son solo de las seccionales',
+  /vueltas de los muelles/i.test(M) && /media vuelta/.test(M));
+paso('y el apartado libre, con el motivo de no desglosar herrajes',
+  /[Mm]ás elementos a identificar/.test(M) && /un todo/.test(M));
+paso('arrastrar y soltar está explicado, con lo que hace solo',
+  /su[ée]ltalos encima/i.test(M) && /no se cuela/.test(M));
 /* Reescrita el 01-11-2026. Antes el manual hablaba de «la única excepción»
    (quedarse sin etiquetas), porque todo lo demás bloqueaba el cierre. Ya no:
    ahora lo que bloquea son la ficha y una foto, y el resto se remata en

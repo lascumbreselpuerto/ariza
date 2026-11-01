@@ -445,6 +445,198 @@ paso('y no se recomienda rellenar algo que no se puede guardar',
   !sinSql.rec.some(x => /Cómo se acciona/.test(x)), sinSql.rec.join(' · '));
 
 /* ================================================================
+   La ficha como la rellena un técnico (01-11-2026)
+
+   Tres cosas pedidas tras las pruebas de campo:
+     · fuera el peso de la hoja, que en obra no se puede pesar;
+     · el arrastre máximo del motor en su lugar, que viene en la placa;
+     · las vueltas de los muelles, en las seccionales;
+     · y un apartado libre en vez de desglosar herraje por herraje.
+   ================================================================ */
+bloque('La ficha como la rellena un técnico');
+
+const nuevaFicha = await T(async () => {
+  const g = window.__T;
+  /* Una seccional y una corredera, para ver qué campo sale en cada una */
+  await g.sb.from('puertas').update({ tipo:'Seccional' }).eq('id','pu-3');
+  await g.sb.from('puertas').update({ tipo:'Corredera', peso_kg:320 }).eq('id','pu-4');
+  await g.cargar();
+
+  const abre = async id => {
+    g.dlgPuerta(id);
+    await new Promise(r => setTimeout(r, 450));
+    const hay = x => !!document.getElementById(x);
+    const visible = x => { const e = document.getElementById(x);
+      if (!e) return false;
+      const caja = e.closest('.campo');
+      return !!(caja && !caja.hidden); };
+    const out = { arrastre: hay('f-arrastre'), muelle: hay('f-muelle'),
+                  muelleVisible: visible('f-muelle'), otros: hay('f-otros'),
+                  peso: hay('f-peso'),
+                  texto: document.getElementById('dlg-form').innerText };
+    return out;
+  };
+  const seccional = await abre('pu-3');
+  g.cerrarDlg(); await new Promise(r => setTimeout(r, 200));
+  const corredera = await abre('pu-4');
+
+  /* Se rellena la corredera y se guarda */
+  document.getElementById('f-arrastre').value = '400';
+  document.getElementById('f-otros').value = 'Muelles Alpine 2019, cable de 4 mm, tambores altos.';
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 1400));
+  const p4 = g.puertaDe('pu-4') || {};
+
+  /* Y la seccional, con sus vueltas de muelle en media vuelta */
+  g.dlgPuerta('pu-3');
+  await new Promise(r => setTimeout(r, 450));
+  document.getElementById('f-muelle').value = '7.5';
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 1400));
+  const p3 = g.puertaDe('pu-3') || {};
+
+  return { seccional, corredera,
+    p4: { arrastre: p4.arrastre_kg, otros: p4.otros_elementos, peso: p4.peso_kg },
+    p3: { muelle: p3.vueltas_muelle },
+    rec3: g.recomendadoObra(g.puertaDe('pu-3')),
+    rec4: g.recomendadoObra(g.puertaDe('pu-4')),
+    hoja: g.hojaDeCampo ? '' : '' };
+});
+paso('el peso de la hoja ya no se pide',
+  nuevaFicha.seccional.peso === false && nuevaFicha.corredera.peso === false);
+paso('en su lugar se pide el arrastre máximo del motor',
+  nuevaFicha.seccional.arrastre === true &&
+  /[Aa]rrastre máximo del motor/.test(nuevaFicha.seccional.texto));
+paso('y se dice de dónde se copia, que es de la placa',
+  /placa o la ficha del motor/.test(nuevaFicha.seccional.texto));
+paso('las vueltas de muelle salen en una seccional',
+  nuevaFicha.seccional.muelleVisible === true);
+paso('y NO en una corredera: ahí no decide nada',
+  nuevaFicha.corredera.muelleVisible === false);
+paso('admiten media vuelta, que es como se trabaja',
+  nuevaFicha.p3.muelle === 7.5, nuevaFicha.p3.muelle);
+paso('hay un apartado libre para lo demás, en vez de desglosar herrajes',
+  nuevaFicha.corredera.otros === true &&
+  /Más elementos a identificar/.test(nuevaFicha.corredera.texto));
+paso('el arrastre y los elementos se guardan',
+  nuevaFicha.p4.arrastre === 400 && /Alpine/.test(nuevaFicha.p4.otros || ''),
+  nuevaFicha.p4.arrastre+' · '+(nuevaFicha.p4.otros||''));
+/* Lo que más importa de todo este cambio: no se destruye nada. */
+paso('el peso que ya estuviera anotado NO se borra al guardar',
+  nuevaFicha.p4.peso === 320, nuevaFicha.p4.peso);
+paso('y se sigue enseñando, diciendo que ya no se pide',
+  /Peso de la hoja/.test(nuevaFicha.corredera.texto) &&
+  /en obra no hay báscula/.test(nuevaFicha.corredera.texto));
+paso('lo recomendado ya no pide el peso',
+  !nuevaFicha.rec3.some(x => /[Pp]eso de la hoja/.test(x)), nuevaFicha.rec3.join(' · '));
+paso('y en la seccional sí recuerda las vueltas de muelle mientras falten',
+  nuevaFicha.rec3.some(x => /[Vv]ueltas de los muelles/.test(x)) === false,
+  'ya puestas: '+nuevaFicha.rec3.join(' · '));
+paso('en la corredera no se piden vueltas de muelle',
+  !nuevaFicha.rec4.some(x => /muelle/i.test(x)), nuevaFicha.rec4.join(' · '));
+
+/* ================================================================
+   Arrastrar y soltar ficheros (01-11-2026)
+   ================================================================ */
+bloque('Arrastrar y soltar ficheros');
+
+const soltar = await T(async () => {
+  const g = window.__T;
+  const img = n => new File([new Uint8Array([255,216,255,0,1,2,3])], n, { type:'image/jpeg' });
+  const pdf = n => new File([new Uint8Array([37,80,68,70])], n, { type:'application/pdf' });
+
+  /* Lo primero, el filtro por el propio accept del campo */
+  const acepta = {
+    fotoEnFotos: g.aceptaFichero(img('a.jpg'), 'image/*'),
+    pdfEnFotos:  g.aceptaFichero(pdf('a.pdf'), 'image/*'),
+    pdfEnPdf:    g.aceptaFichero(pdf('a.pdf'), 'application/pdf,.pdf'),
+    fotoEnPdf:   g.aceptaFichero(img('a.jpg'), 'application/pdf,.pdf'),
+    porExtension: g.aceptaFichero(new File([new Uint8Array([1])], 'b.PDF', { type:'' }),
+                                  'application/pdf,.pdf'),
+    sinAccept:   g.aceptaFichero(img('a.jpg'), '') };
+
+  /* La ficha de una puerta en pantalla, que es donde están los dos recuadros */
+  g.S.tab = 'puertas'; g.S.ficha = 'pu-4'; g.pintar();
+  await new Promise(r => setTimeout(r, 900));
+
+  const panelFotos = document.getElementById('fotos-pu-4');
+  const labelPdf = Array.from(document.querySelectorAll('label.btn'))
+    .find(l => /Subir PDF/.test(l.textContent));
+
+  /* A qué campo va cada sitio */
+  const zFotos = g.zonaDeSoltar(panelFotos, [img('a.jpg')]);
+  const zPdf = g.zonaDeSoltar(labelPdf, [pdf('a.pdf')]);
+
+  const nAntes = (await g.sb.from('fotos').select('*').eq('puerta_id','pu-4')).data.length;
+
+  /* Y el soltar de verdad: arrastrar por encima y soltar */
+  const dt = new DataTransfer();
+  dt.items.add(img('soltada.jpg'));
+  panelFotos.dispatchEvent(new DragEvent('dragover', { bubbles:true, dataTransfer: dt }));
+  const marcado = !!document.querySelector('.soltar-aqui');
+  panelFotos.dispatchEvent(new DragEvent('drop', { bubbles:true, dataTransfer: dt }));
+  await new Promise(r => setTimeout(r, 1600));
+  const marcadoDespues = !!document.querySelector('.soltar-aqui');
+  const nDespues = (await g.sb.from('fotos').select('*').eq('puerta_id','pu-4')).data.length;
+
+  /* Un PDF soltado en las fotos no se cuela. El aviso se lee del recuadro de
+     avisos, así que primero hay que esperar a que se apague el de la foto
+     anterior: si no, se lee el mensaje de antes y la comprobación miente. */
+  const tst = document.getElementById('toast');
+  for (let i = 0; i < 60 && tst && !tst.hidden; i++) await new Promise(r => setTimeout(r, 100));
+  const dt2 = new DataTransfer();
+  dt2.items.add(pdf('manual.pdf'));
+  panelFotos.dispatchEvent(new DragEvent('drop', { bubbles:true, dataTransfer: dt2 }));
+  await new Promise(r => setTimeout(r, 900));
+  const nTrasPdf = (await g.sb.from('fotos').select('*').eq('puerta_id','pu-4')).data.length;
+  const avisoPdf = (tst && !tst.hidden) ? (tst.textContent || '') : '(sin aviso)';
+
+  /* Arrastrar un PDF por encima de las fotos tampoco marca: mientras se
+     arrastra el navegador no da el nombre, pero sí el tipo, y con eso basta
+     para no prometer un sitio donde no va a caer. */
+  const dtA = new DataTransfer();
+  dtA.items.add(pdf('otro.pdf'));
+  panelFotos.dispatchEvent(new DragEvent('dragover', { bubbles:true, dataTransfer: dtA }));
+  const marcadoPdfEncima = !!document.querySelector('.soltar-aqui');
+
+  /* Arrastrar texto no abre ninguna zona */
+  const dt3 = new DataTransfer();
+  dt3.setData('text/plain', 'hola');
+  panelFotos.dispatchEvent(new DragEvent('dragover', { bubbles:true, dataTransfer: dt3 }));
+  const marcadoTexto = !!document.querySelector('.soltar-aqui');
+
+  return { acepta,
+    zFotos: zFotos ? (zFotos.input.dataset.act || '') : '(ninguna)',
+    zPdf: zPdf ? (zPdf.input.dataset.act || '') : '(ninguna)',
+    nAntes, nDespues, nTrasPdf, marcado, marcadoDespues, marcadoTexto,
+    marcadoPdfEncima, avisoPdf };
+});
+paso('una foto vale en el campo de fotos y un PDF no',
+  soltar.acepta.fotoEnFotos === true && soltar.acepta.pdfEnFotos === false);
+paso('un PDF vale en el campo de PDF, y una foto no',
+  soltar.acepta.pdfEnPdf === true && soltar.acepta.fotoEnPdf === false);
+paso('vale también por la extensión, aunque el navegador no diga el tipo',
+  soltar.acepta.porExtension === true);
+paso('un campo sin accept lo acepta todo', soltar.acepta.sinAccept === true);
+paso('soltando en las fotos, el fichero va al campo de fotos',
+  soltar.zFotos === 'subir-foto', soltar.zFotos);
+paso('y soltando justo en el botón de PDF, al de PDF: manda el botón',
+  soltar.zPdf === 'subir-doc', soltar.zPdf);
+paso('mientras se arrastra por encima se marca dónde va a caer',
+  soltar.marcado === true);
+paso('y la marca se apaga al soltar', soltar.marcadoDespues === false);
+paso('la foto soltada se sube de verdad',
+  soltar.nDespues === soltar.nAntes + 1, soltar.nAntes+' → '+soltar.nDespues);
+paso('un PDF soltado en las fotos no se cuela',
+  soltar.nTrasPdf === soltar.nDespues, soltar.nTrasPdf);
+paso('y se dice por qué, en vez de no hacer nada en silencio',
+  /solo se pueden soltar fotos/i.test(soltar.avisoPdf), soltar.avisoPdf);
+paso('arrastrar texto no abre ninguna zona: ahí no hay nada que subir',
+  soltar.marcadoTexto === false);
+paso('ni arrastrar un PDF por encima de las fotos: no se promete un sitio donde no cae',
+  soltar.marcadoPdfEncima === false);
+
+/* ================================================================
    Final
    ================================================================ */
 console.log('\n'+ok+' bien, '+mal+' mal.');

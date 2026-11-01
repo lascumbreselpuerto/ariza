@@ -545,8 +545,14 @@ paso('con el mínimo hecho y lo recomendado sin hacer, el mínimo está completo
   rec.completo === true);
 paso('y lo recomendado se enumera aparte',
   rec.antes.length >= 4, rec.antes.join(' · '));
-paso('el peso de la hoja es recomendado, nunca obligatorio',
-  rec.antes.some(x => /[Pp]eso/.test(x)));
+/* Reescrita a propósito el 01-11-2026: el peso de la hoja ya no se pide, ni
+   como obligatorio ni como recomendado. En obra no hay báscula y no se
+   rellenaba nunca; en su lugar se recomienda el arrastre máximo del motor, que
+   viene en su placa y se copia en diez segundos. */
+paso('el peso de la hoja ya no se recomienda: no se puede pesar en obra',
+  !rec.antes.some(x => /[Pp]eso de la hoja/.test(x)), rec.antes.join(' · '));
+paso('en su lugar se recomienda el arrastre del motor, que viene en la placa',
+  rec.antes.some(x => /[Aa]rrastre máximo del motor/.test(x)), rec.antes.join(' · '));
 paso('al rellenarlo, la lista se queda corta',
   rec.despues.length < rec.antes.length, rec.despues.join(' · '));
 paso('de una puerta que no existe no se recomienda nada',
@@ -560,8 +566,11 @@ const recHtml = await T(async () => {
 });
 paso('lo recomendado sale en el parte, plegado y marcado como recomendado',
   /Recomendado/.test(recHtml) && /datos más, si están a mano/.test(recHtml));
-paso('y dice por qué el peso no está arriba: en obra no hay báscula',
-  /en obra no hay báscula/.test(recHtml));
+/* Reescrita el 01-11-2026: el texto hablaba del peso de la hoja, que ya no se
+   pide. Lo que tiene que decir ahora es qué clase de datos son estos: se copian
+   de una placa o de una ficha, no se miden. */
+paso('y dice qué clase de datos son: de los que se copian, no de los que se miden',
+  /se copian de una placa/.test(recHtml) && /no medidas que haya que tomar/.test(recHtml));
 paso('pero no se pinta ningún aviso de que falte el mínimo',
   /El mínimo de obra está completo/.test(recHtml));
 
