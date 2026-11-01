@@ -149,6 +149,26 @@ create table if not exists public.materiales (
   creado      timestamptz not null default now()
 );
 
+/* La valoración de una visita. Añadida al andamio el 01-11-2026: la tabla y la
+   función valorar_aviso son de una migración anterior que nunca se guardó en
+   servidor/, así que el andamio no las tenía y cualquier fichero que las
+   nombrara no se podía probar. Aquí van solo las columnas que la aplicación
+   lee, que es lo que el andamio necesita: esto no pretende ser la tabla de
+   producción, pretende que los ficheros de servidor/ se puedan ejecutar. */
+create table if not exists public.valoraciones (
+  aviso_id           uuid primary key references public.avisos(id) on delete cascade,
+  imp_mano_obra      numeric not null default 0,
+  imp_desplazamiento numeric not null default 0,
+  imp_materiales     numeric not null default 0,
+  imp_total          numeric not null default 0,
+  coste_total        numeric not null default 0,
+  margen             numeric not null default 0,
+  facturado          boolean not null default false,
+  factura_ref        text,
+  facturado_el       date,
+  creado             timestamptz not null default now()
+);
+
 create table if not exists public.componentes (
   id         uuid primary key default gen_random_uuid(),
   puerta_id  uuid references public.puertas(id) on delete cascade,
