@@ -288,7 +288,30 @@ const bajarCopia = async (pag, act) => {
        R.crc === 0xCBF43926, String(R.crc));
   paso('el ZIP se construye y tiene tamaño', R.bytes > 100, String(R.bytes));
   paso('y se marca como application/zip', R.tipo === 'application/zip', R.tipo);
-  paso('se copian veintiuna tablas', R.tablas === 21, String(R.tablas));
+  /* Cambiada a propósito el 01-11-2026. Eran 21 y se habían quedado fuera 16:
+     los presupuestos enteros, el almacén, los contactos, las jornadas de las
+     obras largas, las actas de entrega y las puertas de cada obra. La copia
+     funcionaba y decía que estaba completa, que es la peor clase de fallo.
+     «catalogo» salió de la lista: es una vista sobre articulos, no una tabla, y
+     el SQL de restauración generaba inserts que una vista no acepta. */
+  paso('se copian las treinta y seis tablas', R.tablas === 36, String(R.tablas));
+  ['presupuestos','presupuesto_lineas','presupuesto_adjuntos','presupuesto_envios',
+   'presupuesto_visitas','textos_presu','proveedores','conjuntos','conjunto_lineas',
+   'ubicaciones','movimientos_material','materiales_previstos','contactos','jornadas',
+   'entregas_obra','aviso_puertas'].forEach(t =>
+    paso('«'+t+'» entra en la copia', R.lista.includes(t)));
+  paso('«catalogo» NO entra: es una vista, no una tabla',
+       !R.lista.includes('catalogo') && R.lista.includes('articulos'));
+  /* El orden de la lista es el orden del SQL de restauración: una tabla que
+     apunta a otra tiene que ir después de ella o la clave ajena aborta el
+     fichero. */
+  [['avisos','aviso_puertas'], ['avisos','jornadas'], ['jornadas','materiales'],
+   ['clientes','contactos'], ['puertas','componentes'], ['proveedores','articulos'],
+   ['conjuntos','conjunto_lineas'], ['presupuestos','presupuesto_lineas'],
+   ['puertas','entregas_obra']].forEach(([antes, despues]) =>
+    paso('«'+antes+'» va antes que «'+despues+'» en el orden de restauración',
+         R.lista.indexOf(antes) >= 0 && R.lista.indexOf(antes) < R.lista.indexOf(despues),
+         R.lista.indexOf(antes)+' < '+R.lista.indexOf(despues)));
   paso('y las seis carpetas de ficheros', R.buckets.length === 6, R.buckets.join(', '));
   /* Lo que no está en esta lista no entra en la copia, y no se nota hasta el día
      que haya que restaurar. Al meter los centros se vio que los componentes

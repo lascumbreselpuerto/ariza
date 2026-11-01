@@ -225,6 +225,7 @@ paso('los campos nuevos se recuperan si se sale a crear un cliente', campos.enBo
 
 const volcado = await T(async () => {
   const g = window.__T;
+  const nAntes = g.S.puertas.length;
   g.dlgPuerta('pu-2');
   await new Promise(r=>setTimeout(r,300));
   document.getElementById('f-motor-marca').value = 'Erreka';
@@ -239,8 +240,16 @@ const volcado = await T(async () => {
   const min = g.componentesMinimos(p);
   return { texto: { cuadro:p.cuadro, motor:p.motor }, comps,
            faltanMotor: min.faltan.some(x => x.clave === 'motor'),
-           faltanCuadro: min.faltan.some(x => x.clave === 'cuadro') };
+           faltanCuadro: min.faltan.some(x => x.clave === 'cuadro'),
+           nAntes, nDespues: g.S.puertas.length };
 });
+/* Añadida el 01-11-2026 después de meter la pata. Un bloque nuevo se colocó
+   entre el «if (p)» que actualiza la puerta y su «else», y el else se quedó
+   colgando del if nuevo: editar una puerta existente se iba por la rama del
+   insert y creaba una puerta nueva en cada guardado. La sintaxis era válida, así
+   que el comprobador no dijo nada. Esta comprobación lo caza de frente. */
+paso('editar una puerta NO crea otra',
+  volcado.nDespues === volcado.nAntes, volcado.nAntes+' → '+volcado.nDespues);
 paso('al guardar la ficha, el motor queda dado de alta como componente',
   (volcado.comps.find(c=>c.clave==='motor')||{}).marca === 'Erreka' &&
   (volcado.comps.find(c=>c.clave==='motor')||{}).modelo === 'Rino 4',

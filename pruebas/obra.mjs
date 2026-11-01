@@ -186,7 +186,7 @@ await T(() => window.__T.cerrarDlg()); await esperar(300);
 /* ================================================================
    3. Punto por punto
    ================================================================ */
-bloque('3. Cada punto del mínimo bloquea por sí solo');
+bloque('3. Punto por punto: qué impide cerrar y qué se remata en oficina');
 
 const completa = { codigo:'AR-0101', tipo:'Corredera', ancho_mm:4200, alto_mm:2400,
                    matricula:'Erreka, Rino 4, nº 2019-0481' };
@@ -198,7 +198,9 @@ const puntoAPunto = await T(async base => {
     await g.sb.from('puertas').update(o).eq('id','pt-sin-doc');
     await g.cargar();
     const m = g.minimoObra(g.puertaDe('pt-sin-doc'), 2);
-    return { bloquean: m.bloquean.map(x => x.clave), completo: m.completo };
+    return { bloquean: m.bloquean.map(x => x.clave),
+             porRematar: m.porRematar.map(x => x.clave),
+             faltan: m.faltan.map(x => x.clave), completo: m.completo };
   };
   const out = {};
   for (const campo of ['codigo','tipo','ancho_mm','alto_mm','matricula'])
@@ -209,26 +211,57 @@ const puntoAPunto = await T(async base => {
   const p = g.puertaDe('pt-sin-doc');
   out.todo = { conFotos: g.minimoObra(p, 2).completo,
                unaFoto:  g.minimoObra(p, 1).bloquean.map(x => x.clave),
+               unaFotoFaltan: g.minimoObra(p, 1).faltan.map(x => x.clave),
+               sinFoto:  g.minimoObra(p, 0).bloquean.map(x => x.clave),
                sinContar: g.minimoObra(p, null).puntos.find(x => x.clave === 'fotos') };
   return out;
 }, completa);
 
-paso('sin etiqueta: bloquea la etiqueta y nada más',
-  puntoAPunto.codigo.bloquean.join(',') === 'etiqueta', puntoAPunto.codigo.bloquean.join(','));
-paso('sin tipo de puerta: bloquea el tipo',
-  puntoAPunto.tipo.bloquean.join(',') === 'tipo', puntoAPunto.tipo.bloquean.join(','));
-paso('sin ancho: bloquean las medidas',
-  puntoAPunto.ancho_mm.bloquean.join(',') === 'medidas', puntoAPunto.ancho_mm.bloquean.join(','));
-paso('sin alto: bloquean las medidas igual',
-  puntoAPunto.alto_mm.bloquean.join(',') === 'medidas', puntoAPunto.alto_mm.bloquean.join(','));
-paso('sin matrícula: bloquea la matrícula',
-  puntoAPunto.matricula.bloquean.join(',') === 'matricula', puntoAPunto.matricula.bloquean.join(','));
-paso('ninguno de esos casos se da por completo',
+/* ---- Reescritas a propósito el 01-11-2026 ----
+   Hasta hoy los seis puntos del mínimo bloqueaban el cierre, y en pruebas de
+   campo eso salía carísimo: el técnico se quedaba sin poder cerrar por una
+   medida o una matrícula, y el trabajo acababa sin hacerse. Un bloqueo que la
+   gente sortea no protege el dato.
+
+   El criterio nuevo, decidido por David: lo único que impide cerrar es lo que
+   NO se puede conseguir desde la oficina, y de esta lista eso son dos cosas, la
+   ficha y al menos una foto. La etiqueta, el tipo, las medidas y la matrícula
+   siguen saliendo como lo que faltan, pero se rematan después y la visita queda
+   señalada como ficha incompleta.
+
+   Así que estas comprobaciones ya no miran si bloquean: miran que NO bloqueen y
+   que no se pierdan de vista. Que sigan contándose como falta es justo lo que
+   las hace valer. */
+paso('sin etiqueta: no bloquea el cierre, pero queda por rematar',
+  puntoAPunto.codigo.bloquean.length === 0 &&
+  puntoAPunto.codigo.porRematar.join(',') === 'etiqueta',
+  'bloquean=['+puntoAPunto.codigo.bloquean.join(',')+'] rematar=['+puntoAPunto.codigo.porRematar.join(',')+']');
+paso('sin tipo de puerta: tampoco bloquea, y queda por rematar',
+  puntoAPunto.tipo.bloquean.length === 0 &&
+  puntoAPunto.tipo.porRematar.join(',') === 'tipo', puntoAPunto.tipo.porRematar.join(','));
+paso('sin ancho: no bloquea, las medidas quedan por rematar',
+  puntoAPunto.ancho_mm.bloquean.length === 0 &&
+  puntoAPunto.ancho_mm.porRematar.join(',') === 'medidas', puntoAPunto.ancho_mm.porRematar.join(','));
+paso('sin alto: igual',
+  puntoAPunto.alto_mm.bloquean.length === 0 &&
+  puntoAPunto.alto_mm.porRematar.join(',') === 'medidas', puntoAPunto.alto_mm.porRematar.join(','));
+paso('sin matrícula: no bloquea, queda por rematar',
+  puntoAPunto.matricula.bloquean.length === 0 &&
+  puntoAPunto.matricula.porRematar.join(',') === 'matricula', puntoAPunto.matricula.porRematar.join(','));
+paso('ninguno de esos casos se da por completo: lo que falta sigue contando',
   ['codigo','tipo','ancho_mm','alto_mm','matricula'].every(k => puntoAPunto[k].completo === false));
 paso('con todo puesto y dos fotos, el mínimo está completo',
   puntoAPunto.todo.conFotos === true);
-paso('con una sola foto, bloquean las fotos',
-  puntoAPunto.todo.unaFoto.join(',') === 'fotos', puntoAPunto.todo.unaFoto.join(','));
+/* También reescrita el 01-11-2026: una foto ya basta para CERRAR, aunque la
+   ficha no esté completa hasta las dos. La segunda es la de la placa, que es la
+   que ahorra el viaje cuando hay que pedir un repuesto, así que sigue contando
+   como falta. */
+paso('con una sola foto ya se puede cerrar, pero la segunda sigue haciendo falta',
+  puntoAPunto.todo.unaFoto.length === 0 &&
+  puntoAPunto.todo.unaFotoFaltan.join(',') === 'fotos',
+  'bloquean=['+puntoAPunto.todo.unaFoto.join(',')+'] faltan=['+puntoAPunto.todo.unaFotoFaltan.join(',')+']');
+paso('sin NINGUNA foto sí bloquea: es lo único que no se puede hacer desde la oficina',
+  puntoAPunto.todo.sinFoto.join(',') === 'fotos', puntoAPunto.todo.sinFoto.join(','));
 paso('mientras no se han contado, las fotos quedan en duda y no se dan por buenas',
   puntoAPunto.todo.sinContar.duda === true && puntoAPunto.todo.sinContar.ok === false,
   JSON.stringify(puntoAPunto.todo.sinContar && { ok:puntoAPunto.todo.sinContar.ok, duda:puntoAPunto.todo.sinContar.duda }));
@@ -284,7 +317,8 @@ const mat = await T(async () => {
   await g.cargar();
   // y el motivo escrito cuenta como dato tomado
   const p = g.puertaDe('pt-sin-doc');
-  out.sinMotivo = g.minimoObra(p, 2).bloquean.map(x => x.clave).join(',');
+  out.sinMotivo = g.minimoObra(p, 2).porRematar.map(x => x.clave).join(',');
+  out.sinMotivoBloquea = g.minimoObra(p, 2).bloquean.length;
   await g.sb.from('puertas').update({ sin_matricula:'Puerta de los años 80 sin placa; el motor es nuevo y va en su componente.' }).eq('id','pt-sin-doc');
   await g.cargar();
   out.conMotivo = g.minimoObra(g.puertaDe('pt-sin-doc'), 2).completo;
@@ -299,8 +333,12 @@ paso('un componente dado de alta sin marca ni serie no cuenta',
   mat.componenteVacio === false);
 paso('un componente retirado no cuenta: ya no está puesto',
   mat.componenteRetirado === false);
-paso('sin matrícula ni motivo, el punto bloquea',
-  mat.sinMotivo === 'matricula', mat.sinMotivo);
+/* Reescrita el 01-11-2026: la matrícula ya no impide cerrar, porque se puede
+   copiar después de la foto de la placa. Lo que se comprueba ahora es que sigue
+   contándose como pendiente y que va a la lista de la oficina. */
+paso('sin matrícula ni motivo, el punto queda por rematar y no bloquea',
+  mat.sinMotivo === 'matricula' && mat.sinMotivoBloquea === 0,
+  mat.sinMotivo+' · bloquean='+mat.sinMotivoBloquea);
 paso('con el motivo escrito, el mínimo se completa',
   mat.conMotivo === true);
 paso('pero el motivo no se cuenta como matrícula tomada: son cosas distintas',
@@ -389,8 +427,12 @@ paso('pero no bloquea: no se puede resolver allí',
 paso('y queda marcada como no resoluble en obra', sinEtiquetas.imposible === true);
 paso('con el motivo explicado, no a secas',
   /No quedan etiquetas libres/.test(sinEtiquetas.porque||''), sinEtiquetas.porque);
+/* Reescrita el 01-11-2026: el recuadro ya no habla de «pendiente» en general,
+   dice en qué queda la visita (ficha incompleta) y quién lo remata. */
 paso('el recuadro lo dice sin dar a entender que da igual',
-  /Se puede cerrar la visita, pero queda como pendiente/.test(sinEtiquetas.html));
+  /Puedes cerrar/.test(sinEtiquetas.html) &&
+  /ficha incompleta/.test(sinEtiquetas.html) &&
+  /remata la oficina/.test(sinEtiquetas.html));
 
 await abrirParte('av-inst');
 const rPend = await T(async () => {
@@ -471,9 +513,13 @@ paso('si falta algo, la tarjeta lo dice y nombra qué',
   /ancho y alto/i.test(tarjetaFalta.conFalta));
 paso('las fotos no se nombran en la tarjeta: no se cuentan por tarjeta',
   !/fotos de la puerta/i.test(tarjetaFalta.conFalta));
+/* Reescrita el 01-11-2026: la tarjeta ya no amenaza con que no se cierra la
+   visita, dice lo que hace falta de verdad (ficha y una foto) y que el resto se
+   remata en oficina. */
 paso('una puerta sin ficha sale como «puerta sin documentar»',
   /Puerta sin documentar/.test(tarjetaFalta.sinPuerta) &&
-  /medidas, fotos y matrículas/.test(tarjetaFalta.sinPuerta));
+  /al menos una foto/.test(tarjetaFalta.sinPuerta) &&
+  /rematar en oficina/.test(tarjetaFalta.sinPuerta));
 paso('la avería de la misma puerta no dice nada de esto',
   !/documentar/.test(tarjetaFalta.averia));
 
@@ -1092,8 +1138,11 @@ paso('el recuadro de documentar habla de LAS puertas, en plural',
   /Documentar las puertas en obra/.test(varias.docu));
 paso('con una caja por puerta', (varias.docu.match(/id="obra-p-/g) || []).length === 4,
   (varias.docu.match(/id="obra-p-/g) || []).length);
-paso('y el resumen cuenta cuántas quedan sin documentar',
-  /de las 4 puertas/.test(varias.docu));
+/* Reescrita el 01-11-2026: con una foto por puerta ya nada bloquea, así que el
+   resumen de varias puertas ya no cuenta «cuántas faltan» sino cuántos datos
+   quedan por rematar en oficina. */
+paso('y el resumen dice que se puede cerrar y que lo remata la oficina',
+  /Puedes cerrar/.test(varias.docu) && /remata la oficina/.test(varias.docu));
 paso('la tarjeta de trabajo avisa de que la obra lleva más de una puerta',
   /3 puertas más en esta obra/.test(varias.tarjeta));
 paso('y nombra las que están sin documentar',
@@ -1184,6 +1233,135 @@ paso('la obra NO se cierra si le falta documentar una puerta cualquiera',
   cierreMulti.cerrado === false, cierreMulti.cerrado);
 paso('y el error dice CUÁL falta, con su código',
   /AR-020\d/.test(cierreMulti.err), cierreMulti.err.slice(0, 160));
+
+/* ================================================================
+   El parte se cierra con la ficha a medias (01-11-2026)
+
+   Por qué cambió: en pruebas de campo el bloqueo salía carísimo. El
+   técnico se quedaba sin poder cerrar por una medida o una matrícula, y
+   el trabajo acababa sin hacerse. El criterio nuevo: solo impide cerrar
+   lo que no se puede conseguir desde la oficina, y de la lista del
+   mínimo eso son dos cosas, la ficha y una foto.
+   ================================================================ */
+bloque('El parte se cierra con la ficha a medias');
+
+const aMedias = await T(async () => {
+  const g = window.__T;
+  const cli = g.S.clientes[0];
+  await g.sb.from('puertas').insert({ id:'pt-rematar', codigo:null, cliente_id:cli.id,
+    cliente:cli.nombre, direccion:'Nave 7', ubicacion:'Muelle',
+    estado:'operativa', creado:new Date().toISOString() });
+  await g.sb.from('avisos').insert({ id:'av-rematar', tipo:'instalacion', estado:'asignado',
+    prioridad:'normal', tecnico_id:'usuario-admin', cliente_id:cli.id, puerta_id:'pt-rematar',
+    descripcion:'Puerta nueva, ficha a medias',
+    fecha_prevista:new Date().toISOString().slice(0,10), creado:new Date().toISOString() });
+  await g.cargar();
+
+  /* Primero SIN ninguna foto: eso sí tiene que bloquear */
+  g.dlgCierre('av-rematar');
+  await new Promise(r => setTimeout(r, 800));
+  document.getElementById('z-trab').value = 'Montada la puerta.';
+  document.getElementById('z-horas').value = '8';
+  document.getElementById('z-sin').value = 'No había nadie.';
+  await g.guardarCierre(g.S.avisos.find(x => x.id === 'av-rematar'), true);
+  const errSinFoto = (document.querySelector('#dlg-form .err') || {}).textContent || '';
+  const cerradoSinFoto = !!(g.S.avisos.find(x => x.id === 'av-rematar') || {}).cerrado;
+
+  /* Ahora con una foto, y con la ficha igual de incompleta */
+  await g.sb.from('fotos').insert({ puerta_id:'pt-rematar', ruta:'fotos/pt-rematar-1.jpg',
+    autor:'usuario-admin', creado:new Date().toISOString() });
+  await g.cargar();
+  await g.guardarCierre(g.S.avisos.find(x => x.id === 'av-rematar'), true);
+  await new Promise(r => setTimeout(r, 900));
+  const av = g.S.avisos.find(x => x.id === 'av-rematar') || {};
+  const incompletas = g.fichasIncompletas();
+  const mia = incompletas.find(x => x.p.id === 'pt-rematar');
+  return { errSinFoto, cerradoSinFoto,
+    cerrado: !!av.cerrado, pendiente: av.pendiente, texto: av.pendiente_texto || '',
+    enLista: !!mia, claves: mia ? mia.faltan.map(x => x.clave) : [] };
+});
+paso('sin ninguna foto NO se cierra, y el error dice que es la foto',
+  aMedias.cerradoSinFoto === false && /al menos una foto/.test(aMedias.errSinFoto),
+  aMedias.errSinFoto.slice(0, 120));
+paso('y explica por qué esa sí: no se puede hacer desde la oficina',
+  /no se puede hacer desde la oficina/.test(aMedias.errSinFoto));
+paso('con una foto, el parte SÍ se cierra aunque falte todo lo demás',
+  aMedias.cerrado === true);
+paso('y queda señalado como ficha incompleta, no como «pendiente» a secas',
+  aMedias.pendiente === true && /Ficha incompleta/.test(aMedias.texto), aMedias.texto.slice(0, 110));
+/* En una instalación se juntan dos cosas pendientes: el acta sin firmar y la
+   ficha a medias. Las dos tienen que constar, y el acta va primero porque es la
+   más grave. */
+paso('y si además falta el acta, constan las dos cosas',
+  /Acta de entrega sin firmar/.test(aMedias.texto) && /Ficha incompleta/.test(aMedias.texto),
+  aMedias.texto.slice(0, 140));
+paso('nombrando a la puerta sin etiqueta por donde está, no como «sin etiqueta»',
+  !/sin firmar: sin etiqueta/.test(aMedias.texto), aMedias.texto.slice(0, 70));
+paso('diciendo qué falta, por su nombre',
+  /etiqueta/i.test(aMedias.texto) && /ancho y alto/i.test(aMedias.texto));
+paso('la puerta sale en la lista de fichas a medias de la oficina', aMedias.enLista === true);
+paso('con la etiqueta, el tipo, las medidas y la matrícula',
+  ['etiqueta','tipo','medidas','matricula'].every(k => aMedias.claves.includes(k)),
+  aMedias.claves.join(','));
+paso('y sin las fotos ni la ficha: eso no lo puede rematar la oficina',
+  !aMedias.claves.includes('fotos') && !aMedias.claves.includes('ficha'),
+  aMedias.claves.join(','));
+
+/* ---- Y cuando el cliente ya ha firmado ---- */
+const firmada = await T(async () => {
+  const g = window.__T;
+  /* El cierre anterior fue sin firma (no había nadie). Se le pone firma para
+     probar el caso que importa. */
+  await g.sb.from('avisos').update({ firma_ruta:'firmas/av-rematar.png',
+    firma_nombre:'Encargado' }).eq('id','av-rematar');
+  await g.cargar();
+  const nFirmados = g.partesFirmadosDe('pt-rematar').length;
+
+  /* Como técnico: no se edita */
+  const rolAntes = g.S.perfil.rol;
+  g.S.perfil.rol = 'tecnico';
+  g.dlgPuerta('pt-rematar');
+  await new Promise(r => setTimeout(r, 500));
+  const comoTecnico = document.getElementById('dlg-form').innerText;
+  const campoTecnico = document.querySelectorAll('#dlg-form #f-cbusca').length;
+  g.cerrarDlg();
+  await new Promise(r => setTimeout(r, 250));
+
+  /* Como oficina: se edita, con aviso */
+  g.S.perfil.rol = 'oficina';
+  g.dlgPuerta('pt-rematar');
+  await new Promise(r => setTimeout(r, 500));
+  const comoOficina = document.getElementById('dlg-form').innerText;
+  const campoOficina = document.querySelectorAll('#dlg-form #f-cbusca').length;
+  /* Y se remata de verdad: se le pone el tipo */
+  document.getElementById('f-tipo').value = 'Seccional';
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 1400));
+  g.S.perfil.rol = rolAntes;
+  const p = g.puertaDe('pt-rematar') || {};
+  const incompletas = g.fichasIncompletas().find(x => x.p.id === 'pt-rematar');
+  return { nFirmados, comoTecnico, campoTecnico, comoOficina, campoOficina,
+    tipo: p.tipo, tocadaPor: p.ficha_tocada_por || '', tocadaEl: !!p.ficha_tocada_el,
+    sigueFaltando: incompletas ? incompletas.faltan.map(x => x.clave) : [] };
+});
+paso('la puerta tiene un parte firmado', firmada.nFirmados === 1, firmada.nFirmados);
+paso('el técnico no puede editar la ficha de un parte firmado',
+  firmada.campoTecnico === 0 && /firmado por el cliente/.test(firmada.comoTecnico),
+  firmada.campoTecnico+' campos');
+paso('y se le dice qué hacer en vez de dejarlo a medias',
+  /dilo a la oficina/i.test(firmada.comoTecnico));
+paso('lo que sí puede seguir haciendo se le nombra',
+  /subir fotos/i.test(firmada.comoTecnico));
+paso('la oficina sí la edita, pero con el aviso delante',
+  firmada.campoOficina === 1 && /parte firmado por el cliente/.test(firmada.comoOficina),
+  firmada.campoOficina+' campos');
+paso('y se le avisa de que el parte firmado no cambia',
+  /el parte que firmó no cambia/.test(firmada.comoOficina));
+paso('el dato se remata de verdad', firmada.tipo === 'Seccional', firmada.tipo);
+paso('queda anotado quién la tocó y cuándo',
+  !!firmada.tocadaPor && firmada.tocadaEl === true, firmada.tocadaPor);
+paso('y lo rematado desaparece de la lista: ya no falta el tipo',
+  !firmada.sigueFaltando.includes('tipo'), firmada.sigueFaltando.join(','));
 
 /* ================================================================
    Final

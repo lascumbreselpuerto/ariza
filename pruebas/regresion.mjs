@@ -571,16 +571,43 @@ const abrirDoc = async (pag, act) => {
     await campo.fill('180');
     await pag.locator('#vista').click({ position:{ x:5, y:5 } });
     await pag.waitForTimeout(900);
+    const soloUna = await pag.textContent('#vista');
+
+    /* CAMBIO DE CRITERIO DEL 01-11-2026. Esta comprobación daba por bueno un
+       «Pasa» con UNA sola magnitud medida, y eso era justo el fallo: los huecos
+       se trataban como ceros, y un cero siempre es menor que el límite, así que
+       el documento afirmaba que se habían comprobado la fuerza tras Td, la
+       residual y el tiempo total. Nadie las había medido.
+
+       Lo que se comprueba ahora: con una sola magnitud NO hay dictamen, y con
+       las cuatro sí. Lo de antes (14-10-2026: una industrial dentro de límites
+       se puede llamar «Pasa» porque el perfil está contrastado) sigue siendo
+       verdad, pero hace falta el ensayo completo.
+
+       Ojo con el \b: textContent pega las celdas sin espacios («sueloPasaCanto»),
+       así que el límite de palabra no existe. */
+    paso('B3b · con una sola magnitud medida NO dice «Pasa»',
+         !/Pasa/.test(soloUna) && /A medias/.test(soloUna),
+         (soloUna.match(/A medias|Pasa|No pasa|Pendiente de evaluación/g)||[]).join(' ') || ruta);
+
+    /* Y con las cuatro, vuelve a dictaminar. Los campos del expediente se
+       guardan al escribir pero no repintan, así que se escribe por dentro y se
+       repinta a mano: rellenarlos uno a uno con el ratón se queda colgado,
+       porque el repintado del primero le quita el campo al segundo. */
+    await pag.evaluate(() => {
+      const g = window.__T;
+      g.expPon('fuerzas.m0.fd', '180');
+      g.expPon('fuerzas.m0.fs', '120');
+      g.expPon('fuerzas.m0.fe', '20');
+      g.expPon('fuerzas.m0.td', '0.5');
+      g.pintar();
+    });
+    await pag.waitForTimeout(700);
     const t = await pag.textContent('#vista');
-    /* CAMBIO DE CRITERIO DEL 14-10-2026, mismo motivo que A6: con la norma
-       aportada, una medición dentro de límites en una industrial SÍ se puede
-       llamar «Pasa». Antes se quedaba en «Pendiente de evaluación» porque el
-       perfil no estaba contrastado. */
-    /* Ojo con el \b: textContent pega las celdas sin espacios («sueloPasaCanto»),
-       así que el límite de palabra no existe. Se mira que diga Pasa y que no sea
-       un «No pasa». */
-    paso('B3b · con una medición dentro de límites ya SÍ dice «Pasa»',
-         /Pasa/.test(t) && !/No pasa/.test(t), (t.match(/.{0,30}Pasa.{0,20}/)||[''])[0] || ruta);
+
+    paso('B3b · con el ensayo completo y dentro de límites ya SÍ dice «Pasa»',
+         /Pasa/.test(t) && !/No pasa/.test(t) && !/A medias/.test(t),
+         (t.match(/.{0,30}Pasa.{0,20}/)||[''])[0] || ruta);
     paso('B3b · ya no se queda en «Pendiente de evaluación»',
          !/Pendiente de evaluación/.test(t), ruta);
     paso('B3b · y la pantalla cita la norma verificada con su apartado',

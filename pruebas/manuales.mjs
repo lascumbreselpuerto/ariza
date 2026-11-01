@@ -435,8 +435,22 @@ paso('el manual explica las tres maneras de tomar la matrícula',
   /Si no tiene placa/.test(M) && /número de serie del motor o del cuadro/.test(M));
 paso('y que el peso de la hoja NO se exige',
   /peso de la hoja \*\*no\*\* se exige/.test(M) || /no se puede pesar una hoja en obra/.test(M));
-paso('dice también la única excepción, y que deja la visita pendiente',
-  /no quedan etiquetas libres/i.test(M) && /pendiente/.test(M));
+/* Reescrita el 01-11-2026. Antes el manual hablaba de «la única excepción»
+   (quedarse sin etiquetas), porque todo lo demás bloqueaba el cierre. Ya no:
+   ahora lo que bloquea son la ficha y una foto, y el resto se remata en
+   oficina. Lo que se comprueba es que el manual diga exactamente eso, que es
+   lo que el técnico necesita saber en la obra. */
+paso('dice qué es lo único que impide cerrar: la ficha y una foto',
+  /[Aa]l menos una foto/.test(M) && /no se puede conseguir desde la oficina|no está la puerta/.test(M));
+paso('y que el resto se remata en oficina, señalado como ficha incompleta',
+  /ficha incompleta/i.test(M) && /remat/i.test(M));
+paso('sin dar a entender que entonces da igual no tomarlo',
+  /viaje de vuelta/.test(M));
+paso('y distingue el dato que se completa de la comprobación que no',
+  /no se comprobó se queda como \*\*no comprobado\*\*|no comprobado/.test(M) &&
+  /no es completarla: es inventarla|inventarla/.test(M));
+paso('lo de quedarse sin etiquetas sigue dicho',
+  /no quedan etiquetas/i.test(M) || /Si no quedan etiquetas/.test(M));
 paso('y avisa de que subir fotos y cerrar necesitan cobertura',
   /necesitan cobertura/.test(M));
 

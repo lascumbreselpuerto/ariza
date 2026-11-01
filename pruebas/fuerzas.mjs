@@ -255,6 +255,88 @@ bloque('4. Si se mide, el ensayo tiene que estar completo');
 }
 
 /* ================================================================
+   4 bis. Un punto medido a medias NO dictamina
+
+   El fallo que esto cierra, encontrado el 01-11-2026: el veredicto se
+   calculaba con los cuatro valores pasados por «+x || 0», así que una
+   magnitud en blanco entraba como CERO, y cero siempre es menor que el
+   límite. Anotar solo Fd (lo normal con un medidor de pico) imprimía
+   «Pasa» afirmando que se habían comprobado la fuerza tras Td, la
+   residual y el tiempo total. Era el único sitio de la aplicación donde
+   se afirmaba algo falso en un papel que se firma.
+   ================================================================ */
+bloque('4 bis. Un ensayo a medias no se da por pasado');
+{
+  const { ctx, pag } = await abrir();
+  await crear(pag, 'adecuacion', 'industrial');
+  await irA(pag, 'fuerzas');
+  const id = await expId(pag);
+
+  /* Los campos del expediente se guardan al escribir pero NO repintan, para no
+     interrumpir a quien teclea. Así que aquí se escribe y se repinta a mano,
+     que es lo que hace la aplicación al cambiar de paso. */
+  const pon = async (ruta, v) => {
+    await pag.evaluate(([r, x]) => { window.__T.expPon(r, x); }, [ruta, v]);
+  };
+  const repinta = async () => {
+    await pag.evaluate(() => window.__T.pintar());
+    await pag.waitForTimeout(500);
+  };
+
+  /* Solo Fd, y dentro de límite: el caso exacto del fallo */
+  await pon('fuerzas.m0.fd', '180');
+  await repinta();
+  const aMedias = await pag.textContent('#vista');
+  const vMedias = await pag.evaluate(i => {
+    const r = window.__T.validarExpediente(window.__T.expDe(i));
+    return { avisos: r.avisos.filter(a => a.area === 'Ensayo').map(a => a.texto),
+             bloqueos: r.bloqueos.filter(a => a.area === 'Ensayo').map(a => a.texto) };
+  }, id);
+  const libMedias = await libro(pag, id);
+
+  paso('con solo Fd anotado, la pantalla NO dice «Pasa»',
+    !/>Pasa</.test(aMedias) && /A medias/.test(aMedias),
+    (aMedias.match(/A medias|Pasa|No pasa|Pendiente de evaluación/g)||[]).join(' '));
+  paso('y dice qué magnitudes faltan, por su nombre',
+    /Falta Fs, Fe, td/.test(aMedias), (aMedias.match(/Falta [^<\n]*/)||[''])[0]);
+  paso('el libro impreso tampoco lo da por pasado',
+    /Ensayo incompleto: falta Fs, Fe, td/.test(libMedias.texto));
+  paso('y lo dice una vez al pie, no solo en la fila',
+    /ENSAYO INCOMPLETO EN 1 PUNTO DE MEDIDA/.test(libMedias.texto));
+  paso('la validación avisa de los puntos a medias antes de emitir',
+    vMedias.avisos.some(t => /ensayo a medias/.test(t)), vMedias.avisos.join(' | '));
+  paso('pero no lo convierte en bloqueo: la medida buena solo se toma en obra',
+    !vMedias.bloqueos.some(t => /a medias/.test(t)));
+
+  /* Un valor que SE SALE sigue siendo «No pasa», aunque falten los otros tres */
+  await pon('fuerzas.m0.fd', '1800');
+  await repinta();
+  const fuera = await pag.textContent('#vista');
+  paso('un valor fuera de límite sigue siendo «No pasa» aunque falten los demás',
+    /No pasa/.test(fuera) && !/A medias/.test(fuera.split('No pasa')[0].slice(-200)));
+
+  /* Y con las cuatro, vuelve a dictaminar */
+  await pon('fuerzas.m0.fd', '180');
+  await pon('fuerzas.m0.fs', '120');
+  await pon('fuerzas.m0.fe', '20');
+  await pon('fuerzas.m0.td', '0.5');
+  await repinta();
+  const completo = await pag.textContent('#vista');
+  paso('con las cuatro magnitudes ya hay dictamen',
+    !/A medias/.test(completo) &&
+    (/Pasa/.test(completo) || /Pendiente de evaluación/.test(completo)),
+    (completo.match(/A medias|>Pasa<|No pasa|Pendiente de evaluación/g)||[]).join(' '));
+  /* Un cero escrito a mano es un dato, no un hueco: Fe puede medir 0 N */
+  await pon('fuerzas.m0.fe', '0');
+  await repinta();
+  const conCero = await pag.textContent('#vista');
+  paso('un cero escrito a mano sí es un cero, no un hueco',
+    !/A medias/.test(conCero),
+    (conCero.match(/A medias|>Pasa<|No pasa|Pendiente de evaluación/g)||[]).join(' '));
+  await ctx.close();
+}
+
+/* ================================================================
    5. Una puerta sin motor no tiene nada de esto
    ================================================================ */
 bloque('5. Puerta sin motorizar');
