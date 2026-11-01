@@ -1419,7 +1419,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.10.28-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.01-1';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -2084,8 +2084,9 @@ function tarjetaTrabajo(a){
          está documentada, el técnico tiene que saberlo desde la furgoneta. */
       const xs = puertasDeAviso(a.id);
       if (!xs.length) return '<p class="nota-oficina" style="border-left-color:var(--mal)">'+
-        '<b>Puerta sin documentar.</b> No tiene ficha ni QR: hay que darla de alta en obra, con '+
-        'medidas, fotos y matrículas. Sin eso no se cierra la visita.</p>';
+        '<b>Puerta sin documentar.</b> No tiene ficha ni QR: hay que darla de alta y hacerle al '+
+        'menos una foto. Lo demás (medidas, etiqueta, matrícula) mejor allí, pero se puede '+
+        'rematar en oficina.</p>';
       const ms = xs.map(pu => ({ p: pu, f: minimoObra(pu, null).faltan.filter(x => !x.duda) }))
         .filter(x => x.f.length);
       if (!ms.length) return '';
@@ -3233,6 +3234,38 @@ function vistaGestion(){
            '<td class="num" style="text-align:right;color:'+(dif < 0 ? 'var(--mal)' : 'var(--ok)')+'">'+eur(dif)+'</td></tr>';
     });
     h += '</tbody></table></div></div>';
+  }
+
+  /* ---- Fichas de puerta a medias ----
+     Desde el 01-11-2026 el parte se cierra aunque la ficha esté incompleta: el
+     técnico no se queda parado en la obra por una medida. Eso solo es honrado
+     si alguien tiene la lista de lo que quedó a medias, y esta es la lista. Se
+     calcula sola: en cuanto el dato se rellena, la puerta desaparece de aquí. */
+  {
+    const incompletas = fichasIncompletas();
+    if (incompletas.length){
+      h += '<div class="panel"><div class="panel-h"><h3>Fichas de puerta a medias</h3>'+
+        '<span class="mini">'+incompletas.length+'</span></div>'+
+        '<p class="mini" style="margin:0 0 10px">Visitas cerradas en las que la ficha de la puerta '+
+        'se quedó sin rematar. Esto se completa desde aquí, sin volver a la obra. Lo que no está en '+
+        'esta lista son las fotos y las comprobaciones: eso solo se puede hacer delante de la puerta.</p>'+
+        '<div class="lista-simple">';
+      incompletas.slice(0, 40).forEach(x => {
+        h += '<div class="item-plano">'+
+          '<button class="item sp" data-act="abrir" data-id="'+x.p.id+'">'+
+            '<span class="qr">'+esc((x.p.codigo || '—').replace(/^[A-Z]+-/, ''))+'</span>'+
+            '<span><span class="tit">'+esc(nombreCliente(x.aviso))+'</span>'+
+            '<span class="sub">'+esc(x.faltan.map(y => y.texto.toLowerCase()).join(' · '))+
+            ' · cerrada '+esc(fechaCorta(x.aviso.cerrado))+'</span></span></button>'+
+          '<button class="btn sm" data-act="ficha-rematar" data-id="'+x.p.id+
+            '" data-aviso="'+x.aviso.id+'">Rematar</button></div>';
+      });
+      h += '</div>'+
+        (incompletas.length > 40
+          ? '<p class="mini" style="margin:8px 0 0">Y '+(incompletas.length-40)+' más. '+
+            'Las más antiguas salen primero.</p>' : '')+
+        '</div>';
+    }
   }
 
   // --- Avisos de cosas a corregir ---
@@ -5659,11 +5692,35 @@ function panelReglasFecha(){
    centro; los componentes, después de las puertas, porque cuelgan de ellas.
    Si se añade una tabla nueva, va aquí: lo que no esté en esta lista NO entra en
    la copia de seguridad, y no se nota hasta el día que haya que restaurar. */
+/* ---- Qué entra en la copia de seguridad ----
+   Hasta el 01-11-2026 esta lista tenía 21 tablas y se habían quedado fuera 16:
+   los presupuestos enteros con sus líneas, sus adjuntos y su seguimiento, el
+   almacén (proveedores, ubicaciones, movimientos, conjuntos y lo previsto), los
+   contactos de cada cliente, los partes de jornada de las obras largas, las
+   actas de entrega y las puertas de cada obra. La copia funcionaba, decía que
+   estaba completa, y restaurarla habría devuelto una empresa sin presupuestos y
+   sin inventario. Es la peor clase de fallo: el que no se nota hasta el día en
+   que hace falta.
+
+   EL ORDEN IMPORTA: una tabla que apunta a otra va DESPUÉS de ella, porque
+   restaurar.sql se ejecuta de arriba abajo y una clave ajena a una fila que
+   todavía no existe aborta el fichero.
+
+   «catalogo» ya no está, y a propósito: es una VISTA sobre articulos, no una
+   tabla. Copiarla no añadía ningún dato que no estuviera en articulos, y el SQL
+   de restauración generaba inserts contra una vista que no los acepta. */
 const TABLAS_COPIA = [
-  'perfiles', 'ajustes', 'tarifas', 'etiquetas', 'catalogo', 'articulos',
-  'clientes', 'centros', 'puertas', 'componentes', 'contratos', 'contrato_puertas',
-  'avisos', 'materiales', 'revisiones', 'fotos', 'documentos', 'valoraciones',
+  'perfiles', 'ajustes', 'tarifas', 'etiquetas',
+  'proveedores', 'articulos', 'ubicaciones',
+  'clientes', 'contactos', 'centros', 'puertas', 'componentes',
+  'contratos', 'contrato_puertas',
+  'conjuntos', 'conjunto_lineas',
+  'avisos', 'aviso_puertas', 'jornadas',
+  'materiales', 'materiales_previstos', 'movimientos_material',
+  'revisiones', 'entregas_obra', 'fotos', 'documentos', 'valoraciones',
   'expedientes', 'expediente_fotos', 'expediente_docs',
+  'textos_presu', 'presupuestos', 'presupuesto_lineas',
+  'presupuesto_adjuntos', 'presupuesto_envios', 'presupuesto_visitas',
 ];
 /* Carpetas de ficheros */
 const BUCKETS_COPIA = ['expedientes', 'fotos', 'documentos', 'firmas', 'equipo', 'ofertas'];
@@ -9218,14 +9275,14 @@ function minimoObra(p, nFotos){
 
   if (!p){
     mete('ficha', 'Dar de alta la puerta', 'Crea la ficha desde este mismo parte. Queda enganchada a la '+
-      'asistencia y el resto de los datos se cuelgan de ella.', false);
+      'asistencia y el resto de los datos se cuelgan de ella.', false, { basico: true });
     return { puntos, faltan: puntos, bloquean: puntos, completo: false, sinFicha: true };
   }
 
   const usadas = new Set(S.puertas.filter(x => x.id !== p.id).map(x => x.codigo));
   const libres = (S.etiquetas || []).filter(e => !usadas.has(e.codigo)).length;
 
-  mete('ficha', 'Ficha de la puerta creada', 'Ya está. El resto se cuelga de aquí.', true);
+  mete('ficha', 'Ficha de la puerta creada', 'Ya está. El resto se cuelga de aquí.', true, { basico: true });
   mete('etiqueta', 'Etiqueta con QR pegada y asignada',
     'Pega una etiqueta de la furgoneta en un sitio visible y protegido, y elígela en la ficha. '+
     'Es lo que identifica esta puerta para siempre y lo que escanea el cliente.',
@@ -9242,22 +9299,81 @@ function minimoObra(p, nFotos){
     'En milímetros y con el flexómetro, no a ojo. De la altura dependen además los puntos '+
     'de medida del ensayo de fuerzas.',
     (+p.ancho_mm > 0 && +p.alto_mm > 0));
+  /* Las fotos son el único punto con dos niveles, y es a propósito. Para CERRAR
+     el parte basta una: una puerta con una foto ya se puede reconocer, y es lo
+     que se acordó el 01-11-2026. Para que la ficha esté COMPLETA siguen siendo
+     dos, porque la segunda es la de la placa, que es la que ahorra el viaje
+     cuando hay que pedir un repuesto. */
   mete('fotos', MIN_FOTOS_OBRA+' fotos de la puerta',
     'Como mínimo dos: una del conjunto desde donde se vea entera, y otra de la placa de '+
     'características o del cuadro de maniobra abierto. Si hay daños o algo fuera de norma, '+
-    'una foto más de eso.',
-    nFotos == null ? null : (nFotos >= MIN_FOTOS_OBRA));
+    'una foto más de eso. Para cerrar el parte basta con una.',
+    nFotos == null ? null : (nFotos >= MIN_FOTOS_OBRA),
+    { basico: true, okBasico: nFotos == null ? null : (nFotos >= 1) });
   mete('matricula', 'Matrícula de lo que hay puesto',
     'Copia la placa: marca, modelo y número de serie. Vale la de la puerta, la del motor o la '+
     'del cuadro, y lo normal es tomar las tres. Si no hay placa o está ilegible, escríbelo en '+
     '«Si no tiene placa» y queda documentado.',
     matriculaTomada(p) || !!String(p.sin_matricula || '').trim());
 
+  /* ---- Qué impide cerrar y qué no. Cambiado el 01-11-2026 ----
+     Hasta ahora bloqueaban los seis puntos, y en pruebas de campo eso salía
+     carísimo: el técnico se quedaba sin poder cerrar por una medida o una
+     matrícula, y el trabajo acababa sin hacerse. Un bloqueo que la gente sortea
+     no protege el dato, solo entretiene.
+
+     Ahora bloquean solo los puntos BÁSICOS, los que no tienen arreglo desde la
+     oficina: que la puerta tenga ficha y que tenga al menos una foto. Una ficha
+     sin foto no se puede completar luego, porque la puerta no está delante. El
+     tipo, las medidas, la etiqueta y la matrícula sí se rematan después, así
+     que se señalan y van a la lista de fichas incompletas de la oficina. */
   const faltan = puntos.filter(x => !x.ok);
+  const cumpleBasico = x => (x.okBasico !== undefined ? x.okBasico : x.ok);
   return { puntos, faltan,
-           bloquean: faltan.filter(x => !x.imposible),
+           bloquean: faltan.filter(x => x.basico && !x.imposible &&
+                                        cumpleBasico(x) !== true && cumpleBasico(x) !== null),
+           /* Lo que no bloquea pero hay que rematar: es lo que ve la oficina */
+           porRematar: faltan.filter(x => !x.basico || cumpleBasico(x) === true),
            completo: !faltan.length, sinFicha: false };
 }
+
+/* ---- Las fichas que se quedaron a medias (01-11-2026) ----
+   El parte se cierra aunque la ficha no esté completa, y eso solo es honrado si
+   alguien tiene la lista de lo que falta. Esta es la lista, y sale en Gestión,
+   que es donde miran la oficina y el administrador.
+
+   Se calcula sola, sin ninguna columna nueva: en cuanto el dato se rellena, la
+   puerta desaparece de aquí. Un campo «pendiente» que hubiera que apagar a mano
+   acabaría mintiendo.
+
+   Las FOTOS no entran a propósito, ni tampoco la ficha que no existe: lo que se
+   lista aquí es solo lo que la oficina puede rematar sin volver a la obra. */
+function fichasIncompletas(){
+  const out = [];
+  (S.puertas || []).forEach(p => {
+    const av = (avisosDe(p.id) || [])
+      .filter(a => a.cerrado && !a.anulada && obligaAltaObra(a));
+    if (!av.length) return;
+    /* 99 fotos: así el punto de las fotos sale cumplido y no entra en la lista */
+    const faltan = minimoObra(p, 99).faltan
+      .filter(x => x.clave !== 'fotos' && x.clave !== 'ficha' && !x.imposible);
+    if (!faltan.length) return;
+    const ult = av.slice().sort((x, y) =>
+      String(y.cerrado || '').localeCompare(String(x.cerrado || '')))[0];
+    out.push({ p, faltan, aviso: ult });
+  });
+  /* Las más antiguas primero: son las que más riesgo tienen de no rematarse nunca */
+  return out.sort((a, b) =>
+    String(a.aviso.cerrado || '').localeCompare(String(b.aviso.cerrado || '')));
+}
+
+/* ---- Partes firmados de una puerta (01-11-2026) ----
+   Si el cliente ya firmó, la ficha no la toca el técnico: la rematan la oficina
+   o el administrador, avisando antes. El parte firmado no se modifica nunca; lo
+   que se completa es la ficha de la puerta, que es otra cosa. */
+const partesFirmadosDe = puertaId => (avisosDe(puertaId) || [])
+  .filter(a => a.cerrado && !a.anulada && a.firma_ruta)
+  .sort((x, y) => String(y.cerrado || '').localeCompare(String(x.cerrado || '')));
 
 /* Lo que no es mínimo pero conviene llevarse si está a mano. No bloquea nada:
    se enseña para que el técnico que tiene dos minutos lo complete. */
@@ -10026,11 +10142,19 @@ function perfilFuerza(e){
 }
 /* Datos de la empresa. Los que vienen de serie son los que David confirmó; el resto
    se dejan vacíos a propósito, porque un dato inventado en una declaración firmada es
-   peor que un hueco. El código postal y la web no constan: no se rellenan solos. */
+   peor que un hueco. La web y el registro no constan: no se rellenan solos.
+
+   La razón social se corrigió el 01-11-2026. Venía de serie como «Ariza p y
+   automatismos S.L.U.», que no es la denominación social de la empresa, y ese
+   nombre se imprime en la etiqueta de marcado CE y en las declaraciones. Si
+   nadie había guardado los datos en Equipo, salía ese nombre y nada avisaba,
+   porque la validación del expediente comprueba el NIF, el domicilio, el código
+   postal y la población, pero no la razón social. La buena es la que él confirmó
+   el 11-10-2026: «Ariza Puertas y Automatismos S.L.U.». */
 const datosEmpresa = () => Object.assign({
-  razon_social:'Ariza p y automatismos S.L.U.', nombre_comercial:'ARIZA Puertas Automáticas',
+  razon_social:'Ariza Puertas y Automatismos S.L.U.', nombre_comercial:'ARIZA Puertas Automáticas',
   nif:'B72004849', domicilio:'Calle Orilla 19', poblacion:'El Puerto de Santa María',
-  provincia:'Cádiz', cp:'', telefono:'661 352 795 · 610 411 032',
+  provincia:'Cádiz', cp:'11500', telefono:'661 352 795 · 610 411 032',
   email:'arizapuertasautomaticas@gmail.com', web:'', registro:'',
   representante:'David Ariza Arana', cargo_firmante:'Administrador único',
   responsable_tecnico:''
@@ -10258,10 +10382,14 @@ function validarExpediente(e){
     if (!em.responsable_tecnico)
       B('Legal', 'No puede emitirse la declaración definitiva hasta identificar a la persona '+
         'facultada para reunir el expediente técnico.');
-    if (!em.nif || !em.domicilio || !em.cp || !em.poblacion)
+    /* La razón social entró en esta lista el 01-11-2026. Estaba comprobándose el
+       NIF, el domicilio, el código postal y la población, y no el nombre con el
+       que la empresa se declara, que es justo el que va impreso en la etiqueta de
+       marcado CE. */
+    if (!em.nif || !em.domicilio || !em.cp || !em.poblacion || !em.razon_social)
       B('Legal', 'Faltan datos de la empresa que son obligatorios en una declaración: '+
-        [!em.nif&&'NIF', !em.domicilio&&'domicilio', !em.cp&&'código postal',
-         !em.poblacion&&'población'].filter(Boolean).join(', ')+'.');
+        [!em.razon_social&&'razón social', !em.nif&&'NIF', !em.domicilio&&'domicilio',
+         !em.cp&&'código postal', !em.poblacion&&'población'].filter(Boolean).join(', ')+'.');
   }
 
   /* --- Prestaciones y declaración de prestaciones --- */
@@ -10318,6 +10446,23 @@ function validarExpediente(e){
       return (+m.fd||0)||(+m.fs||0)||(+m.fe||0)||(+m.td||0); });
     if (!conMedida.length)
       B('Ensayo', 'El ensayo de fuerzas está marcado como procedente pero no tiene ninguna medición.');
+    /* Puntos empezados y sin terminar. Antes esto no se miraba: bastaba una
+       magnitud para que el punto contara como medido y el documento dictaminaba
+       «Pasa» dando por comprobadas las otras tres. Ahora el documento dice que
+       está incompleto, y aquí se avisa para que se pueda rematar antes de
+       emitirlo. Es aviso y no bloqueo: la medida buena solo se toma con la
+       puerta delante, y un bloqueo aquí no la trae de vuelta. */
+    const aMedias = puntos.filter((p, i) => {
+      const m = f['m'+i] || {};
+      const cr = c => String(m[c] == null ? '' : m[c]).trim();
+      const faltan = ['fd','fs','fe','td'].filter(c => cr(c) === '');
+      return faltan.length && faltan.length < 4;
+    }).length;
+    if (aMedias)
+      A('Ensayo', 'Hay '+aMedias+(aMedias === 1 ? ' punto de medida' : ' puntos de medida')+
+        ' con el ensayo a medias: falta alguna de las cuatro magnitudes (Fd, Fs, Fe, td). '+
+        'En esos puntos el documento no dictamina resultado, porque lo que no se midió no se '+
+        'declara comprobado.');
     if (!f.instrumento) B('Ensayo', 'El ensayo de fuerzas no identifica el instrumento de medida.');
     if (!f.calibracion) B('Ensayo', 'Falta la referencia de calibración del instrumento de medida.');
     if (!f.fecha) B('Ensayo', 'El ensayo de fuerzas no tiene fecha.');
@@ -12238,10 +12383,29 @@ function expSecFuerzas(e){
     '<th>Punto de medida</th><th>Fd (N)</th><th>Fs (N)</th><th>Fe (N)</th><th>td (s)</th><th>Resultado</th>'+
     '</tr></thead><tbody>';
   puntos.forEach((pt, i) => {
-    const fd = +expVal('fuerzas.m'+i+'.fd', '') || 0, fs = +expVal('fuerzas.m'+i+'.fs', '') || 0;
-    const fe = +expVal('fuerzas.m'+i+'.fe', '') || 0, td = +expVal('fuerzas.m'+i+'.td', '') || 0;
-    const hay = fd || fs || fe || td;
-    const pasa = hay && fd <= tope && fs <= lim.fs_estatica_n && fe <= lim.fe_residual_n && td <= lim.td_dinamico_s;
+    /* ---- Corregido el 01-11-2026 ----
+       Antes el veredicto se calculaba con los cuatro valores pasados por
+       `+x || 0`, y las magnitudes en blanco entraban como CERO. Cero siempre es
+       menor que el límite, así que anotar solo Fd (lo normal con un medidor de
+       pico) imprimía «Pasa» afirmando que se habían comprobado la fuerza tras
+       Td, la residual y el tiempo total. Era el único sitio de la aplicación
+       donde se afirmaba algo falso en un papel que se firma.
+
+       Ahora se mira el valor CRUDO: en blanco no es cero. Sin las cuatro
+       magnitudes no hay dictamen, solo un ensayo a medias. Lo que sí se
+       mantiene es el «No pasa» de un valor que se sale, porque eso hay que
+       verlo aunque falten los demás. */
+    const cr = c => String(expVal('fuerzas.m'+i+'.'+c, '')).trim();
+    const NOM = { fd:'Fd', fs:'Fs', fe:'Fe', td:'td' };
+    const faltan = ['fd','fs','fe','td'].filter(c => cr(c) === '');
+    const fd = +cr('fd') || 0, fs = +cr('fs') || 0, fe = +cr('fe') || 0, td = +cr('td') || 0;
+    const hay = faltan.length < 4;
+    const completo = !faltan.length;
+    const fuera = (cr('fd') !== '' && fd > tope)
+               || (cr('fs') !== '' && fs > lim.fs_estatica_n)
+               || (cr('fe') !== '' && fe > lim.fe_residual_n)
+               || (cr('td') !== '' && td > lim.td_dinamico_s);
+    const pasa = completo && !fuera;
     h += '<tr><td>'+esc(pt)+'</td>'+
       ['fd','fs','fe','td'].map(c =>
         '<td><input type="number" step="any" style="width:72px" data-exp="fuerzas.m'+i+'.'+c+'" value="'+
@@ -12252,9 +12416,12 @@ function expSecFuerzas(e){
          se mantiene, porque salirse de un límite de referencia hay que verlo
          aunque el perfil esté por validar. */
       '<td>'+(!hay ? '<span class="mini">Sin medir</span>'
-            : (!pasa ? '<span class="chip mal sin">No pasa</span>'
-              : (perfil.validado ? '<span class="chip ok sin">Pasa</span>'
-                : '<span class="chip gris sin">Pendiente de evaluación</span>')))+'</td></tr>';
+            : (fuera ? '<span class="chip mal sin">No pasa</span>'
+              : (!completo ? '<span class="chip aviso sin">A medias</span>'+
+                  '<span class="mini" style="display:block">Falta '+
+                  esc(faltan.map(c => NOM[c]).join(', '))+'</span>'
+                : (perfil.validado ? '<span class="chip ok sin">Pasa</span>'
+                  : '<span class="chip gris sin">Pendiente de evaluación</span>'))))+'</td></tr>';
   });
   h += '</tbody></table></div>';
   h += '<div class="campos" style="margin-top:12px">'+
@@ -14338,20 +14505,50 @@ async function libroExpediente(id){
           'registradas, pero la aplicación no dictamina si la puerta pasa el ensayo.</p>' : '')+
       '<table class="datos chk"><thead><tr><th>Punto de medida</th><th>Fd (N)</th><th>Fs (N)</th><th>Fe (N)</th><th>td (s)</th><th>Resultado</th></tr></thead><tbody>'+
       puntos.map((pt, i) => {
+        /* Corregido el 01-11-2026, igual que en la pantalla: una magnitud en
+           blanco NO es un cero. Sin las cuatro no hay dictamen, y el documento
+           lo dice con el nombre de las que faltan, en vez de firmar un «Pasa»
+           sobre tres comprobaciones que nadie hizo. */
         const m = f['m'+i] || {};
-        const fd = +m.fd||0, fs = +m.fs||0, fe = +m.fe||0, td = +m.td||0;
-        const hay = fd||fs||fe||td;
-        const pasa = hay && fd<=tope && fs<=lim.fs_estatica_n && fe<=lim.fe_residual_n && td<=lim.td_dinamico_s;
+        const NOM = { fd:'Fd', fs:'Fs', fe:'Fe', td:'td' };
+        const cr = c => String(m[c] == null ? '' : m[c]).trim();
+        const faltan = ['fd','fs','fe','td'].filter(c => cr(c) === '');
+        const fd = +cr('fd')||0, fs = +cr('fs')||0, fe = +cr('fe')||0, td = +cr('td')||0;
+        const hay = faltan.length < 4;
+        const completo = !faltan.length;
+        const fuera = (cr('fd') !== '' && fd > tope)
+                   || (cr('fs') !== '' && fs > lim.fs_estatica_n)
+                   || (cr('fe') !== '' && fe > lim.fe_residual_n)
+                   || (cr('td') !== '' && td > lim.td_dinamico_s);
         return '<tr><td>'+esc(pt)+'</td><td>'+(m.fd||'—')+'</td><td>'+(m.fs||'—')+'</td>'+
           '<td>'+(m.fe||'—')+'</td><td>'+(m.td||'—')+'</td><td>'+
           (!hay ? '<span class="na">Sin medir</span>'
             /* Sin perfil validado no se dictamina. Un «No pasa» sí se mantiene:
                si una medida supera el límite de referencia, eso hay que verlo
                aunque el perfil esté pendiente de contrastar. */
-            : (!pasa ? '<span class="no">No pasa</span>'
-              : (perfil.validado ? '<span class="ok">Pasa</span>'
-                : '<span class="na">Pendiente de evaluación</span>')))+'</td></tr>';
+            : (fuera ? '<span class="no">No pasa</span>'
+              : (!completo ? '<span class="na">Ensayo incompleto: falta '+
+                  esc(faltan.map(c => NOM[c]).join(', '))+'</span>'
+                : (perfil.validado ? '<span class="ok">Pasa</span>'
+                  : '<span class="na">Pendiente de evaluación</span>'))))+'</td></tr>';
       }).join('')+'</tbody></table>'+
+      (() => {
+        /* Un aviso al pie, para que no haya que ir fila por fila buscando cuál
+           quedó a medias: en un documento firmado eso tiene que estar dicho una
+           vez, claro y en un sitio. */
+        const aMedias = puntos.filter((pt, i) => {
+          const m = f['m'+i] || {};
+          const cr = c => String(m[c] == null ? '' : m[c]).trim();
+          const faltan = ['fd','fs','fe','td'].filter(c => cr(c) === '');
+          return faltan.length && faltan.length < 4;
+        }).length;
+        return aMedias
+          ? '<p class="aviso-borrador">ENSAYO INCOMPLETO EN '+aMedias+
+            (aMedias === 1 ? ' PUNTO DE MEDIDA' : ' PUNTOS DE MEDIDA')+'. En esos puntos no se '+
+            'anotaron las cuatro magnitudes, de modo que la aplicación no dictamina si la puerta '+
+            'pasa el ensayo: lo que no se midió no se declara comprobado.</p>'
+          : '';
+      })()+
       '<p class="min">Límites aplicados: fuerza de aplastamiento '+lim.fd_aplastamiento_n+' N; fuerza de impacto '+
       lim.fd_impacto_n+' N; fuerza estática '+lim.fs_estatica_n+' N durante un máximo de '+lim.fs_tiempo_s+' s; '+
       'fuerza residual '+lim.fe_residual_n+' N; tiempo por encima de la fuerza estática '+lim.td_dinamico_s+' s.</p>'+
@@ -16967,7 +17164,42 @@ function dlgPuerta(id, avisoId){
   const usadas = new Set(S.puertas.filter(x => !p || x.id !== p.id).map(x => x.codigo));
   const libres = S.etiquetas.filter(e => !usadas.has(e.codigo)).map(e => e.codigo);
   const d = p || { estado:'operativa', seguridad:[] };
+
+  /* ---- Ficha de un parte ya firmado (01-11-2026) ----
+     Desde que el parte se cierra sin exigir la ficha completa, hay fichas que se
+     rematan después. Pero si el cliente ya firmó, el que la remata no es
+     cualquiera: lo hacen la oficina o el administrador, porque el técnico que
+     estuvo allí ya no puede comprobar nada y el papel está firmado.
+
+     Lo que se completa es la FICHA DE LA PUERTA. El parte firmado no se toca
+     nunca, ni aquí ni en ningún sitio. */
+  const firmados = p ? partesFirmadosDe(p.id) : [];
+  if (p && firmados.length && !esGestion()){
+    return abrirDlg('<h3>Puerta '+esc(p.codigo || '')+'</h3>'+
+      '<div class="sin-ficha" style="margin-bottom:12px">Esta puerta tiene un parte '+
+      '<b>firmado por el cliente</b> el '+esc(fechaCorta(firmados[0].cerrado))+
+      ', así que su ficha ya no se edita desde aquí.</div>'+
+      '<p style="margin:0 0 12px">Si falta algún dato o hay algo mal, dilo a la oficina con el '+
+      'código de la puerta y lo completan ellos. Queda anotado quién lo cambió y cuándo.</p>'+
+      '<p class="mini" style="margin:0">Lo que sí puedes hacer siempre: subir fotos, dar de alta '+
+      'componentes con su número de serie y abrir una asistencia nueva.</p>'+
+      '<div class="pie"><span class="sp"></span>'+
+      '<button type="button" class="btn plana" data-cerrar>Entendido</button></div>', null);
+  }
+
   let h = '<h3>'+(p ? 'Editar puerta '+esc(p.codigo||'') : 'Nueva puerta')+'</h3>';
+  if (p && firmados.length)
+    h += '<div class="sin-ficha" style="margin-bottom:12px;background:var(--aviso-bg);color:var(--aviso)">'+
+      '<b>Ojo: hay un parte firmado por el cliente</b> el '+esc(fechaCorta(firmados[0].cerrado))+
+      '. Puedes completar la ficha, pero el parte que firmó no cambia, y queda anotado que la '+
+      'tocaste tú y cuándo. Lo que no se comprobó en obra no se rellena desde aquí: se queda sin '+
+      'comprobar, que es la verdad.'+
+      (p.ficha_tocada_por
+        ? '<div class="mini" style="margin-top:6px">La última vez la completó <b>'+
+          esc(p.ficha_tocada_por)+'</b>'+
+          (p.ficha_tocada_el ? ' el '+esc(fechaHora(p.ficha_tocada_el)) : '')+'.</div>'
+        : '')+
+      '</div>';
   /* ---- De quién es la puerta ----
      Antes había dos campos: un texto «Cliente (nombre)» y un desplegable «Ficha de
      cliente». Se rellenaba el texto, no se tocaba el desplegable, y la puerta
@@ -17176,6 +17408,22 @@ function dlgPuerta(id, avisoId){
         const { data, error } = await sb.from('puertas').insert(o).select().maybeSingle();
         if (error) throw error;
         if (data){ puertaId = data.id; S.ficha = data.id; }
+      }
+      /* Si el parte estaba firmado, queda anotado quién completó la ficha y cuándo.
+         Va en un update aparte a propósito: una base sin ficha2.sql ejecutado no
+         puede impedir que se guarde la ficha.
+
+         Y va DESPUÉS del if/else de arriba, no en medio. El 01-11-2026 se metió
+         entre el «if (p)» y su «else», y el else se quedó colgando de este otro
+         if: editar una puerta existente sin firma se iba por la rama del insert y
+         creaba una puerta nueva en cada guardado. La sintaxis era válida, así que
+         no lo vio el comprobador; lo cazó la suite de la ficha. */
+      if (p && firmados.length){
+        try {
+          await sb.from('puertas').update({
+            ficha_tocada_por: (S.perfil || {}).nombre || yo(),
+            ficha_tocada_el: new Date().toISOString() }).eq('id', p.id);
+        } catch(_){ /* sin esas columnas se guarda igual, solo sin el rastro */ }
       }
       /* El cuadro y el motor son el mismo dato que su componente: lo que se acaba
          de escribir en la ficha se vuelca ahí, y así no hay que teclearlo dos
@@ -20199,10 +20447,11 @@ function bloqueAltaObra(a, puertas, fotos){
   let h = '<div class="grupo" id="obra-bloque"><h3>Documentar '+
     (varias ? 'las puertas' : 'la puerta')+' en obra</h3>'+
     '<p class="mini" style="margin:0">Esta visita es de <b>'+esc(tipoAsis(a.tipo))+'</b>, así que '+
-    (varias ? 'cada una de las '+xs.length+' puertas de la obra tiene que quedar documentada'
-            : 'la puerta tiene que quedar documentada')+
-    ' antes de cerrar. Lo que se toma aquí no se puede tomar después: las medidas, las fotos y la '+
-    'placa están en la puerta, no en la oficina.</p>';
+    (varias ? 'conviene dejar documentadas las '+xs.length+' puertas de la obra'
+            : 'conviene dejar la puerta documentada')+
+    ' aquí mismo: las medidas, las fotos y la placa están en la puerta, no en la oficina. '+
+    'Para <b>cerrar</b> basta con la ficha y una foto; lo que falte se remata en oficina y queda '+
+    'señalado, pero cada dato que se quede sin tomar es un viaje de vuelta.</p>';
 
   /* Sin ninguna puerta todavía. En una instalación esto es lo NORMAL hasta que
      la puerta está montada: no se documenta lo que aún no existe. */
@@ -20239,20 +20488,28 @@ function bloqueAltaObra(a, puertas, fotos){
 
   /* El resumen de todas, que es lo que de verdad decide si se puede cerrar */
   const ms = xs.map(p => minimoObra(p, nFotosDe(p)));
+  /* ---- El resumen, reescrito el 01-11-2026 ----
+     Antes decía «la visita no se cierra sin eso» de los seis puntos. Ya no es
+     verdad y no debía serlo: lo único que impide cerrar es que falte una foto.
+     El resto se remata en oficina, y lo que el técnico necesita saber es
+     exactamente eso, para no quedarse parado en la obra. */
   const conFalta = ms.filter(m => m.bloquean.length).length;
   const pendientes = ms.reduce((n, m) => n + m.faltan.length, 0);
   if (!pendientes)
     h += '<p class="mini" style="margin:10px 0 0;color:var(--ok);font-weight:600">'+
       'El mínimo de obra está completo'+(varias ? ' en las '+xs.length+' puertas' : '')+'.</p>';
-  else if (!conFalta)
-    h += '<div class="sin-ficha" style="margin-top:10px;background:var(--aviso-bg);color:var(--aviso)">'+
-      'Lo que falta no se puede resolver en obra. Se puede cerrar la visita, pero queda como pendiente.</div>';
-  else if (varias)
-    h += '<div class="sin-ficha" style="margin-top:10px">Faltan datos del mínimo de obra en '+conFalta+
-      ' de las '+xs.length+' puertas. La obra no se cierra hasta que estén las '+xs.length+'.</div>';
+  else if (conFalta)
+    h += '<div class="sin-ficha" style="margin-top:10px">'+
+      (varias
+        ? 'Falta la foto en '+conFalta+' de las '+xs.length+' puertas. Sin una foto por puerta no '+
+          'se cierra: es lo único de esta lista que no se puede hacer desde la oficina.'
+        : 'Falta la foto de la puerta. Sin al menos una no se cierra, porque es lo único de esta '+
+          'lista que no se puede hacer desde la oficina.')+'</div>';
   else
-    h += '<div class="sin-ficha" style="margin-top:10px">Falta '+ms[0].bloquean.length+
-      (ms[0].bloquean.length === 1 ? ' punto' : ' puntos')+' del mínimo de obra. La visita no se cierra sin eso.</div>';
+    h += '<div class="sin-ficha" style="margin-top:10px;background:var(--aviso-bg);color:var(--aviso)">'+
+      'Puedes cerrar. Lo que falta ('+pendientes+(pendientes === 1 ? ' dato' : ' datos')+
+      ') lo remata la oficina: la visita queda señalada como <b>ficha incompleta</b> y le sale en '+
+      'su lista. Si lo tienes a mano ahora, mejor hacerlo aquí: en la oficina no está la puerta.</div>';
 
   return h + '</div>';
 }
@@ -20615,32 +20872,39 @@ async function guardarCierre(a, cerrando){
           'Dale a «Dar de alta la puerta» aquí arriba: no se puede cerrar sin ficha.');
       const ms = [];
       for (const pu of xs) ms.push({ p: pu, m: minimoObra(pu, await contarFotos(pu.id)) });
+      /* Lo único que impide cerrar es que una puerta no tenga ni una foto. Todo
+         lo demás se remata en oficina (acordado el 01-11-2026). La foto no, y
+         por un motivo práctico: es el único dato de esta lista que no se puede
+         conseguir sin estar delante de la puerta. */
       const bloquean = ms.filter(x => x.m.bloquean.length);
       if (bloquean.length){
         const bl = document.getElementById('obra-bloque');
         if (bl) bl.scrollIntoView({ block:'start' });
         return setErr(xs.length === 1
-          ? 'Falta documentar la puerta en obra: '+
-            bloquean[0].m.bloquean.map(x => x.texto.toLowerCase()).join('; ')+
-            '. Está arriba, en «Documentar la puerta en obra».'
-          : 'Falta documentar en obra '+bloquean.length+' de las '+xs.length+' puertas: '+
-            bloquean.map(x => (x.p.codigo || 'sin etiqueta')+' ('+
-              x.m.bloquean.map(y => y.texto.toLowerCase()).join('; ')+')').join(' · ')+
-            '. Está arriba, en «Documentar las puertas en obra».');
+          ? 'Antes de cerrar hace falta al menos una foto de la puerta. Es lo único que no se '+
+            'puede hacer desde la oficina, porque la puerta no está allí. Tienes el botón de '+
+            'hacer fotos arriba, en «Documentar la puerta en obra»; lo demás que falte lo '+
+            'remata la oficina.'
+          : 'Antes de cerrar hace falta al menos una foto de cada puerta, y falta'+
+            (bloquean.length === 1 ? ' la de ' : 'n las de ')+
+            bloquean.map(x => x.p.codigo || 'la puerta sin etiqueta').join(', ')+
+            '. Es lo único que no se puede hacer desde la oficina. Lo demás que falte lo '+
+            'remata ella.');
       }
       /* Lo que no se puede resolver allí (que no queden etiquetas libres) no bloquea,
          pero tampoco se queda sin rastro: la visita se cierra señalada como pendiente
          y la oficina lo ve en su lista. */
       const conFalta = ms.filter(x => x.m.faltan.length);
       if (conFalta.length){
-        const texto = conFalta.map(x => (xs.length > 1 ? (x.p.codigo || 'sin etiqueta')+': ' : '')+
+        const texto = 'Ficha incompleta · '+conFalta.map(x =>
+          (xs.length > 1 ? (x.p.codigo || 'sin etiqueta')+': ' : '')+
           x.m.faltan.map(y => y.texto).join('; ')).join(' · ');
         o.pendiente = true;
         o.pendiente_texto = o.pendiente_texto
-          ? (/obra|etiqueta|matr[íi]cula|foto|medida/i.test(o.pendiente_texto)
+          ? (/ficha incompleta|obra|etiqueta|matr[íi]cula|foto|medida/i.test(o.pendiente_texto)
               ? o.pendiente_texto : texto+'. '+o.pendiente_texto)
-          : texto+' (no se pudo hacer en obra)';
-        toast('Se cierra dejándolo pendiente: '+texto+'.');
+          : texto;
+        toast('Se cierra con la ficha a medias: lo remata la oficina.');
       }
     }
     /* El acta de entrega es POR PUERTA. No bloquea el cierre, porque puede que el
@@ -20651,7 +20915,8 @@ async function guardarCierre(a, cerrando){
         .filter(pu => !entregasObraDePuerta(a.id, pu.id).some(e => e.firma_el));
       if (sinActa.length){
         const texto = 'Acta de entrega sin firmar: '+
-          sinActa.map(pu => pu.codigo || 'sin etiqueta').join(', ');
+          sinActa.map(pu => pu.codigo
+            || ('la puerta de '+(pu.ubicacion || pu.direccion || 'esta obra'))).join(', ');
         o.pendiente = true;
         o.pendiente_texto = o.pendiente_texto
           ? (/acta/i.test(o.pendiente_texto) ? o.pendiente_texto : texto+'. '+o.pendiente_texto)
@@ -21147,6 +21412,10 @@ raiz.addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b || b.tagName === 'INPUT') return;
   const a = b.dataset.act;
   if (a === 'abrir'){ S.ficha = b.dataset.id; S.fichaCliente = null; S.tab = 'puertas'; pintar(); window.scrollTo({top:0}); }
+  /* Rematar desde Gestión la ficha que quedó a medias: abre el formulario de la
+     puerta directamente, sin pasar por su ficha. Si el parte estaba firmado, el
+     propio diálogo lo avisa. */
+  if (a === 'ficha-rematar'){ dlgPuerta(b.dataset.id); return; }
   else if (a === 'volver'){ S.ficha = null; pintar(); }
   else if (a === 'abrir-cliente'){ S.fichaCliente = b.dataset.id; S.ficha = null; pintar(); window.scrollTo({top:0}); }
   else if (a === 'volver-cliente'){ S.fichaCliente = null; pintar(); }
