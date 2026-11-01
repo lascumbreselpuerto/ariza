@@ -660,7 +660,8 @@ const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etique
             expedientes:[], expFotos:[], expDocs:[], exp:null, expPaso:'obra', expSucio:false,
             fotosEquipo:{}, histBusca:'', histTec:'', histTipo:'', histDesde:'', histHasta:'', histArchivadas:false,
             cliArchivados:false, centros:[], sinCentros:false, versionNueva:null, versionAvisada:null,
-            manual:null, manuales:null, sinObra:false, sinModo:false, sinFicha3:false, fotosCuenta:{},
+            manual:null, manuales:null, sinObra:false, sinModo:false, sinFicha3:false,
+            sinPresuAviso:false, matSinPrecio:null, fotosCuenta:{},
             sinAlmacen:false, ubicaciones:[], existencias:[], movimientos:[], previstos:[],
             buscaMat:'', matFamilia:'', matProveedor:'', matFiltro:'', fichaMat:null,
             sinPresupuestos:false, presupuestos:[], presuLineas:[], articulos:[], textosPresu:[], sinTextos:false,
@@ -1282,6 +1283,11 @@ async function cargar(){
      antes, y no enseña los dos desplegables en la ficha. */
   const mo = await sb.from('puertas').select('modo').limit(1);
   S.sinModo = !!mo.error;
+  /* El enlace del trabajo con su presupuesto: servidor/presupuestos3.sql. Sin
+     esa columna el enlace se sigue deduciendo al revés, por
+     presupuestos.convertido_aviso, que es como funcionaba antes. */
+  const pa = await sb.from('avisos').select('presupuesto_id').limit(1);
+  S.sinPresuAviso = !!pa.error;
   /* El arrastre del motor, las vueltas de muelle y «más elementos a
      identificar»: servidor/ficha3.sql. Sin esas columnas la ficha no los
      enseña y no los guarda, y el alta de puertas sigue funcionando igual. */
@@ -1303,6 +1309,20 @@ async function cargar(){
   const pv = S.sinAlmacen ? { data: [] }
     : await sb.from('materiales_previstos').select('*').order('creado');
   S.previstos = pv.error ? [] : (pv.data || []);
+  /* ---- El material que no está enlazado con el almacén (01-11-2026) ----
+     La línea de material del parte tiene artículo, descripción, cantidad y
+     unidad, y ningún campo de precio: el precio sale del almacén. Lo que el
+     técnico escribe a mano, porque no todo lo que se gasta está dado de alta,
+     se queda sin enlazar y por tanto SIN PRECIO. El importe de la visita sale
+     corto y el margen sale más alto que el real, que es la peor combinación
+     posible: te crees que has ganado dinero que has regalado.
+     Esto se pide solo para quien ve precios, y solo lo que falta por enlazar. */
+  if (esGestion() && !S.sinAlmacen){
+    const ms = await sb.from('materiales')
+      .select('id, aviso_id, descripcion, cantidad, unidad, articulo_id')
+      .is('articulo_id', null).range(0, 9999);
+    S.matSinPrecio = ms.error ? [] : (ms.data || []);
+  } else S.matSinPrecio = [];
   /* ---- Presupuestos ----
      Llevan precios y costes, así que la base de datos solo se los deja ver al
      administrador y a la oficina: para un técnico vienen vacíos y la pestaña ni
@@ -1432,7 +1452,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.01-2';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.01-3';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -3190,7 +3210,16 @@ function vistaGestion(){
             (dias_ > 30 ? ' · <b style="color:var(--mal)">hace '+dias_+' días</b>' : ' · hace '+dias_+' días')+'</span>'+
           '<span class="sub">'+esc(dondeAsistencia(a))+'</span></span>'+
           '<span style="text-align:right"><span class="tit">'+eur(v.imp_total)+'</span>'+
-          '<span class="sub">margen '+eur(v.margen)+'</span></span>'+
+          /* Si el trabajo venía de un presupuesto y el cálculo no llega a lo
+             pactado, se ve aquí mismo: es la diferencia que se estaba dejando
+             de facturar sin que nada la señalara. */
+          (() => {
+            const pac = pactadoDe(a);
+            if (pac == null) return '<span class="sub">margen '+eur(v.margen)+'</span>';
+            const dif = Math.round((pac - (+v.imp_total || 0)) * 100) / 100;
+            if (Math.abs(dif) < 1) return '<span class="sub">margen '+eur(v.margen)+'</span>';
+            return '<span class="sub" style="color:var(--mal);font-weight:600">pactado '+eur(pac)+'</span>';
+          })()+'</span>'+
         '</button>'+
         '<div class="fila" style="padding:0 12px 12px">'+
           '<button class="btn sm pri" data-act="marcar-facturado" data-id="'+a.id+'">Marcar facturada</button>'+
@@ -3253,6 +3282,81 @@ function vistaGestion(){
            '<td class="num" style="text-align:right;color:'+(dif < 0 ? 'var(--mal)' : 'var(--ok)')+'">'+eur(dif)+'</td></tr>';
     });
     h += '</tbody></table></div></div>';
+  }
+
+  /* ---- Material sin precio (01-11-2026) ----
+     La lista de lo que hay que enlazar con el almacén antes de facturar. No es
+     un capricho de orden: cada línea de estas entra en la valoración a cero
+     euros, así que la factura sale corta Y el margen sale más alto del real. */
+  {
+    const conMat = visitasConMatSinPrecio();
+    if (conMat.length){
+      const nLineas = conMat.reduce((n, x) => n + x.mats.length, 0);
+      h += '<div class="panel"><div class="panel-h"><h3>Material sin precio</h3>'+
+        '<span class="mini">'+conMat.length+'</span></div>'+
+        '<p class="mini" style="margin:0 0 10px">'+nLineas+' línea'+(nLineas===1?'':'s')+
+        ' de material escrito a mano, sin enlazar con el almacén. El precio de un material sale '+
+        'de su ficha, así que lo que no está enlazado <b>vale cero</b>: el importe de la visita '+
+        'sale corto y el margen sale más alto que el real, que es la peor combinación. Enlázalos '+
+        'y vuelve a calcular.</p>'+
+        '<div class="lista-simple">';
+      conMat.slice(0, 30).forEach(x => {
+        h += '<div class="item-plano">'+
+          '<button class="item sp" data-act="mat-sin-precio" data-id="'+x.a.id+'">'+
+            '<span><span class="tit">'+esc(nombreCliente(x.a))+'</span>'+
+            '<span class="sub">'+esc(x.mats.slice(0, 3).map(m => m.descripcion).join(' · '))+
+            (x.mats.length > 3 ? ' y '+(x.mats.length-3)+' más' : '')+
+            ' · cerrada '+esc(fechaCorta(x.a.cerrado))+'</span></span>'+
+            '<span style="text-align:right"><span class="tit">'+x.mats.length+'</span>'+
+            '<span class="sub">sin precio</span></span>'+
+          '</button>'+
+          '<button class="btn sm" data-act="mat-sin-precio" data-id="'+x.a.id+'">Enlazar</button>'+
+          '</div>';
+      });
+      h += '</div>'+
+        (conMat.length > 30 ? '<p class="mini" style="margin:8px 0 0">Y '+(conMat.length-30)+' más.</p>' : '')+
+        '</div>';
+    }
+  }
+
+  /* ---- Lo pactado contra lo calculado (01-11-2026) ----
+     El trabajo que salió de un presupuesto y se va a facturar por menos de lo
+     que el cliente aceptó. Esto no lo señalaba nada: el precio pactado se
+     quedaba en el presupuesto y el circuito de cobro iba por su cuenta con las
+     horas. Aquí sale, con lo que falta sumado, antes de facturar. */
+  {
+    const cortos = cerradas
+      .map(a => { const v = con(a), pac = pactadoDe(a);
+        return { a, v, pac, dif: (pac == null || !v) ? 0
+          : Math.round((pac - (+v.imp_total || 0)) * 100) / 100 }; })
+      .filter(x => x.v && !x.v.facturado && !x.a.sin_cargo && x.pac != null && x.dif >= 1)
+      .sort((x, y) => y.dif - x.dif);
+    if (cortos.length){
+      const falta = cortos.reduce((t, x) => t + x.dif, 0);
+      h += '<div class="panel"><div class="panel-h"><h3>Por debajo de lo pactado</h3>'+
+        '<span class="mini">'+cortos.length+'</span></div>'+
+        '<p class="mini" style="margin:0 0 10px">Trabajos que salieron de un presupuesto aceptado '+
+        'y cuyo cálculo no llega al precio que firmó el cliente. Suman <b>'+eur(falta)+
+        '</b> sin IVA. El cálculo sale de las horas apuntadas y del material del almacén; el precio '+
+        'pactado es otra cosa, y es el que el cliente aceptó.</p>'+
+        '<div class="lista-simple">';
+      cortos.slice(0, 30).forEach(x => {
+        const pre = presuDelAviso(x.a);
+        h += '<div class="item-plano">'+
+          '<button class="item sp" data-act="ver-valoracion" data-id="'+x.a.id+'">'+
+            '<span><span class="tit">'+esc(nombreCliente(x.a))+'</span>'+
+            '<span class="sub">'+esc([(pre||{}).referencia, tipoAsis(x.a.tipo)].filter(Boolean).join(' · '))+
+            ' · cerrada '+esc(fechaCorta(x.a.cerrado))+'</span></span>'+
+            '<span style="text-align:right"><span class="tit">'+eur(x.pac)+'</span>'+
+            '<span class="sub">calculado '+eur(x.v.imp_total)+'</span></span>'+
+          '</button>'+
+          '<button class="btn sm plana" data-act="ver-valoracion" data-id="'+x.a.id+'">Revisar</button>'+
+          '</div>';
+      });
+      h += '</div>'+
+        (cortos.length > 30 ? '<p class="mini" style="margin:8px 0 0">Y '+(cortos.length-30)+' más.</p>' : '')+
+        '</div>';
+    }
   }
 
   /* ---- Fichas de puerta a medias ----
@@ -3744,6 +3848,51 @@ const enviosDe = id => (S.presuEnvios || []).filter(e => e.presupuesto_id === id
 const visitasDe = id => (S.presuVisitas || []).filter(v => v.presupuesto_id === id)
   .sort((a, b) => String(b.cuando).localeCompare(String(a.cuando)));
 const presuDe = id => (S.presupuestos || []).find(p => p.id === id) || null;
+/* ---- El material sin precio (01-11-2026) ----
+   Lo que el técnico escribe a mano no está enlazado con el almacén, así que no
+   tiene precio y entra en la valoración a cero: la factura sale corta y el
+   margen sale más alto que el real. Estas dos funciones son para que eso deje
+   de pasar en silencio. */
+const matSinPrecioDe = avisoId => (S.matSinPrecio || []).filter(m => m.aviso_id === avisoId);
+/* Las visitas cerradas y sin facturar que llevan material sin enlazar: lo que
+   hay que rematar antes de facturar, y lo que ve la oficina en su lista. */
+function visitasConMatSinPrecio(){
+  const porAviso = {};
+  (S.matSinPrecio || []).forEach(m => {
+    if (!m.aviso_id) return;
+    (porAviso[m.aviso_id] = porAviso[m.aviso_id] || []).push(m);
+  });
+  return Object.keys(porAviso).map(id => {
+    const a = S.avisos.find(x => x.id === id);
+    return a ? { a, mats: porAviso[id], v: valoracionDe(id) } : null;
+  }).filter(x => x && x.a.cerrado && !x.a.anulada && !x.a.sin_cargo &&
+                 !(x.v && x.v.facturado))
+    .sort((x, y) => String(x.a.cerrado || '').localeCompare(String(y.a.cerrado || '')));
+}
+
+/* ---- El presupuesto del que nació un trabajo (01-11-2026) ----
+   Hasta hoy el precio pactado se quedaba en el presupuesto y no llegaba al
+   circuito de cobro: una oferta firmada de 3.200 € con seis horas de trabajo
+   salía en Gestión por 400 y pico euros, y había que acordarse de ir a
+   buscarla. Ahora el trabajo sabe de dónde viene.
+
+   Se busca por el enlace nuevo (avisos.presupuesto_id) y, si la base todavía
+   no tiene esa columna, por el de siempre en sentido contrario. Así funciona
+   con el SQL ejecutado y sin él. */
+const presuDelAviso = a => {
+  if (!a) return null;
+  const xs = S.presupuestos || [];
+  if (a.presupuesto_id) return xs.find(p => p.id === a.presupuesto_id) || null;
+  return xs.find(p => p.convertido_aviso === a.id) || null;
+};
+/* Lo pactado, SIN IVA, que es como está el importe de la valoración. Comparar
+   un total con IVA contra uno sin IVA es inventarse un 21 % de diferencia. */
+const pactadoDe = a => {
+  const p = presuDelAviso(a);
+  if (!p) return null;
+  const base = +p.base;
+  return isNaN(base) ? null : base;
+};
 const lineasDe = id => (S.presuLineas || []).filter(l => l.presupuesto_id === id)
   .sort((a, b) => (a.orden || 0) - (b.orden || 0));
 /* Caducado no se guarda: se mira la fecha. Guardarlo obligaría a alguien a pasar
@@ -5239,6 +5388,12 @@ async function convertirPresupuesto(id){
       notas_oficina: (p.descripcion || '') +
         (p.condiciones ? '\n\nCondiciones ofertadas: '+p.condiciones : ''),
       creado_por: yo(),
+      /* El enlace con el presupuesto, que es lo que se perdía aquí. El importe
+         NO se copia: se lee del presupuesto, donde quedó congelado al emitirlo.
+         Un importe copiado en dos sitios acaba diciendo dos cosas distintas.
+         Si la base no tiene la columna todavía, no se manda y el enlace se
+         sigue deduciendo al revés, como antes. */
+      ...(S.sinPresuAviso ? {} : { presupuesto_id: id }),
     }).select().maybeSingle();
     if (error) throw error;
     if (!av) throw new Error('No se ha podido abrir el trabajo.');
@@ -19430,6 +19585,89 @@ function dlgFacturar(avisoId){
 }
 
 /* Detalle de lo que se factura en una visita */
+/* ---- Enlazar con el almacén el material escrito a mano (01-11-2026) ----
+   El técnico escribe a mano lo que no está dado de alta, y eso es correcto: en
+   obra no se para a crear fichas de artículo. Lo que no puede pasar es que eso
+   se quede a cero euros para siempre. Aquí la oficina le pone a cada línea su
+   artículo del almacén, de donde sale el precio, y vuelve a calcular.
+
+   Se propone solo el artículo cuya descripción coincide, pero no se elige por
+   nadie: una coincidencia de texto no es una decisión de precio. */
+function dlgMatSinPrecio(avisoId){
+  const a = S.avisos.find(x => x.id === avisoId);
+  if (!a) return;
+  const mats = matSinPrecioDe(avisoId);
+  const cat = (S.catalogo || []).filter(x => x.activo !== false)
+    .sort((x, y) => (x.descripcion || '').localeCompare(y.descripcion || '', 'es'));
+
+  if (!mats.length)
+    return abrirDlg('<h3>Material sin precio</h3>'+
+      '<p style="margin:0 0 12px">Ya está todo enlazado con el almacén en esta visita.</p>'+
+      '<div class="pie"><span class="sp"></span>'+
+      '<button type="button" class="btn plana" data-cerrar>Cerrar</button></div>', null);
+
+  const sugiere = desc => {
+    const n = normTxt(desc);
+    if (!n) return '';
+    const x = cat.find(c => normTxt(c.descripcion) === n)
+           || cat.find(c => n && normTxt(c.descripcion).indexOf(n) >= 0);
+    return x ? x.id : '';
+  };
+
+  let h = '<h3>Material sin precio</h3>'+
+    '<p class="mini" style="margin:0 0 12px">'+esc(nombreCliente(a))+' · '+
+    esc(tipoAsis(a.tipo))+' · cerrada '+esc(fechaCorta(a.cerrado))+'</p>'+
+    '<p style="margin:0 0 12px">Estas líneas las escribió el técnico a mano, así que no están '+
+    'enlazadas con el almacén y <b>entran en la valoración a cero euros</b>. Dile a cada una qué '+
+    'artículo es y el precio saldrá de su ficha.</p>';
+
+  if (!cat.length)
+    h += '<div class="sin-ficha" style="margin-bottom:12px">El catálogo de materiales está vacío, '+
+      'así que no hay con qué enlazar. Da de alta primero los materiales que más usáis, con su '+
+      'precio de compra.</div>';
+
+  h += '<div class="campos">'+ mats.map((m, i) =>
+    '<div class="campo full"><label for="mp-'+i+'">'+esc(m.descripcion || 'Sin descripción')+
+      ' <span class="mini">· '+esc(m.cantidad)+' '+esc(m.unidad || 'ud')+'</span></label>'+
+    '<select id="mp-'+i+'" data-mat="'+m.id+'">'+
+      '<option value="">Dejarlo sin enlazar</option>'+
+      cat.map(c => { const pv = precioVentaMaterial(c.id);
+        return '<option value="'+c.id+'"'+(sugiere(m.descripcion) === c.id ? ' selected' : '')+'>'+
+          esc(c.descripcion + (c.codigo ? ' · '+c.codigo : '') +
+            (pv != null ? ' · '+eur(pv) : ' · sin precio'))+'</option>'; }).join('')+
+      '</select>'+
+      (sugiere(m.descripcion) ? '<span class="pista">Propuesto por el nombre. Compruébalo</span>' : '')+
+    '</div>').join('')+'</div>';
+
+  h += '<p class="mini" style="margin:12px 0 0">Lo que dejes sin enlazar seguirá valiendo cero. '+
+    'Si el material no está en el almacén, dale de alta primero con su precio de compra y vuelve '+
+    'aquí.</p>'+
+    '<p class="err"></p><div class="pie" style="flex-wrap:wrap;gap:6px">'+
+    '<button type="button" class="btn sm plana" data-act="articulo-nuevo">Dar de alta un material</button>'+
+    '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Enlazar y volver a calcular</button></div>';
+
+  abrirDlg(h, async () => {
+    const sels = Array.from(dlgForm.querySelectorAll('select[data-mat]'));
+    const cambios = sels.filter(s => s.value);
+    if (!cambios.length) return setErr('No has enlazado ninguna línea.');
+    try {
+      for (const s of cambios){
+        const { error } = await sb.from('materiales')
+          .update({ articulo_id: s.value }).eq('id', s.dataset.mat);
+        if (error) throw error;
+      }
+      /* Y se vuelve a calcular en el momento: enlazar sin recalcular dejaría el
+         importe viejo en pantalla y la sensación de que no ha servido de nada. */
+      await sb.rpc('valorar_aviso', { p_aviso: avisoId });
+      cerrarDlg(); await cargar(); pintar();
+      const quedan = matSinPrecioDe(avisoId).length;
+      toast(cambios.length+' enlazada'+(cambios.length===1?'':'s')+' y visita recalculada'+
+        (quedan ? '. Quedan '+quedan+' sin enlazar.' : '.'));
+    } catch(e){ setErr(e.message || 'No se ha podido enlazar.'); }
+  });
+}
+
 function dlgValoracion(avisoId){
   const a = S.avisos.find(x => x.id === avisoId);
   const v = valoracionDe(avisoId);
@@ -19439,10 +19677,47 @@ function dlgValoracion(avisoId){
   let h = '<h3>'+esc(nombreCliente(a))+'</h3>'+
     '<p class="mini" style="margin:0 0 12px">'+esc(tipoAsis(a.tipo))+' · '+esc(fechaCorta(a.cerrado))+
     (p ? ' · '+esc(p.codigo||'') : '')+'</p>';
-  h += '<div class="grupo"><h3>Lo que se factura</h3><dl class="datos">'+
+  /* ---- Lo pactado, delante de todo (01-11-2026) ----
+     Si este trabajo viene de un presupuesto aceptado, el precio que el cliente
+     firmó va ARRIBA, antes del cálculo. No se toca ninguna fórmula: la
+     valoración sigue calculando lo que calculaba, pero quien va a facturar ve
+     los dos números en la misma pantalla y decide con los dos delante. Antes
+     uno de ellos no estaba. */
+  {
+    const pre = presuDelAviso(a);
+    const pac = pactadoDe(a);
+    if (pre && pac != null){
+      const dif = Math.round((pac - (+v.imp_total || 0)) * 100) / 100;
+      const hayDif = Math.abs(dif) >= 1;
+      h += '<div class="grupo"><h3>Lo que se pactó</h3><dl class="datos">'+
+        fila('Presupuesto', esc([pre.referencia, pre.titulo].filter(Boolean).join(' · ')))+
+        fila('Aceptado sin IVA', eur(pac), true)+
+        (pre.firma_el ? fila('Firmado', esc(fechaCorta(pre.firma_el))) : '')+
+        '</dl>'+
+        (hayDif
+          ? '<div class="sin-ficha" style="margin-top:10px'+
+            (dif > 0 ? '' : ';background:var(--aviso-bg);color:var(--aviso)')+'">'+
+            (dif > 0
+              ? 'El cálculo de abajo se queda <b>'+eur(dif)+' por debajo</b> de lo pactado. '+
+                'Si el trabajo fue el ofertado, se factura lo pactado: el cálculo sale de las '+
+                'horas apuntadas y del material del almacén, no del precio que firmó el cliente.'
+              : 'El cálculo de abajo se pasa <b>'+eur(-dif)+'</b> de lo pactado. Si se ha hecho '+
+                'más trabajo del ofertado, hace falta un presupuesto nuevo o el visto bueno del '+
+                'cliente antes de facturarlo.')+'</div>'
+          : '<p class="mini" style="margin:8px 0 0">Lo pactado y lo calculado cuadran.</p>')+
+        '<div class="fila" style="gap:6px;margin-top:10px">'+
+        '<button type="button" class="btn sm plana" data-act="ver-presu-origen" data-id="'+pre.id+
+          '">Ver el presupuesto</button><span class="sp"></span></div>'+
+        '</div>';
+    }
+  }
+  h += '<div class="grupo"><h3>'+(presuDelAviso(a) ? 'Lo que sale del cálculo' : 'Lo que se factura')+'</h3><dl class="datos">'+
     fila('Mano de obra', eur(v.imp_mano_obra) + (a.horas != null ? ' <span class="mini">('+a.horas+' h × '+(a.num_tecnicos||1)+')</span>' : '')) +
     fila('Desplazamiento', eur(v.imp_desplazamiento) + (a.desplazamiento != null ? ' <span class="mini">('+a.desplazamiento+' km)</span>' : '')) +
-    fila('Materiales', eur(v.imp_materiales)) +
+    fila('Materiales', eur(v.imp_materiales) +
+      (matSinPrecioDe(avisoId).length
+        ? ' <span class="mini" style="color:var(--mal)">('+matSinPrecioDe(avisoId).length+
+          ' sin enlazar, a 0 €)</span>' : '')) +
     fila('Total sin IVA', eur(v.imp_total), true) +
     (S.tarifas ? fila('Con IVA', eur(+v.imp_total * (1 + (+S.tarifas.iva || 21) / 100))) : '') +
     '</dl></div>';
@@ -19451,6 +19726,21 @@ function dlgValoracion(avisoId){
     fila('Margen', '<span style="color:'+(+v.margen < 0 ? 'var(--mal)' : 'var(--ok)')+'">'+eur(v.margen)+'</span>', true) +
     fila('Margen sobre venta', pct(+v.margen, +v.imp_total)) +
     '</dl></div>';
+  /* El material sin enlazar, dicho donde se mira el margen: si no, el margen
+     de esta pantalla parece bueno y es que falta restarle lo que costó el
+     material que entró a cero. */
+  {
+    const sp = matSinPrecioDe(avisoId);
+    if (sp.length)
+      h += '<div class="sin-ficha" style="margin:0 0 10px">Esta visita lleva <b>'+sp.length+
+        ' línea'+(sp.length===1?'':'s')+' de material sin enlazar</b> con el almacén: '+
+        esc(sp.slice(0, 4).map(m => m.descripcion).join(', '))+
+        (sp.length > 4 ? ' y '+(sp.length-4)+' más' : '')+
+        '. Entran a cero euros, así que el importe sale corto y el margen de arriba sale más alto '+
+        'que el real.<div class="fila" style="gap:6px;margin-top:8px">'+
+        '<button type="button" class="btn sm pri" data-act="mat-sin-precio" data-id="'+a.id+
+        '">Enlazar con el almacén</button><span class="sp"></span></div></div>';
+  }
   if (a.cobrado) h += '<p class="mini" style="margin:0">Cobrada en obra: '+eur(a.cobro_importe)+' · '+esc(a.cobro_forma||'')+'</p>';
   if (v.facturado) h += '<p class="mini" style="margin:0">Facturada el '+esc(fechaCorta(v.facturado_el))+(v.factura_ref?(' · '+esc(v.factura_ref)):'')+'</p>';
   h += '<p class="err"></p><div class="pie">'+
@@ -21750,6 +22040,10 @@ raiz.addEventListener('click', async e => {
     if (av) presupuestoDesdeAsistencia(av);
   }
   else if (a === 'presu-abrir') dlgPresupuesto(b.dataset.id);
+  /* Desde la valoración, ir al presupuesto del que salió el trabajo: cerrando
+     primero, que si no quedan dos diálogos uno encima del otro. */
+  else if (a === 'ver-presu-origen'){ cerrarDlg(); dlgPresupuesto(b.dataset.id); }
+  else if (a === 'mat-sin-precio'){ dlgMatSinPrecio(b.dataset.id); }
   else if (a === 'mat-nuevo') dlgArticulo(null);
   else if (a === 'prev-abrir') dlgPrevistos(b.dataset.id);
   else if (a === 'mat-ficha') dlgMaterial(b.dataset.id);
@@ -23030,6 +23324,8 @@ dlgForm.addEventListener('click', async e => {
     catch(err){ fallo(err); }
     return;
   }
+  /* Desde la valoración, ir a enlazar el material que entró a cero euros */
+  if (a === 'mat-sin-precio'){ cerrarDlg(); dlgMatSinPrecio(b.dataset.id); return; }
   if (a === 'revalorar'){
     try { await sb.rpc('valorar_aviso', { p_aviso: b.dataset.id }); cerrarDlg(); await cargar(); toast('Visita recalculada.'); }
     catch(err){ fallo(err); }
