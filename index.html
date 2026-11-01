@@ -221,6 +221,14 @@ img{max-width:100%}
 .datos dt{font:500 11px var(--mono);text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
 .datos dd{margin:0;overflow-wrap:anywhere}
 .fotos{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px}
+/* Arrastrar y soltar: el recuadro donde van a caer los ficheros se marca
+   mientras se arrastra por encima, para que se vea DÓNDE se suelta. Se apaga
+   solo al soltar o al salirse. */
+.soltar-aqui{outline:2px dashed var(--amarillo);outline-offset:3px;border-radius:8px;
+  background:color-mix(in srgb, var(--amarillo) 9%, transparent)}
+@supports not (background: color-mix(in srgb, red 9%, transparent)){
+  .soltar-aqui{background:rgba(252,186,29,.10)}
+}
 .foto{position:relative;aspect-ratio:4/3;border-radius:6px;overflow:hidden;border:1px solid var(--line);background:var(--surface-2)}
 .foto img{width:100%;height:100%;object-fit:cover;display:block}
 .foto button{position:absolute;top:4px;right:4px;border:0;background:rgba(28,24,23,.75);color:#fff;border-radius:4px;font-size:12px;padding:3px 7px;cursor:pointer}
@@ -652,7 +660,7 @@ const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etique
             expedientes:[], expFotos:[], expDocs:[], exp:null, expPaso:'obra', expSucio:false,
             fotosEquipo:{}, histBusca:'', histTec:'', histTipo:'', histDesde:'', histHasta:'', histArchivadas:false,
             cliArchivados:false, centros:[], sinCentros:false, versionNueva:null, versionAvisada:null,
-            manual:null, manuales:null, sinObra:false, sinModo:false, fotosCuenta:{},
+            manual:null, manuales:null, sinObra:false, sinModo:false, sinFicha3:false, fotosCuenta:{},
             sinAlmacen:false, ubicaciones:[], existencias:[], movimientos:[], previstos:[],
             buscaMat:'', matFamilia:'', matProveedor:'', matFiltro:'', fichaMat:null,
             sinPresupuestos:false, presupuestos:[], presuLineas:[], articulos:[], textosPresu:[], sinTextos:false,
@@ -1274,6 +1282,11 @@ async function cargar(){
      antes, y no enseña los dos desplegables en la ficha. */
   const mo = await sb.from('puertas').select('modo').limit(1);
   S.sinModo = !!mo.error;
+  /* El arrastre del motor, las vueltas de muelle y «más elementos a
+     identificar»: servidor/ficha3.sql. Sin esas columnas la ficha no los
+     enseña y no los guarda, y el alta de puertas sigue funcionando igual. */
+  const f3 = await sb.from('puertas').select('arrastre_kg').limit(1);
+  S.sinFicha3 = !!f3.error;
   /* ---- El almacén ----
      Las existencias no se guardan en ninguna columna: se leen de la vista, que
      las suma de los movimientos. Si falta el SQL del almacén, la aplicación
@@ -1419,7 +1432,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.01-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.01-2';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -1741,7 +1754,13 @@ function vistaFicha(id){
   h += '<div class="panel"><div class="panel-h"><h3>Ficha técnica</h3></div><dl class="datos">';
   const d = [['Tipo',p.tipo],['Uso',p.uso],['Tipo de cliente',p.tipo_cliente],['Marca',p.marca],['Modelo',p.modelo],
     ['Cuadro de maniobra',p.cuadro],['Motor',p.motor],['Año',p.anio],['Instalador',p.instalador],
-    ['Medidas',(p.ancho_mm||p.alto_mm)?((p.ancho_mm||'?')+' x '+(p.alto_mm||'?')+' mm'):''],['Peso hoja',p.peso_kg?(p.peso_kg+' kg'):''],
+    ['Medidas',(p.ancho_mm||p.alto_mm)?((p.ancho_mm||'?')+' x '+(p.alto_mm||'?')+' mm'):''],
+    ['Dintel',p.dintel_mm?(p.dintel_mm+' mm'):''],
+    ['Arrastre del motor',p.arrastre_kg?(p.arrastre_kg+' kg'):''],
+    ['Vueltas de muelle',p.vueltas_muelle?String(p.vueltas_muelle):''],
+    /* El peso solo sale si alguien lo anotó cuando se pedía: ya no se pide */
+    ['Peso hoja',p.peso_kg?(p.peso_kg+' kg'):''],
+    ['Más elementos',p.otros_elementos],
     ['Matrícula',p.matricula],['Sin matrícula',p.sin_matricula],
     ['Accionamiento',(MODOS_ACCIONAMIENTO[p.modo]||{}).nombre||''],['Usuarios',TIPOS_USUARIO[p.usuarios]||''],
     ['Última revisión',p.ultima_revision?fechaCorta(p.ultima_revision):''],['Próxima revisión',p.proxima_revision?(fechaCorta(p.proxima_revision)+' · '+relativo(p.proxima_revision)):'']];
@@ -6092,7 +6111,13 @@ const IMPORTA = {
       ['anio',       'Año',                    ['año','ano','ejercicio'], 'numero'],
       ['ancho_mm',   'Ancho (mm)',             ['ancho'], 'numero'],
       ['alto_mm',    'Alto (mm)',              ['alto','altura'], 'numero'],
+      /* El peso se sigue admitiendo en la importación aunque la ficha ya no lo
+         pida: si alguien lo tiene en su hoja de Excel de antes, no se tira. */
       ['peso_kg',    'Peso de la hoja (kg)',   ['peso'], 'numero'],
+      ['dintel_mm',  'Dintel (mm)',            ['dintel'], 'numero'],
+      ['arrastre_kg','Arrastre del motor (kg)',['arrastre','arrastre maximo','tiro'], 'numero'],
+      ['vueltas_muelle','Vueltas de muelle',   ['vueltas','muelle','muelles'], 'numero'],
+      ['otros_elementos','Más elementos',      ['otros','elementos','herrajes'], 'texto'],
       ['instalador', 'Instalada por',          ['instalador'], 'texto'],
       ['ultima_revision',  'Última revisión',  ['ultima revision','fecha ultima revision'], 'fecha'],
       ['proxima_revision', 'Próxima revisión', ['proxima revision','fecha proxima revision'], 'fecha'],
@@ -9009,6 +9034,13 @@ const nombreForma = clave => (FORMAS_PUERTA.find(x => x[0] === clave) || [,''])[
    batiente no se pide, porque ahí no manda nada y solo estorbaría. */
 const FORMAS_CON_DINTEL = ['seccional', 'enrollable', 'guillotina', 'rapida', 'basculante'];
 const pideDintel = tipo => FORMAS_CON_DINTEL.includes(formaDePuerta(tipo));
+/* ---- Las vueltas de los muelles ----
+   Solo en las seccionales, que es donde David las echaba en falta: es el dato
+   que hace falta para equilibrar la hoja y para pedir un muelle de repuesto.
+   Si algún día hay que pedirlas también en basculante o en enrollable de
+   muelle, se añaden aquí y aparecen solas en la ficha. */
+const FORMAS_CON_MUELLE = ['seccional'];
+const pideMuelle = tipo => FORMAS_CON_MUELLE.includes(formaDePuerta(tipo));
 /* Una corredera puede ir sobre guía en el suelo o en voladizo. No se deduce de la
    nada: solo se afirma cuando el tipo lo dice. null = no consta. */
 const correderaGuiada = t => {
@@ -9382,7 +9414,14 @@ function recomendadoObra(p){
   const out = [];
   if (!p.cliente_id) out.push('Enlazar la puerta con la ficha del cliente');
   if (!String(p.uso || '').trim()) out.push('Uso de la puerta');
-  if (!+p.peso_kg) out.push('Peso de la hoja, si lo da la placa o el fabricante');
+  /* El peso de la hoja salía aquí hasta el 01-11-2026 y no se rellenaba nunca:
+     en obra no hay báscula. En su lugar, el arrastre del motor, que viene en la
+     placa; y en las seccionales, las vueltas de los muelles. */
+  if (!S.sinFicha3){
+    if (!+p.arrastre_kg) out.push('Arrastre máximo del motor, que viene en su placa');
+    if (pideMuelle(p.tipo) && !+p.vueltas_muelle)
+      out.push('Vueltas de los muelles, para equilibrar y para pedir el repuesto');
+  }
   if (!String(p.cuadro || '').trim()) out.push('Cuadro de maniobra: marca y modelo');
   if (!String(p.motor || '').trim()) out.push('Motor: marca y modelo');
   /* No es del mínimo (lo decidió David: dos desplegables no pueden impedir cerrar
@@ -16712,10 +16751,14 @@ dlgForm.addEventListener('change', e => {
   if (t.id === 'a-puerta'){ clienteDeLaPuertaDelAviso(); return; }
   // Puerta: al elegir centro, su dirección baja a la puerta
   if (t.id === 'f-centro'){ centroElegido(); return; }
-  /* El dintel aparece o desaparece según el tipo de puerta que se elija */
+  /* El dintel y las vueltas de muelle aparecen o desaparecen según el tipo de
+     puerta que se elija: el dintel en todo lo que sube, las vueltas solo en las
+     seccionales. Un campo que no decide nada solo sirve para dejarlo en blanco. */
   if (t.id === 'f-tipo'){
     const caja = document.getElementById('f-caja-dintel');
     if (caja) caja.hidden = !pideDintel(t.value);
+    const cajaM = document.getElementById('f-caja-muelle');
+    if (cajaM) cajaM.hidden = !pideMuelle(t.value);
     return;
   }
   if (t.id === 'pl-art'){
@@ -16932,7 +16975,8 @@ async function guardarLista(clave, arr){
 
 /* Campos del alta de puerta, para poder recuperarlos si se sale a crear un cliente */
 const CAMPOS_PUERTA = ['f-cod','f-cbusca','f-clid','f-centro','f-dir','f-ubi','f-tcliente','f-tipo','f-uso',
-  'f-marca','f-modelo','f-anio','f-instalador','f-ancho','f-alto','f-dintel','f-peso',
+  'f-marca','f-modelo','f-anio','f-instalador','f-ancho','f-alto','f-dintel',
+  'f-arrastre','f-muelle','f-otros',
   'f-motor-marca','f-motor-modelo','f-cuadro-marca','f-cuadro-modelo','f-modo','f-usuarios',
   'f-matricula','f-sinmat','f-ult','f-prox','f-notas'];
 function guardarBorradorPuerta(){
@@ -17278,7 +17322,44 @@ function dlgPuerta(id, avisoId){
       '<label for="f-dintel">Dintel (mm)</label>'+
       '<input id="f-dintel" type="number" value="'+esc(d.dintel_mm||'')+'">'+
       '<span class="pista">Del hueco al techo. Decide el tipo de guía</span></div>'+
-    '<div class="campo"><label for="f-peso">Peso hoja (kg)</label><input id="f-peso" type="number" step="0.1" value="'+esc(d.peso_kg||'')+'"></div>'+
+    /* ---- El arrastre del motor, en lugar del peso de la hoja ----
+       El peso de la hoja no se pide desde el 01-11-2026: en obra no hay báscula
+       y no se rellenaba nunca. El arrastre máximo viene en la placa o en la
+       ficha de casi cualquier motor, y sirve para lo mismo que se quería el
+       peso: saber si el motor va sobrado o justo.
+       Lo que ya estuviera anotado como peso no se borra ni se toca. */
+    (S.sinFicha3 ? '' :
+      '<div class="campo"><label for="f-arrastre">Arrastre máximo del motor (kg)</label>'+
+      '<input id="f-arrastre" type="number" step="1" min="0" value="'+esc(d.arrastre_kg||'')+'">'+
+      '<span class="pista">De la placa o la ficha del motor. Dice si va sobrado o justo</span></div>'+
+      /* Las vueltas de muelle: solo en seccionales, igual que el dintel, y el
+         campo aparece o desaparece al cambiar el tipo. */
+      '<div class="campo" id="f-caja-muelle"'+(pideMuelle(d.tipo)?'':' hidden')+'>'+
+      '<label for="f-muelle">Vueltas de los muelles</label>'+
+      '<input id="f-muelle" type="number" step="0.5" min="0" value="'+esc(d.vueltas_muelle||'')+'">'+
+      '<span class="pista">Con media vuelta vale. Para equilibrar y para pedir el repuesto</span></div>')+
+    (d.peso_kg
+      ? '<div class="campo"><label>Peso de la hoja</label>'+
+        '<input type="text" value="'+esc(d.peso_kg)+' kg" disabled>'+
+        '<span class="pista">Anotado antes. Ya no se pide: en obra no hay báscula</span></div>'
+      : '')+
+    '</div></div>';
+
+  /* ---- Más elementos a identificar ----
+     Antes esto se iba a resolver desglosando herrajes y componentes uno por
+     uno, y David lo paró con un argumento bueno: cuando se habla de la puerta
+     SIN automatismo se habla de un todo, así que el desglose solo alargaba el
+     tiempo de gestión del documento. Un campo libre donde el técnico escribe
+     lo que a su juicio hay que identificar de esa puerta sirve mejor y se
+     rellena de verdad. El motor y el cuadro siguen aparte, como componentes
+     con su número de serie, porque eso es lo que permite pedir un repuesto. */
+  if (!S.sinFicha3)
+  h += '<div class="grupo"><h3>Más elementos a identificar</h3><div class="campos">'+
+    '<div class="campo full"><label for="f-otros">Lo que veas que hay que dejar anotado</label>'+
+      '<textarea id="f-otros" rows="3" placeholder="Ej.: muelles Alpine del 2019, cable de 4 mm, '+
+      'tambores altos, herrajes de refuerzo en el panel inferior, puerta peatonal integrada con '+
+      'cierrapuertas Dorma">'+esc(d.otros_elementos||'')+'</textarea>'+
+      '<span class="pista">A tu criterio, lo que distinga a esta puerta y sirva para volver</span></div>'+
     '</div></div>';
 
   /* ---- Cuadro y motor ----
@@ -17360,9 +17441,21 @@ function dlgPuerta(id, avisoId){
       motor:  [val('f-motor-marca'),  val('f-motor-modelo')].filter(Boolean).join(' '),
       anio: val('f-anio')?+val('f-anio'):null, instalador: val('f-instalador'),
       ancho_mm: val('f-ancho')?+val('f-ancho'):null, alto_mm: val('f-alto')?+val('f-alto'):null,
-      dintel_mm: val('f-dintel')?+val('f-dintel'):null, peso_kg: val('f-peso')?+val('f-peso'):null,
+      dintel_mm: val('f-dintel')?+val('f-dintel'):null,
       seguridad: seg, ultima_revision: val('f-ult')||null, proxima_revision: val('f-prox')||null, notas: val('f-notas')
     };
+    /* peso_kg NO está en este objeto, y es a propósito: el campo se quitó de la
+       ficha el 01-11-2026 y si se guardara como null borraría el peso de las
+       puertas que ya lo tenían anotado. Lo que no se pide, no se toca.
+
+       Los tres nuevos se guardan solo si la base de datos los tiene, igual que
+       los demás añadidos: así una copia de la aplicación nueva contra una base
+       sin ficha3.sql ejecutado sigue dando de alta puertas. */
+    if (!S.sinFicha3){
+      o.arrastre_kg    = val('f-arrastre') ? +val('f-arrastre') : null;
+      o.vueltas_muelle = val('f-muelle')   ? +val('f-muelle')   : null;
+      o.otros_elementos = val('f-otros') || null;
+    }
     /* El centro solo se guarda si la base de datos lo tiene: así una copia de la
        aplicación nueva contra una base de datos sin centros.sql no rompe el alta
        de puertas. Y si el centro elegido no es del cliente que queda enlazado, no
@@ -20548,8 +20641,8 @@ function cuerpoAltaObra(a, p, nFotos, dentro){
       '<summary><span class="obra-est">Recomendado</span><span>'+rec.length+
       (rec.length === 1 ? ' dato más, si está a mano' : ' datos más, si están a mano')+'</span></summary>'+
       '<p>'+rec.map(esc).join(' · ')+'</p>'+
-      '<p class="obra-porque">Esto no impide cerrar la visita. El peso de la hoja está aquí y no '+
-      'arriba porque en obra no hay báscula: se copia de la placa o de la ficha del fabricante, si la hay.</p>'+
+      '<p class="obra-porque">Esto no impide cerrar la visita. Son datos que se copian de una placa '+
+      'o de una ficha, no medidas que haya que tomar: si los tienes delante, en dos minutos están.</p>'+
       '</details>';
 
   if (!dentro) return h;
@@ -22200,6 +22293,149 @@ raiz.addEventListener('change', e => {
     const pub = document.getElementById('doc-pub-'+e.target.dataset.id);
     subirDocs(e.target.dataset.id, Array.from(e.target.files), sel ? sel.value : 'Manual de instrucciones', pub && pub.checked); e.target.value='';
   }
+});
+
+/* ============================================================================
+   ARRASTRAR Y SOLTAR FICHEROS                                      01-11-2026
+   ============================================================================
+   Pedido tras las pruebas de campo: desde el ordenador, poder soltar las fotos
+   encima del recuadro en vez de ir al botón y buscar la carpeta.
+
+   No hace falta tocar los trece sitios donde se sube algo. Todos tienen ya su
+   <input type="file"> con su data-act, y lo que se hace aquí es enchufarles el
+   soltar: al arrastrar por encima se busca, desde donde está el ratón, el
+   recuadro más cercano que contenga uno de esos campos; se le marca el borde
+   para que se vea DÓNDE va a caer; y al soltar, los ficheros se le meten a ese
+   campo y se dispara su «change», que es exactamente el mismo camino que si se
+   hubieran elegido a mano. Así no hay dos maneras de subir una foto: hay una,
+   con dos puertas de entrada.
+
+   En el teléfono esto no estorba ni cambia nada: allí no se arrastra, y el
+   botón de siempre sigue en su sitio.
+   ========================================================================= */
+
+/* El label va primero a propósito: si se suelta justo encima de un botón, manda
+   ese botón. Así, en un recuadro con dos (foto y papel, logo y sello), soltar
+   sobre el que toca hace lo que se espera. */
+const ZONAS_SOLTAR = 'label, .fotos, .grupo, .panel, #dlg-form';
+
+/* ¿Este fichero le vale a ese campo? Se lee su propio accept, así que un PDF
+   soltado en las fotos no se cuela y una foto soltada en los PDF tampoco. */
+function aceptaFichero(f, accept){
+  if (!accept) return true;
+  const tipo = String(f.type || '').toLowerCase();
+  const nom = String(f.name || '').toLowerCase();
+  return accept.split(',').map(x => x.trim().toLowerCase()).filter(Boolean).some(a =>
+    a.endsWith('/*') ? tipo.startsWith(a.slice(0, -1))
+      : (a.charAt(0) === '.' ? nom.endsWith(a) : tipo === a));
+}
+
+/* Desde donde está el ratón hacia arriba, el primer recuadro que tenga un campo
+   de ficheros capaz de aceptar lo que se trae. Si en ese recuadro hay dos, gana
+   el que acepte estos ficheros: es lo que distingue la foto del papel. */
+function zonaDeSoltar(destino, ficheros){
+  let n = destino && destino.nodeType === 1 ? destino : (destino && destino.parentElement);
+  let rechazo = null;          // el primer recuadro que tenía campo y no le valía
+  while (n && n !== document.body){
+    if (n.matches && n.matches(ZONAS_SOLTAR)){
+      const inps = Array.from(n.querySelectorAll('input[type="file"]'));
+      if (inps.length){
+        const vale = inps.find(i => !ficheros || !ficheros.length ||
+          ficheros.some(f => aceptaFichero(f, i.getAttribute('accept') || '')));
+        if (vale) return { zona: n, input: vale, inputs: inps };
+        /* Hay campo pero no acepta esto: se sigue subiendo, que arriba puede
+           haber otro recuadro al que sí le valga. Se guarda el primero para
+           poder decir por qué no ha pasado nada, si al final no hay ninguno:
+           soltar algo y que no ocurra nada en silencio es lo peor de todo. */
+        if (!rechazo) rechazo = { zona: n, input: null,
+          accept: inps[0].getAttribute('accept') || '' };
+      }
+    }
+    n = n.parentElement;
+  }
+  return rechazo;
+}
+
+let ZONA_PINTADA = null;
+function pintarZonaSoltar(z){
+  if (ZONA_PINTADA === z) return;
+  if (ZONA_PINTADA) ZONA_PINTADA.classList.remove('soltar-aqui');
+  ZONA_PINTADA = z || null;
+  if (ZONA_PINTADA) ZONA_PINTADA.classList.add('soltar-aqui');
+}
+
+/* Solo ficheros. Arrastrar texto, un enlace o una foto de otra pestaña del
+   navegador no abre ninguna zona: ahí no hay nada que subir. */
+const arrastraFicheros = e => {
+  const t = (e.dataTransfer && e.dataTransfer.types) || [];
+  return Array.prototype.indexOf.call(t, 'Files') >= 0;
+};
+
+/* Mientras se arrastra, el navegador no da los nombres de los ficheros (por
+   privacidad), pero sí su tipo. Con eso basta para no marcar como zona buena un
+   recuadro al que lo arrastrado no le va a valer. El filtro de verdad, con
+   nombre y extensión, se hace al soltar. */
+const arrastrados = e => Array.from((e.dataTransfer && e.dataTransfer.items) || [])
+  .filter(i => i.kind === 'file').map(i => ({ type: i.type || '', name: '' }));
+
+document.addEventListener('dragover', e => {
+  if (!arrastraFicheros(e)) return;
+  const z = zonaDeSoltar(e.target, arrastrados(e));
+  if (!z || !z.input){ pintarZonaSoltar(null); return; }
+  /* Sin esto el navegador abre el fichero y se pierde lo que haya en pantalla */
+  e.preventDefault();
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+  pintarZonaSoltar(z.zona);
+});
+document.addEventListener('dragleave', e => {
+  /* Al salirse de la ventana entera se apaga la marca; dentro, la va cambiando
+     el dragover según por dónde pase. */
+  if (!e.relatedTarget) pintarZonaSoltar(null);
+});
+document.addEventListener('drop', e => {
+  if (!arrastraFicheros(e)) return;
+  const fs = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+  const z = zonaDeSoltar(e.target, fs);
+  pintarZonaSoltar(null);
+  if (!z) return;
+  e.preventDefault();
+  if (!fs.length) return;
+
+  /* Recuadro que sí recibe ficheros, pero no de esta clase */
+  if (!z.input){
+    const a = z.accept || '';
+    return toast(/image/.test(a) ? 'Ahí solo se pueden soltar fotos.'
+      : (/pdf/.test(a) ? 'Ahí solo se pueden soltar PDF.'
+        : 'Ese tipo de fichero no vale aquí.'));
+  }
+
+  const accept = z.input.getAttribute('accept') || '';
+  const valen = fs.filter(f => aceptaFichero(f, accept));
+  if (!valen.length)
+    return toast(/image/.test(accept) ? 'Ahí solo se pueden soltar fotos.'
+      : (/pdf/.test(accept) ? 'Ahí solo se pueden soltar PDF.'
+        : 'Ese tipo de fichero no vale aquí.'));
+
+  /* Un campo sin «multiple» se queda con el primero, y se dice, en vez de
+     subir uno de los cuatro en silencio. */
+  const unoSolo = !z.input.multiple;
+  const mando = unoSolo ? valen.slice(0, 1) : valen;
+
+  try {
+    const dt = new DataTransfer();
+    mando.forEach(f => dt.items.add(f));
+    z.input.files = dt.files;
+    z.input.dispatchEvent(new Event('change', { bubbles: true }));
+  } catch(_){
+    /* Si el navegador no deja escribir en el campo, se dice: nunca se queda
+       en silencio dando a entender que ha subido algo. */
+    return toast('Este navegador no deja soltar ficheros aquí. Usa el botón.');
+  }
+
+  if (valen.length < fs.length)
+    toast('Subo '+mando.length+' de '+fs.length+': lo demás no vale en ese sitio.');
+  else if (unoSolo && valen.length > 1)
+    toast('Ahí cabe uno: subo «'+(mando[0].name || '')+'».');
 });
 dlgForm.addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
