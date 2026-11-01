@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.11.01-2**
+> **Versión de la aplicación que describe este manual: 2026.11.01-3**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -460,6 +460,59 @@ Los que más veces se ven, por orden de gravedad:
 
 ---
 
+## 8 bis. Dos maneras de perder dinero sin enterarse
+
+Esto no es técnica de puertas, es oficio de empresa, y se pone aquí porque las
+dos cosas pasan en el mismo sitio donde se documenta el trabajo.
+
+### El precio pactado y el precio calculado no son el mismo número
+
+Cuando un presupuesto se acepta y se convierte en trabajo, hay dos importes
+distintos en juego y conviene no confundirlos nunca:
+
+| | Qué es | De dónde sale |
+|---|---|---|
+| **Lo pactado** | El precio que el cliente aceptó y firmó | Del presupuesto, congelado el día que se emitió |
+| **Lo calculado** | Lo que valen las horas apuntadas más el material y el desplazamiento | Del parte de trabajo y de las tarifas |
+
+**No tienen por qué coincidir, y casi nunca coinciden.** Un portón se oferta por
+3.200 € porque eso es lo que vale ponerlo, no porque sean sesenta horas de
+trabajo. Si después se factura por las horas, se factura por una fracción.
+
+La regla de oficio: **se factura lo pactado**, salvo que el trabajo haya
+cambiado; y si ha cambiado, hace falta un presupuesto nuevo o el visto bueno del
+cliente, por escrito, antes de facturar más. El cálculo sirve para otra cosa:
+para saber si esa obra ha dejado margen.
+
+Lo que hacía perder dinero en nuestra aplicación hasta el 1 de noviembre de 2026
+no era la fórmula, era que **uno de los dos números no estaba en pantalla**: el
+precio pactado se quedaba en el presupuesto y el circuito de cobro iba por su
+cuenta con las horas. Ahora los dos salen juntos, y Gestión lista los trabajos
+donde el cálculo no llega a lo pactado, con la diferencia sumada.
+
+### El material que no tiene precio vale cero, y eso infla el margen
+
+El técnico no ve precios, y es correcto: su trabajo es anotar qué ha puesto. El
+precio sale de la ficha del material en el almacén.
+
+La consecuencia es la que hay que entender: **lo que se escribe a mano, porque
+no está dado de alta, entra en la cuenta a cero euros.** Y eso tiene dos efectos
+a la vez, uno malo y otro peor:
+
+1. El importe de la visita sale **corto**: se factura menos de lo que se gastó.
+2. El margen sale **más alto que el real**, porque el coste de esa pieza tampoco
+   está. Se cree haber ganado un dinero que en realidad se ha regalado.
+
+De las dos, la segunda es la peligrosa: un importe corto se nota al cobrar, pero
+un margen inflado no se nota nunca, y es con el que se decide qué precios poner
+el año que viene.
+
+Por eso el remate no es opcional: antes de facturar, el material escrito a mano
+se enlaza con su artículo del almacén y se vuelve a calcular. Y por eso hay una
+lista que no deja que se olvide.
+
+---
+
 ## 9. Cómo se registra todo esto en ARIZA SAT
 
 La aplicación no es un cuaderno bonito: está construida sobre lo que acabas de leer.
@@ -479,6 +532,8 @@ La aplicación no es un cuaderno bonito: está construida sobre lo que acabas de
 - El **peso de la hoja** ya no se pide: en su lugar, el **arrastre máximo del motor**, que viene en su placa. El peso que estuviera anotado de antes se conserva y se sigue imprimiendo.
 - En vez de desglosar herrajes, un apartado libre, **más elementos a identificar**, que rellena el técnico en su inspección.
 - Desde el ordenador, los ficheros se pueden **soltar encima** del recuadro donde van. Cada recuadro acepta lo suyo: un PDF soltado en las fotos no se cuela y lo dice.
+- Un trabajo que nace de un presupuesto **guarda de qué presupuesto viene**, y en la valoración salen juntos el precio pactado y el calculado. Gestión lista los que se quedan por debajo de lo pactado, con la diferencia sumada.
+- El material escrito a mano sale señalado en Gestión hasta que se enlaza con el almacén, y al enlazarlo la visita se vuelve a calcular en el momento.
 - Una obra puede llevar **varias puertas**, y cada una tiene su ficha, su mínimo de obra y su acta. La obra no se cierra mientras le falte el mínimo a cualquiera de ellas, y el aviso dice el código de la que falta, no «la puerta» en general.
 - Una obra de **varios días** se declara a propósito, no se deduce: cada día deja su parte, sin firma ni cobro, y al cerrar las horas y los kilómetros salen de la suma de todos los partes. El material se apunta al día en que se gastó.
 - El **acta de entrega** lleva la lista de funciones del tipo de puerta, que la mantiene la oficina. No deja firmar con puntos en blanco, ni firmar «Conforme» con un punto marcado como mal.
@@ -528,4 +583,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.01-2 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.01-3 de ARIZA SAT*

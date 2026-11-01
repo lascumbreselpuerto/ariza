@@ -11,7 +11,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.01-2**
+> **Versión de la aplicación que describe este manual: 2026.11.01-3**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -101,6 +101,13 @@ Lo que escribas en **Recomendaciones y presupuesto a ofertar** no se queda ahí:
 Cada línea tiene dos cosas: el **material del almacén**, que eliges de la lista, y la **descripción**, que se rellena sola y puedes matizar. Lo que no esté en el almacén se sigue escribiendo a mano, como siempre.
 
 Lo importante: al **cerrar la visita**, lo que hayas elegido del almacén se descuenta de tu furgoneta. Solo al cerrar, y una sola vez, aunque guardes el avance diez veces.
+
+> **Elige del almacén siempre que esté.** Tú no ves precios, y está bien así,
+> pero el precio de un material sale de su ficha del almacén: lo que se escribe
+> a mano entra en la cuenta **a cero euros**. No pasa nada por escribirlo a mano
+> cuando no está dado de alta, que es a lo que viene el campo; lo que pasa es
+> que la oficina tiene que enlazarlo después, y si no se da cuenta, esa pieza se
+> ha regalado. Dos segundos en el desplegable ahorran eso.
 
 Si la oficina te ha mandado llevar material, te sale arriba del todo con un botón para **pasarlo a material usado**. Eso es lo previsto, no lo gastado: corrige las cantidades con lo que de verdad hayas puesto.
 
@@ -518,4 +525,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.01-2 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.01-3 de ARIZA SAT*
