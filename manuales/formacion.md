@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.10.28-1**
+> **Versión de la aplicación que describe este manual: 2026.11.01-1**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -162,6 +162,32 @@ Y la fuerza dinámica **depende de cómo se mueva la hoja y de la abertura** en 
 
 Hay además un caso aparte: sobre **superficies planas de más de 0,1 m²** en las que ninguna dimensión lateral baje de 100 mm, el límite dinámico es de 1.400 N.
 
+### Las cuatro, o no hay resultado
+
+Un ensayo de fuerzas no es un número: son cuatro magnitudes por punto de medida,
+y las cuatro dicen cosas distintas sobre el mismo golpe. Esto tiene una
+consecuencia que conviene entender antes de coger el dinamómetro:
+
+> **Un punto con una sola magnitud anotada no es un punto medido.**
+
+Lo normal, con un medidor de pico, es que salga Fd y que el resto quede en
+blanco. Si en esa situación alguien da el punto por bueno, está afirmando que
+comprobó la fuerza tras Td, la residual y el tiempo total. No las comprobó.
+
+Y hay una razón práctica, no solo formal: un pico bajo con una residual alta es
+exactamente el caso peligroso, la puerta que no golpea fuerte pero sigue
+empujando. Si solo se anota el pico, ese caso pasa desapercibido.
+
+Esto estuvo mal en nuestra propia aplicación hasta el 1 de noviembre de 2026: los
+huecos se trataban como ceros, y un cero siempre es menor que el límite, así que
+el documento imprimía «Pasa». Ahora un punto a medias se imprime como **ensayo
+incompleto**, con el nombre de las magnitudes que faltan, y no dictamina nada. Un
+valor que **se sale** del límite sí se marca como no conforme aunque falten los
+demás: eso hay que verlo igual.
+
+Un cero escrito a mano, en cambio, es un dato: Fe puede medir 0 N y eso se anota
+como 0, no como un hueco.
+
 ### El error que hay que grabarse
 
 > **Una puerta de movimiento vertical lleva 400 N en todo el recorrido.**
@@ -232,7 +258,7 @@ Hay un caso que se repite y que cuesta dinero: se atiende una puerta que **no es
 
 Lo que hay que entender es **cuándo** se puede arreglar eso: solo estando delante de ella. Las medidas se toman con el flexómetro allí. Las fotos se hacen allí. La placa de características se lee allí. De vuelta al taller no hay manera, y lo que pasa entonces es que no se documenta nunca, y a la siguiente visita se empieza otra vez de cero.
 
-De ahí sale el criterio: en los trabajos que tocan la puerta de lleno (montarla, ponerla en servicio, adecuarla a normativa o revisarla), documentarla **es parte del trabajo**, no un extra administrativo. El mínimo exigible en obra es:
+De ahí sale el criterio: en los trabajos que tocan la puerta de lleno (montarla, ponerla en servicio, adecuarla a normativa o revisarla), documentarla **es parte del trabajo**, no un extra administrativo. Lo que hay que llevarse de allí es:
 
 | Dato | Para qué sirve después |
 |---|---|
@@ -244,7 +270,45 @@ De ahí sale el criterio: en los trabajos que tocan la puerta de lleno (montarla
 
 El peso de la hoja no entra en el mínimo: no se puede pesar una hoja en obra sin báscula ni ficha del fabricante.
 
-Y si no hay placa, o está pintada o ilegible, **eso también es un dato**: se escribe por qué no la hay. Un campo en blanco no distingue entre «no lo mirré» y «no existe»; una frase escrita, sí.
+Y si no hay placa, o está pintada o ilegible, **eso también es un dato**: se escribe por qué no la hay. Un campo en blanco no distingue entre «no lo miré» y «no existe»; una frase escrita, sí.
+
+### Qué se puede completar después, y qué no
+
+Esta es una distinción que cuesta y que vale dinero, así que va con cuidado. Hay
+dos clases de huecos en un expediente y **no se tratan igual**:
+
+| | Se puede completar después | Por qué |
+|---|---|---|
+| **Datos de la puerta** (identificación, tipo, medidas, matrícula) | **Sí** | Están en la foto de la placa, en el albarán o en el presupuesto. Teclearlos en la oficina no cambia la realidad: el ancho del hueco es el que es. |
+| **Resultados de comprobaciones** (puntos del guion, medidas del ensayo, lo probado en la entrega) | **No** | Nadie estuvo delante de la puerta. Rellenarlo después no es completar un dato: es inventar una comprobación. |
+
+De aquí sale una regla de oficio que conviene tener clara: **un hueco se
+completa, una comprobación no.** Lo que no se comprobó se deja escrito como no
+comprobado, y el documento lo dice.
+
+Hay además una tercera categoría, la de **lo que no se puede recuperar de ninguna
+manera**: las fotos. Una puerta sin ninguna foto no se puede fotografiar desde la
+oficina, y nada la sustituye. Por eso, de todo este mínimo, lo único que en
+nuestra aplicación impide cerrar el parte es que la puerta tenga ficha y al menos
+una foto; el resto se remata después y queda señalado en una lista.
+
+**El criterio de fondo, que es lo que hay que entender:** bloquear el trabajo
+para proteger un dato solo funciona si el dato se puede conseguir en ese momento.
+Si no se puede, el bloqueo no protege nada, y la gente aprende a sortearlo.
+Nuestra aplicación bloqueaba los seis puntos hasta el 1 de noviembre de 2026, y lo
+que pasaba era lo previsible: el técnico se quedaba sin cerrar por una medida y el
+trabajo acababa sin hacerse, sin dato y sin parte.
+
+### Y si el cliente ya firmó
+
+Un parte firmado **no se modifica**, nunca. Lo que se completa después es la ficha
+de la puerta, que es otra cosa: el inventario de la empresa, no el documento que
+el cliente aceptó.
+
+Aun así conviene que quede dicho quién lo completó y cuándo, por un motivo
+sencillo: dentro de dos años, delante de una reclamación, hay que poder
+distinguir lo que se tomó en obra con la puerta delante de lo que se añadió en la
+oficina tres semanas después. Las dos cosas pueden ser verdad y no valen lo mismo.
 
 ### La obra que dura varios días
 
@@ -357,8 +421,10 @@ La aplicación no es un cuaderno bonito: está construida sobre lo que acabas de
 - En los puntos que citan norma o piden medir, tienes **«Cómo se comprueba»**: qué se mide, cómo y el límite de esa puerta concreta.
 - El **ensayo de fuerzas** aplica solo el límite que le toca a esa puerta por su forma de moverse y la abertura declarada.
 - Si un punto queda sin comprobar, el documento lo dice. Si el ensayo no se incluye, también.
-- En instalación, puesta en servicio, adecuación a normativa y preventiva, la aplicación **no deja cerrar la visita** si la puerta no está documentada: identificación, tipo, medidas, dos fotos y matrícula. Cada punto se pone en verde cuando el dato está guardado, nunca porque alguien lo marque.
-- Lo único que no bloquea es lo que el técnico no puede resolver allí, como quedarse sin etiquetas: entonces la visita se cierra señalada como pendiente, que no es lo mismo que cerrarla como si estuviera completa.
+- En instalación, puesta en servicio, adecuación a normativa y preventiva, la aplicación pide documentar la puerta: identificación, tipo, medidas, dos fotos y matrícula. Cada punto se pone en verde cuando el dato está guardado, nunca porque alguien lo marque.
+- De esos puntos, los únicos que **impiden cerrar** son la ficha y al menos una foto, que es lo que no se puede conseguir desde la oficina. El resto se remata después y la visita queda señalada como **ficha incompleta**, con su lista en Gestión. Esa lista se calcula sola: en cuanto el dato se rellena, la puerta desaparece de ella, porque un campo «pendiente» que hubiera que apagar a mano acabaría mintiendo.
+- Una ficha de una puerta con un parte **firmado** solo la pueden completar la oficina y el administrador, y queda anotado quién y cuándo.
+- Un punto del ensayo de fuerzas con menos de sus cuatro magnitudes **no dictamina**: el documento lo imprime como ensayo incompleto y nombra las que faltan.
 - En **instalación la puerta se da de alta cuando está montada**, no al llegar. Antes no hay medidas que tomar ni placa que leer. Por eso la aplicación lo exige al cerrar y no al empezar, y mientras se monta dice que está bien que todavía no exista.
 - El **dintel** se pide solo en las puertas que suben. En las demás el campo no sale.
 - Una obra puede llevar **varias puertas**, y cada una tiene su ficha, su mínimo de obra y su acta. La obra no se cierra mientras le falte el mínimo a cualquiera de ellas, y el aviso dice el código de la que falta, no «la puerta» en general.
@@ -410,4 +476,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.10.28-1 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.01-1 de ARIZA SAT*

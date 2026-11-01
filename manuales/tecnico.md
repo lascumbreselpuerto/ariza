@@ -11,7 +11,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.10.28-1**
+> **Versión de la aplicación que describe este manual: 2026.11.01-1**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -40,7 +40,7 @@ En la tarjeta de **Mi trabajo**, además del cliente y la dirección, puedes ten
 - **De la jornada del día tal:** lo que dejaste dicho el último día que estuviste en esa obra. Va arriba del todo porque es lo que hay que leer **antes** de ponerse, no después. Si el lunes escribiste «falta traer el cuadro y dos emisores», el martes es lo primero que ves.
 - **El sitio:** cómo se entra, el horario de acceso, con quién hablar allí y los avisos de seguridad del sitio. Esto sale cuando la puerta está en un centro.
 - **Cuántas puertas lleva la obra:** si es más de una, lo dice en la línea de la puerta: «y 2 puertas más en esta obra».
-- **Falta documentar la puerta:** en instalación, puesta en servicio, adecuación a normativa y preventiva, si la puerta no está documentada la tarjeta te lo dice **antes de salir**. Llévate el flexómetro y cuenta con el tiempo. Si la obra lleva varias puertas, te dice **cuáles** están sin documentar, con su código. El apartado 7 explica lo que hay que tomar.
+- **Falta documentar la puerta:** en instalación, puesta en servicio, adecuación a normativa y preventiva, si la puerta no está documentada la tarjeta te lo dice **antes de salir**. Llévate el flexómetro y cuenta con el tiempo. Si la obra lleva varias puertas, te dice **cuáles** están sin documentar, con su código. No te va a impedir cerrar, pero cada dato que no tomes allí es un viaje de vuelta: el apartado 7 explica qué se toma y qué se puede rematar en oficina.
 
 > Los avisos de seguridad del sitio van separados del resto a propósito. No son un dato más: son lo que te vas a encontrar al llegar.
 
@@ -81,6 +81,15 @@ Aparecen los puntos que le tocan a **ese tipo de puerta**. Cada uno se marca **B
 **Lo que más te interesa:** los puntos que citan una norma o piden medir llevan un desplegable **«Cómo se comprueba»**. Ábrelo y te dice qué se comprueba, cómo y el límite. No tienes que acordarte ni llevar apuntes.
 
 Por ejemplo, en la fuerza dinámica te dice el dinamómetro, dónde apoyarlo, cuántas lecturas y el límite **de esa puerta**: no es el mismo en una corredera que en una seccional.
+
+> **Si mides fuerzas, las cuatro o ninguna.** En el ensayo del expediente hay
+> cuatro magnitudes por punto: Fd, Fs, Fe y td. Anotar solo una y dejar las
+> otras en blanco **no da un resultado**: la aplicación dice «a medias» y nombra
+> las que faltan, en pantalla y en el documento. Antes del 1 de noviembre de 2026
+> esto salía como «Pasa», dando por comprobadas tres cosas que nadie había
+> medido. Era el único sitio donde la aplicación afirmaba algo falso en un papel
+> firmado, y por eso se cambió. Un valor que se sale del límite sí se marca como
+> «No pasa» aunque falten los demás: eso hay que verlo igual.
 
 Lo que escribas en **Recomendaciones y presupuesto a ofertar** no se queda ahí: la oficina lo convierte en presupuesto para el cliente sin volver a teclearlo. Escríbelo como si lo fuera a leer él, porque acabará leyéndolo.
 
@@ -281,13 +290,50 @@ En estos cuatro tipos de asistencia:
 - Normativa y adecuación
 - Preventiva (mantenimiento)
 
-**la puerta tiene que quedar documentada antes de cerrar la visita.** Si no lo
-está, el parte no se cierra.
+**la puerta tiene que quedar documentada.** Pero desde el 1 de noviembre de 2026
+eso ya **no te impide cerrar el parte**, y conviene entender bien dónde está la
+raya.
 
-No es papeleo: una puerta sin dar de alta no existe para la empresa. No tiene
-ficha, ni QR, ni historial, ni expediente, y no se le puede sacar una hoja de
-campo. Y el único momento en que se puede documentar es cuando estás delante de
-ella. De vuelta al taller ya no se mide ni se fotografía nada.
+### Lo único que te impide cerrar
+
+| | |
+|---|---|
+| **La ficha de la puerta** | Si la puerta no existe, no hay dónde colgar nada. Se crea desde el propio parte, con el cliente o la dirección, y ya está. |
+| **Al menos una foto** | Una sola. Es lo **único** de la lista que no se puede conseguir desde la oficina, porque allí no está la puerta. |
+
+Lo demás (la etiqueta con QR, el tipo, el ancho y el alto, la matrícula) **sale
+igual en la lista**, sigue contando como que falta, y el parte **se cierra**. La
+visita queda señalada como **ficha incompleta** y le aparece a la oficina en su
+propia lista, en Gestión, hasta que alguien la remate.
+
+Esto cambió porque el bloqueo salía carísimo: te quedabas sin poder cerrar por
+una medida, y el trabajo acababa sin hacerse. Un bloqueo que la gente sortea no
+protege el dato, solo entretiene.
+
+> **Pero no te confundas con esto.** Que la aplicación te deje cerrar no
+> significa que dé igual. El ancho y el alto, el dintel y la placa están en la
+> puerta, y de vuelta al taller ya no se miden ni se fotografían: **cada dato
+> que no tomes es un viaje de vuelta**, tuyo o de otro. Si lo tienes a mano
+> ahora, hazlo ahora.
+
+Y hay una cosa que **no** se completa nunca después: **los resultados de lo que
+se comprueba.** Los puntos del guion, las medidas del ensayo de fuerzas, lo que
+se probó en la entrega. Eso no es un dato que falte, es una comprobación que
+nadie hizo, y rellenarla en la oficina no es completarla: es inventarla. Lo que
+no se comprobó se queda como **no comprobado**, que es la verdad.
+
+### Si el cliente ya ha firmado
+
+Cuando un parte de esa puerta ya está firmado, **tú ya no editas su ficha**. Te
+lo dice la aplicación al abrirla. Lo rematan la oficina o el administrador, y
+queda anotado quién lo hizo y cuándo, para que dentro de dos años se pueda
+distinguir lo que se tomó en obra de lo que se completó en la oficina.
+
+Lo que sí puedes hacer siempre: **subir fotos**, dar de alta **componentes** con
+su número de serie y abrir una **asistencia nueva**.
+
+Una puerta sin dar de alta no existe para la empresa: no tiene ficha, ni QR, ni
+historial, ni expediente, y no se le puede sacar una hoja de campo.
 
 > **En una instalación, la puerta se da de alta cuando está montada, no al
 > llegar.** Antes no hay medidas que tomar ni placa que leer: lo que hay es un
@@ -343,11 +389,10 @@ no decide nada, y el campo no sale.
 
 El peso de la hoja **no** se exige: no se puede pesar una hoja en obra. Sale como recomendado, junto al uso, el cuadro y el motor.
 
-### Lo único que no bloquea
+### Si no quedan etiquetas
 
-Si no quedan etiquetas libres en la furgoneta, eso no lo puedes resolver allí. La
-visita se cierra, pero queda señalada como **pendiente** y la oficina lo ve. Lo
-demás sí se puede hacer en obra, y por eso se exige.
+Eso no lo puedes resolver allí, así que ni se intenta: la visita se cierra, queda
+señalada y la etiqueta se pega en la siguiente.
 
 ---
 
@@ -391,7 +436,7 @@ Dale a **Guardar sin cerrar**. Se guarda todo y la visita sigue abierta. No pier
 **Obra sin terminar**, en la tarjeta. Deja el parte del día y la obra abierta. Escribe en «Para la próxima vez» lo que haga falta traer: es lo primero que leerás mañana. Apartado 4.
 
 **«La puerta no está dada de alta.»**
-Desde el propio parte puedes darla de alta y queda enganchada a la asistencia. Antes de salir del parte, guarda el avance. En los cuatro tipos del apartado 7, además, es obligatorio.
+Desde el propio parte puedes darla de alta y queda enganchada a la asistencia. Antes de salir del parte, guarda el avance. En los cuatro tipos del apartado 7 hace falta la ficha y una foto para poder cerrar; el resto de los datos se pueden rematar en oficina.
 
 **«Son tres puertas, no una.»**
 En el parte, **Puertas de esta obra**, las añades todas. Cada una lleva su ficha y su acta; las horas son de la obra. Apartado 5.
@@ -407,7 +452,9 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 - **No marques conforme un paracaídas que no has podido probar.** Si no se puede probar sin riesgo, se deja como no comprobado y se escribe por qué.
 - **No puentees una seguridad y la dejes puenteada.** Como prueba, un momento y controlado. Si la dejas así, la puerta queda fuera de servicio y se dice.
 - **No cierres una visita de pago sin horas.** Se queda valorada en cero y desaparece de lo pendiente de facturar.
-- **No dejes sin documentar una puerta que has tocado.** Las medidas y las fotos solo se pueden tomar allí. Lo que no se toma en obra no se toma nunca.
+- **No dejes sin documentar una puerta que has tocado.** Que la aplicación te deje cerrar no significa que dé igual: las medidas, el dintel y la placa están allí, y lo que no se toma en obra se convierte en otro viaje.
+- **No rellenes en la oficina una comprobación que no hiciste.** Un dato que falta se completa; una comprobación que nadie hizo, no. Eso se queda como no comprobado.
+- **No anotes una sola magnitud del ensayo de fuerzas.** Las cuatro o ninguna: con una sola no hay resultado, y un resultado a medias en un papel firmado es peor que no tenerlo.
 - **No cierres una obra de varios días sin haber apuntado los partes.** Se facturaría el último día en vez de la obra entera.
 - **No firmes un acta de entrega con puntos en blanco.** Lo que no aplique, márcalo como No aplica. Un hueco en blanco no dice nada y vale menos que un «No aplica».
 
@@ -422,4 +469,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.10.28-1 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.01-1 de ARIZA SAT*
