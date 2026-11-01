@@ -353,7 +353,13 @@ const RPC = {
   },
   siguiente_contrato(){ return 'CT-2026-' + String(DB.contratos.length + 1).padStart(3, '0'); },
   generar_preventivas(){ return { ok:true, creadas:0 }; },
-  valorar_aviso(){ return { ok:true }; },
+  /* No calcula nada, igual que antes: la fórmula vive en Supabase. Lo que sí
+     hace desde el 01-11-2026 es dejar constancia de a qué avisos se la ha
+     pedido, para poder comprobar que la aplicación recalcula cuando debe. */
+  valorar_aviso({ p_aviso }){
+    DB.__valorados = (DB.__valorados || []).concat([String(p_aviso)]);
+    return { ok:true };
+  },
   archivar_asistencia(){ return { ok:true }; },
   borrar_asistencia({ p_aviso }){
     DB.avisos = DB.avisos.filter(x => String(x.id) !== String(p_aviso));

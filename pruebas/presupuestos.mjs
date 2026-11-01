@@ -297,7 +297,12 @@ const convertir = await T(async () => {
            aviso: av && { tipo:av.tipo, cliente: av.cliente_id === p2.cliente_id,
                           desc: av.descripcion },
            previstos: g.previstosDe(p2.convertido_aviso).map(x => x.descripcion+' x'+x.cantidad),
-           movimientos: (g.S.movimientos||[]).length };
+           movimientos: (g.S.movimientos||[]).length,
+           /* El enlace con el presupuesto, que es lo que se perdía */
+           enlace: av && av.presupuesto_id === p.id,
+           pactado: av && g.pactadoDe(av),
+           base: p2.base,
+           desdeAviso: av && (g.presuDelAviso(av)||{}).id === p.id };
 });
 paso('se abre una asistencia nueva', convertir.creado === 1, convertir.creado);
 paso('para el mismo cliente y diciendo de qué presupuesto sale',
@@ -308,6 +313,18 @@ paso('el material ofertado queda apuntado como lo que hay que llevar',
 paso('pero NO se mueve el almacén: reservar no es gastar',
   convertir.movimientos === 0, convertir.movimientos);
 paso('y el presupuesto queda como en marcha', convertir.estado === 'convertido');
+/* ---- Añadido el 01-11-2026 ----
+   Aquí se perdía el precio. Al abrir el trabajo se copiaban la descripción, las
+   condiciones y las cantidades de material, pero ni el importe ni ningún enlace
+   al presupuesto, así que una oferta firmada de 3.200 € con seis horas de
+   trabajo salía en Gestión por 400 y pico euros, y el precio que el cliente
+   aceptó no estaba en ninguna pantalla del circuito de cobro. */
+paso('el trabajo se acuerda de qué presupuesto viene',
+  convertir.enlace === true, String(convertir.enlace));
+paso('y desde el trabajo se llega al presupuesto', convertir.desdeAviso === true);
+paso('el precio pactado se lee, y es la base sin IVA, no el total con IVA',
+  convertir.pactado === convertir.base && convertir.pactado > 0,
+  convertir.pactado+' vs base '+convertir.base);
 
 /* ================================================================
    5. Desde una visita
@@ -1248,6 +1265,104 @@ paso('una ruta normal trae su importe y su coste',
 paso('y todo suma en el sitio que le toca',
   lineasTarifa.mano_obra === 223.2 && lineasTarifa.desplazamiento === 86.5,
   'mano de obra '+lineasTarifa.mano_obra+', desplazamiento '+lineasTarifa.desplazamiento);
+
+/* ================================================================
+   17. Material sin precio                                01-11-2026
+
+   La línea de material del parte tiene artículo, descripción,
+   cantidad y unidad, y NINGÚN campo de precio: el precio sale de la
+   ficha del almacén. Eso está bien, porque el técnico no ve precios.
+   Lo que no puede pasar es que el material escrito a mano —el que no
+   está dado de alta, que es la mitad— se quede a cero euros para
+   siempre: el importe de la visita sale corto Y el margen sale más
+   alto que el real, que es la peor combinación posible.
+   ================================================================ */
+bloque('17. Material sin precio');
+
+const sinPrecio = await T(async () => {
+  const g = window.__T;
+  const cli = g.S.clientes[0];
+  const ayer = new Date(Date.now() - 86400000).toISOString();
+  await g.sb.from('avisos').insert({ id:'av-matsp', tipo:'averia', estado:'cerrado',
+    prioridad:'normal', tecnico_id:'usuario-admin', cliente_id:cli.id,
+    puerta_id:g.S.puertas[0].id, trabajo:'Cambiada la banda y una tapa.',
+    horas:2, cerrado:ayer, creado:ayer });
+  /* Dos líneas: una enlazada con el almacén y otra escrita a mano */
+  await g.sb.from('materiales').insert({ aviso_id:'av-matsp', articulo_id:'art-banda',
+    descripcion:'Banda de seguridad resistiva 2 m', cantidad:1, unidad:'ud' });
+  await g.sb.from('materiales').insert({ aviso_id:'av-matsp', articulo_id:null,
+    descripcion:'Fotocélula de espejo', cantidad:2, unidad:'ud' });
+  await g.sb.from('materiales').insert({ aviso_id:'av-matsp', articulo_id:null,
+    descripcion:'Tornillería varia', cantidad:1, unidad:'ud' });
+  await g.sb.from('valoraciones').insert({ aviso_id:'av-matsp', imp_mano_obra:90,
+    imp_desplazamiento:30, imp_materiales:54, imp_total:174,
+    coste_total:60, margen:114, facturado:false });
+  await g.cargar();
+
+  const mios = g.matSinPrecioDe('av-matsp').map(m => m.descripcion);
+  const enLista = g.visitasConMatSinPrecio().some(x => x.a.id === 'av-matsp');
+
+  /* El panel de Gestión */
+  g.S.tab = 'gestion'; g.pintar();
+  await new Promise(r => setTimeout(r, 700));
+  const gestion = document.getElementById('vista').innerText;
+
+  /* El aviso dentro de la valoración */
+  g.dlgValoracion('av-matsp');
+  await new Promise(r => setTimeout(r, 500));
+  const val = document.getElementById('dlg-form').innerText;
+  g.cerrarDlg();
+  await new Promise(r => setTimeout(r, 250));
+
+  /* Y el diálogo de enlazar: tiene que proponer el artículo por el nombre */
+  g.dlgMatSinPrecio('av-matsp');
+  await new Promise(r => setTimeout(r, 500));
+  const sels = Array.from(document.querySelectorAll('#dlg-form select[data-mat]'));
+  const propuesto = sels.map(x => x.value);
+  const textoDlg = document.getElementById('dlg-form').innerText;
+  /* La tornillería no está en el catálogo: se queda sin enlazar a propósito */
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 1500));
+
+  const quedan = g.matSinPrecioDe('av-matsp').map(m => m.descripcion);
+  const todas = (await g.sb.from('materiales').select('*').eq('aviso_id','av-matsp')).data;
+  const enlazada = todas.find(m => /Fotocélula/.test(m.descripcion));
+  return { mios, enLista, gestion, val, propuesto, textoDlg, quedan,
+    enlazadaCon: enlazada ? enlazada.articulo_id : null,
+    recalculada: (window.__DB.__valorados || []).includes('av-matsp') };
+});
+paso('se ven las líneas sin enlazar, y solo esas',
+  sinPrecio.mios.length === 2 && !sinPrecio.mios.some(x => /Banda/.test(x)),
+  sinPrecio.mios.join(' · '));
+paso('la visita entra en la lista de lo que hay que rematar antes de facturar',
+  sinPrecio.enLista === true);
+paso('Gestión lo saca con su propio recuadro',
+  /Material sin precio/.test(sinPrecio.gestion));
+paso('diciendo lo que de verdad pasa: que vale cero y el margen sale alto',
+  /vale cero/.test(sinPrecio.gestion) && /más alto que el real/.test(sinPrecio.gestion));
+paso('la valoración de esa visita lo avisa donde se mira el margen',
+  /sin enlazar/.test(sinPrecio.val) && /margen/.test(sinPrecio.val));
+paso('y lo dice también en la propia línea de materiales',
+  /a 0 €/.test(sinPrecio.val), (sinPrecio.val.match(/.{0,40}a 0 €/)||[''])[0]);
+paso('al enlazar, propone el artículo cuyo nombre coincide',
+  sinPrecio.propuesto[0] === 'art-foto', sinPrecio.propuesto.join(','));
+paso('pero no propone nada para lo que no está en el catálogo',
+  sinPrecio.propuesto[1] === '', '['+sinPrecio.propuesto[1]+']');
+paso('y avisa de que una coincidencia de nombre hay que comprobarla',
+  /Compruébalo/.test(sinPrecio.textoDlg));
+paso('enseña el precio de cada artículo, que es de lo que se trata',
+  /€/.test(sinPrecio.textoDlg));
+paso('la línea queda enlazada con su artículo',
+  sinPrecio.enlazadaCon === 'art-foto', sinPrecio.enlazadaCon);
+paso('la visita se vuelve a calcular en el momento, sin pedirlo aparte',
+  sinPrecio.recalculada === true);
+/* Lo que NO se arregla solo, y se dice: un material que no está dado de alta
+   sigue sin precio hasta que alguien lo cree. */
+paso('lo que no está en el almacén sigue señalado, no se da por bueno',
+  sinPrecio.quedan.length === 1 && /Tornillería/.test(sinPrecio.quedan[0]),
+  sinPrecio.quedan.join(' · '));
+paso('y el diálogo dice qué hacer con eso: darlo de alta primero',
+  /dale de alta primero/.test(sinPrecio.textoDlg));
 
 /* ================================================================
    Final
