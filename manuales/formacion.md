@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.11.01-1**
+> **Versión de la aplicación que describe este manual: 2026.11.01-2**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -268,7 +268,56 @@ De ahí sale el criterio: en los trabajos que tocan la puerta de lleno (montarla
 | Foto del conjunto y de la placa | Una foto de la placa vale más que tres campos de memoria |
 | Marca, modelo y número de serie | Pedir repuestos sin volver, y decidir el marco legal aplicable |
 
-El peso de la hoja no entra en el mínimo: no se puede pesar una hoja en obra sin báscula ni ficha del fabricante.
+### El dato que se pide y el dato que se puede conseguir
+
+El peso de la hoja no entra en el mínimo, y desde el 1 de noviembre de 2026 no se
+pide siquiera. Conviene entender por qué, porque el razonamiento vale para
+cualquier ficha que haya que diseñar:
+
+**Un campo que nadie puede rellenar no recoge un dato: produce un hueco.** Y un
+hueco en una ficha no es neutro, porque no distingue entre «no se pudo» y «no se
+miró». En obra no hay báscula y el fabricante no siempre da el peso, así que ese
+campo llevaba años en blanco en casi todas las puertas.
+
+Lo que sí se puede conseguir siempre es el **arrastre máximo del motor**, que
+viene en su placa. Y responde a la misma pregunta por la que se quería el peso:
+si el motor va sobrado o justo para esa hoja. Es un dato que se **copia**, no que
+se mide, y eso lo cambia todo: lo que se copia se rellena.
+
+De ahí sale el criterio: **al diseñar una ficha, no se pide el dato ideal, se
+pide el dato que existe y responde a la pregunta.** Si entre los dos hay
+distancia, se pide el que se puede tomar y se dice para qué sirve.
+
+### Las vueltas de los muelles
+
+En una seccional, las vueltas de los muelles de torsión son el dato que permite
+equilibrar la hoja y pedir un muelle de repuesto con la referencia correcta. Se
+anotan con media vuelta de precisión porque así se trabaja.
+
+No estaba en la ficha, y es un buen ejemplo de lo contrario al caso anterior: un
+dato que el técnico sí tiene delante, que cuesta diez segundos anotar, y cuya
+ausencia obliga a volver con el flexómetro y el medidor. Se pide solo en las
+seccionales: en una corredera no decide nada.
+
+### Por qué la puerta se trata como un todo
+
+Hay una tentación al construir cualquier inventario: desglosar. Herraje por
+herraje, rodillo por rodillo, bisagra por bisagra. Parece más riguroso.
+
+No lo es, por dos razones. La primera es práctica: el tiempo de gestión del
+documento crece y el técnico deja de rellenarlo, así que se cambia un desglose
+imaginario por un dato real. La segunda es de oficio: **cuando se habla de la
+puerta sin automatismo se habla de un conjunto**, y es como conjunto como se
+revisa, se equilibra y se sustituye.
+
+Lo que sí se desglosa, y no es una contradicción, es el **automatismo**: el motor
+y el cuadro van como componentes con su marca, su modelo y su número de serie,
+porque son lo que se pide de repuesto, lo que tiene su propia declaración y lo
+que se cambia por separado.
+
+Para el resto, un apartado libre donde el técnico escribe lo que a su juicio hay
+que identificar de esa puerta concreta. Un campo libre que se rellena vale más
+que doce campos cerrados que se quedan vacíos.
 
 Y si no hay placa, o está pintada o ilegible, **eso también es un dato**: se escribe por qué no la hay. Un campo en blanco no distingue entre «no lo miré» y «no existe»; una frase escrita, sí.
 
@@ -426,7 +475,10 @@ La aplicación no es un cuaderno bonito: está construida sobre lo que acabas de
 - Una ficha de una puerta con un parte **firmado** solo la pueden completar la oficina y el administrador, y queda anotado quién y cuándo.
 - Un punto del ensayo de fuerzas con menos de sus cuatro magnitudes **no dictamina**: el documento lo imprime como ensayo incompleto y nombra las que faltan.
 - En **instalación la puerta se da de alta cuando está montada**, no al llegar. Antes no hay medidas que tomar ni placa que leer. Por eso la aplicación lo exige al cerrar y no al empezar, y mientras se monta dice que está bien que todavía no exista.
-- El **dintel** se pide solo en las puertas que suben. En las demás el campo no sale.
+- El **dintel** se pide solo en las puertas que suben. En las demás el campo no sale. Las **vueltas de los muelles**, solo en las seccionales.
+- El **peso de la hoja** ya no se pide: en su lugar, el **arrastre máximo del motor**, que viene en su placa. El peso que estuviera anotado de antes se conserva y se sigue imprimiendo.
+- En vez de desglosar herrajes, un apartado libre, **más elementos a identificar**, que rellena el técnico en su inspección.
+- Desde el ordenador, los ficheros se pueden **soltar encima** del recuadro donde van. Cada recuadro acepta lo suyo: un PDF soltado en las fotos no se cuela y lo dice.
 - Una obra puede llevar **varias puertas**, y cada una tiene su ficha, su mínimo de obra y su acta. La obra no se cierra mientras le falte el mínimo a cualquiera de ellas, y el aviso dice el código de la que falta, no «la puerta» en general.
 - Una obra de **varios días** se declara a propósito, no se deduce: cada día deja su parte, sin firma ni cobro, y al cerrar las horas y los kilómetros salen de la suma de todos los partes. El material se apunta al día en que se gastó.
 - El **acta de entrega** lleva la lista de funciones del tipo de puerta, que la mantiene la oficina. No deja firmar con puntos en blanco, ni firmar «Conforme» con un punto marcado como mal.
@@ -476,4 +528,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.01-1 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.01-2 de ARIZA SAT*

@@ -11,7 +11,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.01-1**
+> **Versión de la aplicación que describe este manual: 2026.11.01-2**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -387,7 +387,56 @@ no decide nada, y el campo no sale.
 - **Hacer fotos:** abre la cámara y sube las fotos sin salir del parte.
 - **Añadir la matrícula de un elemento:** da de alta el motor o el cuadro con su número de serie.
 
-El peso de la hoja **no** se exige: no se puede pesar una hoja en obra. Sale como recomendado, junto al uso, el cuadro y el motor.
+### El peso de la hoja ya no se pide
+
+Desde el 1 de noviembre de 2026 no está en la ficha, y por la razón obvia: en
+obra no hay báscula, no es fácil de saber y no se rellenaba nunca.
+
+En su lugar la ficha pide el **arrastre máximo del motor**, que viene en su placa
+o en su ficha. Sirve para lo mismo que se quería el peso: saber si el motor va
+sobrado o justo para esa hoja. Es un dato que se copia, no que se mide.
+
+> Si en alguna puerta ya había un peso anotado, **no se ha borrado**. Sigue
+> saliendo en la ficha y en los documentos, en gris, diciendo que ya no se pide.
+
+### Las vueltas de los muelles, en las seccionales
+
+En una seccional la ficha pide las **vueltas de los muelles**, con media vuelta
+de precisión, que es como se trabaja. Es el dato que hace falta para equilibrar
+la hoja y para pedir un muelle de repuesto sin volver a medirlo.
+
+En el resto de puertas el campo no sale, igual que el dintel: un campo que no
+decide nada solo sirve para dejarlo en blanco.
+
+### Más elementos a identificar
+
+Un apartado libre al final de la ficha donde escribes **lo que tú veas** que hay
+que dejar anotado de esa puerta: los muelles y su año, el grosor del cable, los
+tambores, los herrajes de refuerzo, una puerta peatonal integrada.
+
+Va así a propósito. Desglosar herraje por herraje alargaba el papeleo sin añadir
+nada: cuando se habla de la puerta sin automatismo se habla de **un todo**. El
+motor y el cuadro siguen aparte, como componentes con su número de serie, porque
+eso es lo que permite pedir un repuesto sin volver.
+
+### Soltar las fotos encima, desde el ordenador
+
+En el ordenador ya no hace falta ir al botón y buscar la carpeta: **arrastra los
+ficheros y suéltalos encima** del recuadro. Mientras arrastras, el recuadro donde
+van a caer se marca con un borde, para que veas dónde se van a soltar antes de
+soltarlos.
+
+Funciona en todos los sitios donde se sube algo: las fotos y los PDF de la
+puerta, las fotos del expediente, la foto y el papel de un componente, los
+adjuntos de una oferta, la foto de un material, el logo y los sellos.
+
+Dos cosas que hace solo:
+
+- **Cada recuadro acepta lo suyo.** Si sueltas un PDF encima de las fotos no se cuela, y te lo dice. Mientras arrastras, un recuadro que no acepta lo que llevas no se marca.
+- Si sueltas cuatro fotos donde solo cabe una, sube la primera y te dice cuál.
+
+En el teléfono todo sigue igual: allí no se arrastra nada y el botón está donde
+estaba.
 
 ### Si no quedan etiquetas
 
@@ -469,4 +518,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.01-1 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.01-2 de ARIZA SAT*
