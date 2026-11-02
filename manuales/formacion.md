@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.11.01-3**
+> **Versión de la aplicación que describe este manual: 2026.11.02-1**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -460,7 +460,7 @@ Los que más veces se ven, por orden de gravedad:
 
 ---
 
-## 8 bis. Dos maneras de perder dinero sin enterarse
+## 8 bis. Tres maneras de perder dinero sin enterarse
 
 Esto no es técnica de puertas, es oficio de empresa, y se pone aquí porque las
 dos cosas pasan en el mismo sitio donde se documenta el trabajo.
@@ -508,8 +508,32 @@ un margen inflado no se nota nunca, y es con el que se decide qué precios poner
 el año que viene.
 
 Por eso el remate no es opcional: antes de facturar, el material escrito a mano
-se enlaza con su artículo del almacén y se vuelve a calcular. Y por eso hay una
-lista que no deja que se olvide.
+se enlaza con su artículo del almacén, o se le escribe lo que costó, y se vuelve
+a calcular. Y por eso hay una lista que no deja que se olvide.
+
+### El tipo de la visita decide si se cobra
+
+Esta es la más silenciosa de las tres, porque no se ve en ningún importe: se ve
+en que el importe **no existe**.
+
+Hay tipos de visita que, por definición, no se facturan: la **comercial** (ir a
+ver y ofertar), la de **garantía** (volver a lo que ya se cobró) y cualquiera
+marcada como que no se cobra. Eso está bien y tiene que ser así.
+
+Lo que hay que vigilar es el tipo con el que **nace** un trabajo. Un presupuesto
+vendido que se abre como «comercial» se cierra valiendo cero euros, no aparece
+en lo pendiente de facturar, y nadie lo echa de menos porque nunca estuvo ahí.
+En nuestra aplicación pasaba exactamente eso con los presupuestos de clientes
+cuya puerta no estaba dada de alta, hasta el 2 de noviembre de 2026.
+
+> **La regla:** el tipo de una visita no es una etiqueta para ordenar, es una
+> decisión de cobro. Cuando una aplicación lo deduce sola, conviene saber qué
+> deduce.
+
+Y un matiz que no es contradicción: una garantía **sí se apunta con sus horas**,
+aunque no se cobre. El importe sale cero y el coste no, así que el margen sale
+negativo. Eso es la verdad: volver a una puerta cuesta dinero, y hay que poder
+ver cuánto cuestan las garantías al cabo del año.
 
 ---
 
@@ -583,4 +607,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.01-3 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.02-1 de ARIZA SAT*
