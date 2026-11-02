@@ -52,6 +52,23 @@ img{max-width:100%}
 .top .quien{font-size:13px;color:#CFC9C4;display:flex;align-items:center;gap:8px}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block}
 .dot.off{background:var(--aviso)}
+/* Las dos barras se quedan pegadas arriba al bajar por la página: con pantallas
+   largas (Gestión, el almacén, una obra con varias puertas) había que subir del
+   todo para cambiar de sitio. Pedido por David el 02-11-2026. */
+.barras{position:sticky;top:0;z-index:40}
+/* Con la barra fija arriba, saltar a un apartado dejaba su título DEBAJO de la
+   barra. Esto reserva su alto al desplazarse, así que el apartado al que llegas
+   empieza donde se ve. */
+html{scroll-padding-top:104px}
+.panel{scroll-margin-top:104px}
+.grupos{display:flex;overflow-x:auto;background:#141110;scrollbar-width:none;
+  border-bottom:1px solid #2A2522}
+.grupos::-webkit-scrollbar{display:none}
+.grupos button{border:0;background:none;color:#CFC9C4;padding:11px 16px;
+  font:700 15px var(--cond);letter-spacing:.02em;cursor:pointer;white-space:nowrap;
+  border-bottom:3px solid transparent}
+.grupos button[aria-selected="true"]{color:#fff;border-bottom-color:var(--amarillo);background:var(--negro)}
+.tabs button.fuera-de-grupo{display:none}
 .tabs{display:flex;gap:2px;overflow-x:auto;background:var(--negro);scrollbar-width:none}
 .tabs::-webkit-scrollbar{display:none}
 .tabs-in{max-width:1000px;margin:0 auto;display:flex;gap:2px;padding:0 8px}
@@ -479,6 +496,8 @@ dialog::backdrop{background:rgba(20,18,17,.55)}
       <button class="btn sm plana" id="btn-salir" style="color:#fff;border-color:#4A4442;background:transparent">Salir</button>
     </div>
   </header>
+  <div class="barras">
+  <nav class="grupos"><div class="tabs-in" id="grupos"></div></nav>
   <nav class="tabs"><div class="tabs-in" id="tabs">
     <button data-tab="trabajo" role="tab">Mi trabajo</button>
     <button data-tab="puertas" role="tab">Puertas</button>
@@ -494,6 +513,7 @@ dialog::backdrop{background:rgba(20,18,17,.55)}
     <button data-tab="equipo" role="tab" hidden>Equipo</button>
     <button data-tab="manual" role="tab">Manual</button>
   </div></nav>
+  </div>
   <main class="wrap" id="vista"></main>
 </div>
 
@@ -562,6 +582,29 @@ const ESTADOS = {
   fuera_servicio:   {t:'Fuera de servicio',      c:'mal',   b:'#EE5A48'},
   mantenimiento:    {t:'Mantenimiento pendiente',c:'gris',  b:'#A49E99'}
 };
+/* ---- Las pestañas, agrupadas (02-11-2026) ----
+   Trece pestañas en una fila no son un menú: son una lista por la que hay que
+   buscar. Agrupadas en seis, cada grupo se abre en su propia fila y solo la del
+   grupo en el que estás. Los nombres son los que se usan hablando: «la oficina»
+   es gestión y equipo, y «clientes y trabajos» es todo lo que cuelga de un
+   cliente, desde su puerta hasta la etiqueta que lleva pegada.
+
+   Un grupo con una sola pestaña no enseña la segunda fila: sería una fila para
+   repetir lo que acabas de pulsar. */
+const GRUPOS = [
+  { k:'trabajo',    t:'Mi trabajo',          tabs:['trabajo'] },
+  { k:'cartera',    t:'Clientes y trabajos',
+    tabs:['clientes','puertas','avisos','realizadas','presupuestos','contratos','etiquetas'] },
+  { k:'calendario', t:'Calendario',          tabs:['calendario'] },
+  { k:'almacen',    t:'Almacén',             tabs:['almacen'] },
+  { k:'oficina',    t:'Oficina',             tabs:['gestion','equipo'] },
+  { k:'manual',     t:'Manuales',            tabs:['manual'] }
+];
+const grupoDeTab = k => GRUPOS.find(g => g.tabs.includes(k)) || GRUPOS[0];
+/* Una pestaña está disponible si existe y el papel de quien entra la deja ver:
+   el «hidden» lo pone el arranque según el rol, y aquí no se toca. */
+const tabDisponible = k => { const b = document.querySelector('#tabs button[data-tab="'+k+'"]');
+                             return !!b && !b.hidden; };
 const TIPOS_DOC = ['Manual de instrucciones','Desbloqueo de emergencia','Instrucciones de uso','Esquema eléctrico','Declaración CE','Certificado','Informe técnico','Presupuesto','Fotos de obra','Otro'];
 const EST_AVISO = {recibido:'Recibido', asignado:'Asignado', en_curso:'En curso', repuesto:'Esperando repuesto', cerrado:'Cerrado'};
 /* Tipos de asistencia: clave interna y cómo se llama en pantalla */
@@ -1474,7 +1517,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.02-6';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.02-7';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -1582,6 +1625,27 @@ function pintar(){ if (pend) return; pend = requestAnimationFrame(()=>{ pend=0; 
    se queda donde estaba, salvo cuando el sitio ha cambiado de verdad. */
 let SITIO = '';
 const sitioActual = () => [S.tab, S.ficha || '', S.fichaCliente || '', S.exp || ''].join('|');
+/* Las dos barras: arriba los seis grupos, debajo las pestañas del grupo en el
+   que estás. Se repinta en cada render porque el rol puede cambiar las pestañas
+   disponibles, y un grupo sin ninguna no se enseña: a un técnico no se le pone
+   un botón de Oficina que no lleva a ninguna parte. */
+function pintarBarras(){
+  const g = grupoDeTab(S.tab);
+  const barra = document.getElementById('grupos');
+  if (barra){
+    const html = GRUPOS.filter(x => x.tabs.some(tabDisponible)).map(x =>
+      '<button type="button" data-grupo="'+x.k+'" role="tab" aria-selected="'+
+      (x.k === g.k ? 'true' : 'false')+'">'+esc(x.t)+'</button>').join('');
+    if (barra.innerHTML !== html) barra.innerHTML = html;
+  }
+  document.querySelectorAll('#tabs button').forEach(b => {
+    b.setAttribute('aria-selected', b.dataset.tab === S.tab ? 'true' : 'false');
+    b.classList.toggle('fuera-de-grupo', !g.tabs.includes(b.dataset.tab));
+  });
+  /* La segunda fila solo cuando hay de dónde elegir */
+  const fila = document.querySelector('nav.tabs');
+  if (fila) fila.hidden = g.tabs.filter(tabDisponible).length < 2;
+}
 function render(){
   const act = document.activeElement, keep = act && act.id && raiz.contains(act)
     ? {id:act.id, v:act.value, s:act.selectionStart, e:act.selectionEnd, txt:/^(text|email|password|search|number|date)$/.test(act.type)||act.tagName==='TEXTAREA'} : null;
@@ -1591,7 +1655,7 @@ function render(){
   const mismoSitio = sitio === SITIO;
   const scroll = window.scrollY || document.documentElement.scrollTop || 0;
   SITIO = sitio;
-  document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab===S.tab ? 'true':'false'));
+  pintarBarras();
   let h = '';
   if (S.cargando) h = '<p class="cargando">Cargando datos…</p>';
   else if (S.exp) h = vistaExpediente(S.exp);
@@ -1611,7 +1675,10 @@ function render(){
   else if (S.tab === 'manual') h = vistaManual();
   else h = vistaPuertas();
   raiz.innerHTML = h;
-  if (S.tab === 'equipo' && !S.exp && !S.ficha && !S.fichaCliente) indiceEquipo();
+  /* El índice va en cualquier pantalla larga, no solo en Equipo. No se pone
+     sobre una ficha abierta (puerta, cliente o expediente): ahí el índice es el
+     propio documento. */
+  if (!S.exp && !S.ficha && !S.fichaCliente) indiceSecciones();
   activarCombos(raiz);
   if (keep){ const el = document.getElementById(keep.id); if (el){ if(keep.txt) el.value = keep.v; el.focus(); if(keep.txt){ try{ el.setSelectionRange(keep.s,keep.e); }catch(_){} } } }
   /* Volver a la altura de antes. Se hace después de pintar, porque hasta que no
@@ -5832,11 +5899,22 @@ async function convertirPresupuesto(id, tipoElegido){
 
    No se usan anclas con almohadilla porque la almohadilla de la dirección es
    la que abre la ficha de una puerta por QR: pisarla rompería los enlaces. */
-function indiceEquipo(){
+/* ---- El índice de la pantalla (02-11-2026) ----
+   Empezó siendo solo para Equipo, que tenía quince paneles. David pidió que lo
+   tenga TODA pantalla con más de una lista, y tiene razón: el problema no es de
+   Equipo, es de cualquier pantalla larga.
+
+   Cuándo sale, que es lo que más se piensa: cuando hay dos o más apartados Y la
+   página no cabe en el alto de la pantalla. Esa es exactamente la condición en
+   la que el índice sirve para algo, porque es cuando hay que hacer scroll para
+   buscar. En una pantalla que se ve entera, un índice es una fila de botones
+   para llegar a lo que ya estás viendo. */
+function indiceSecciones(){
   const stack = raiz.querySelector('.stack');
   if (!stack) return;
+  if (stack.querySelector(':scope > .eq-indice')) return;      // ya está puesto
   const paneles = [...stack.querySelectorAll(':scope > .panel')];
-  if (paneles.length < 4) return;   // con cuatro cosas el índice estorba más que ayuda
+  if (paneles.length < 2) return;
   const entradas = [];
   paneles.forEach((p, i) => {
     const t = p.querySelector('.panel-h h2, .panel-h h3, h2, h3');
@@ -5845,16 +5923,23 @@ function indiceEquipo(){
     p.id = id;
     entradas.push([id, t.textContent.trim()]);
   });
-  if (entradas.length < 4) return;
+  if (entradas.length < 2) return;
+  /* ¿Hace falta bajar para verlo todo? Si no, no hay nada que buscar. */
+  const alto = document.documentElement.scrollHeight;
+  if (alto <= (window.innerHeight || 800) + 160) return;
+  const comoSeLlama = (document.querySelector('#tabs button[data-tab="'+S.tab+'"]') || {}).textContent;
   const nav = document.createElement('div');
   nav.className = 'panel eq-indice';
-  nav.innerHTML = '<div class="panel-h"><h2>Qué hay en Equipo</h2>'+
+  nav.innerHTML = '<div class="panel-h"><h2>Qué hay en '+esc(comoSeLlama || 'esta pantalla')+'</h2>'+
     '<span class="mini">'+entradas.length+' apartados</span></div>'+
     '<div class="eq-lista">'+entradas.map(([id, t]) =>
       '<button type="button" class="btn sm plana" data-act="eq-ir" data-ir="'+id+'">'+esc(t)+'</button>').join('')+
     '</div>';
   stack.insertBefore(nav, stack.firstChild);
 }
+/* El nombre viejo se queda apuntando al nuevo: lo usa el banco de pruebas y
+   alguna llamada suelta, y no hay motivo para romperlas. */
+const indiceEquipo = indiceSecciones;
 
 function vistaEquipo(){
   let h = '<div class="stack"><div class="panel"><div class="panel-h"><h2>Técnicos con acceso</h2><span class="mini">'+S.equipo.length+'</span></div>';
@@ -17307,6 +17392,18 @@ dlgForm.addEventListener('keydown', e => {
 });
 dlgForm.addEventListener('change', e => {
   const t = e.target;
+  /* ---- La foto del material (02-11-2026) ----
+     Este campo vive dentro del diálogo del artículo, pero quien lo escuchaba
+     estaba colgado de la pantalla principal, que es otro sitio del documento:
+     el diálogo cuelga del body, no de la vista. Así que el aviso de «hay un
+     fichero» no llegaba a nadie y la foto no se subía NUNCA, ni soltándola ni
+     con el botón. Lo vio David soltando una foto en el almacén. */
+  if (t.dataset && t.dataset.act === 'subir-foto-art' && t.files && t.files.length){
+    const id = t.dataset.id, f = t.files[0];
+    t.value = '';
+    subirFotoArticulo(id, f);
+    return;
+  }
   if (t.classList && t.classList.contains('k-p')) sumarCuotas();
   if (t.dataset && t.dataset.act === 'k-cond'){ condicionCambiada(); return; }
   if (t.id === 'k-cli'){ pintarPuertasContrato(t.value || null, {}); return; }
@@ -22091,6 +22188,14 @@ async function guardarCierre(a, cerrando){
       toast(almacen.bajas+' material'+(almacen.bajas===1?'':'es')+' descontado'+
             (almacen.bajas===1?'':'s')+' de '+almacen.origen+'.');
     if (almacen && almacen.aviso) toast(almacen.aviso);
+    /* Dice que SÍ ha guardado. Quien llama a esto para irse a otra pantalla lo
+       necesita saber, y antes lo adivinaba mirando si el campo del parte seguía
+       en pantalla. Eso estaba mal: cerrar el diálogo no borra su contenido, así
+       que el campo seguía ahí siempre y los cinco sitios que lo preguntaban
+       creían SIEMPRE que el guardado había fallado. Resultado: se guardaba, se
+       cerraba el parte y no se abría nunca la pantalla a la que ibas.
+       (Lo encontró David el 02-11-2026, dando de alta una puerta.) */
+    return true;
   } catch(e){ setErr(e.message || 'No se pudo guardar.'); }
 }
 
@@ -22500,6 +22605,20 @@ function hojaImprimible(){
 $('#tabs').addEventListener('click', e => {
   const b = e.target.closest('button[data-tab]'); if (!b) return;
   S.tab = b.dataset.tab; S.tabElegida = true; S.ficha = null; S.fichaCliente = null; pintar(); window.scrollTo({top:0});
+});
+/* Al elegir grupo se va a su primera pestaña disponible. Si ya estás en una
+   pestaña de ese grupo, no se te mueve de sitio: pulsar el grupo en el que
+   estás no puede sacarte de donde estabas. */
+$('#grupos').addEventListener('click', e => {
+  const b = e.target.closest('button[data-grupo]'); if (!b) return;
+  const g = GRUPOS.find(x => x.k === b.dataset.grupo);
+  if (!g) return;
+  if (!g.tabs.includes(S.tab)){
+    const primera = g.tabs.find(tabDisponible);
+    if (!primera) return;
+    S.tab = primera; S.tabElegida = true; S.ficha = null; S.fichaCliente = null;
+  }
+  pintar(); window.scrollTo({top:0});
 });
 raiz.addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b || b.tagName === 'INPUT') return;
@@ -23501,8 +23620,7 @@ dlgForm.addEventListener('click', async e => {
     const id = b.dataset.id;
     const av = S.avisos.find(x => x.id === id);
     if (av && document.getElementById('z-trab')){
-      await guardarCierre(av, false);
-      if (document.getElementById('z-trab')) return;   // no se pudo guardar: el error está en pantalla
+      if (!await guardarCierre(av, false)) return;   // no se guardó: el error ya está en pantalla
     } else cerrarDlg();
     dlgEntregaObra(id, b.dataset.entrega || null, b.dataset.puerta || null);
     return;
@@ -23653,9 +23771,7 @@ dlgForm.addEventListener('click', async e => {
     const id = b.dataset.id;
     const av = S.avisos.find(x => x.id === id);
     if (av && document.getElementById('z-trab')){
-      await guardarCierre(av, false);
-      // si no se pudo guardar, el error ya está en pantalla y no se sale del parte
-      if (document.getElementById('z-trab')) return;
+      if (!await guardarCierre(av, false)) return;   // no se guardó: el error ya está en pantalla
     } else cerrarDlg();
     dlgPuerta(null, id);
     return;
@@ -23671,8 +23787,7 @@ dlgForm.addEventListener('click', async e => {
     const puId = b.dataset.puerta || (av ? av.puerta_id : null);
     if (!av || !puId) return;
     if (document.getElementById('z-trab')){
-      await guardarCierre(av, false);
-      if (document.getElementById('z-trab')) return;
+      if (!await guardarCierre(av, false)) return;   // no se guardó: el error ya está en pantalla
     } else cerrarDlg();
     if (a === 'obra-ficha') dlgPuerta(puId, id);
     else dlgComponente(null, puId, '', id);
@@ -23684,8 +23799,7 @@ dlgForm.addEventListener('click', async e => {
     const id = b.dataset.id;
     const av = S.avisos.find(x => x.id === id);
     if (av && document.getElementById('z-trab')){
-      await guardarCierre(av, false);
-      if (document.getElementById('z-trab')) return;
+      if (!await guardarCierre(av, false)) return;   // no se guardó: el error ya está en pantalla
     } else cerrarDlg();
     dlgEngancharPuerta(id);
     return;
@@ -23697,8 +23811,7 @@ dlgForm.addEventListener('click', async e => {
     /* Se guarda lo escrito antes de recargar: quitar una puerta no es motivo
        para perder el diagnóstico. */
     if (av && document.getElementById('z-trab')){
-      await guardarCierre(av, false);
-      if (document.getElementById('z-trab')) return;
+      if (!await guardarCierre(av, false)) return;   // no se guardó: el error ya está en pantalla
     }
     await soltarPuerta(id, b.dataset.puerta);
     cerrarDlg(); dlgCierre(id);
