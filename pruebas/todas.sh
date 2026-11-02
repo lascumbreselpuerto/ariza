@@ -10,7 +10,7 @@ if ! curl -fsS -o /dev/null "http://127.0.0.1:8899/index.html"; then
   exit 1
 fi
 
-SUITES="${*:-humo version basico componentes centros tipos ayudas fuerzas obra ficha importar almacen presupuestos regresion fase6 fase7 fase8 copias manuales}"
+SUITES="${*:-humo version basico componentes centros tipos ayudas fuerzas obra ficha importar almacen presupuestos parado regresion fase6 fase7 fase8 copias manuales}"
 RESUMEN="$AQUI/resultado.txt"
 : > "$RESUMEN"
 TOTAL=0; FALLOS=0
@@ -54,7 +54,12 @@ if [ -z "${1:-}" ] && [ -x "$AQUI/sql.sh" ]; then
   CODIGO_SQL=$?
   echo "$SALIDA_SQL" | grep -aE "FALLA|pasan las|fallos\." || true
   if [ "$CODIGO_SQL" = "0" ]; then
-    echo "sql: los 18 ficheros pasan las tres vueltas" >> "$RESUMEN"
+    # El número de ficheros lo dice sql.sh, que es quien los cuenta. Estaba
+    # escrito a mano («los 18 ficheros») y se quedó viejo el día que entró el
+    # fichero 19: el resumen daba un número y el detalle otro. Corregido el
+    # 02-11-2026.
+    FRASE="$(echo "$SALIDA_SQL" | grep -aoE 'Los [0-9]+ ficheros pasan las tres vueltas' | tail -1)"
+    echo "sql: ${FRASE:-pasa las tres vueltas}" >> "$RESUMEN"
   else
     N="$(echo "$SALIDA_SQL" | grep -acE '^ FALLA')"
     FALLOS=$((FALLOS + ${N:-1}))

@@ -556,6 +556,32 @@ paso('lo dice también en la lista de lo que hace la aplicación',
   /enlaza solo por el nombre/.test(F));
 
 /* ================================================================
+   14. El manual cuenta lo que se queda parado        02-11-2026
+
+   El panel de lo parado solo sirve si alguien entiende POR QUÉ está
+   ahí, porque no avisa de ningún error: avisa de trabajo que nadie
+   está haciendo. Eso hay que explicarlo, no solo pintarlo.
+
+   Trozos cortos a propósito: el manual va a 80 columnas.
+   ================================================================ */
+bloque('14. El manual cuenta lo que se queda parado');
+
+paso('el manual dice que lo abierto no envejece a la vista',
+  /no envejece a la vista/.test(F));
+paso('y lo que eso cuesta: el presupuesto que se pierde callando',
+  /pierde callando/.test(F));
+paso('dice que el reloj cuenta desde la última señal de vida',
+  /última señal de vida/.test(F));
+paso('que por eso el parte diario de una obra larga no es papeleo',
+  /no es papeleo/.test(F));
+paso('y que esperando un repuesto se arregla llamando, no esperando',
+  /llamando, no\s+esperando|llamando, no esperando/.test(F.replace(/\n/g, ' ')));
+paso('lo dice también en la lista de lo que hace la aplicación',
+  /lo que se ha quedado parado/i.test(F) && /los urgentes desde el primer día/.test(F));
+paso('y que no hay nada que marcar ni que apagar',
+  /nada que marcar/.test(F));
+
+/* ================================================================
    El índice del manual
    ================================================================
    El manual ha pasado de dos folios a ocho apartados largos. Buscar

@@ -45,7 +45,8 @@ export PATH="$PGBIN:$PATH"
 # del que la crea. Es el mismo orden en que se fueron entregando.
 ORDEN="componentes.sql centros.sql parte-por-correo.sql obra.sql ficha.sql \
 almacen.sql presupuestos.sql presupuestos2.sql comercial.sql anexos.sql \
-tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos3.sql valoracion.sql"
+tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos3.sql valoracion.sql \
+parado.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -120,6 +121,21 @@ if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/valoracion-pruebas.sql" ]; then
     fallos=$((fallos+1))
     echo " FALLA la valoración:"
     grep -a -m3 -E "ERROR|EXCEPTION" /tmp/val-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
+# Y las dos fechas que dicen desde cuándo algo está quieto: las sella un
+# disparador, así que hay que comprobar que las sella cuando toca y, sobre todo,
+# que NO las sella cuando no toca.
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/parado-pruebas.sql" ]; then
+  echo ""
+  echo "── Desde cuándo está quieto ────────────────────"
+  if $PSQL -f "$AQUI/sql/parado-pruebas.sql" > /tmp/parado-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/parado-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA lo parado:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/parado-pruebas.log | sed 's/^/         /'
   fi
 fi
 
