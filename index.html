@@ -1468,7 +1468,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.02-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.02-2';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -3221,7 +3221,13 @@ function vistaGestion(){
       h += '<div class="item-plano">'+
         '<button class="item sp" data-act="ver-valoracion" data-id="'+a.id+'">'+
           '<span class="qr">'+esc(((p&&p.codigo)||'—').replace(/^[A-Z]+-/,''))+'</span>'+
-          '<span><span class="tit">'+esc(nombreCliente(a))+'</span>'+
+          '<span><span class="tit">'+esc(nombreCliente(a))+
+            /* El letrero de material sin valorar, pedido el 02-11-2026: la
+               oficina tiene que verlo en la lista, sin abrir la visita una por
+               una, porque es lo que hay que cargar ANTES de facturar. */
+            (() => { const n = matSinPrecioDe(a.id).length;
+              return n ? ' <span class="chip mal sin">Material sin valorar · '+n+'</span>' : ''; })()+
+          '</span>'+
           '<span class="sub">'+esc(tipoAsis(a.tipo))+' · cerrada '+esc(fechaCorta(a.cerrado))+
             (dias_ > 30 ? ' · <b style="color:var(--mal)">hace '+dias_+' días</b>' : ' · hace '+dias_+' días')+'</span>'+
           '<span class="sub">'+esc(dondeAsistencia(a))+'</span></span>'+
@@ -3238,7 +3244,12 @@ function vistaGestion(){
           })()+'</span>'+
         '</button>'+
         '<div class="fila" style="padding:0 12px 12px">'+
-          '<button class="btn sm pri" data-act="marcar-facturado" data-id="'+a.id+'">Marcar facturada</button>'+
+          /* Si lleva material sin valorar, el botón de ponerle precio va DELANTE
+             del de facturar: facturar antes de cargarlo es facturar de menos. */
+          (matSinPrecioDe(a.id).length
+            ? '<button class="btn sm pri" data-act="mat-sin-precio" data-id="'+a.id+'">Ponerle precio</button>'+
+              '<button class="btn sm" data-act="marcar-facturado" data-id="'+a.id+'">Marcar facturada</button>'
+            : '<button class="btn sm pri" data-act="marcar-facturado" data-id="'+a.id+'">Marcar facturada</button>')+
           '<button class="btn sm plana" data-act="parte" data-id="'+a.id+'">Parte</button>'+
           '<span class="sp"></span>'+
           '<button class="btn sm plana" data-act="revalorar" data-id="'+a.id+'">Volver a calcular</button>'+
@@ -3261,9 +3272,15 @@ function vistaGestion(){
     orden.forEach(a => {
       const v = con(a);
       const col = !v ? 'var(--muted)' : (+v.margen < 0 ? 'var(--mal)' : (+v.margen === 0 ? 'var(--muted)' : 'var(--ok)'));
+      /* El margen de una visita con material sin valorar es más alto que el
+         real, y aquí es justo donde se mira el margen: se dice en la misma
+         línea, no en otra pantalla. */
+      const nSin = matSinPrecioDe(a.id).length;
       h += '<tr><td>'+esc(nombreCliente(a))+
            '<span class="sub mini" style="display:block">'+esc(fechaCorta(a.cerrado))+
-             (a.cobrado ? ' · cobrada en obra' : '')+(a.sin_cargo ? ' · sin cargo' : '')+'</span></td>'+
+             (a.cobrado ? ' · cobrada en obra' : '')+(a.sin_cargo ? ' · sin cargo' : '')+
+             (nSin ? ' · <b style="color:var(--mal)">'+nSin+' material'+(nSin===1?'':'es')+
+               ' sin valorar</b>' : '')+'</span></td>'+
            '<td>'+esc(tipoAsis(a.tipo))+'</td>'+
            '<td class="num" style="text-align:right">'+(v ? eur(v.imp_total) : '—')+'</td>'+
            '<td class="num" style="text-align:right">'+(v ? eur(v.coste_total) : '—')+'</td>'+
@@ -19731,10 +19748,17 @@ function dlgMatSinPrecio(avisoId){
            servidor al recalcular, que es quien sabe el recargo que toca y el
            descuento del contrato. Ponerlo aquí sería calcular el mismo número
            en dos sitios distintos, y acabarían diciendo cosas distintas.
-           Con artículo, el coste también se deja al servidor: lo coge de su
-           ficha, que es donde está el bueno. */
-        const o = c.art ? { articulo_id: c.art, coste: null, precio: null }
-                        : { coste: c.coste, precio: null };
+
+           El COSTE solo se vacía cuando el artículo elegido tiene coste en su
+           ficha, para que el servidor lo coja de ahí. Si no lo tiene, el coste
+           que hubiera en la línea NO se toca: borrarlo dejaría la línea peor
+           que antes. (Corregido el 02-11-2026.) */
+        const art = c.art ? articuloConCoste(c.art) : null;
+        const o = c.art
+          ? (art && art.coste != null
+              ? { articulo_id: c.art, coste: null, precio: null }
+              : { articulo_id: c.art, precio: null })
+          : { coste: c.coste, precio: null };
         const { error } = await sb.from('materiales').update(o).eq('id', c.id);
         if (error) throw error;
       }
@@ -19742,9 +19766,55 @@ function dlgMatSinPrecio(avisoId){
          importe viejo en pantalla y la sensación de que no ha servido de nada. */
       await sb.rpc('valorar_aviso', { p_aviso: avisoId });
       cerrarDlg(); await cargar(); pintar();
-      const quedan = matSinPrecioDe(avisoId).length;
-      toast(cambios.length+' línea'+(cambios.length===1?'':'s')+' con precio y visita recalculada'+
-        (quedan ? '. Quedan '+quedan+' sin precio.' : '.'));
+      /* ---- Y se comprueba que de verdad ha servido (02-11-2026) ----
+         Antes esto acababa en un «guardado» alegre y, si el servidor no había
+         puesto el precio, la línea seguía valiendo cero sin que nada lo dijera.
+         Pasó de verdad: enlazabas con el almacén y no ocurría nada. Ahora se
+         mira el resultado y, si sigue sin precio, se dice POR QUÉ. */
+      const siguen = matSinPrecioDe(avisoId);
+      const tocadas = cambios.map(c => c.id);
+      const malas = siguen.filter(m => tocadas.includes(m.id));
+      const quedan = siguen.length;
+
+      if (!malas.length){
+        toast(cambios.length+' línea'+(cambios.length===1?'':'s')+' con precio y visita recalculada'+
+          (quedan ? '. Quedan '+quedan+' sin precio.' : '.'));
+        return;
+      }
+
+      /* Separar las dos causas posibles, que se arreglan de maneras distintas */
+      const sinCosteEnFicha = malas.filter(m => {
+        const c = cambios.find(x => x.id === m.id);
+        const art = c && c.art ? articuloConCoste(c.art) : null;
+        return !!art && art.coste == null;
+      });
+      const conArticuloBueno = malas.filter(m => !sinCosteEnFicha.includes(m));
+
+      abrirDlg('<h3>El precio no ha entrado</h3>'+
+        '<p style="margin:0 0 12px">He guardado lo que has puesto, pero al volver a calcular '+
+        (malas.length === 1 ? 'una línea se ha quedado' : malas.length+' líneas se han quedado')+
+        ' <b>sin precio</b>, así que de momento siguen valiendo cero.</p>'+
+        (sinCosteEnFicha.length
+          ? '<div class="sin-ficha" style="margin-bottom:10px"><b>'+
+            esc(sinCosteEnFicha.map(m => m.descripcion).join(', '))+'</b><br>'+
+            'El artículo que has elegido no tiene <b>precio de compra</b> en su ficha del almacén, '+
+            'así que no hay de dónde sacar el precio. Ponle el coste en Almacén y vuelve a calcular '+
+            'la visita, o escríbele aquí lo que costó esa pieza.</div>'
+          : '')+
+        (conArticuloBueno.length
+          ? '<div class="sin-ficha" style="margin-bottom:10px"><b>'+
+            esc(conArticuloBueno.map(m => m.descripcion).join(', '))+'</b><br>'+
+            'El artículo sí tiene coste en su ficha, pero el servidor no ha puesto el precio. Eso '+
+            'pasa cuando <b>falta ejecutar en Supabase el fichero valoracion.sql</b>: hasta que no '+
+            'entre, enlazar con el almacén no sirve de nada y hay que escribir el coste a mano.</div>'
+          : '')+
+        '<p class="mini" style="margin:0">Mientras tanto, el camino que siempre funciona es escribir '+
+        'lo que costó la pieza en la casilla de coste.</p>'+
+        '<div class="pie" style="flex-wrap:wrap;gap:6px">'+
+        '<button type="button" class="btn sm" data-act="mat-sin-precio" data-id="'+avisoId+
+          '">Volver a intentarlo</button>'+
+        '<span class="sp"></span>'+
+        '<button type="button" class="btn plana" data-cerrar>Entendido</button></div>', null);
     } catch(e){ setErr(e.message || 'No se ha podido guardar.'); }
   });
 }
