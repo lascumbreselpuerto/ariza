@@ -1468,7 +1468,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.02-4';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.02-5';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -3269,6 +3269,18 @@ function vistaGestion(){
     const nTotal = grupos.reduce((n, g) => n + g.filas.length, 0);
     h += '<div class="panel"><div class="panel-h"><h3>Lo que se ha quedado parado</h3>'+
       '<span class="mini">'+nTotal+'</span></div>';
+    /* El aviso de que faltan las fechas va ANTES de todo y pase lo que pase.
+       Estaba dentro de la rama que solo se pinta cuando hay algo en la lista, y
+       eso lo dejaba mudo justo en el caso en que más engaña: con la lista vacía
+       no se sabía si es que no hay nada parado o si es que los días se están
+       contando mal. Una pantalla que dice «nada quieto» sin poder saberlo es
+       peor que una que no dice nada. (Corregido el 02-11-2026.) */
+    if (sinFechasDeMovimiento())
+      h += '<div class="sin-ficha" style="margin-bottom:10px">Los días se están contando desde '+
+        'la fecha de alta, no desde la última vez que se tocó: falta ejecutar en la base de '+
+        'datos <b>servidor/parado.sql</b>. Hasta entonces, algo que se movió ayer cuenta los '+
+        'días que lleva desde que entró, así que esta lista no es de fiar <b>ni cuando sale '+
+        'vacía</b>.</div>';
     if (!nTotal)
       h += '<p class="muted" style="margin:0">Nada quieto más de la cuenta. Lo abierto se está '+
         'moviendo.</p>';
@@ -3277,11 +3289,6 @@ function vistaGestion(){
         'que lleva. No hay nada que apagar: en cuanto se le apunta algo, desaparece de aquí '+
         'solo. En <b style="color:var(--mal)">rojo</b>, lo que lleva más del doble de tiempo '+
         'del que ya era raro.</p>';
-      if (sinFechasDeMovimiento())
-        h += '<div class="sin-ficha" style="margin-bottom:10px">Los días se están contando desde '+
-          'la fecha de alta, no desde la última vez que se tocó: falta ejecutar en la base de '+
-          'datos <b>servidor/parado.sql</b>. Hasta entonces, algo que se movió ayer sale aquí '+
-          'con los días que lleva desde que entró.</div>';
       grupos.forEach(g => {
         h += '<div class="grupo"><h3>'+esc(g.titulo)+
           ' <span class="mini">· '+g.filas.length+'</span></h3>'+
