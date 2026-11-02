@@ -1468,7 +1468,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.02-3';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.02-4';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -3259,6 +3259,77 @@ function vistaGestion(){
   }
   h += '</div>';
 
+  /* ---- Lo que se ha quedado parado (02-11-2026) ----
+     El panel que no existía: lo abierto, sí; lo abierto Y QUIETO, no. Un aviso
+     sin asignar, una obra a medias o un presupuesto sin respuesta no se caen de
+     ninguna lista por sí solos, y como no envejecen en pantalla, nadie los echa
+     de menos. Aquí envejecen, y en cuanto se mueven desaparecen. */
+  {
+    const grupos = loQueSeQuedoParado();
+    const nTotal = grupos.reduce((n, g) => n + g.filas.length, 0);
+    h += '<div class="panel"><div class="panel-h"><h3>Lo que se ha quedado parado</h3>'+
+      '<span class="mini">'+nTotal+'</span></div>';
+    if (!nTotal)
+      h += '<p class="muted" style="margin:0">Nada quieto más de la cuenta. Lo abierto se está '+
+        'moviendo.</p>';
+    else {
+      h += '<p class="mini" style="margin:0 0 10px">Lo que lleva días sin moverse, con los días '+
+        'que lleva. No hay nada que apagar: en cuanto se le apunta algo, desaparece de aquí '+
+        'solo. En <b style="color:var(--mal)">rojo</b>, lo que lleva más del doble de tiempo '+
+        'del que ya era raro.</p>';
+      if (sinFechasDeMovimiento())
+        h += '<div class="sin-ficha" style="margin-bottom:10px">Los días se están contando desde '+
+          'la fecha de alta, no desde la última vez que se tocó: falta ejecutar en la base de '+
+          'datos <b>servidor/parado.sql</b>. Hasta entonces, algo que se movió ayer sale aquí '+
+          'con los días que lleva desde que entró.</div>';
+      grupos.forEach(g => {
+        h += '<div class="grupo"><h3>'+esc(g.titulo)+
+          ' <span class="mini">· '+g.filas.length+'</span></h3>'+
+          '<p class="mini" style="margin:0 0 8px">'+esc(g.porque)+'</p><div class="lista-simple">';
+        g.filas.slice(0, 20).forEach(x => {
+          const col = x.rojo ? ';color:var(--mal);font-weight:700' : '';
+          if (g.presu){
+            const cli = x.p.cliente_id ? clienteDe(x.p.cliente_id) : null;
+            h += '<div class="item-plano">'+
+              '<button class="item sp" data-act="presu-abrir" data-id="'+x.p.id+'">'+
+                '<span><span class="tit">'+esc((cli && cli.nombre) || x.p.titulo || 'Sin cliente')+'</span>'+
+                '<span class="sub">'+esc([x.p.referencia, x.que].filter(Boolean).join(' · '))+
+                /* El total del presupuesto lleva IVA, y aquí se dice: en la misma
+                   pantalla hay importes sin IVA (lo facturable, el margen), y dos
+                   números que no significan lo mismo no pueden ir sin apellido. */
+                (x.p.total != null ? ' · '+eur(x.p.total)+' con IVA' : '')+'</span></span>'+
+                '<span style="text-align:right"><span class="tit" style="font-size:15px'+col+'">'+
+                x.dias+' días</span><span class="sub">quieto</span></span>'+
+              '</button>'+
+              '<button class="btn sm" data-act="presu-abrir" data-id="'+x.p.id+'">Abrir</button>'+
+              '</div>';
+          } else {
+            const pu = x.a.puerta_id ? puertaDe(x.a.puerta_id) : null;
+            h += '<div class="item-plano">'+
+              '<button class="item sp" data-act="'+g.act+'" data-id="'+x.a.id+'">'+
+                '<span class="qr">'+esc(((pu && pu.codigo) || '—').replace(/^[A-Z]+-/, ''))+'</span>'+
+                '<span><span class="tit">'+esc(nombreCliente(x.a))+
+                (x.urgente ? ' <span class="chip mal sin">Urgente</span>' : '')+
+                (x.obra ? ' <span class="chip gris sin">Obra</span>' : '')+'</span>'+
+                '<span class="sub">'+esc(tipoAsis(x.a.tipo))+' · '+esc(EST_AVISO[x.a.estado] || x.a.estado)+
+                ' · '+esc(dondeAsistencia(x.a))+'</span></span>'+
+                '<span style="text-align:right"><span class="tit" style="font-size:15px'+col+'">'+
+                x.dias+' días</span><span class="sub">quieto</span></span>'+
+              '</button>'+
+              '<button class="btn sm" data-act="'+g.act+'" data-id="'+x.a.id+'">'+esc(g.boton)+'</button>'+
+              '</div>';
+          }
+        });
+        h += '</div>'+
+          (g.filas.length > 20
+            ? '<p class="mini" style="margin:8px 0 0">Y '+(g.filas.length-20)+' más. '+
+              'Los más antiguos salen primero.</p>' : '')+
+          '</div>';
+      });
+    }
+    h += '</div>';
+  }
+
   // --- Margen de las visitas del mes ---
   h += '<div class="panel"><div class="panel-h"><h3>Margen de '+esc(nombreMes(mes))+'</h3><span class="mini">'+delMes.length+'</span></div>';
   if (!delMes.length) h += '<p class="muted" style="margin:0">No hay visitas cerradas en este mes.</p>';
@@ -3901,6 +3972,151 @@ function visitasConMatSinPrecio(){
   }).filter(x => x && x.a.cerrado && !x.a.anulada && !x.a.sin_cargo &&
                  !(x.v && x.v.facturado))
     .sort((x, y) => String(x.a.cerrado || '').localeCompare(String(y.a.cerrado || '')));
+}
+
+/* ================================================================
+   LO QUE SE HA QUEDADO PARADO                        02-11-2026
+
+   La aplicación sabía perfectamente lo que estaba abierto. Lo que no
+   decía en ninguna pantalla es DESDE CUÁNDO, y sin eso no se puede
+   distinguir lo que lleva dos días de lo que lleva siete semanas.
+
+   Nada de esto es un estado nuevo que alguien tenga que mantener: se
+   calcula solo con las fechas. En cuanto algo se mueve, desaparece de
+   aquí sin que nadie tenga que apagar un aviso, que es la única manera
+   de que una lista así no acabe mintiendo.
+
+   Los días los eligió David: holgados. Un número bajo llena la lista
+   todos los días y se deja de mirar; esto avisa cuando ya es raro.
+   ================================================================ */
+const PARADO = {
+  sinAsignar:      3,   // un aviso abierto sin técnico puesto
+  repuesto:       10,   // esperando un repuesto, que es el agujero negro
+  obra:           10,   // una obra abierta sin un parte nuevo
+  presuEnviado:   15,   // enviado al cliente y sin respuesta
+  presuSinMandar:  3,   // emitido y todavía dentro de la oficina
+  presuAceptado:   7    // aceptado y sin abrir el trabajo
+};
+/* En rojo, al doble: no es lo mismo tarde que abandonado. */
+const esRojo = (d, umbral) => d >= umbral * 2;
+
+/* Desde cuándo no se mueve. Se coge la fecha MÁS RECIENTE de todas las que
+   indican que algo pasó de verdad: el sello del servidor, el cambio de estado,
+   el último parte de obra y, como último recurso, el alta.
+
+   Las dos primeras solo existen si está ejecutado servidor/parado.sql. Sin él
+   esto sigue funcionando, pero midiendo desde el alta, así que un aviso tocado
+   ayer parecerá tan viejo como el día que entró. Por eso el panel lo dice. */
+function quietoDesde(a){
+  if (!a) return null;
+  const candidatas = [a.movido_el, a.estado_el, a.creado];
+  const js = jornadasDe(a.id);
+  if (js.length){
+    /* De cada parte, la más reciente de sus dos fechas: el día trabajado y el
+       día en que se apuntó, que no siempre son el mismo. */
+    js.forEach(j => { candidatas.push(j.fecha); candidatas.push(j.creado); });
+  }
+  const t = candidatas.filter(Boolean).map(x => +new Date(x)).filter(x => !isNaN(x));
+  return t.length ? new Date(Math.max.apply(null, t)).toISOString() : null;
+}
+const diasQuieto = a => { const q = quietoDesde(a); return q == null ? 0 : -dias(q); };
+/* Si falta el SQL, no hay más fecha que la del alta: se dice, no se disimula. */
+const sinFechasDeMovimiento = () => (S.avisos || []).length > 0 &&
+  !(S.avisos || []).some(a => a.movido_el || a.estado_el);
+
+/* El trabajo que nació de un presupuesto, visto desde el presupuesto */
+const avisoDelPresu = p => !p ? null :
+  (S.avisos || []).find(a => a.presupuesto_id === p.id || a.id === p.convertido_aviso) || null;
+
+/* Los grupos, cada uno con su umbral y con el motivo por el que ese grupo
+   existe. El motivo va aquí y no en la pantalla a propósito: así la pantalla y
+   las pruebas dicen lo mismo. */
+function loQueSeQuedoParado(){
+  const abiertos = (S.avisos || []).filter(a => !a.cerrado && !a.anulada);
+  const grupos = [];
+  const porAntiguedad = (x, y) => y.dias - x.dias;
+
+  /* ---- 1. Avisos sin asignar ----
+     Un aviso sin técnico no es de nadie. Los urgentes entran desde el primer
+     día: si es urgente y nadie lo ha cogido, el mismo día ya es tarde. */
+  {
+    const filas = abiertos.filter(a => !a.tecnico_id)
+      .map(a => ({ a, dias: diasQuieto(a), urgente: a.prioridad === 'urgente' }))
+      .filter(x => x.urgente || x.dias >= PARADO.sinAsignar)
+      .map(x => Object.assign(x, { rojo: x.urgente ? x.dias >= 1 : esRojo(x.dias, PARADO.sinAsignar) }))
+      .sort((x, y) => (y.urgente ? 1 : 0) - (x.urgente ? 1 : 0) || porAntiguedad(x, y));
+    if (filas.length) grupos.push({ clave:'sin-asignar', titulo:'Avisos sin asignar',
+      umbral: PARADO.sinAsignar, act:'asignar', boton:'Asignar', filas,
+      porque:'Un aviso abierto sin técnico puesto no es de nadie. Los urgentes salen desde '+
+             'el primer día, por delante del resto.' });
+  }
+
+  /* ---- 2. Esperando repuesto ----
+     El clásico: el aviso está vivo, el cliente espera, y nadie lo mira porque
+     formalmente ya está «en marcha». */
+  {
+    const filas = abiertos.filter(a => a.estado === 'repuesto')
+      .map(a => ({ a, dias: diasQuieto(a) }))
+      .filter(x => x.dias >= PARADO.repuesto)
+      .map(x => Object.assign(x, { rojo: esRojo(x.dias, PARADO.repuesto) }))
+      .sort(porAntiguedad);
+    if (filas.length) grupos.push({ clave:'repuesto', titulo:'Esperando repuesto',
+      umbral: PARADO.repuesto, act:'aviso-editar', boton:'Abrir', filas,
+      porque:'El aviso está vivo y el cliente esperando, pero nadie lo mira porque ya '+
+             'figura en marcha. Si el repuesto no ha llegado en '+PARADO.repuesto+' días, '+
+             'o no se pidió, o hay que llamar al proveedor.' });
+  }
+
+  /* ---- 3. Obras y trabajos sin movimiento ----
+     Lo asignado y empezado que lleva días sin un parte nuevo. */
+  {
+    const filas = abiertos.filter(a => a.tecnico_id && a.estado !== 'repuesto')
+      .map(a => ({ a, dias: diasQuieto(a), obra: esObraLarga(a) }))
+      .filter(x => x.dias >= PARADO.obra)
+      .map(x => Object.assign(x, { rojo: esRojo(x.dias, PARADO.obra) }))
+      .sort(porAntiguedad);
+    if (filas.length) grupos.push({ clave:'obra', titulo:'Trabajos sin movimiento',
+      umbral: PARADO.obra, act:'aviso-editar', boton:'Abrir', filas,
+      porque:'Trabajos asignados en los que no se ha apuntado nada nuevo. En una obra de '+
+             'varios días, cada día deja su parte: si no hay parte nuevo, la obra está '+
+             'quieta, aunque en la pantalla del técnico siga saliendo.' });
+  }
+
+  /* ---- 4. Presupuestos ----
+     Tres situaciones distintas que se arreglan de maneras distintas, así que
+     van juntas en un grupo pero cada fila dice cuál es la suya. */
+  {
+    const ps = (S.presupuestos || []);
+    const filas = [];
+    ps.forEach(p => {
+      const e = estadoPresu(p);
+      if (e === 'emitido'){
+        const d = -dias(p.creado);
+        if (d >= PARADO.presuSinMandar)
+          filas.push({ p, dias:d, que:'emitido y sin mandar',
+            rojo: esRojo(d, PARADO.presuSinMandar) });
+      } else if (e === 'enviado'){
+        const d = -dias(p.enviado_el || p.creado);
+        if (d >= PARADO.presuEnviado)
+          filas.push({ p, dias:d, que:'enviado, sin respuesta',
+            rojo: esRojo(d, PARADO.presuEnviado) });
+      } else if (p.estado === 'aceptado' && !avisoDelPresu(p)){
+        const d = -dias(p.aceptado_el || p.creado);
+        if (d >= PARADO.presuAceptado)
+          filas.push({ p, dias:d, que:'aceptado, sin abrir el trabajo',
+            rojo: esRojo(d, PARADO.presuAceptado) });
+      }
+    });
+    filas.sort(porAntiguedad);
+    if (filas.length) grupos.push({ clave:'presupuestos', titulo:'Presupuestos sin cerrar',
+      umbral: PARADO.presuEnviado, act:'presu-abrir', boton:'Abrir', presu:true, filas,
+      porque:'Un presupuesto emitido que no sale de la oficina es trabajo hecho que no llegó '+
+             'a nadie. Uno enviado y sin respuesta a los '+PARADO.presuEnviado+' días hay que '+
+             'llamarlo, no esperarlo. Y uno aceptado sin trabajo abierto es dinero firmado '+
+             'que no se está haciendo.' });
+  }
+
+  return grupos;
 }
 
 /* ---- El presupuesto del que nació un trabajo (01-11-2026) ----
