@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.11.02-1**
+> **Versión de la aplicación que describe este manual: 2026.11.02-2**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -557,7 +557,9 @@ La aplicación no es un cuaderno bonito: está construida sobre lo que acabas de
 - En vez de desglosar herrajes, un apartado libre, **más elementos a identificar**, que rellena el técnico en su inspección.
 - Desde el ordenador, los ficheros se pueden **soltar encima** del recuadro donde van. Cada recuadro acepta lo suyo: un PDF soltado en las fotos no se cuela y lo dice.
 - Un trabajo que nace de un presupuesto **guarda de qué presupuesto viene**, y en la valoración salen juntos el precio pactado y el calculado. Gestión lista los que se quedan por debajo de lo pactado, con la diferencia sumada.
-- El material escrito a mano sale señalado en Gestión hasta que se enlaza con el almacén, y al enlazarlo la visita se vuelve a calcular en el momento.
+- El material sin precio sale señalado en Gestión hasta que se remata, y además lleva su **letrero en la lista de pendiente de facturar**: se ve sin abrir la visita, que es como hay que verlo cuando se va a facturar.
+- Se remata de dos maneras: eligiendo el artículo del almacén, o escribiendo lo que costó. Al guardar, la visita se vuelve a calcular en el momento.
+- Y si el precio **no** entra, la aplicación dice por qué: o el artículo no tiene precio de compra en su ficha, o falta ejecutar el SQL de la valoración. Un «guardado» que no ha servido de nada es peor que un error.
 - Una obra puede llevar **varias puertas**, y cada una tiene su ficha, su mínimo de obra y su acta. La obra no se cierra mientras le falte el mínimo a cualquiera de ellas, y el aviso dice el código de la que falta, no «la puerta» en general.
 - Una obra de **varios días** se declara a propósito, no se deduce: cada día deja su parte, sin firma ni cobro, y al cerrar las horas y los kilómetros salen de la suma de todos los partes. El material se apunta al día en que se gastó.
 - El **acta de entrega** lleva la lista de funciones del tipo de puerta, que la mantiene la oficina. No deja firmar con puntos en blanco, ni firmar «Conforme» con un punto marcado como mal.
@@ -607,4 +609,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.02-1 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.02-2 de ARIZA SAT*
