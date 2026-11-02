@@ -120,6 +120,8 @@ create table if not exists public.avisos (
   estado_final text,
   pendiente    boolean not null default false,
   pendiente_texto text,
+  sin_cargo    boolean not null default false,
+  sin_cargo_motivo text,
   cerrado      timestamptz,
   anulada      boolean not null default false,
   contacto_nombre   text,
@@ -146,6 +148,11 @@ create table if not exists public.materiales (
   descripcion text not null default '',
   cantidad    numeric not null default 1,
   unidad      text not null default 'ud',
+  /* El coste y el precio de la línea existen desde la primera migración, y la
+     función de valoración los usa. No estaban en el andamio porque esa
+     migración nunca se guardó en servidor/. */
+  coste       numeric,
+  precio      numeric,
   creado      timestamptz not null default now()
 );
 
@@ -166,6 +173,7 @@ create table if not exists public.valoraciones (
   facturado          boolean not null default false,
   factura_ref        text,
   facturado_el       date,
+  calculado          timestamptz,
   creado             timestamptz not null default now()
 );
 
@@ -206,7 +214,22 @@ create table if not exists public.contratos (
   id         uuid primary key default gen_random_uuid(),
   cliente_id uuid references public.clientes(id) on delete set null,
   referencia text,
+  /* Lo que la valoración necesita saber de un contrato: qué cubre y qué
+     descuenta. Un contrato cubre las revisiones periódicas, no las averías. */
+  estado     text not null default 'activo',
+  fecha_alta date not null default current_date,
+  mano_obra_incluida      boolean not null default false,
+  desplazamiento_incluido boolean not null default false,
+  descuento_material      numeric not null default 0,
+  descuento_mano_obra     numeric not null default 0,
   creado     timestamptz not null default now()
+);
+
+create table if not exists public.contrato_puertas (
+  id          uuid primary key default gen_random_uuid(),
+  contrato_id uuid references public.contratos(id) on delete cascade,
+  puerta_id   uuid references public.puertas(id) on delete cascade,
+  creado      timestamptz not null default now()
 );
 
 create table if not exists public.tarifas (
