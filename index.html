@@ -717,6 +717,7 @@ const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etique
             cliArchivados:false, centros:[], sinCentros:false, versionNueva:null, versionAvisada:null,
             manual:null, manuales:null, sinObra:false, sinModo:false, sinFicha3:false,
             sinPresuAviso:false, matSinPrecio:null, fotosCuenta:{}, sinFactura:false,
+            sinRutas:false,
             sinAlmacen:false, ubicaciones:[], existencias:[], movimientos:[], previstos:[],
             buscaMat:'', matFamilia:'', matProveedor:'', matFiltro:'', fichaMat:null,
             sinPresupuestos:false, presupuestos:[], presuLineas:[], articulos:[], textosPresu:[], sinTextos:false,
@@ -1354,6 +1355,10 @@ async function cargar(){
      falta el SQL en vez de inventarse que nadie debe nada. */
   const fc = await sb.from('valoraciones').select('vence_el').limit(1);
   S.sinFactura = !!fc.error;
+  /* La ruta de cada visita: servidor/rutas.sql. Sin esa columna el parte sigue
+     pidiendo kilómetros, como antes, y no se manda ninguna ruta al guardar. */
+  const rt = await sb.from('avisos').select('ruta').limit(1);
+  S.sinRutas = !!rt.error;
   /* ---- El almacén ----
      Las existencias no se guardan en ninguna columna: se leen de la vista, que
      las suma de los movimientos. Si falta el SQL del almacén, la aplicación
@@ -1517,7 +1522,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.02-7';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.02-8';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -3353,6 +3358,37 @@ function vistaGestion(){
   }
   h += '</div>';
 
+  /* ---- Rutas sin valorar (02-11-2026) ----
+     Va junto a lo de facturar porque es lo mismo: dinero que no se está
+     cobrando y que no se ve en ninguna cuenta. */
+  {
+    const rsv = visitasRutaSinValorar();
+    if (rsv.length){
+      const cuales = [...new Set(rsv.map(x => x.ruta))];
+      h += '<div class="panel"><div class="panel-h"><h3>Visitas con la ruta sin valorar</h3>'+
+        '<span class="mini">'+rsv.length+'</span></div>'+
+        '<p class="mini" style="margin:0 0 10px">Estas visitas se cerraron con una ruta a la que '+
+        '<b>nadie le ha puesto importe</b> en Tarifas, así que su desplazamiento ha entrado a '+
+        '<b>cero euros</b>: la factura sale corta y el margen sale más alto que el real. Ponle el '+
+        'importe a '+esc(cuales.map(nombreRuta).join(', '))+' y vuelve a calcular estas visitas.</p>'+
+        '<div class="lista-simple">';
+      rsv.slice(0, 30).forEach(x => {
+        h += '<div class="item-plano">'+
+          '<button class="item sp" data-act="ver-valoracion" data-id="'+x.a.id+'">'+
+            '<span><span class="tit">'+esc(nombreCliente(x.a))+'</span>'+
+            '<span class="sub">'+esc(nombreRuta(x.ruta))+' · cerrada '+esc(fechaCorta(x.a.cerrado))+
+            '</span></span>'+
+            '<span style="text-align:right"><span class="tit">'+eur(x.v.imp_total)+'</span>'+
+            '<span class="sub" style="color:var(--mal)">desplazamiento 0 €</span></span>'+
+          '</button>'+
+          '<button class="btn sm pri" data-act="tarifas">Poner el importe</button></div>';
+      });
+      h += '</div>'+
+        (rsv.length > 30 ? '<p class="mini" style="margin:8px 0 0">Y '+(rsv.length-30)+' más.</p>' : '')+
+        '</div>';
+    }
+  }
+
   /* ---- Facturas vencidas sin cobrar (02-11-2026) ----
      El final del circuito: emitir la factura no es cobrarla. Esto solo puede
      existir desde que se apunta el vencimiento, y por eso antes no estaba. */
@@ -4171,6 +4207,23 @@ const diasQuieto = a => { const q = quietoDesde(a); return q == null ? 0 : -dias
 const sinFechasDeMovimiento = () => (S.avisos || []).length > 0 &&
   !(S.avisos || []).some(a => a.movido_el || a.estado_el);
 
+/* ---- Visitas con una ruta que nadie ha valorado (02-11-2026) ----
+   Desde que el desplazamiento sale de la ruta, una ruta sin importe puesto hace
+   que esa visita se valore con el desplazamiento a CERO. Es el mismo caso que
+   el material sin precio: la factura sale corta y el margen sale más alto que
+   el real. Así que se lista, igual que aquél. */
+function visitasRutaSinValorar(){
+  if (S.sinRutas) return [];
+  return (S.avisos || []).filter(a => {
+    if (!a.cerrado || a.anulada || a.sin_cargo) return false;
+    const r = (a.ruta || '').trim();
+    if (!r || r === 'km') return false;       // sin ruta se cobra la 1, que siempre vale
+    return !rutaValorada(r);
+  }).map(a => ({ a, v: valoracionDe(a.id), ruta: a.ruta }))
+    .filter(x => x.v && !x.v.facturado)
+    .sort((x, y) => String(x.a.cerrado || '').localeCompare(String(y.a.cerrado || '')));
+}
+
 /* ---- Facturas vencidas y sin cobrar (02-11-2026) ----
    Una factura emitida no es dinero: es una promesa con fecha. Lo que convierte
    la promesa en cobro es que alguien mire los vencimientos, y para eso hay que
@@ -4415,7 +4468,18 @@ function precioHoraDe(k){
   return Number(v != null && v !== '' ? v : (t.precio_hora || 0));
 }
 
-const RUTAS = ['ruta1', 'ruta2', 'ruta3'];
+/* Cinco rutas desde el 02-11-2026 (eran tres). Las valora administración en
+   Tarifas: la que no tenga importe puesto no se ofrece, porque elegirla haría
+   que esa visita se valorase con el desplazamiento a cero. */
+const RUTAS = ['ruta1', 'ruta2', 'ruta3', 'ruta4', 'ruta5'];
+/* Las que se pueden elegir: las que tienen importe. La ruta 1 siempre vale,
+   porque cae al importe fijo de toda la vida si está sin rellenar. */
+const rutasValoradas = () => {
+  const t = S.tarifas || {};
+  return RUTAS.filter(k => k === 'ruta1' ||
+    (t[k+'_importe'] != null && t[k+'_importe'] !== ''));
+};
+const rutaValorada = k => k === 'km' || rutasValoradas().includes(k);
 const nombreRuta = k => {
   const t = S.tarifas || {};
   if (k === 'km') return 'Por kilómetros';
@@ -17494,6 +17558,13 @@ dlgForm.addEventListener('change', e => {
   /* Al cambiar la fecha de la factura, el vencimiento se vuelve a proponer con
      el plazo de ese cliente. Si alguien ya lo había tocado a mano, no se le
      pisa: una fecha escrita por una persona manda sobre una calculada. */
+  /* Los kilómetros solo se piden cuando la visita va fuera de ruta. Un campo
+     que no decide nada solo sirve para dejarlo en blanco. (02-11-2026) */
+  if (t.id === 'z-ruta'){
+    const caja = document.getElementById('z-caja-km');
+    if (caja) caja.hidden = t.value !== 'km';
+    return;
+  }
   if (t.id === 'fa-fecha'){
     const venc = document.getElementById('fa-vence');
     if (venc && !venc.dataset.tocado && venc.dataset.aviso){
@@ -18292,6 +18363,17 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
       activos().map(t => '<option value="'+t.id+'"'+(d.tecnico_id===t.id?' selected':'')+'>'+esc(t.nombre||'—')+(t.rol==='admin'?' (admin)':'')+'</option>').join('')+
       '</select><span class="pista">Le llega un correo y lo ve en «Mis asistencias»</span></div>'+
     '<div class="campo"><label for="a-fecha">Visita prevista</label><input id="a-fecha" type="date" value="'+esc(d.fecha_prevista||'')+'"></div>'+
+    /* ---- La ruta, desde la oficina (02-11-2026) ----
+       Quien crea el aviso suele saber a qué zona va esa visita mejor que quien
+       la cierra a las ocho de la tarde. Si se pone aquí, el técnico la ve pero
+       no la cambia; si se deja vacía, la elige él al cerrar. */
+    (S.sinRutas || !esGestion() ? '' :
+      '<div class="campo"><label for="a-ruta">Ruta</label><select id="a-ruta">'+
+      '<option value="">Que la elija el técnico</option>'+
+      rutasValoradas().map(k => '<option value="'+k+'"'+((d.ruta||'')===k?' selected':'')+'>'+
+        esc(nombreRuta(k))+'</option>').join('')+
+      '<option value="km"'+((d.ruta||'')==='km'?' selected':'')+'>Fuera de ruta (por kilómetros)</option>'+
+      '</select><span class="pista">Si la pones, el técnico no la cambia</span></div>')+
     '</div></div>';
 
   if (a && a.anulada)
@@ -18321,6 +18403,10 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
                 contacto_nombre: nom || null, contacto_telefono: tel || null, contacto_email: mail || null,
                 contacto: [nom, tel, mail].filter(Boolean).join(' · '),
                 actualizado: new Date().toISOString() };
+    /* La ruta solo se manda si la base la tiene y si quien edita es oficina:
+       un técnico editando el aviso no puede borrar lo que puso la oficina. */
+    if (!S.sinRutas && esGestion() && document.getElementById('a-ruta'))
+      o.ruta = val('a-ruta') || null;
     if (!o.puerta_id && !o.cliente_id && !o.direccion_libre && !o.contacto_nombre)
       return setErr('Pon al menos la puerta, el cliente, una dirección o el nombre de quien avisa.');
     if (tid && o.estado === 'recibido') o.estado = 'asignado';
@@ -20520,7 +20606,20 @@ function dlgValoracion(avisoId){
   }
   h += '<div class="grupo"><h3>'+(presuDelAviso(a) ? 'Lo que sale del cálculo' : 'Lo que se factura')+'</h3><dl class="datos">'+
     fila('Mano de obra', eur(v.imp_mano_obra) + (a.horas != null ? ' <span class="mini">('+a.horas+' h × '+(a.num_tecnicos||1)+')</span>' : '')) +
-    fila('Desplazamiento', eur(v.imp_desplazamiento) + (a.desplazamiento != null ? ' <span class="mini">('+a.desplazamiento+' km)</span>' : '')) +
+    /* De dónde sale ese importe: la ruta, o los kilómetros si va fuera de
+       ruta. Sin esto, el número no se puede comprobar. (02-11-2026) */
+    fila('Desplazamiento', eur(v.imp_desplazamiento) +
+      (() => {
+        if (S.sinRutas) return a.desplazamiento != null
+          ? ' <span class="mini">('+a.desplazamiento+' km)</span>' : '';
+        const r = (a.ruta || '').trim() || 'ruta1';
+        if (r === 'km') return ' <span class="mini">(fuera de ruta'+
+          (a.desplazamiento != null ? ', '+a.desplazamiento+' km' : '')+')</span>';
+        const sinValorar = !rutaValorada(r);
+        return ' <span class="mini"'+(sinValorar ? ' style="color:var(--mal)"' : '')+'>('+
+          esc(nombreRuta(r))+(a.ruta ? '' : ', por defecto')+
+          (sinValorar ? ', sin importe puesto' : '')+')</span>';
+      })()) +
     fila('Materiales', eur(v.imp_materiales) +
       (matSinPrecioDe(avisoId).length
         ? ' <span class="mini" style="color:var(--mal)">('+matSinPrecioDe(avisoId).length+
@@ -21418,11 +21517,42 @@ function dlgCierre(avisoId){
     (() => {
       const r = resumenHorasObra(a.id);
       const kv = r && r.km > 0 ? r.km : (a.desplazamiento != null ? a.desplazamiento : '');
-      return '<div class="campo"><label for="z-km">Desplazamiento (km)</label>'+
+      /* ---- El desplazamiento, por ruta (02-11-2026) ----
+         Antes aquí se pedían los kilómetros. El técnico no los sabe: los
+         estima, distinto cada día y cada técnico, y de esa estimación salía el
+         importe. Ahora se elige la ruta, que tiene su precio puesto por la
+         oficina. Los kilómetros siguen existiendo para lo que cae fuera de las
+         cinco rutas, que es el viaje raro, y entonces sí se escriben. */
+      if (S.sinRutas)
+        return '<div class="campo"><label for="z-km">Desplazamiento (km)</label>'+
+          '<input id="z-km" type="number" step="1" min="0" value="'+esc(kv)+'">'+
+          '<span class="pista">Falta ejecutar servidor/rutas.sql: hasta entonces, kilómetros</span></div>';
+      /* Si la oficina puso la ruta al crear la asistencia, el técnico no la
+         cambia: la eligió quien sabe lo que se le cobra a ese cliente. */
+      const puesta = (a.ruta || '').trim();
+      const fijada = !!puesta && !esGestion();
+      const ops = rutasValoradas();
+      const opcion = k => '<option value="'+k+'"'+(puesta === k ? ' selected' : '')+'>'+
+        esc(nombreRuta(k))+'</option>';
+      return '<div class="campo"><label for="z-ruta">Desplazamiento</label>'+
+        (fijada
+          ? '<input id="z-ruta-vista" type="text" value="'+esc(nombreRuta(puesta))+'" disabled>'+
+            '<input id="z-ruta" type="hidden" value="'+esc(puesta)+'">'+
+            '<span class="pista">La puso la oficina al crear el aviso</span>'
+          : '<select id="z-ruta" data-act="z-ruta">'+
+            (puesta ? '' : '<option value="">Elige la ruta</option>')+
+            ops.map(opcion).join('')+
+            '<option value="km"'+(puesta === 'km' ? ' selected' : '')+'>Fuera de ruta (por kilómetros)</option>'+
+            '</select>'+
+            '<span class="pista">La ruta decide lo que se cobra de desplazamiento. '+
+            'Si no eliges, se cobra '+esc(nombreRuta('ruta1'))+'</span>')+
+        '</div>'+
+        '<div class="campo" id="z-caja-km"'+(puesta === 'km' ? '' : ' hidden')+'>'+
+        '<label for="z-km">Kilómetros</label>'+
         '<input id="z-km" type="number" step="1" min="0" value="'+esc(kv)+'">'+
         (r && r.km > 0
           ? '<span class="pista">Suma de los kilómetros de las '+r.jornadas+' jornadas</span>'
-          : '')+'</div>';
+          : '<span class="pista">Solo para lo que cae fuera de las rutas</span>')+'</div>';
     })()+
     '</div></div>';
 
@@ -22000,12 +22130,28 @@ async function guardarCierre(a, cerrando){
     num_tecnicos: val('z-ntec') ? +val('z-ntec') : 1,
     desplazamiento: val('z-km') ? +val('z-km') : null,
     estado_final: val('z-estado') || null,
+    /* La ruta se guarda aparte, abajo, solo si la base la tiene */
     pendiente: chk('z-pend'), pendiente_texto: val('z-pendt') || null,
     sin_cargo: chk('z-sincargo'), sin_cargo_motivo: val('z-sincargom') || null,
     firma_nombre: val('z-fnom') || null, firma_sin: val('z-sin') || null,
     enviado_cliente: chk('z-enviar'),
     actualizado: new Date().toISOString(),
   };
+  /* La ruta, si la base la tiene. Lo que se elija manda sobre lo que hubiera,
+     y si no se elige nada se deja como estaba: el servidor valora como ruta 1
+     cuando no hay ninguna, así que no hace falta inventarle una aquí. */
+  if (!S.sinRutas){
+    const r = val('z-ruta');
+    if (r) o.ruta = r;
+    /* Fuera de ruta sin kilómetros es un desplazamiento a medio apuntar: se
+       cobra el importe fijo y nada más, y conviene decirlo antes de cerrar. */
+    if (r === 'km' && !o.desplazamiento && cerrando)
+      return setErr('Has marcado que la visita va fuera de ruta: pon los kilómetros, '+
+        'o elige una de las rutas.');
+    /* Y los kilómetros solo cuentan fuera de ruta: dentro de una ruta, el
+       importe es el de la ruta, y dejar un número suelto ahí confunde. */
+    if (r && r !== 'km') o.desplazamiento = null;
+  }
   if (conCobro){
     o.cobrado = chk('z-cobrado');
     o.cobro_importe = val('z-imp') ? +val('z-imp') : null;
@@ -22317,7 +22463,15 @@ async function hojaParte(avisoId){
       fila('Fecha', fechaCorta(a.cerrado || a.creado))+
       fila('Horas', a.horas != null ? (a.horas + ' h') : '')+
       fila('Técnicos', a.num_tecnicos)+
-      fila('Desplazamiento', a.desplazamiento != null ? (a.desplazamiento + ' km') : '')+
+      /* En el parte que firma el cliente va la ruta, no un número de
+         kilómetros que nadie ha medido. Los kilómetros solo salen cuando la
+         visita va fuera de ruta, que es cuando significan algo. (02-11-2026) */
+      fila('Desplazamiento', (() => {
+        const r = (a.ruta || '').trim();
+        if (!S.sinRutas && r && r !== 'km') return nombreRuta(r);
+        if (a.desplazamiento != null) return a.desplazamiento + ' km';
+        return !S.sinRutas && !r ? nombreRuta('ruta1') : '';
+      })())+
       fila('Técnico', a.tecnico_id ? nombreTec(a.tecnico_id) : a.tecnico)+
     '</table>'+
     (a.cobrado ? ('<h2>Cobro</h2><table>'+fila('Importe cobrado', (a.cobro_importe||0) + ' €')+fila('Forma', a.cobro_forma)+fila('Referencia', a.cobro_ref)+'</table>') : '')+
