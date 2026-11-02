@@ -1468,7 +1468,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.02-2';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.02-3';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -3937,6 +3937,21 @@ const estadoPresu = p => presuCaducado(p) ? 'caducado' : (p ? p.estado : 'borrad
 /* El artículo CON su coste. S.catalogo no lo trae nunca; S.articulos solo lo
    tiene quien puede verlo. */
 const articuloConCoste = id => (S.articulos || []).find(a => a.id === id) || null;
+/* El artículo del almacén cuya descripción es EXACTAMENTE esta.
+   «Exactamente» aquí quiere decir lo mismo que en el servidor, que es quien
+   enlaza solas las líneas de material: minúsculas y sin espacios de sobra a los
+   lados, y nada más. No se quitan acentos ni signos a propósito, aunque el
+   buscador de la aplicación sí lo haga: si yo fuera más tolerante que el
+   servidor diría que un material ya está dado de alta y luego el servidor no lo
+   reconocería, y la línea se quedaría a cero sin que nada lo explicase. */
+const mismoNombreQueElServidor = (a, b) =>
+  String(a == null ? '' : a).trim().toLowerCase() ===
+  String(b == null ? '' : b).trim().toLowerCase();
+function exactoEnCatalogo(desc){
+  if (!String(desc == null ? '' : desc).trim()) return null;
+  return (S.catalogo || []).find(c => c.activo !== false &&
+    mismoNombreQueElServidor(c.descripcion, desc)) || null;
+}
 /* Precio de venta de un material. Si tiene precio fijo puesto, ese: hay
    material que se vende a tarifa del fabricante y no a lo que a ti te salga.
    Si no, su coste más el recargo, y el del propio artículo manda sobre el
@@ -19690,7 +19705,9 @@ function dlgMatSinPrecio(avisoId){
     esc(tipoAsis(a.tipo))+' · cerrada '+esc(fechaCorta(a.cerrado))+'</p>'+
     '<p style="margin:0 0 12px">Estas líneas no tienen precio, así que <b>entran en la valoración '+
     'a cero euros</b>. Cada una se arregla de una de dos maneras: diciendo qué artículo del '+
-    'almacén es, o escribiendo lo que costó.</p>';
+    'almacén es, o escribiendo lo que costó. Y si es material que vais a volver a gastar, al '+
+    'escribir el coste puedes marcar que <b>lo dé de alta en el almacén</b>: la próxima vez que '+
+    'aparezca se enlazará solo y no habrá que escribir nada.</p>';
 
   if (!cat.length)
     h += '<div class="sin-ficha" style="margin-bottom:12px">El catálogo de materiales está vacío, '+
@@ -19702,8 +19719,12 @@ function dlgMatSinPrecio(avisoId){
      y no merece darse de alta (tornillería, una pieza suelta), se escribe su
      COSTE y el servidor calcula el precio con el recargo general y el descuento
      del contrato si lo hay. Lo que no tenga ni una cosa ni otra sigue a cero. */
-  h += mats.map((m, i) =>
-    '<div class="grupo"><h3>'+esc(m.descripcion || 'Sin descripción')+
+  h += mats.map((m, i) => {
+  /* ¿Está ya en el almacén con esta misma descripción? Si lo está, no se
+     ofrece darlo de alta: se ofrece enlazarlo, que es lo que hace el select. */
+  const yaEsta = !!exactoEnCatalogo(m.descripcion);
+  const sePuedeAlta = esGestion() && !yaEsta && !!(m.descripcion || '').trim();
+  return '<div class="grupo"><h3>'+esc(m.descripcion || 'Sin descripción')+
       ' <span class="mini">· '+esc(m.cantidad)+' '+esc(m.unidad || 'ud')+'</span></h3>'+
     '<div class="campos">'+
     '<div class="campo full"><label for="mp-'+i+'">Del almacén</label>'+
@@ -19720,12 +19741,34 @@ function dlgMatSinPrecio(avisoId){
     '<input id="mc-'+i+'" type="number" step="0.01" min="0" data-mat="'+m.id+'" '+
       'value="'+esc(m.coste != null ? m.coste : '')+'">'+
     '<span class="pista">El coste, no el precio de venta: el recargo lo pone la aplicación</span></div>'+
-    '</div></div>').join('');
+    /* ---- El almacén se llena solo, pero preguntando (02-11-2026) ----
+       Lo que más se gasta es pieza repetida: fotocélulas, bandas, mandos,
+       muelles, rodillos. Si cada vez que aparece una hay que escribir su coste
+       a mano, se escribe el mismo número cincuenta veces y nadie se fía de
+       ninguno. Dándola de alta aquí, la próxima vez el servidor la enlaza solo
+       por el nombre y ya no hay nada que teclear.
+
+       No se hace solo: se pregunta. Crear una ficha de almacén es una decisión
+       de catálogo, y no todo merece ficha (un tornillo, una brida, un trozo de
+       cable). Así que es una casilla que hay que marcar, y viene sin marcar. */
+    (sePuedeAlta
+      ? '<div class="campo full">'+
+        '<label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer">'+
+        '<input type="checkbox" id="mn-'+i+'" data-mat="'+m.id+'" '+
+          'style="accent-color:var(--amarillo);width:18px;height:18px">'+
+        'Esto no está en el almacén: ¿lo doy de alta?</label>'+
+        '<span class="pista">Le creo su ficha con esta descripción y el coste que escribas '+
+        'arriba, y la línea queda enlazada. La próxima vez que aparezca este material, el '+
+        'servidor lo enlaza solo por el nombre y no hay que escribir nada</span></div>'
+      : '')+
+    '</div></div>'; }).join('');
 
   h += '<p class="mini" style="margin:12px 0 0">Con una de las dos cosas basta. Si eliges artículo '+
     'del almacén, manda su ficha y su recargo; si escribes el coste, se le aplica tu recargo '+
     'general y el descuento del contrato, si lo tiene. Lo que dejes sin ninguna de las dos seguirá '+
-    'valiendo cero.</p>'+
+    'valiendo cero. La casilla de dar de alta no cambia el precio de esta visita: lo que hace es '+
+    'que la próxima vez no haya que volver a teclearlo. No la marques para una brida o un trozo '+
+    'de cable: el almacén es para lo que se repite.</p>'+
     '<p class="err"></p><div class="pie" style="flex-wrap:wrap;gap:6px">'+
     '<button type="button" class="btn sm plana" data-act="articulo-nuevo">Dar de alta un material</button>'+
     '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
@@ -19736,13 +19779,72 @@ function dlgMatSinPrecio(avisoId){
     const cambios = mats.map((m, i) => {
       const sel = document.getElementById('mp-'+i);
       const cos = document.getElementById('mc-'+i);
+      const chk = document.getElementById('mn-'+i);
       const art = sel ? sel.value : '';
       const coste = cos && cos.value !== '' ? +cos.value : null;
-      return { id: m.id, art, coste };
-    }).filter(x => x.art || x.coste != null);
+      return { id: m.id, art, coste, desc: m.descripcion, unidad: m.unidad,
+               alta: !!(chk && chk.checked) && !art };
+    }).filter(x => x.art || x.coste != null || x.alta);
     if (!cambios.length)
       return setErr('No has puesto ni artículo ni coste en ninguna línea.');
+    /* Un artículo de almacén sin precio de compra no sirve para nada: la línea
+       seguiría a cero y la ficha nueva tampoco valdría para la próxima vez. */
+    const altaSinCoste = cambios.filter(c => c.alta && c.coste == null);
+    if (altaSinCoste.length)
+      return setErr('Para dar de alta '+
+        altaSinCoste.map(c => '«'+(c.desc || 'sin descripción')+'»').join(', ')+
+        ' hace falta escribir lo que costó: una ficha de almacén sin precio de compra '+
+        'no le pone precio ni a esta línea ni a las de la próxima vez.');
     try {
+      /* ---- Primero las fichas de almacén que ha mandado crear (02-11-2026) ----
+         Se crea una por línea marcada, con la descripción tal cual la escribió
+         el técnico (que es la que el servidor comparará la próxima vez) y el
+         coste que acaba de poner la oficina. Sin recargo propio: hereda el
+         general, que es lo que hace el almacén con todo lo que no lo lleva.
+
+         Si mientras el diálogo estaba abierto alguien dio de alta ese mismo
+         material, se enlaza al que ya hay en vez de crear un duplicado. */
+      const altas = [];
+      const vueltos = [];
+      for (const c of cambios.filter(x => x.alta)){
+        /* Puede existir ya y no haberse visto: porque alguien lo dio de alta
+           mientras el diálogo estaba abierto, o porque está DE BAJA, que es
+           material que un día se dejó de usar. En los dos casos se enlaza con
+           el que hay: crear otro con el mismo nombre no lo permite el almacén
+           (la descripción no se repite) y el servidor tampoco sabría con cuál
+           de los dos enlazar la próxima vez. Al de baja se le vuelve a dar
+           servicio, que es justo lo que se está pidiendo. */
+        const ya = exactoEnCatalogo(c.desc) ||
+          (S.catalogo || []).find(x => mismoNombreQueElServidor(x.descripcion, c.desc));
+        if (ya){
+          c.art = ya.id; c.alta = false;
+          const ficha = articuloConCoste(ya.id);
+          const o = {};
+          if (ya.activo === false) o.activo = true;
+          /* El coste solo se le pone si se puede ver su ficha y está vacía:
+             escribir encima de un precio de compra que ya estaba puesto sería
+             cambiarle el coste a todo el almacén sin haberlo pedido. */
+          if (ficha && ficha.coste == null) o.coste = c.coste;
+          if (Object.keys(o).length){
+            const { error } = await sb.from('articulos').update(o).eq('id', ya.id);
+            if (error) throw error;
+            vueltos.push(ya.descripcion);
+          }
+          continue;
+        }
+        const o = { descripcion: String(c.desc).trim(), unidad: c.unidad || 'ud',
+                    coste: c.coste };
+        if (!S.sinAlmacen){ o.codigo = siguienteCodigoMaterial(); o.token = token(); }
+        const { data, error } = await sb.from('articulos').insert(o).select().maybeSingle();
+        if (error) throw error;
+        if (!data || !data.id)
+          throw new Error('No he podido crear la ficha de «'+o.descripcion+'» en el almacén.');
+        /* Apuntarlo ya en memoria: si no, la siguiente línea de esta misma
+           tanda pediría el mismo código y chocarían. */
+        S.catalogo.push(data);
+        (S.articulos = S.articulos || []).push(data);
+        c.art = data.id; altas.push(o.descripcion);
+      }
       for (const c of cambios){
         /* El PRECIO se deja vacío a propósito en los dos casos: lo calcula el
            servidor al recalcular, que es quien sabe el recargo que toca y el
@@ -19754,11 +19856,17 @@ function dlgMatSinPrecio(avisoId){
            que hubiera en la línea NO se toca: borrarlo dejaría la línea peor
            que antes. (Corregido el 02-11-2026.) */
         const art = c.art ? articuloConCoste(c.art) : null;
-        const o = c.art
-          ? (art && art.coste != null
-              ? { articulo_id: c.art, coste: null, precio: null }
-              : { articulo_id: c.art, precio: null })
-          : { coste: c.coste, precio: null };
+        const o = c.alta
+          /* Ficha recién creada: se queda también el coste en la línea. La
+             ficha nueva no lleva recargo propio, así que el precio sale igual
+             por los dos caminos, y teniéndolo en la línea no se pierde el
+             número si el servidor no llegara a mirar la ficha. */
+          ? { articulo_id: c.art, coste: c.coste, precio: null }
+          : c.art
+            ? (art && art.coste != null
+                ? { articulo_id: c.art, coste: null, precio: null }
+                : { articulo_id: c.art, precio: null })
+            : { coste: c.coste, precio: null };
         const { error } = await sb.from('materiales').update(o).eq('id', c.id);
         if (error) throw error;
       }
@@ -19778,7 +19886,11 @@ function dlgMatSinPrecio(avisoId){
 
       if (!malas.length){
         toast(cambios.length+' línea'+(cambios.length===1?'':'s')+' con precio y visita recalculada'+
-          (quedan ? '. Quedan '+quedan+' sin precio.' : '.'));
+          (quedan ? '. Quedan '+quedan+' sin precio.' : '.')+
+          (altas.length ? ' '+altas.length+' material'+(altas.length===1?'':'es')+
+            ' dado'+(altas.length===1?'':'s')+' de alta en el almacén.' : '')+
+          (vueltos.length ? ' '+vueltos.join(', ')+' ya estaba en el almacén: se ha usado '+
+            'esa ficha en vez de crear otra igual.' : ''));
         return;
       }
 
