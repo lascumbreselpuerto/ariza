@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.11.02-3**
+> **Versión de la aplicación que describe este manual: 2026.11.02-4**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -460,10 +460,14 @@ Los que más veces se ven, por orden de gravedad:
 
 ---
 
-## 8 bis. Tres maneras de perder dinero sin enterarse
+## 8 bis. Cuatro maneras de perder dinero sin enterarse
 
 Esto no es técnica de puertas, es oficio de empresa, y se pone aquí porque las
 dos cosas pasan en el mismo sitio donde se documenta el trabajo.
+
+Las tres primeras son cuentas que salen mal. La cuarta es distinta y es la peor
+de las cuatro, porque no sale mal ninguna cuenta: simplemente no se hace el
+trabajo.
 
 ### El precio pactado y el precio calculado no son el mismo número
 
@@ -553,6 +557,42 @@ aunque no se cobre. El importe sale cero y el coste no, así que el margen sale
 negativo. Eso es la verdad: volver a una puerta cuesta dinero, y hay que poder
 ver cuánto cuestan las garantías al cabo del año.
 
+### Lo que se queda quieto no se pierde: se olvida
+
+Un aviso que entra y no se asigna. Una obra a medias de la que nadie se acuerda.
+Un repuesto que se pidió, o que se dijo que se pediría. Un presupuesto enviado
+del que no se ha vuelto a saber. Ninguna de esas cuatro cosas da un número
+equivocado en ninguna pantalla: están abiertas, y abiertas es lo que son.
+
+El problema es otro. **Lo que está abierto no envejece a la vista.** Un aviso de
+anteayer y uno de hace siete semanas salen igual en la lista, así que el de
+siete semanas no llama la atención de nadie, y el que llama es el que acaba de
+entrar. La consecuencia la conoces: el cliente que llama enfadado no es el que
+se quejó ayer, es el que llevaba un mes esperando y nadie le dijo nada.
+
+Y tiene un coste que se puede medir. Un presupuesto enviado y no perseguido se
+pierde callando: el cliente no dice no, simplemente llama a otro. Una obra
+parada ocupa un hueco en la agenda, tiene material comprado y no se puede
+facturar hasta que se termina. Un aviso sin asignar es la peor de todas, porque
+el cliente ya cuenta con que vas.
+
+Por eso la aplicación cuenta los días. No hay ninguna lista que mantener ni
+ningún aviso que apagar: en cuanto a algo se le apunta cualquier cosa,
+desaparece de ahí solo. Un aviso que nadie toca envejece; uno que se mueve, no.
+
+Dos cosas que conviene entender de cómo se cuentan esos días:
+
+1. **El reloj es la última señal de vida, no la fecha de alta.** Una obra abierta
+   hace dos meses con un parte de ayer no está parada: está en marcha, y no sale
+   en ninguna lista. Por eso el parte diario de una obra larga no es papeleo: es
+   lo que mantiene la obra viva a ojos de la oficina.
+2. **Cambiar de estado no es moverse hacia delante.** Pasar un aviso a «esperando
+   repuesto» cuenta como movimiento ese día, y a partir de ahí el reloj vuelve a
+   correr. Un aviso que lleva un mes esperando un repuesto aparece como lo que
+   es: un mes quieto. Si el repuesto no ha llegado en diez días, o no se pidió,
+   o hay que llamar al proveedor; las dos cosas se arreglan llamando, no
+   esperando.
+
 ---
 
 ## 9. Cómo se registra todo esto en ARIZA SAT
@@ -578,6 +618,8 @@ La aplicación no es un cuaderno bonito: está construida sobre lo que acabas de
 - El material sin precio sale señalado en Gestión hasta que se remata, y además lleva su **letrero en la lista de pendiente de facturar**: se ve sin abrir la visita, que es como hay que verlo cuando se va a facturar.
 - Se remata de dos maneras: eligiendo el artículo del almacén, o escribiendo lo que costó. Al guardar, la visita se vuelve a calcular en el momento.
 - Y al escribir el coste se puede marcar que ese material **se dé de alta en el almacén**, con esa descripción y ese coste: la próxima vez que aparezca, el servidor lo enlaza solo por el nombre. Lo pregunta cada vez, nunca lo hace solo, porque una brida no merece ficha de catálogo.
+- Gestión tiene un panel, **lo que se ha quedado parado**, con los días que lleva quieta cada cosa: avisos sin asignar (los urgentes desde el primer día), avisos esperando repuesto, trabajos sin un parte nuevo, y presupuestos sin mandar, sin respuesta o aceptados sin abrir el trabajo. En rojo, lo que lleva más del doble del tiempo que ya era raro.
+- Ese panel se calcula solo con las fechas: no hay nada que marcar ni que apagar, y en cuanto algo se mueve desaparece de la lista. El reloj cuenta desde la última señal de vida (un parte de obra, un cambio de estado, cualquier cambio en el aviso), no desde el día en que entró.
 - Y si el precio **no** entra, la aplicación dice por qué: o el artículo no tiene precio de compra en su ficha, o falta ejecutar el SQL de la valoración. Un «guardado» que no ha servido de nada es peor que un error.
 - Una obra puede llevar **varias puertas**, y cada una tiene su ficha, su mínimo de obra y su acta. La obra no se cierra mientras le falte el mínimo a cualquiera de ellas, y el aviso dice el código de la que falta, no «la puerta» en general.
 - Una obra de **varios días** se declara a propósito, no se deduce: cada día deja su parte, sin firma ni cobro, y al cerrar las horas y los kilómetros salen de la suma de todos los partes. El material se apunta al día en que se gastó.
@@ -628,4 +670,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.02-3 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.02-4 de ARIZA SAT*
