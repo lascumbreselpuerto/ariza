@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.11.02-2**
+> **Versión de la aplicación que describe este manual: 2026.11.02-3**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -511,6 +511,24 @@ Por eso el remate no es opcional: antes de facturar, el material escrito a mano
 se enlaza con su artículo del almacén, o se le escribe lo que costó, y se vuelve
 a calcular. Y por eso hay una lista que no deja que se olvide.
 
+Hay una cosa más, y es la que convierte el remate en algo que se hace cada vez
+menos. Lo que más se gasta es **pieza repetida**: fotocélulas, bandas, mandos,
+muelles, rodillos. Si cada vez que aparece una hay que escribirle el coste a
+mano, se escribe el mismo número cincuenta veces, y a la cincuenta y una ya no
+se parece a la primera. Así que al ponerle el coste se puede marcar que **se dé
+de alta en el almacén**: se le crea su ficha con esa descripción y ese coste, y
+la próxima vez que ese material aparezca en un parte el servidor lo reconoce por
+el nombre y le pone el precio solo.
+
+Dos matices que importan. El primero: **pregunta, no lo hace solo**. Crear una
+ficha de catálogo es una decisión, y un tornillo, una brida o un trozo de cable
+no la merecen: el almacén es para lo que se repite. El segundo: el nombre con el
+que se reconoce es el que escribió el técnico, comparado sin distinguir
+mayúsculas ni espacios de los lados, pero **sí los acentos**. «Fotocelula» y
+«Fotocélula» son dos materiales distintos para el servidor, así que conviene
+escribir bien lo que se da de alta, porque ese nombre es el que va a tener que
+coincidir durante los próximos años.
+
 ### El tipo de la visita decide si se cobra
 
 Esta es la más silenciosa de las tres, porque no se ve en ningún importe: se ve
@@ -559,6 +577,7 @@ La aplicación no es un cuaderno bonito: está construida sobre lo que acabas de
 - Un trabajo que nace de un presupuesto **guarda de qué presupuesto viene**, y en la valoración salen juntos el precio pactado y el calculado. Gestión lista los que se quedan por debajo de lo pactado, con la diferencia sumada.
 - El material sin precio sale señalado en Gestión hasta que se remata, y además lleva su **letrero en la lista de pendiente de facturar**: se ve sin abrir la visita, que es como hay que verlo cuando se va a facturar.
 - Se remata de dos maneras: eligiendo el artículo del almacén, o escribiendo lo que costó. Al guardar, la visita se vuelve a calcular en el momento.
+- Y al escribir el coste se puede marcar que ese material **se dé de alta en el almacén**, con esa descripción y ese coste: la próxima vez que aparezca, el servidor lo enlaza solo por el nombre. Lo pregunta cada vez, nunca lo hace solo, porque una brida no merece ficha de catálogo.
 - Y si el precio **no** entra, la aplicación dice por qué: o el artículo no tiene precio de compra en su ficha, o falta ejecutar el SQL de la valoración. Un «guardado» que no ha servido de nada es peor que un error.
 - Una obra puede llevar **varias puertas**, y cada una tiene su ficha, su mínimo de obra y su acta. La obra no se cierra mientras le falte el mínimo a cualquiera de ellas, y el aviso dice el código de la que falta, no «la puerta» en general.
 - Una obra de **varios días** se declara a propósito, no se deduce: cada día deja su parte, sin firma ni cobro, y al cerrar las horas y los kilómetros salen de la suma de todos los partes. El material se apunta al día en que se gastó.
@@ -609,4 +628,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.02-2 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.02-3 de ARIZA SAT*
