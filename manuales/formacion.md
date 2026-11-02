@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.11.02-8**
+> **Versión de la aplicación que describe este manual: 2026.11.02-9**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -655,6 +655,19 @@ Dos cosas que se siguen de ahí:
   Huelva que no entra en ninguna zona se marca como fuera de ruta y entonces sí
   se escriben los kilómetros, porque ahí el número significa algo.
 
+Y una cosa que apareció al mirar esto de cerca, porque conviene saber cómo se
+encuentran estas cosas. El cobro por kilómetros **no era el mismo en el
+presupuesto que en el parte**: el presupuesto pedía la ida y la doblaba sin
+cobrar el importe fijo de salida; el parte cobraba el fijo más los kilómetros
+tal cual. Para un viaje de 20 km, 18 € en la oferta y 39 € en la factura. El
+mismo viaje medido dos veces daba dos números.
+
+Desde el 2 de noviembre de 2026 la regla es una sola, en los dos sitios: se
+escribe el **viaje completo** (ida y vuelta) y se cobra el **importe fijo de
+salida más esos kilómetros**. Los presupuestos ya emitidos no cambian: cada
+línea guarda su precio desde que se emitió, y eso es lo que se le ofreció al
+cliente.
+
 ### Lo que esta aplicación no hace, y por qué
 
 ARIZA SAT **no emite facturas ni las numera**. La factura se emite con el
@@ -763,4 +776,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.02-8 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.02-9 de ARIZA SAT*

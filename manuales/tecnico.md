@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.02-8**
+> **Versión de la aplicación que describe este manual: 2026.11.02-9**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -149,6 +149,9 @@ oficina ya la puso al darte el aviso, la ves pero no la cambias.
 Solo hay un caso en el que se escriben kilómetros: cuando la visita cae **fuera
 de ruta**, que es el viaje que no entra en ninguna zona. Eliges «Fuera de ruta»
 y entonces aparece la casilla de los kilómetros.
+
+Ahí se escribe **el viaje completo, ida y vuelta**, no solo la ida. Si vas a un
+sitio que está a 60 km, pones 120.
 
 Si una ruta que necesitas no sale en la lista es que la oficina no le ha puesto
 precio todavía. Díselo: si la eligieras, esa visita se quedaría sin cobrar el
@@ -557,4 +560,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.02-8 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.02-9 de ARIZA SAT*
