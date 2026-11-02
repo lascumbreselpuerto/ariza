@@ -29,9 +29,15 @@ insert into public.articulos (id, descripcion, unidad, coste, recargo) values
   ('33333333-3333-3333-3333-333333333333', 'Fotocélula de espejo', 'ud', 25, 60)
   on conflict (id) do nothing;
 
-insert into public.avisos (id, tipo, estado, cliente_id, horas, num_tecnicos, desplazamiento) values
+-- CAMBIO DEL 02-11-2026: la ruta decide el desplazamiento
+-- Esta prueba comprueba, entre otras cosas, que el desplazamiento son 34,50:
+-- 30 de importe fijo más 10 km a 0,45. Desde hoy ese cálculo solo se hace
+-- cuando la visita va marcada como FUERA DE RUTA, que es lo que son esos
+-- kilómetros. Antes no hacía falta decirlo porque era el único cálculo que
+-- existía; ahora se dice, y la prueba sigue comprobando lo mismo.
+insert into public.avisos (id, tipo, estado, cliente_id, horas, num_tecnicos, desplazamiento, ruta) values
   ('44444444-4444-4444-4444-444444444444', 'averia', 'cerrado',
-   '11111111-1111-1111-1111-111111111111', 2, 1, 10)
+   '11111111-1111-1111-1111-111111111111', 2, 1, 10, 'km')
   on conflict (id) do nothing;
 
 delete from public.materiales where aviso_id = '44444444-4444-4444-4444-444444444444';
