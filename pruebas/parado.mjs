@@ -304,6 +304,35 @@ paso('y si esas fechas no están, lo dice en vez de callarse',
 paso('avisando de lo que eso significa: que los días se cuentan desde el alta',
   /desde la fecha de alta|desde el alta/.test(sinSql.texto));
 
+/* ---- El caso en que más engañaba (02-11-2026) ----
+   Con la lista VACÍA el aviso no salía, porque estaba dentro de la rama que
+   solo se pinta cuando hay algo. Y justo ahí es donde más importa: «nada
+   quieto» dicho por una pantalla que no sabe contar los días no es una buena
+   noticia, es una pantalla que no sabe lo que dice. Lo vio David en su propia
+   aplicación el mismo día que se entregó. */
+const vacia = await T(async () => {
+  const g = window.__T;
+  const copia = g.S.avisos.slice();
+  /* Solo lo cerrado, y sin las fechas del SQL: no hay nada que pueda estar
+     parado, y tampoco hay con qué contar los días. */
+  g.S.avisos = copia.filter(a => a.cerrado).map(a => {
+    const x = Object.assign({}, a); delete x.movido_el; delete x.estado_el; return x; });
+  g.S.presupuestos = [];
+  g.pintar();
+  await new Promise(r => setTimeout(r, 700));
+  const texto = document.getElementById('vista').innerText;
+  const nGrupos = g.loQueSeQuedoParado().length;
+  g.S.avisos = copia;
+  return { texto, nGrupos };
+});
+paso('la lista sale vacía, que es el caso que se comprueba',
+  vacia.nGrupos === 0 && /Nada quieto más de la cuenta/.test(vacia.texto), vacia.nGrupos+' grupos');
+paso('y aun así avisa de que faltan las fechas, que es lo que no hacía',
+  /parado\.sql/.test(vacia.texto));
+paso('diciendo justo lo que hay que saber: que no es de fiar ni vacía',
+  /ni cuando sale vac/.test(vacia.texto),
+  (vacia.texto.match(/.{0,40}ni cuando sale vac.{0,10}/)||[''])[0]);
+
 console.log('\n'+ok+' bien, '+mal+' mal.');
 const graves = errores.filter(x => !/fonts\.googleapis|ERR_TUNNEL|ERR_NAME|net::ERR|provocado por la prueba/.test(x));
 if (graves.length) console.log('Errores de JavaScript:\n'+graves.join('\n'));
