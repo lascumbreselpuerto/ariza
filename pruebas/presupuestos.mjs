@@ -1138,7 +1138,8 @@ const tarifas = await T(async () => {
     nombres: g.RUTAS.map(k => g.nombreRuta(k)),
     importes: g.RUTAS.map(k => g.importeRuta(k)),
     costes: g.RUTAS.map(k => g.costeRuta(k)),
-    km20: g.importePorKm(20), km20coste: g.costePorKm(20), km0: g.importePorKm(0) };
+    km20: g.importePorKm(20), km20coste: g.costePorKm(20), km0: g.importePorKm(0),
+    ofrecidas: g.rutasValoradas() };
 });
 paso('cada tarifa tiene su precio por hora',
   JSON.stringify(tarifas.precios) === JSON.stringify([['particular',48],['retail',55],['industria',62]]),
@@ -1152,10 +1153,23 @@ paso('una empresa de servicios, a retail',
 paso('industria y administración, a industria',
   tarifas.porTipo['Industria'] === 'industria' &&
   tarifas.porTipo['Administración'] === 'industria');
+/* CAMBIO DEL 02-11-2026: son CINCO rutas, no tres.
+   Las dos nuevas nacen con su nombre por defecto y sin importe, que es como
+   llegan el día que se estrena esto: creadas y todavía sin valorar por la
+   oficina. Esta prueba comprueba las tres de siempre tal cual estaban, y de
+   las nuevas comprueba lo que importa: que valen cero y que, por eso, la
+   aplicación NO las ofrece para elegir. */
 paso('las rutas llevan el nombre que se les ponga',
-  tarifas.nombres.join(',') === 'El Puerto,Bahía,Provincia', tarifas.nombres.join(','));
+  tarifas.nombres.slice(0, 3).join(',') === 'El Puerto,Bahía,Provincia',
+  tarifas.nombres.join(','));
 paso('con su importe y su coste',
-  tarifas.importes.join(',') === '30,55,90' && tarifas.costes.join(',') === '9,20,38');
+  tarifas.importes.slice(0, 3).join(',') === '30,55,90' &&
+  tarifas.costes.slice(0, 3).join(',') === '9,20,38');
+paso('y hay cinco, con las dos nuevas sin valorar todavía',
+  tarifas.nombres.length === 5 && tarifas.importes[3] === 0 && tarifas.importes[4] === 0,
+  tarifas.nombres.slice(3).join(' · '));
+paso('una ruta sin importe no se ofrece: elegirla sería cobrar cero',
+  tarifas.ofrecidas.join(',') === 'ruta1,ruta2,ruta3', tarifas.ofrecidas.join(','));
 paso('por kilómetros se cobra la ida y la vuelta',
   tarifas.km20 === 18, '20 km de ida → '+tarifas.km20+' € (20 × 2 × 0,45)');
 paso('y cuesta también la ida y la vuelta',

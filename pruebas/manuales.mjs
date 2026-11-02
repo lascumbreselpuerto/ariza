@@ -130,9 +130,16 @@ paso('y el manual los pone en el MISMO ORDEN que la aplicación',
    ================================================================ */
 bloque('5. Los campos del parte');
 
+/* CAMBIO DEL 02-11-2026: el desplazamiento ya no se pide en kilómetros.
+   Donde ponía «Desplazamiento (km)» ahora hay dos campos: «Desplazamiento»,
+   que es la ruta, y «Kilómetros», que solo sale fuera de ruta. Se comprueban
+   los dos, porque los dos tienen que llamarse igual en la aplicación y en el
+   manual: un manual que nombra un campo que no existe hace perder más tiempo
+   que no tenerlo. */
 const campos = [['z-diag','Diagnóstico'], ['z-trab','Trabajo realizado'],
   ['z-ini','Hora de entrada'], ['z-fin','Hora de salida'],
-  ['z-horas','Horas a facturar'], ['z-km','Desplazamiento (km)'],
+  ['z-horas','Horas a facturar'],
+  ['z-ruta','Desplazamiento'], ['z-km','Kilómetros'],
   ['z-ntec','Técnicos'], ['z-estado','Estado de la puerta'],
   ['z-fnom','Nombre de quien firma']];
 campos.forEach(([id, et]) => paso('«'+et+'» se llama así en la aplicación y en el manual',
@@ -633,6 +640,31 @@ paso('y el índice de las pantallas largas',
   /pantallas largas/.test(M) && /índice/.test(M));
 paso('ya no manda al técnico a una «pestaña Manual» que no existe',
   !/pestaña \*\*Manual\*\*/.test(M), (M.match(/.{0,30}pestaña \*\*Manual\*\*/)||[''])[0]);
+
+/* ================================================================
+   17. Los manuales cuentan lo de las rutas           02-11-2026
+
+   El técnico tiene que saber que ya no escribe kilómetros, y por qué
+   una ruta puede no salirle en la lista. Y el de formación, por qué
+   se cambió: no es un capricho de interfaz, es que ese dato nadie lo
+   medía.
+   ================================================================ */
+bloque('17. Los manuales cuentan lo de las rutas');
+
+paso('el manual del técnico dice que el desplazamiento es una ruta',
+  /ya no son kilómetros/.test(M));
+paso('que si la puso la oficina, no la cambia',
+  /la ves pero no la cambias/.test(M));
+paso('y cuándo se escriben kilómetros: fuera de ruta',
+  /fuera\s*\n?\s*de ruta/.test(M) || /Fuera de ruta/.test(M));
+paso('avisa de qué hacer si su ruta no sale en la lista',
+  /no le ha puesto\s*\n?precio/.test(M.replace(/\n/g, ' ')) || /no le ha puesto/.test(M));
+paso('el de formación explica por qué se cambió',
+  /kilometraje que nadie mide/i.test(F));
+paso('que el problema no es la fórmula, es el dato',
+  /no es la fórmula/.test(F));
+paso('y que una ruta sin importe no se puede elegir',
+  /no se puede elegir/.test(F));
 
 /* ================================================================
    El índice del manual

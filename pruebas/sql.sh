@@ -46,7 +46,7 @@ export PATH="$PGBIN:$PATH"
 ORDEN="componentes.sql centros.sql parte-por-correo.sql obra.sql ficha.sql \
 almacen.sql presupuestos.sql presupuestos2.sql comercial.sql anexos.sql \
 tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos3.sql valoracion.sql \
-parado.sql factura.sql"
+parado.sql factura.sql rutas.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -150,6 +150,20 @@ if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/factura-pruebas.sql" ]; then
     fallos=$((fallos+1))
     echo " FALLA la factura:"
     grep -a -m3 -E "ERROR|EXCEPTION" /tmp/factura-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
+# El desplazamiento por ruta: cambia lo que se cobra en TODAS las visitas, así
+# que los números se comprueban uno a uno y calculados a mano.
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/rutas-pruebas.sql" ]; then
+  echo ""
+  echo "── El desplazamiento por ruta ──────────────────"
+  if $PSQL -f "$AQUI/sql/rutas-pruebas.sql" > /tmp/rutas-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/rutas-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA el desplazamiento por ruta:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/rutas-pruebas.log | sed 's/^/         /'
   fi
 fi
 
