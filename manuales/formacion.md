@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.11.02-5**
+> **Versión de la aplicación que describe este manual: 2026.11.02-6**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -460,7 +460,7 @@ Los que más veces se ven, por orden de gravedad:
 
 ---
 
-## 8 bis. Cuatro maneras de perder dinero sin enterarse
+## 8 bis. Cinco maneras de perder dinero sin enterarse
 
 Esto no es técnica de puertas, es oficio de empresa, y se pone aquí porque las
 dos cosas pasan en el mismo sitio donde se documenta el trabajo.
@@ -593,6 +593,67 @@ Dos cosas que conviene entender de cómo se cuentan esos días:
    o hay que llamar al proveedor; las dos cosas se arreglan llamando, no
    esperando.
 
+### Cobrar no es facturar, y facturar no es cobrar
+
+Son tres cosas distintas y conviene no mezclarlas nunca:
+
+1. **Cobrar en obra.** El técnico cobra la visita en el momento y lo apunta en
+   el parte. El dinero ya está en casa.
+2. **Facturar.** La oficina emite la factura con el programa de facturación y se
+   la manda al cliente. Esto hay que hacerlo **aunque ya se haya cobrado**: el
+   cobro no sustituye a la factura, ni a efectos de IVA ni a ningún otro.
+3. **Cobrar la factura.** Que la factura emitida acabe en el banco. Entre la
+   segunda y la tercera hay un plazo, y ese plazo es donde vive el impagado.
+
+Hasta el 2 de noviembre de 2026 la aplicación mezclaba la primera con la
+segunda: la lista de pendiente de facturar **excluía lo cobrado en obra**. En
+una empresa donde el técnico cobra y la oficina factura, eso significa que esas
+visitas desaparecían de la lista y no las facturaba nadie. Dinero cobrado del
+que no queda factura.
+
+Y de la tercera no había nada. Una factura emitida y no cobrada no salía en
+ninguna pantalla, porque no se guardaba su fecha de vencimiento. Emitir una
+factura no es cobrar: es una promesa con fecha, y lo que convierte la promesa en
+dinero es que alguien mire los vencimientos.
+
+Tres reglas que se siguen de esto:
+
+- **El plazo de pago lo pone el cliente, no la empresa.** Está en su ficha, y de
+  ahí sale el vencimiento de cada factura. Una comunidad paga a treinta días y el
+  particular paga en el momento; ponerle a los dos el mismo plazo es inventarse
+  uno de los dos.
+- **Sin fecha de vencimiento no hay impagado.** Si no se sabe cuándo había que
+  pagar, no se puede afirmar que alguien deba nada. La aplicación deja esas
+  facturas fuera de la lista a propósito: reclamarle a un cliente que no debe
+  nada cuesta más que el cobro.
+- **Lo cobrado en obra se compara con lo calculado.** Si el técnico cobró 145,20
+  y la visita sale en 120 € más IVA, los números cuadran; si cobró 120, se cobró
+  el IVA de menos. Esa comparación se hace al apuntar la factura, no después.
+
+### Lo que esta aplicación no hace, y por qué
+
+ARIZA SAT **no emite facturas ni las numera**. La factura se emite con el
+programa de facturación, y aquí se apunta su número y sus fechas para poder
+seguir el cobro.
+
+No es una limitación técnica, es una decisión. El reglamento antifraude (Real
+Decreto 1007/2023, con los requisitos técnicos en la Orden HAC/1177/2024, y las
+fechas aplazadas un año por el Real Decreto-ley 15/2025) obliga a que el
+programa con el que se emiten facturas cumpla una lista de requisitos:
+registro inalterable de cada factura, huella encadenada con la anterior, firma
+electrónica con certificado, QR en el documento y exportación en un formato
+determinado. Para las sociedades, desde el **1 de enero de 2027**.
+
+Y la conformidad no la da la Agencia Tributaria: la acredita una **declaración
+responsable del fabricante del programa**. En un programa de desarrollo propio,
+el fabricante es la propia empresa. Es decir, que si ARIZA SAT emitiera
+facturas, sería David quien declara que cumple, con su nombre.
+
+Por eso la aplicación llega hasta el borde y se para ahí: calcula qué hay que
+facturar, lo tiene todo preparado y apunta la factura emitida fuera, pero no
+pone números de factura ni genera documentos con validez fiscal. Lo que se
+imprime desde aquí lleva escrito que no es una factura.
+
 ---
 
 ## 9. Cómo se registra todo esto en ARIZA SAT
@@ -620,6 +681,11 @@ La aplicación no es un cuaderno bonito: está construida sobre lo que acabas de
 - Y al escribir el coste se puede marcar que ese material **se dé de alta en el almacén**, con esa descripción y ese coste: la próxima vez que aparezca, el servidor lo enlaza solo por el nombre. Lo pregunta cada vez, nunca lo hace solo, porque una brida no merece ficha de catálogo.
 - Gestión tiene un panel, **lo que se ha quedado parado**, con los días que lleva quieta cada cosa: avisos sin asignar (los urgentes desde el primer día), avisos esperando repuesto, trabajos sin un parte nuevo, y presupuestos sin mandar, sin respuesta o aceptados sin abrir el trabajo. En rojo, lo que lleva más del doble del tiempo que ya era raro.
 - Ese panel se calcula solo con las fechas: no hay nada que marcar ni que apagar, y en cuanto algo se mueve desaparece de la lista. El reloj cuenta desde la última señal de vida (un parte de obra, un cambio de estado, cualquier cambio en el aviso), no desde el día en que entró.
+- **Lo cobrado en obra sigue en pendiente de facturar**, con su etiqueta y el importe que ya se cobró. Cobrar no es facturar: hay que emitir la factura igual y mandarla.
+- La ficha del cliente lleva su **plazo de pago** y su forma de pago. De ese plazo sale el vencimiento que se propone al apuntar cada factura, y se puede cambiar a mano; una fecha escrita por una persona manda sobre una calculada.
+- Al marcar una visita como facturada se apunta el **número de la factura emitida fuera**, su fecha, su vencimiento y, si ya está cobrada, cuándo, cómo y con qué referencia.
+- Gestión lista las **facturas vencidas sin cobrar**, la más atrasada primero y en rojo a partir de un mes. Lo que aún no ha vencido se dice aparte: eso no es un impagado, es dinero en camino.
+- Y lo que no tiene fecha de vencimiento apuntada no sale como impagado, porque no se puede saber si lo es.
 - Y si el precio **no** entra, la aplicación dice por qué: o el artículo no tiene precio de compra en su ficha, o falta ejecutar el SQL de la valoración. Un «guardado» que no ha servido de nada es peor que un error.
 - Una obra puede llevar **varias puertas**, y cada una tiene su ficha, su mínimo de obra y su acta. La obra no se cierra mientras le falte el mínimo a cualquiera de ellas, y el aviso dice el código de la que falta, no «la puerta» en general.
 - Una obra de **varios días** se declara a propósito, no se deduce: cada día deja su parte, sin firma ni cobro, y al cerrar las horas y los kilómetros salen de la suma de todos los partes. El material se apunta al día en que se gastó.
@@ -670,4 +736,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.02-5 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.02-6 de ARIZA SAT*
