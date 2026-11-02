@@ -1288,8 +1288,10 @@ const sinPrecio = await T(async () => {
     puerta_id:g.S.puertas[0].id, trabajo:'Cambiada la banda y una tapa.',
     horas:2, cerrado:ayer, creado:ayer });
   /* Dos líneas: una enlazada con el almacén y otra escrita a mano */
+  /* Esta ya la valoró el servidor: tiene artículo, coste y precio */
   await g.sb.from('materiales').insert({ aviso_id:'av-matsp', articulo_id:'art-banda',
-    descripcion:'Banda de seguridad resistiva 2 m', cantidad:1, unidad:'ud' });
+    descripcion:'Banda de seguridad resistiva 2 m', cantidad:1, unidad:'ud',
+    coste:38.5, precio:53.9 });
   await g.sb.from('materiales').insert({ aviso_id:'av-matsp', articulo_id:null,
     descripcion:'Fotocélula de espejo', cantidad:2, unidad:'ud' });
   await g.sb.from('materiales').insert({ aviso_id:'av-matsp', articulo_id:null,
@@ -1320,15 +1322,23 @@ const sinPrecio = await T(async () => {
   const sels = Array.from(document.querySelectorAll('#dlg-form select[data-mat]'));
   const propuesto = sels.map(x => x.value);
   const textoDlg = document.getElementById('dlg-form').innerText;
-  /* La tornillería no está en el catálogo: se queda sin enlazar a propósito */
+  /* La tornillería no está en el catálogo: se le pone el coste a mano, que es
+     la segunda vía que se añadió el 02-11-2026. */
+  const campoCoste = Array.from(document.querySelectorAll('#dlg-form input[data-mat]'));
+  const hayCampoCoste = campoCoste.length;
+  campoCoste[1].value = '7.5';
   document.querySelector('#dlg-form [type="submit"]').click();
   await new Promise(r => setTimeout(r, 1500));
 
   const quedan = g.matSinPrecioDe('av-matsp').map(m => m.descripcion);
   const todas = (await g.sb.from('materiales').select('*').eq('aviso_id','av-matsp')).data;
   const enlazada = todas.find(m => /Fotocélula/.test(m.descripcion));
-  return { mios, enLista, gestion, val, propuesto, textoDlg, quedan,
+  const torni = todas.find(m => /Torniller/.test(m.descripcion));
+  return { mios, enLista, gestion, val, propuesto, textoDlg, quedan, hayCampoCoste,
     enlazadaCon: enlazada ? enlazada.articulo_id : null,
+    enlazadaPrecio: enlazada ? enlazada.precio : 'x',
+    torniCoste: torni ? torni.coste : null,
+    torniPrecio: torni ? torni.precio : 'x',
     recalculada: (window.__DB.__valorados || []).includes('av-matsp') };
 });
 paso('se ven las líneas sin enlazar, y solo esas',
@@ -1341,7 +1351,8 @@ paso('Gestión lo saca con su propio recuadro',
 paso('diciendo lo que de verdad pasa: que vale cero y el margen sale alto',
   /vale cero/.test(sinPrecio.gestion) && /más alto que el real/.test(sinPrecio.gestion));
 paso('la valoración de esa visita lo avisa donde se mira el margen',
-  /sin enlazar/.test(sinPrecio.val) && /margen/.test(sinPrecio.val));
+  /sin precio/.test(sinPrecio.val) && /margen/.test(sinPrecio.val),
+  (sinPrecio.val.match(/.{0,60}sin precio.{0,40}/)||[''])[0]);
 paso('y lo dice también en la propia línea de materiales',
   /a 0 €/.test(sinPrecio.val), (sinPrecio.val.match(/.{0,40}a 0 €/)||[''])[0]);
 paso('al enlazar, propone el artículo cuyo nombre coincide',
@@ -1356,13 +1367,88 @@ paso('la línea queda enlazada con su artículo',
   sinPrecio.enlazadaCon === 'art-foto', sinPrecio.enlazadaCon);
 paso('la visita se vuelve a calcular en el momento, sin pedirlo aparte',
   sinPrecio.recalculada === true);
-/* Lo que NO se arregla solo, y se dice: un material que no está dado de alta
-   sigue sin precio hasta que alguien lo cree. */
-paso('lo que no está en el almacén sigue señalado, no se da por bueno',
-  sinPrecio.quedan.length === 1 && /Tornillería/.test(sinPrecio.quedan[0]),
-  sinPrecio.quedan.join(' · '));
-paso('y el diálogo dice qué hacer con eso: darlo de alta primero',
-  /dale de alta primero/.test(sinPrecio.textoDlg));
+/* ---- La segunda vía, añadida el 02-11-2026 ----
+   Enlazar con el almacén no basta: hay piezas que no merecen una ficha de
+   artículo (tornillería, una pieza suelta). Para esas, se escribe el COSTE y el
+   servidor calcula el precio con el recargo y el descuento del contrato. */
+paso('cada línea ofrece las dos vías: el almacén o el coste',
+  sinPrecio.hayCampoCoste === 2, sinPrecio.hayCampoCoste+' campos de coste');
+paso('el coste escrito a mano se guarda', sinPrecio.torniCoste === 7.5, sinPrecio.torniCoste);
+/* Y lo que NO se hace: calcular el precio aquí. Lo calcula el servidor, que es
+   quien sabe el recargo que toca y el descuento del contrato. Calcularlo en dos
+   sitios es garantizar que un día digan cosas distintas. */
+paso('el precio se deja al servidor, no se calcula aquí',
+  sinPrecio.torniPrecio === null && sinPrecio.enlazadaPrecio === null,
+  'tornillería '+sinPrecio.torniPrecio+' · enlazada '+sinPrecio.enlazadaPrecio);
+paso('el diálogo explica que con una de las dos cosas basta',
+  /con una de las dos cosas basta/i.test(sinPrecio.textoDlg));
+paso('y que el coste es el coste, no el precio de venta',
+  /no el precio de venta/.test(sinPrecio.textoDlg));
+
+/* ================================================================
+   18. El tipo del trabajo se pregunta               02-11-2026
+
+   La función de valoración del servidor pone a CERO las visitas
+   comerciales, las de garantía y las marcadas «no se cobra». Y la
+   aplicación abría como COMERCIAL todo presupuesto que no tuviera
+   puerta asignada, de modo que un trabajo vendido nacía valorado en
+   nada y ni siquiera salía en pendiente de facturar.
+   ================================================================ */
+bloque('18. El tipo del trabajo se pregunta al abrirlo');
+
+const tipoTrabajo = await T(async () => {
+  const g = window.__T;
+  const cli = g.S.clientes[0];
+  await g.sb.from('presupuestos').insert({ id:'pre-tipo', referencia:'PR-9001',
+    titulo:'Cancela de la nave, sin puerta dada de alta', cliente_id:cli.id,
+    puerta_id:null, estado:'aceptado', base:2400, iva:504, total:2904, tipo_iva:21,
+    creado:new Date().toISOString() });
+  await g.cargar();
+
+  g.dlgConvertirPresupuesto('pre-tipo');
+  await new Promise(r => setTimeout(r, 500));
+  const texto = document.getElementById('dlg-form').innerText;
+  const sel = document.getElementById('cv-tipo');
+  const propuesto = sel ? sel.value : '(no hay)';
+  /* Se elige otra cosa a propósito, para comprobar que manda lo elegido */
+  const opciones = sel ? Array.from(sel.options).map(o => o.value) : [];
+  const averia = opciones.find(o => /aver/i.test(o));
+  if (sel && averia) sel.value = averia;
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 1500));
+
+  const p2 = g.presuDe('pre-tipo');
+  const av = g.S.avisos.find(x => x.id === p2.convertido_aviso);
+  return { texto, propuesto, opciones: opciones.length,
+    tipo: av ? av.tipo : null, enlace: av ? av.presupuesto_id === 'pre-tipo' : false,
+    pactado: av ? g.pactadoDe(av) : null,
+    cero: av ? g.seValoraEnCero(av) : null,
+    ceroComercial: g.seValoraEnCero({ tipo:'comercial' }),
+    ceroGarantia: g.seValoraEnCero({ tipo:'garantia' }),
+    ceroSinCargo: g.seValoraEnCero({ tipo:'averia', sin_cargo:true }) };
+});
+paso('al abrir el trabajo se pregunta de qué clase es',
+  /Qué clase de trabajo es/.test(tipoTrabajo.texto) && tipoTrabajo.opciones > 2,
+  tipoTrabajo.opciones+' opciones');
+paso('y propone instalación, que es lo que suele ser una oferta vendida',
+  /Instalación/i.test(tipoTrabajo.propuesto), tipoTrabajo.propuesto);
+paso('avisando de las dos que se valoran en cero',
+  /cero euros/.test(tipoTrabajo.texto) &&
+  /Comercial/.test(tipoTrabajo.texto) && /Garantía/.test(tipoTrabajo.texto));
+paso('y de que sin puerta el trabajo se abre igual',
+  /no tiene puerta asignada/.test(tipoTrabajo.texto));
+paso('manda el tipo que se elige, no el que deduzca la aplicación',
+  /aver/i.test(tipoTrabajo.tipo || ''), tipoTrabajo.tipo);
+paso('el trabajo nace enlazado con su presupuesto aunque no haya puerta',
+  tipoTrabajo.enlace === true && tipoTrabajo.pactado === 2400,
+  tipoTrabajo.pactado);
+paso('y NO se valora en cero, que era lo que pasaba antes',
+  tipoTrabajo.cero === false);
+/* La lista de lo que el servidor valora en cero, escrita en la aplicación para
+   poder avisar ANTES de que alguien se lo encuentre al facturar. */
+paso('comercial y garantía se valoran en cero, y lo marcado «no se cobra» también',
+  tipoTrabajo.ceroComercial === true && tipoTrabajo.ceroGarantia === true &&
+  tipoTrabajo.ceroSinCargo === true);
 
 /* ================================================================
    Final

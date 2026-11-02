@@ -45,7 +45,7 @@ export PATH="$PGBIN:$PATH"
 # del que la crea. Es el mismo orden en que se fueron entregando.
 ORDEN="componentes.sql centros.sql parte-por-correo.sql obra.sql ficha.sql \
 almacen.sql presupuestos.sql presupuestos2.sql comercial.sql anexos.sql \
-tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos3.sql"
+tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos3.sql valoracion.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -107,6 +107,21 @@ else
   echo " FALLA al quitar columnas:"; sed -n '1,8p' /tmp/quitar.log; fallos=$((fallos+1))
 fi
 vuelta 3 "sobre una base creada por la versión anterior"
+
+# Y las pruebas de la fórmula que valora una visita. Los ficheros de arriba
+# solo comprueban que se puedan EJECUTAR; esto comprueba que la función
+# CALCULE bien, con datos de verdad y números esperados uno a uno.
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/valoracion-pruebas.sql" ]; then
+  echo ""
+  echo "── Lo que calcula la valoración ────────────────"
+  if $PSQL -f "$AQUI/sql/valoracion-pruebas.sql" > /tmp/val-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/val-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA la valoración:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/val-pruebas.log | sed 's/^/         /'
+  fi
+fi
 
 echo ""
 echo "═══════════════════════════════════════"
