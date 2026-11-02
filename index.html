@@ -582,6 +582,18 @@ const EST_FINAL = ['Operativa','Operativa con reservas','Fuera de servicio','Esp
 const PRIORIDADES = ['normal','urgente','programada'];
 /* Tipos que no llevan cobro en obra ni cambian el estado de la puerta */
 const SIN_COBRO = ['comercial','falso'];
+/* ---- Los tipos que el servidor valora en CERO euros (02-11-2026) ----
+   La función valorar_aviso pone a cero el importe de las comerciales, las de
+   garantía y las marcadas «no se cobra». Está escrito aquí para poder avisar
+   ANTES, en vez de que alguien se lo encuentre al ir a facturar.
+
+   Ojo a la diferencia con SIN_COBRO, que es otra cosa y por eso tiene otro
+   nombre: SIN_COBRO es lo que la aplicación no pide al cerrar (horas, cobro en
+   obra), y esto es lo que el servidor no factura. No coinciden a propósito: una
+   garantía SÍ se apunta con sus horas, porque hay que saber lo que cuesta,
+   aunque no se cobre. El margen sale negativo, que es la verdad. */
+const TIPOS_SIN_VALOR = ['comercial','garantia'];
+const seValoraEnCero = a => !!a && (TIPOS_SIN_VALOR.includes(a.tipo) || !!a.sin_cargo);
 /* Mantenimiento: periodicidades que se ofrecen y estados del contrato */
 const PERIODOS = [[1,'Cada mes'],[2,'Cada 2 meses'],[3,'Cada trimestre'],[4,'Cada 4 meses'],[6,'Cada 6 meses'],[12,'Una vez al año'],[24,'Cada 2 años']];
 const FORMAS_PAGO = ['Transferencia','Domiciliación','Efectivo','Tarjeta'];
@@ -1316,11 +1328,15 @@ async function cargar(){
      se queda sin enlazar y por tanto SIN PRECIO. El importe de la visita sale
      corto y el margen sale más alto que el real, que es la peor combinación
      posible: te crees que has ganado dinero que has regalado.
-     Esto se pide solo para quien ve precios, y solo lo que falta por enlazar. */
+     Esto se pide solo para quien ve precios, y solo lo que falta por rematar.
+
+     Se pregunta por el PRECIO vacío, no por el artículo sin enlazar: desde el
+     02-11-2026 una línea puede tener precio porque alguien le puso el coste a
+     mano, sin estar en el almacén, y esa ya no hay que rematarla. */
   if (esGestion() && !S.sinAlmacen){
     const ms = await sb.from('materiales')
-      .select('id, aviso_id, descripcion, cantidad, unidad, articulo_id')
-      .is('articulo_id', null).range(0, 9999);
+      .select('id, aviso_id, descripcion, cantidad, unidad, articulo_id, coste, precio')
+      .is('precio', null).range(0, 9999);
     S.matSinPrecio = ms.error ? [] : (ms.data || []);
   } else S.matSinPrecio = [];
   /* ---- Presupuestos ----
@@ -1452,7 +1468,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.01-3';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.02-1';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -3295,10 +3311,10 @@ function vistaGestion(){
       h += '<div class="panel"><div class="panel-h"><h3>Material sin precio</h3>'+
         '<span class="mini">'+conMat.length+'</span></div>'+
         '<p class="mini" style="margin:0 0 10px">'+nLineas+' línea'+(nLineas===1?'':'s')+
-        ' de material escrito a mano, sin enlazar con el almacén. El precio de un material sale '+
-        'de su ficha, así que lo que no está enlazado <b>vale cero</b>: el importe de la visita '+
-        'sale corto y el margen sale más alto que el real, que es la peor combinación. Enlázalos '+
-        'y vuelve a calcular.</p>'+
+        ' de material sin precio. El precio sale de la ficha del almacén, así que lo que el '+
+        'técnico escribió a mano <b>vale cero</b>: el importe de la visita sale corto y el margen '+
+        'sale más alto que el real, que es la peor combinación. Ponles precio y vuelve a '+
+        'calcular.</p>'+
         '<div class="lista-simple">';
       conMat.slice(0, 30).forEach(x => {
         h += '<div class="item-plano">'+
@@ -3310,7 +3326,7 @@ function vistaGestion(){
             '<span style="text-align:right"><span class="tit">'+x.mats.length+'</span>'+
             '<span class="sub">sin precio</span></span>'+
           '</button>'+
-          '<button class="btn sm" data-act="mat-sin-precio" data-id="'+x.a.id+'">Enlazar</button>'+
+          '<button class="btn sm" data-act="mat-sin-precio" data-id="'+x.a.id+'">Ponerle precio</button>'+
           '</div>';
       });
       h += '</div>'+
@@ -5374,14 +5390,52 @@ function dlgAceptarAMano(id){
 /* ---- De presupuesto aceptado a trabajo ----
    Abre la asistencia y deja el material apuntado como previsto, que es lo que el
    técnico verá en su parte. No mueve existencias: reservar no es gastar. */
-async function convertirPresupuesto(id){
+/* ---- De presupuesto aceptado a trabajo: preguntando el tipo (02-11-2026) ----
+   El tipo no es un detalle: decide si la visita se cobra. La función de
+   valoración del servidor pone a CERO las comerciales, las de garantía y las
+   marcadas como «no se cobra». Y la aplicación abría como comercial todo
+   presupuesto sin puerta asignada, de modo que el trabajo vendido nacía ya
+   valorado en nada sin que nadie lo dijera. */
+function dlgConvertirPresupuesto(id){
+  const p = presuDe(id);
+  if (!p) return;
+  const tipos = lista('tipos_asistencia', Object.keys(ASISTENCIAS));
+  /* Se propone instalación, que es lo que es una oferta vendida la mayoría de
+     las veces, pero manda lo que se elija aquí. */
+  const propuesto = tipos.includes('instalacion') ? 'instalacion' : tipos[0];
+  abrirDlg('<h3>Abrir el trabajo</h3>'+
+    '<p class="mini" style="margin:0 0 12px">'+esc([p.referencia, p.titulo].filter(Boolean).join(' · '))+
+    ' · '+esc(nombreCliente({ cliente_id: p.cliente_id }))+'</p>'+
+    '<div class="campos"><div class="campo full"><label for="cv-tipo">¿Qué clase de trabajo es?</label>'+
+    '<select id="cv-tipo">'+opts(tipos.map(t => tipoAsis(t)), tipoAsis(propuesto))+'</select>'+
+    '<span class="pista">Decide el guión del parte y si la visita se cobra</span></div></div>'+
+    '<div class="sin-ficha" style="margin-top:12px;background:var(--aviso-bg);color:var(--aviso)">'+
+    'Cuidado con <b>Comercial</b> y <b>Garantía</b>: esas dos se valoran en <b>cero euros</b>, '+
+    'porque son las que no se cobran. Para un presupuesto vendido no son lo que toca.</div>'+
+    (p.puerta_id ? '' :
+      '<p class="mini" style="margin:10px 0 0">Este presupuesto no tiene puerta asignada. El trabajo '+
+      'se abre igual y la puerta se da de alta en obra, cuando esté montada.</p>')+
+    '<p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Abrir el trabajo</button></div>', async () => {
+      /* El desplegable enseña los nombres, así que se vuelve a la clave */
+      const nombre = val('cv-tipo');
+      const tipo = tipos.find(t => tipoAsis(t) === nombre) || propuesto;
+      await convertirPresupuesto(id, tipo);
+    });
+}
+
+async function convertirPresupuesto(id, tipoElegido){
   const p = presuDe(id);
   if (!p) return;
   const lineas = lineasDe(id);
   try {
     const admin = (S.equipo.find(t => t.rol === 'admin' && t.activo) || {}).id || null;
     const { data: av, error } = await sb.from('avisos').insert({
-      tipo: p.puerta_id ? 'instalacion' : 'comercial',
+      /* El tipo lo elige quien abre el trabajo. Si por lo que sea no llega
+         ninguno, se abre como instalación y NO como comercial: una oferta
+         vendida no es una visita de ir a ofertar, y comercial se valora a cero. */
+      tipo: tipoElegido || 'instalacion',
       estado: admin ? 'asignado' : 'recibido', prioridad: 'normal', origen: 'Interno',
       cliente_id: p.cliente_id, puerta_id: p.puerta_id || null, tecnico_id: admin,
       descripcion: 'Presupuesto aceptado '+(p.referencia||'')+': '+p.titulo,
@@ -19602,7 +19656,7 @@ function dlgMatSinPrecio(avisoId){
 
   if (!mats.length)
     return abrirDlg('<h3>Material sin precio</h3>'+
-      '<p style="margin:0 0 12px">Ya está todo enlazado con el almacén en esta visita.</p>'+
+      '<p style="margin:0 0 12px">Ya tienen precio todas las líneas de esta visita.</p>'+
       '<div class="pie"><span class="sp"></span>'+
       '<button type="button" class="btn plana" data-cerrar>Cerrar</button></div>', null);
 
@@ -19617,44 +19671,71 @@ function dlgMatSinPrecio(avisoId){
   let h = '<h3>Material sin precio</h3>'+
     '<p class="mini" style="margin:0 0 12px">'+esc(nombreCliente(a))+' · '+
     esc(tipoAsis(a.tipo))+' · cerrada '+esc(fechaCorta(a.cerrado))+'</p>'+
-    '<p style="margin:0 0 12px">Estas líneas las escribió el técnico a mano, así que no están '+
-    'enlazadas con el almacén y <b>entran en la valoración a cero euros</b>. Dile a cada una qué '+
-    'artículo es y el precio saldrá de su ficha.</p>';
+    '<p style="margin:0 0 12px">Estas líneas no tienen precio, así que <b>entran en la valoración '+
+    'a cero euros</b>. Cada una se arregla de una de dos maneras: diciendo qué artículo del '+
+    'almacén es, o escribiendo lo que costó.</p>';
 
   if (!cat.length)
     h += '<div class="sin-ficha" style="margin-bottom:12px">El catálogo de materiales está vacío, '+
       'así que no hay con qué enlazar. Da de alta primero los materiales que más usáis, con su '+
       'precio de compra.</div>';
 
-  h += '<div class="campos">'+ mats.map((m, i) =>
-    '<div class="campo full"><label for="mp-'+i+'">'+esc(m.descripcion || 'Sin descripción')+
-      ' <span class="mini">· '+esc(m.cantidad)+' '+esc(m.unidad || 'ud')+'</span></label>'+
+  /* Dos vías por línea, y basta con una (02-11-2026). Si el material está en el
+     almacén se enlaza y el precio sale de su ficha, con su recargo. Si no está
+     y no merece darse de alta (tornillería, una pieza suelta), se escribe su
+     COSTE y el servidor calcula el precio con el recargo general y el descuento
+     del contrato si lo hay. Lo que no tenga ni una cosa ni otra sigue a cero. */
+  h += mats.map((m, i) =>
+    '<div class="grupo"><h3>'+esc(m.descripcion || 'Sin descripción')+
+      ' <span class="mini">· '+esc(m.cantidad)+' '+esc(m.unidad || 'ud')+'</span></h3>'+
+    '<div class="campos">'+
+    '<div class="campo full"><label for="mp-'+i+'">Del almacén</label>'+
     '<select id="mp-'+i+'" data-mat="'+m.id+'">'+
-      '<option value="">Dejarlo sin enlazar</option>'+
+      '<option value="">No está en el almacén</option>'+
       cat.map(c => { const pv = precioVentaMaterial(c.id);
         return '<option value="'+c.id+'"'+(sugiere(m.descripcion) === c.id ? ' selected' : '')+'>'+
           esc(c.descripcion + (c.codigo ? ' · '+c.codigo : '') +
             (pv != null ? ' · '+eur(pv) : ' · sin precio'))+'</option>'; }).join('')+
       '</select>'+
       (sugiere(m.descripcion) ? '<span class="pista">Propuesto por el nombre. Compruébalo</span>' : '')+
-    '</div>').join('')+'</div>';
+    '</div>'+
+    '<div class="campo"><label for="mc-'+i+'">O lo que te costó (€/'+esc(m.unidad || 'ud')+')</label>'+
+    '<input id="mc-'+i+'" type="number" step="0.01" min="0" data-mat="'+m.id+'" '+
+      'value="'+esc(m.coste != null ? m.coste : '')+'">'+
+    '<span class="pista">El coste, no el precio de venta: el recargo lo pone la aplicación</span></div>'+
+    '</div></div>').join('');
 
-  h += '<p class="mini" style="margin:12px 0 0">Lo que dejes sin enlazar seguirá valiendo cero. '+
-    'Si el material no está en el almacén, dale de alta primero con su precio de compra y vuelve '+
-    'aquí.</p>'+
+  h += '<p class="mini" style="margin:12px 0 0">Con una de las dos cosas basta. Si eliges artículo '+
+    'del almacén, manda su ficha y su recargo; si escribes el coste, se le aplica tu recargo '+
+    'general y el descuento del contrato, si lo tiene. Lo que dejes sin ninguna de las dos seguirá '+
+    'valiendo cero.</p>'+
     '<p class="err"></p><div class="pie" style="flex-wrap:wrap;gap:6px">'+
     '<button type="button" class="btn sm plana" data-act="articulo-nuevo">Dar de alta un material</button>'+
     '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
-    '<button type="submit" class="btn pri">Enlazar y volver a calcular</button></div>';
+    '<button type="submit" class="btn pri">Guardar y volver a calcular</button></div>';
 
   abrirDlg(h, async () => {
-    const sels = Array.from(dlgForm.querySelectorAll('select[data-mat]'));
-    const cambios = sels.filter(s => s.value);
-    if (!cambios.length) return setErr('No has enlazado ninguna línea.');
+    /* Por cada línea, lo que se haya puesto: el artículo, el coste, o nada */
+    const cambios = mats.map((m, i) => {
+      const sel = document.getElementById('mp-'+i);
+      const cos = document.getElementById('mc-'+i);
+      const art = sel ? sel.value : '';
+      const coste = cos && cos.value !== '' ? +cos.value : null;
+      return { id: m.id, art, coste };
+    }).filter(x => x.art || x.coste != null);
+    if (!cambios.length)
+      return setErr('No has puesto ni artículo ni coste en ninguna línea.');
     try {
-      for (const s of cambios){
-        const { error } = await sb.from('materiales')
-          .update({ articulo_id: s.value }).eq('id', s.dataset.mat);
+      for (const c of cambios){
+        /* El PRECIO se deja vacío a propósito en los dos casos: lo calcula el
+           servidor al recalcular, que es quien sabe el recargo que toca y el
+           descuento del contrato. Ponerlo aquí sería calcular el mismo número
+           en dos sitios distintos, y acabarían diciendo cosas distintas.
+           Con artículo, el coste también se deja al servidor: lo coge de su
+           ficha, que es donde está el bueno. */
+        const o = c.art ? { articulo_id: c.art, coste: null, precio: null }
+                        : { coste: c.coste, precio: null };
+        const { error } = await sb.from('materiales').update(o).eq('id', c.id);
         if (error) throw error;
       }
       /* Y se vuelve a calcular en el momento: enlazar sin recalcular dejaría el
@@ -19662,9 +19743,9 @@ function dlgMatSinPrecio(avisoId){
       await sb.rpc('valorar_aviso', { p_aviso: avisoId });
       cerrarDlg(); await cargar(); pintar();
       const quedan = matSinPrecioDe(avisoId).length;
-      toast(cambios.length+' enlazada'+(cambios.length===1?'':'s')+' y visita recalculada'+
-        (quedan ? '. Quedan '+quedan+' sin enlazar.' : '.'));
-    } catch(e){ setErr(e.message || 'No se ha podido enlazar.'); }
+      toast(cambios.length+' línea'+(cambios.length===1?'':'s')+' con precio y visita recalculada'+
+        (quedan ? '. Quedan '+quedan+' sin precio.' : '.'));
+    } catch(e){ setErr(e.message || 'No se ha podido guardar.'); }
   });
 }
 
@@ -19686,6 +19767,15 @@ function dlgValoracion(avisoId){
   {
     const pre = presuDelAviso(a);
     const pac = pactadoDe(a);
+    /* Un trabajo vendido que además se valora en cero: eso no se puede quedar
+       en una línea pequeña, porque es dinero que desaparece entero. */
+    if (pre && seValoraEnCero(a))
+      h += '<div class="sin-ficha" style="margin-bottom:10px">Este trabajo salió de un presupuesto '+
+        'aceptado, pero es de tipo <b>'+esc(tipoAsis(a.tipo))+'</b>'+
+        (a.sin_cargo ? ' y está marcado como que no se cobra' : '')+
+        ', y eso se valora en <b>cero euros</b>. Si hay que cobrarlo, cambia el tipo de la '+
+        'asistencia'+(a.sin_cargo ? ' o quítale la marca de «no se cobra»' : '')+
+        ' y vuelve a calcular.</div>';
     if (pre && pac != null){
       const dif = Math.round((pac - (+v.imp_total || 0)) * 100) / 100;
       const hayDif = Math.abs(dif) >= 1;
@@ -19717,7 +19807,7 @@ function dlgValoracion(avisoId){
     fila('Materiales', eur(v.imp_materiales) +
       (matSinPrecioDe(avisoId).length
         ? ' <span class="mini" style="color:var(--mal)">('+matSinPrecioDe(avisoId).length+
-          ' sin enlazar, a 0 €)</span>' : '')) +
+          ' sin precio, a 0 €)</span>' : '')) +
     fila('Total sin IVA', eur(v.imp_total), true) +
     (S.tarifas ? fila('Con IVA', eur(+v.imp_total * (1 + (+S.tarifas.iva || 21) / 100))) : '') +
     '</dl></div>';
@@ -19733,13 +19823,13 @@ function dlgValoracion(avisoId){
     const sp = matSinPrecioDe(avisoId);
     if (sp.length)
       h += '<div class="sin-ficha" style="margin:0 0 10px">Esta visita lleva <b>'+sp.length+
-        ' línea'+(sp.length===1?'':'s')+' de material sin enlazar</b> con el almacén: '+
+        ' línea'+(sp.length===1?'':'s')+' de material sin precio</b>: '+
         esc(sp.slice(0, 4).map(m => m.descripcion).join(', '))+
         (sp.length > 4 ? ' y '+(sp.length-4)+' más' : '')+
         '. Entran a cero euros, así que el importe sale corto y el margen de arriba sale más alto '+
         'que el real.<div class="fila" style="gap:6px;margin-top:8px">'+
         '<button type="button" class="btn sm pri" data-act="mat-sin-precio" data-id="'+a.id+
-        '">Enlazar con el almacén</button><span class="sp"></span></div></div>';
+        '">Ponerles precio</button><span class="sp"></span></div></div>';
   }
   if (a.cobrado) h += '<p class="mini" style="margin:0">Cobrada en obra: '+eur(a.cobro_importe)+' · '+esc(a.cobro_forma||'')+'</p>';
   if (v.facturado) h += '<p class="mini" style="margin:0">Facturada el '+esc(fechaCorta(v.facturado_el))+(v.factura_ref?(' · '+esc(v.factura_ref)):'')+'</p>';
@@ -23169,10 +23259,12 @@ dlgForm.addEventListener('click', async e => {
   if (a === 'pz-volver-editor'){ pintarPresupuesto(); return; }
   if (a === 'pz-enlace'){ cerrarDlg(); dlgEnlacePresu(b.dataset.id); return; }
   if (a === 'pz-acepta-mano'){ cerrarDlg(); dlgAceptarAMano(b.dataset.id); return; }
-  if (a === 'pz-convertir'){
-    if (!armar(b, 'Confirmar: se abre el trabajo')) return;
-    await convertirPresupuesto(b.dataset.id); return;
-  }
+  /* Abrir el trabajo preguntando antes de qué tipo es. Hasta el 02-11-2026 lo
+     decidía sola: instalación si había puerta y COMERCIAL si no la había. Y lo
+     comercial se valora en cero euros, así que un presupuesto firmado de un
+     cliente cuya puerta no estaba dada de alta abría un trabajo que al cerrarlo
+     valía nada y ni siquiera salía en pendiente de facturar. */
+  if (a === 'pz-convertir'){ dlgConvertirPresupuesto(b.dataset.id); return; }
   if (a === 'pz-duplicar'){
     const p = presuDe(b.dataset.id);
     if (!p) return;
