@@ -582,6 +582,34 @@ paso('y que no hay nada que marcar ni que apagar',
   /nada que marcar/.test(F));
 
 /* ================================================================
+   15. El manual cuenta lo de la factura              02-11-2026
+
+   Lo más delicado de esta parte no es técnico: es que la aplicación
+   llega hasta el borde de la factura y se para, y eso hay que
+   explicarlo con sus motivos, porque si no parece que falte algo.
+
+   Trozos cortos: el manual va a 80 columnas.
+   ================================================================ */
+bloque('15. El manual cuenta lo de la factura');
+
+paso('distingue las tres cosas: cobrar en obra, facturar y cobrar la factura',
+  /Cobrar no es facturar/.test(F) && /facturar no es cobrar/.test(F));
+paso('dice que hay que facturar aunque ya se haya cobrado',
+  /aunque ya se haya cobrado/.test(F));
+paso('que el plazo de pago lo pone el cliente',
+  /lo pone el cliente/.test(F));
+paso('que sin fecha de vencimiento no hay impagado',
+  /no hay impagado/.test(F));
+paso('y por qué: reclamar a quien no debe nada sale caro',
+  /reclamarle a un cliente que no debe/.test(F));
+paso('explica que la aplicación NO emite facturas ni las numera',
+  /no emite facturas/.test(F));
+paso('con el motivo y la fecha del reglamento',
+  /1007\/2023/.test(F) && /1 de enero de 2027/.test(F));
+paso('y lo que de verdad decide: que la declaración responsable la firma el fabricante',
+  /declaraci[óo]n/.test(F) && /fabricante/.test(F));
+
+/* ================================================================
    El índice del manual
    ================================================================
    El manual ha pasado de dos folios a ocho apartados largos. Buscar

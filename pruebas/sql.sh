@@ -46,7 +46,7 @@ export PATH="$PGBIN:$PATH"
 ORDEN="componentes.sql centros.sql parte-por-correo.sql obra.sql ficha.sql \
 almacen.sql presupuestos.sql presupuestos2.sql comercial.sql anexos.sql \
 tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos3.sql valoracion.sql \
-parado.sql"
+parado.sql factura.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -136,6 +136,20 @@ if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/parado-pruebas.sql" ]; then
     fallos=$((fallos+1))
     echo " FALLA lo parado:"
     grep -a -m3 -E "ERROR|EXCEPTION" /tmp/parado-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
+# Y lo que entra y no entra en pendiente de facturar y en impagados. Cobrar no
+# es facturar, y confundirlo dejaba visitas cobradas que no facturaba nadie.
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/factura-pruebas.sql" ]; then
+  echo ""
+  echo "── Cobrar no es facturar ───────────────────────"
+  if $PSQL -f "$AQUI/sql/factura-pruebas.sql" > /tmp/factura-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/factura-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA la factura:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/factura-pruebas.log | sed 's/^/         /'
   fi
 fi
 

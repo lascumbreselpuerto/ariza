@@ -162,6 +162,7 @@ fichasIncompletas partesFirmadosDe validarExpediente datosEmpresa TABLAS_COPIA e
 presuDelAviso pactadoDe matSinPrecioDe visitasConMatSinPrecio dlgMatSinPrecio
 exactoEnCatalogo mismoNombreQueElServidor
 PARADO esRojo quietoDesde diasQuieto sinFechasDeMovimiento avisoDelPresu
+IMPAGO_ROJO impagados porCobrar plazoDe venceProponer dlgFacturar FORMAS_PAGO
 loQueSeQuedoParado vistaGestion
 dlgValoracion precioVentaMaterial convertirPresupuesto
 dlgEngancharPuerta pideEntrega avisosDe minimoObra
