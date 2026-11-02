@@ -30,8 +30,19 @@ for s in $SUITES; do
     echo "  la suite ha muerto sin terminar (código $CODIGO)"
     FALLOS=$((FALLOS + 1))
     echo "$SALIDA" | tail -12
+    echo "$s: no ha terminado" >> "$RESUMEN"
+  elif [ "$CODIGO" != "0" ]; then
+    # Agujero tapado el 02-11-2026: una suite sin ninguna comprobación en rojo
+    # pero con un error de JavaScript sale con código 1, y hasta hoy el resumen
+    # solo miraba el «0 mal» y decía «Todo en verde». Un banco que esconde un
+    # error de consola es un banco en el que no se mira la consola.
+    echo "  la suite acaba con errores de JavaScript (código $CODIGO)"
+    FALLOS=$((FALLOS + 1))
+    echo "$SALIDA" | grep -aE "^JS:|^consola:" | head -6
+    echo "$s: ${LINEA} pero con errores de JavaScript" >> "$RESUMEN"
+  else
+    echo "$s: ${LINEA}" >> "$RESUMEN"
   fi
-  echo "$s: ${LINEA:-no ha terminado}" >> "$RESUMEN"
 done
 
 # Los SQL también se prueban: son código, y hasta el 27-10-2026 nadie los

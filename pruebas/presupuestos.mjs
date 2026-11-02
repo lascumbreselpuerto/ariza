@@ -1324,7 +1324,10 @@ const sinPrecio = await T(async () => {
   const textoDlg = document.getElementById('dlg-form').innerText;
   /* La tornillería no está en el catálogo: se le pone el coste a mano, que es
      la segunda vía que se añadió el 02-11-2026. */
-  const campoCoste = Array.from(document.querySelectorAll('#dlg-form input[data-mat]'));
+  /* Solo las casillas de COSTE. Desde el 02-11-2026 hay también una casilla de
+     verificación por línea (dar de alta en el almacén), que también lleva
+     data-mat, así que contarlas todas juntas ya no mide lo que medía. */
+  const campoCoste = Array.from(document.querySelectorAll('#dlg-form input[type="number"][data-mat]'));
   const hayCampoCoste = campoCoste.length;
   campoCoste[1].value = '7.5';
   document.querySelector('#dlg-form [type="submit"]').click();
@@ -1530,6 +1533,208 @@ paso('el artículo queda enlazado aunque no diera precio',
   letrero.enlazado === 'art-nocoste', letrero.enlazado);
 paso('y la línea sigue sin precio: no se da por buena',
   letrero.precio === null, letrero.precio);
+
+/* ================================================================
+   20. El almacén se llena solo, pero preguntando     02-11-2026
+
+   El catálogo tenía DOS artículos y lo que más se gasta es pieza
+   repetida: fotocélulas, bandas, mandos, muelles, rodillos. Si cada
+   vez que aparece una hay que escribirle el coste a mano, se escribe
+   el mismo número cincuenta veces y no se parece ninguno al anterior.
+
+   Así que al ponerle el coste se puede dar de alta en el almacén de
+   paso. Lo que esta parte vigila es que PREGUNTE: crear una ficha de
+   catálogo es una decisión, y un tornillo o una brida no la merecen.
+   Y que la próxima vez que aparezca ese material el servidor lo
+   enlace solo por el nombre, que es de lo que se trata.
+   ================================================================ */
+bloque('20. Dar de alta el material desde el propio diálogo');
+
+const alta = await T(async () => {
+  const g = window.__T;
+  const cli = g.S.clientes[0];
+  const ayer = new Date(Date.now() - 86400000).toISOString();
+  const pon = async (id, desc, cant) => {
+    await g.sb.from('avisos').insert({ id, tipo:'averia', estado:'cerrado', prioridad:'normal',
+      tecnico_id:'usuario-admin', cliente_id:cli.id, puerta_id:g.S.puertas[0].id,
+      trabajo:'Cambiada una pieza.', horas:1, cerrado:ayer, creado:ayer });
+    await g.sb.from('materiales').insert({ aviso_id:id, articulo_id:null,
+      descripcion:desc, cantidad:cant, unidad:'ud' });
+    await g.sb.from('valoraciones').insert({ aviso_id:id, imp_mano_obra:45,
+      imp_desplazamiento:30, imp_materiales:0, imp_total:75,
+      coste_total:22, margen:53, facturado:false });
+  };
+  /* Tres visitas: una pieza que no merece ficha, una que sí, y la próxima vez
+     que aparezca esa misma pieza. */
+  await pon('av-alta1', 'Brida de nylon 200 mm', 10);
+  await pon('av-alta2', 'Rodillo de nylon 20 mm', 4);
+  await pon('av-alta3', 'Rodillo de nylon 20 mm', 2);
+  await pon('av-alta4', 'Rodillo de nylon 20 mm', 1);
+  await pon('av-alta5', 'Muelle de torsión 95 mm', 2);
+  /* Y un material que ya existe en el almacén pero está DE BAJA, con la misma
+     descripción: el almacén no permite dos nombres iguales, así que darlo de
+     alta otra vez no puede acabar en un error del servidor. */
+  await g.sb.from('articulos').insert({ id:'art-baja',
+    descripcion:'Muelle de torsión 95 mm', unidad:'ud', codigo:'MAT-8888',
+    token:'D6N2', activo:false });
+  await g.cargar();
+  const antes = g.S.catalogo.length;
+
+  /* --- 1. La brida: se le pone el coste y NO se marca la casilla --- */
+  g.dlgMatSinPrecio('av-alta1');
+  await new Promise(r => setTimeout(r, 500));
+  const texto = document.getElementById('dlg-form').innerText;
+  const casillas = Array.from(document.querySelectorAll('#dlg-form input[type="checkbox"][data-mat]'));
+  const pregunta = casillas.length === 1 && casillas[0].checked === false;
+  document.querySelector('#dlg-form input[type="number"][data-mat]').value = '0.15';
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 1500));
+  const trasBrida = g.S.catalogo.length;
+  const brida = (await g.sb.from('materiales').select('*').eq('aviso_id','av-alta1')).data[0];
+
+  /* --- 2. Marcar la casilla sin escribir el coste: no vale --- */
+  g.dlgMatSinPrecio('av-alta2');
+  await new Promise(r => setTimeout(r, 500));
+  document.querySelector('#dlg-form input[type="checkbox"][data-mat]').checked = true;
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 700));
+  const errSinCoste = (document.querySelector('#dlg-form .err') || {}).innerText || '';
+  const trasIntento = g.S.catalogo.length;
+
+  /* --- 3. Ahora con coste y la casilla marcada: se da de alta --- */
+  document.querySelector('#dlg-form input[type="number"][data-mat]').value = '3.2';
+  document.querySelector('#dlg-form input[type="checkbox"][data-mat]').checked = true;
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 1800));
+  const dialogoAbierto = document.getElementById('dlg').open === true;
+  const avisoTras = document.getElementById('dlg-form').innerText;
+  const creado = g.S.catalogo.find(x => x.descripcion === 'Rodillo de nylon 20 mm') || null;
+  const rodillo = (await g.sb.from('materiales').select('*').eq('aviso_id','av-alta2')).data[0];
+  const trasAlta = g.S.catalogo.length;
+
+  /* --- 4. La próxima vez que aparezca: el servidor la enlaza solo --- */
+  await g.sb.rpc('valorar_aviso', { p_aviso: 'av-alta3' });
+  await g.cargar();
+  const otra = (await g.sb.from('materiales').select('*').eq('aviso_id','av-alta3')).data[0];
+  /* Y en una visita donde vuelve a salir el mismo material, el diálogo ya no
+     ofrece darlo de alta: ya está. Lo que ofrece es el artículo, propuesto. */
+  g.dlgMatSinPrecio('av-alta4');
+  await new Promise(r => setTimeout(r, 450));
+  const textoLuego = document.getElementById('dlg-form').innerText;
+  const casillasLuego = document.querySelectorAll('#dlg-form input[type="checkbox"][data-mat]').length;
+  const propuestoLuego = (document.querySelector('#dlg-form select[data-mat]') || {}).value;
+  g.cerrarDlg();
+  await new Promise(r => setTimeout(r, 250));
+
+  /* --- 5. El que ya existe pero está de baja: se reutiliza, no se duplica --- */
+  g.dlgMatSinPrecio('av-alta5');
+  await new Promise(r => setTimeout(r, 450));
+  const ofreceBaja = document.querySelectorAll('#dlg-form input[type="checkbox"][data-mat]').length;
+  document.querySelector('#dlg-form input[type="number"][data-mat]').value = '12.5';
+  document.querySelector('#dlg-form input[type="checkbox"][data-mat]').checked = true;
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 1800));
+  const trasBaja = (await g.sb.from('articulos').select('*')).data
+    .filter(x => x.descripcion === 'Muelle de torsión 95 mm').length;
+  const reusado = (await g.sb.from('articulos').select('*').eq('id','art-baja')).data[0];
+  const muelle = (await g.sb.from('materiales').select('*').eq('aviso_id','av-alta5')).data[0];
+
+  /* --- 6. Y el nombre con el que se compara es el del servidor --- */
+  const mismoNombre = [
+    g.mismoNombreQueElServidor(' Rodillo de nylon 20 mm ', 'rodillo de nylon 20 MM'),
+    g.mismoNombreQueElServidor('Fotocelula', 'Fotocélula'),
+    !!g.exactoEnCatalogo('  RODILLO DE NYLON 20 MM '),
+    !!g.exactoEnCatalogo('Rodillo de nylon')
+  ];
+
+  return { texto, pregunta, antes, trasBrida, trasIntento, trasAlta, errSinCoste,
+    dialogoAbierto, avisoTras, textoLuego, casillasLuego, propuestoLuego, mismoNombre,
+    ofreceBaja, trasBaja, reusadoActivo: reusado.activo, reusadoCoste: reusado.coste,
+    muelleArt: muelle.articulo_id, muelleCoste: muelle.coste, muellePrecio: muelle.precio,
+    bridaArt: brida.articulo_id, bridaCoste: brida.coste, bridaPrecio: brida.precio,
+    creadoCoste: creado ? creado.coste : null, creadoUnidad: creado ? creado.unidad : null,
+    creadoCodigo: creado ? !!creado.codigo : false,
+    creadoRecargo: creado ? (creado.recargo == null) : false,
+    creadoId: creado ? creado.id : null,
+    rodilloArt: rodillo.articulo_id, rodilloCoste: rodillo.coste, rodilloPrecio: rodillo.precio,
+    otraArt: otra.articulo_id, otraPrecio: otra.precio };
+});
+paso('cada línea que no esté en el almacén ofrece darla de alta, y pregunta',
+  alta.pregunta === true);
+paso('lo dice con las palabras que se entienden',
+  /no está en el almacén/.test(alta.texto) && /lo doy de alta/.test(alta.texto),
+  (alta.texto.match(/.{0,50}doy de alta.{0,30}/)||[''])[0]);
+paso('y explica para qué sirve: que la próxima vez no haya que teclear nada',
+  /próxima vez/.test(alta.texto));
+paso('avisando de lo que NO hay que dar de alta',
+  /trozo de cable/.test(alta.texto));
+/* La brida: coste a mano, sin ficha. Es la vía de siempre y sigue igual. */
+paso('si no se marca la casilla, no se crea nada en el almacén',
+  alta.trasBrida === alta.antes, alta.antes+' → '+alta.trasBrida);
+paso('la brida se queda con su coste y su precio, sin ficha de artículo',
+  alta.bridaArt == null && alta.bridaCoste === 0.15 && alta.bridaPrecio === 0.21,
+  'art '+alta.bridaArt+' · coste '+alta.bridaCoste+' · precio '+alta.bridaPrecio);
+/* Una ficha de almacén sin precio de compra no sirve para nada */
+paso('marcar la casilla sin escribir el coste no da de alta nada',
+  alta.trasIntento === alta.antes, alta.antes+' → '+alta.trasIntento);
+paso('y lo dice en vez de crear una ficha vacía',
+  /hace falta escribir lo que costó/.test(alta.errSinCoste), alta.errSinCoste.slice(0, 90));
+/* El alta de verdad */
+paso('con coste y la casilla marcada, el material queda dado de alta',
+  alta.trasAlta === alta.antes + 1, alta.antes+' → '+alta.trasAlta);
+paso('con la descripción que escribió el técnico y el coste que puso la oficina',
+  alta.creadoCoste === 3.2 && alta.creadoUnidad === 'ud',
+  'coste '+alta.creadoCoste+' · '+alta.creadoUnidad);
+paso('con su código de almacén, para poder imprimirle la etiqueta',
+  alta.creadoCodigo === true);
+paso('y sin recargo propio: hereda el general, como todo lo demás',
+  alta.creadoRecargo === true);
+paso('la línea queda enlazada con la ficha nueva',
+  alta.rodilloArt === alta.creadoId && alta.creadoId != null,
+  alta.rodilloArt+' / '+alta.creadoId);
+/* 3,20 de coste con el recargo general del 40 % = 4,48 */
+paso('y con precio: 3,20 de coste y el 40 % de recargo son 4,48',
+  alta.rodilloPrecio === 4.48 && alta.rodilloCoste === 3.2,
+  'coste '+alta.rodilloCoste+' · precio '+alta.rodilloPrecio);
+paso('no se queda ningún aviso de que el precio no haya entrado',
+  alta.dialogoAbierto === false && !/El precio no ha entrado/.test(alta.avisoTras),
+  alta.avisoTras.slice(0, 60));
+/* Y esto es lo que hace que valga la pena: la próxima vez, nada que teclear */
+paso('la próxima vez que aparezca ese material, el servidor lo enlaza solo',
+  alta.otraArt === alta.creadoId, alta.otraArt+' / '+alta.creadoId);
+paso('y le pone el precio sin que nadie toque nada',
+  alta.otraPrecio === 4.48, alta.otraPrecio);
+paso('y la próxima visita ya no ofrece darlo de alta: ya está',
+  alta.casillasLuego === 0 && !/lo doy de alta/.test(alta.textoLuego),
+  alta.casillasLuego+' casillas');
+paso('lo que ofrece es el artículo nuevo, propuesto por el nombre',
+  alta.propuestoLuego === alta.creadoId, alta.propuestoLuego+' / '+alta.creadoId);
+/* ---- Lo que ya existe no se duplica ----
+   El almacén no admite dos materiales con la misma descripción, y el servidor
+   tampoco sabría con cuál de los dos enlazar la próxima vez. Un material dado
+   de baja con ese nombre vuelve al servicio en vez de crearse otro igual. */
+paso('un material de baja con ese nombre sigue ofreciendo darlo de alta',
+  alta.ofreceBaja === 1);
+paso('pero no se crea otro igual: se usa el que ya había',
+  alta.trasBaja === 1, alta.trasBaja+' fichas con ese nombre');
+paso('y vuelve al servicio, con el coste que se acaba de poner',
+  alta.reusadoActivo === true && alta.reusadoCoste === 12.5,
+  'activo '+alta.reusadoActivo+' · coste '+alta.reusadoCoste);
+paso('la línea queda enlazada con esa ficha y con su precio',
+  alta.muelleArt === 'art-baja' && alta.muelleCoste === 12.5 && alta.muellePrecio === 17.5,
+  alta.muelleArt+' · '+alta.muelleCoste+' · '+alta.muellePrecio);
+
+/* El nombre con el que se compara tiene que ser el MISMO que usa el servidor:
+   si yo fuera más tolerante diría que ya está dado de alta y el servidor luego
+   no lo reconocería, y la línea se quedaría a cero sin explicación. */
+paso('el nombre se compara como lo compara el servidor: mayúsculas y espacios da igual',
+  alta.mismoNombre[0] === true);
+paso('pero los acentos NO: ahí el servidor no perdona y yo tampoco',
+  alta.mismoNombre[1] === false);
+paso('así que lo que ya está dado de alta se reconoce',
+  alta.mismoNombre[2] === true);
+paso('y lo que solo se parece, no',
+  alta.mismoNombre[3] === false);
 
 /* ================================================================
    Final

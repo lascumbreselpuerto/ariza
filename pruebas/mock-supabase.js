@@ -304,7 +304,21 @@ function almacen(bucket){
       }
       return { data: out, error:null };
     },
-    getPublicUrl(ruta){ return { data:{ publicUrl: 'blob:'+bucket+'/'+ruta } }; },
+    /* Devuelve una dirección que el navegador PUEDA cargar, igual que la de
+       verdad. Hasta el 02-11-2026 devolvía la cadena «blob:bucket/ruta», que no
+       es una dirección válida: Chromium la rechazaba y dejaba un error de
+       consola en cada prueba que pintaba una foto. Ese error no era de la
+       aplicación, pero ensuciaba el banco, y un banco con ruido de fondo acaba
+       siendo un banco donde no se mira el ruido. */
+    getPublicUrl(ruta){
+      /* Se apunta qué ha pedido la aplicación, que es lo que importa de
+         verdad: de qué cubo y con qué ruta, y sin firmar. */
+      DB.__publicas = (DB.__publicas || []).concat([bucket + '/' + ruta]);
+      const x = FICHEROS.get(bucket + '/' + ruta);
+      let url = PNG_VACIO;
+      try { if (x && x.blob instanceof Blob) url = URL.createObjectURL(x.blob); } catch(_){}
+      return { data:{ publicUrl: url } };
+    },
   };
 }
 
@@ -366,24 +380,38 @@ const RPC = {
   valorar_aviso({ p_aviso }){
     DB.__valorados = (DB.__valorados || []).concat([String(p_aviso)]);
     const tar = (DB.tarifas || [])[0] || {};
-    (DB.materiales || []).forEach(m => {
-      if (String(m.aviso_id) !== String(p_aviso)) return;
-      if (m.precio != null) return;
-      const art = m.articulo_id
-        ? (DB.articulos || []).find(a => String(a.id) === String(m.articulo_id)) : null;
-      /* (a) enlazada con un artículo que tiene coste: coge su coste y su recargo */
-      if (art && art.coste != null){
-        m.coste = art.coste;
-        const rec = art.recargo != null ? art.recargo : (tar.recargo_material || 0);
-        m.precio = Math.round(art.coste * (1 + rec / 100) * 100) / 100;
-        return;
-      }
-      /* (b) con coste escrito a mano: recargo general */
-      if (m.coste != null){
-        m.precio = Math.round(m.coste * (1 + (tar.recargo_material || 0) / 100) * 100) / 100;
-      }
-      /* (c) ni una cosa ni otra: se queda sin precio, y vale cero */
+    const rec2 = (art, c) => Math.round(c * (1 + (art.recargo != null ? art.recargo
+                                                 : (tar.recargo_material || 0)) / 100) * 100) / 100;
+    /* El mismo nombre que para el servidor: minúsculas y sin espacios a los
+       lados. Ni se quitan acentos ni signos, igual que en valoracion.sql. */
+    const mismo = (a, b) => String(a == null ? '' : a).trim().toLowerCase() ===
+                            String(b == null ? '' : b).trim().toLowerCase();
+    const mios = (DB.materiales || []).filter(m => String(m.aviso_id) === String(p_aviso));
+    const arts = DB.articulos || [];
+    /* (a) sin enlazar y con un artículo que se llama igual: lo enlaza SOLO.
+       Es lo que hace que dar de alta el material una vez valga para siempre. */
+    mios.forEach(m => {
+      if (m.articulo_id) return;
+      const art = arts.find(a => mismo(a.descripcion, m.descripcion));
+      if (!art) return;
+      m.articulo_id = art.id;
+      const c = m.coste != null ? m.coste : art.coste;
+      if (c == null) return;
+      m.coste = c; m.precio = rec2(art, c);
     });
+    /* (b) enlazada a mano desde la oficina y sin coste: lo coge de la ficha */
+    mios.forEach(m => {
+      if (!m.articulo_id || m.coste != null) return;
+      const art = arts.find(a => String(a.id) === String(m.articulo_id));
+      if (!art || art.coste == null) return;
+      m.coste = art.coste; m.precio = rec2(art, art.coste);
+    });
+    /* (c) con coste y sin precio: recargo general */
+    mios.forEach(m => {
+      if (m.coste == null || m.precio != null) return;
+      m.precio = Math.round(m.coste * (1 + (tar.recargo_material || 0) / 100) * 100) / 100;
+    });
+    /* lo que no tiene ni enlace ni coste se queda sin precio, y vale cero */
     return { ok:true };
   },
   archivar_asistencia(){ return { ok:true }; },

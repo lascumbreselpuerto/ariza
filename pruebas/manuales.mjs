@@ -529,6 +529,33 @@ paso('deja claro que dar de alta y poner precios es de oficina',
   /cosa de oficina/.test(M));
 
 /* ================================================================
+   13. El manual cuenta cómo se llena el almacén      02-11-2026
+
+   La casilla de dar de alta el material desde el remate del parte
+   cambia una rutina de oficina, así que tiene que estar contada
+   donde se enseña esa rutina. Y con los dos matices, que son los que
+   evitan un catálogo lleno de bridas y de nombres mal escritos.
+
+   Los trozos de texto que se buscan son CORTOS a propósito: el
+   manual está a 80 columnas, y una expresión que cruce un salto de
+   línea daría un rojo que no es.
+   ================================================================ */
+bloque('13. El manual cuenta cómo se llena el almacén');
+
+paso('el manual de formación dice que el material se puede dar de alta al remate',
+  /de alta en el almacén/.test(F));
+paso('y por qué vale la pena: lo que se gasta es pieza repetida',
+  /pieza repetida/.test(F));
+paso('dice que pregunta y que no lo hace solo',
+  /pregunta, no lo hace solo/.test(F));
+paso('avisa de lo que NO merece ficha de catálogo',
+  /trozo de cable/.test(F) && /para lo que se repite/.test(F));
+paso('y advierte de que los acentos cuentan para reconocer el nombre',
+  /los acentos/.test(F) && /distintos para el servidor/.test(F));
+paso('lo dice también en la lista de lo que hace la aplicación',
+  /enlaza solo por el nombre/.test(F));
+
+/* ================================================================
    El índice del manual
    ================================================================
    El manual ha pasado de dos folios a ocho apartados largos. Buscar

@@ -467,14 +467,26 @@ const venta = await T(async () => {
   const l = g.S.presu.lineas[g.S.presu.lineas.length - 1];
   g.cerrarDlg();
   return { precioFijo, precioCalculado, url, descAuto, precioAuto,
-    linea: { det:l.detalle, foto:l.foto_ruta, ref:l.referencia, p:l.precio } };
+    linea: { det:l.detalle, foto:l.foto_ruta, ref:l.referencia, p:l.precio },
+    publicas: window.__DB.__publicas || [] };
 });
 paso('un precio de venta fijo manda sobre el coste más el recargo',
   venta.precioFijo === 72, venta.precioFijo);
 paso('y si no lo hay, se sigue calculando como siempre: 50 más el 40% son 70',
   venta.precioCalculado === 70, venta.precioCalculado);
-paso('la foto tiene enlace público, porque la ve el cliente sin entrar',
-  /ofertas\/catalogo\//.test(venta.url), venta.url);
+/* Reescrita el 02-11-2026. Antes comprobaba que la dirección de la foto
+   CONTUVIERA «ofertas/catalogo/», pero eso solo era verdad porque el simulador
+   devolvía una cadena inventada que el navegador no sabía cargar y que dejaba
+   un error de consola en cada prueba. Ahora el simulador devuelve una dirección
+   que carga, como la de verdad, y lo que se comprueba es lo que de verdad
+   importa: que la aplicación pide la foto del cubo PÚBLICO «ofertas», con la
+   ruta de ese artículo, y sin firmarla. Si hiciera falta firma, el cliente no
+   vería la foto en la oferta que se le manda. */
+paso('la foto se pide al cubo público «ofertas», con la ruta de ese artículo',
+  (venta.publicas || []).some(x => x === 'ofertas/catalogo/art-foto-1.jpg'),
+  (venta.publicas || []).join(' · ') || 'no ha pedido ninguna');
+paso('y la dirección que sale carga, no es un apaño del banco',
+  /^(data:|blob:http|https?:)/.test(venta.url), venta.url.slice(0, 40));
 paso('al elegir el material en el presupuesto se rellena solo el concepto',
   /Fotocélula/.test(venta.descAuto), venta.descAuto);
 paso('y el precio', venta.precioAuto === '72', venta.precioAuto);
