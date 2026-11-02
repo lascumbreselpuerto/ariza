@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.11.02-7**
+> **Versión de la aplicación que describe este manual: 2026.11.02-8**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -630,6 +630,31 @@ Tres reglas que se siguen de esto:
   y la visita sale en 120 € más IVA, los números cuadran; si cobró 120, se cobró
   el IVA de menos. Esa comparación se hace al apuntar la factura, no después.
 
+### El kilometraje que nadie mide
+
+Hasta el 2 de noviembre de 2026, el técnico escribía los kilómetros de cada
+visita y de ese número salía el importe del desplazamiento: importe fijo más
+kilómetros por el precio del kilómetro.
+
+El problema no es la fórmula, es el dato. **Nadie mide esos kilómetros.** Se
+estiman al cerrar el parte, a las ocho de la tarde, y se estiman distinto según
+el técnico, el día y lo que se acuerde del camino. Un dato que se inventa cada
+vez no es un dato: es ruido que acaba en una factura.
+
+Una ruta sí se sabe. El Puerto es El Puerto, Jerez es Jerez, y lo que cuesta ir
+a cada sitio se decide una vez, en frío, mirando lo que de verdad se gasta en
+combustible y en vehículo. Por eso las rutas las valora la oficina y el técnico
+solo dice por cuál fue.
+
+Dos cosas que se siguen de ahí:
+
+- **Una ruta sin importe puesto no se puede elegir.** Si se pudiera, esa visita
+  se valoraría con el desplazamiento a cero y nadie se enteraría. Es el mismo
+  caso que el material sin precio, y se trata igual: la aplicación lo lista.
+- **Los kilómetros no desaparecen, se guardan para lo que son.** El viaje a
+  Huelva que no entra en ninguna zona se marca como fuera de ruta y entonces sí
+  se escriben los kilómetros, porque ahí el número significa algo.
+
 ### Lo que esta aplicación no hace, y por qué
 
 ARIZA SAT **no emite facturas ni las numera**. La factura se emite con el
@@ -681,6 +706,8 @@ La aplicación no es un cuaderno bonito: está construida sobre lo que acabas de
 - Y al escribir el coste se puede marcar que ese material **se dé de alta en el almacén**, con esa descripción y ese coste: la próxima vez que aparezca, el servidor lo enlaza solo por el nombre. Lo pregunta cada vez, nunca lo hace solo, porque una brida no merece ficha de catálogo.
 - Gestión tiene un panel, **lo que se ha quedado parado**, con los días que lleva quieta cada cosa: avisos sin asignar (los urgentes desde el primer día), avisos esperando repuesto, trabajos sin un parte nuevo, y presupuestos sin mandar, sin respuesta o aceptados sin abrir el trabajo. En rojo, lo que lleva más del doble del tiempo que ya era raro.
 - Ese panel se calcula solo con las fechas: no hay nada que marcar ni que apagar, y en cuanto algo se mueve desaparece de la lista. El reloj cuenta desde la última señal de vida (un parte de obra, un cambio de estado, cualquier cambio en el aviso), no desde el día en que entró.
+- El **desplazamiento se cobra por ruta**, no por kilómetros: cinco rutas con su nombre, su importe y su coste, que pone la oficina en Tarifas. El técnico elige la suya al cerrar, salvo que la oficina ya la haya puesto al crear el aviso. Los kilómetros solo se escriben cuando la visita va **fuera de ruta**.
+- Una ruta a la que nadie le haya puesto importe **no se ofrece** para elegir, y si alguna visita se cerró con ella, Gestión la lista aparte: su desplazamiento entró a cero euros.
 - **Lo cobrado en obra sigue en pendiente de facturar**, con su etiqueta y el importe que ya se cobró. Cobrar no es facturar: hay que emitir la factura igual y mandarla.
 - La ficha del cliente lleva su **plazo de pago** y su forma de pago. De ese plazo sale el vencimiento que se propone al apuntar cada factura, y se puede cambiar a mano; una fecha escrita por una persona manda sobre una calculada.
 - Al marcar una visita como facturada se apunta el **número de la factura emitida fuera**, su fecha, su vencimiento y, si ya está cobrada, cuándo, cómo y con qué referencia.
@@ -736,4 +763,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.02-7 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.02-8 de ARIZA SAT*

@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.02-7**
+> **Versión de la aplicación que describe este manual: 2026.11.02-8**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -137,10 +137,22 @@ Si la oficina te ha mandado llevar material, te sale arriba del todo con un bot�
 |---|---|
 | Hora de entrada / Hora de salida | Las de verdad |
 | Horas a facturar | Se calcula solo; puedes corregirlo |
-| Desplazamiento (km) | Los del viaje |
+| Desplazamiento | **La ruta** por la que has ido |
 | Técnicos | Cuántos habéis ido |
 
 Las horas se facturan completas: los 30 minutos exactos suben.
+
+**El desplazamiento ya no son kilómetros, es una ruta.** Eliges la zona de la
+lista y ya está: lo que cuesta cada ruta lo tiene puesto la oficina. Si la
+oficina ya la puso al darte el aviso, la ves pero no la cambias.
+
+Solo hay un caso en el que se escriben kilómetros: cuando la visita cae **fuera
+de ruta**, que es el viaje que no entra en ninguna zona. Eliges «Fuera de ruta»
+y entonces aparece la casilla de los kilómetros.
+
+Si una ruta que necesitas no sale en la lista es que la oficina no le ha puesto
+precio todavía. Díselo: si la eligieras, esa visita se quedaría sin cobrar el
+desplazamiento.
 
 En una obra de varios días estos tres campos salen **ya sumados** de todas las
 jornadas, no con los del último día. El apartado 4 lo explica.
@@ -545,4 +557,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.02-7 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.02-8 de ARIZA SAT*
