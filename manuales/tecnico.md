@@ -3,15 +3,35 @@
 **Para el equipo de Ariza Puertas y Automatismos.**
 Esto no explica el oficio: explica la aplicación. Da por hecho que sabes de puertas.
 
-Lo tienes siempre a mano en la pestaña **Manual** de la propia aplicación, también
+Lo tienes siempre a mano en el grupo **Manuales** de la propia aplicación, también
 sin cobertura una vez que lo has abierto la primera vez.
+
+## Cómo moverse por la aplicación
+
+Arriba del todo hay **seis grupos**, y se quedan fijos: aunque bajes por una
+pantalla larga, los tienes siempre a la vista sin tener que subir.
+
+| Grupo | Qué hay dentro |
+|---|---|
+| **Mi trabajo** | Lo tuyo del día |
+| **Clientes y trabajos** | Puertas, asistencias, realizadas, clientes, contratos, presupuestos y etiquetas |
+| **Calendario** | Lo planificado |
+| **Almacén** | Material, furgonetas y etiquetas de material |
+| **Oficina** | Gestión y equipo. Solo lo ve quien tiene permiso |
+| **Manuales** | Esto que estás leyendo |
+
+Al pulsar un grupo con varias cosas dentro aparece una segunda fila con sus
+pestañas. Los que tienen una sola cosa no enseñan esa segunda fila.
+
+Y en las pantallas largas, arriba sale un **índice** con los apartados que tiene
+esa pantalla: pulsas uno y te lleva, en vez de bajar buscándolo.
 
 Arriba del texto tienes un **índice** con una entrada por apartado y un **buscador**.
 El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.02-6**
+> **Versión de la aplicación que describe este manual: 2026.11.02-7**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -518,11 +538,11 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ## 11. Si algo no cuadra
 
-1. Mira la versión arriba de esta pantalla, en la pestaña **Manual**.
+1. Mira la versión arriba de esta pantalla, en el grupo **Manuales**.
 2. Busca en el manual con el buscador de arriba: busca también dentro del texto, no solo en los títulos.
 3. Recarga a fondo: en el móvil, cierra la aplicación del todo y vuelve a abrirla.
 4. Si sigue sin cuadrar, dilo **con el número de versión delante**. Sin eso se pierde el doble de tiempo.
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.02-6 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.02-7 de ARIZA SAT*
