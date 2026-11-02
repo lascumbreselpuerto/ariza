@@ -8,6 +8,25 @@ import { dirname, join } from 'path';
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const URL_APP = process.env.ARIZA_URL || 'http://127.0.0.1:8899/index.html';
+
+/* ---- Ir a una pestaña como va una persona (02-11-2026) ----
+   Desde esta fecha las trece pestañas van agrupadas en seis grupos, y solo se
+   enseñan las del grupo en el que estás. Así que para llegar a una pestaña hay
+   que pulsar antes su grupo. Esto hace las dos cosas, con clics de verdad: no
+   se salta la interfaz, se usa. */
+const irAPestana = async (pag, k) => {
+  const g = await pag.evaluate(t => {
+    const x = (window.__T.GRUPOS || []).find(y => y.tabs.includes(t));
+    return x ? x.k : null;
+  }, k);
+  if (g) {
+    await pag.click('#grupos button[data-grupo="'+g+'"]').catch(()=>{});
+    await pag.waitForTimeout(300);
+  }
+  if (await pag.isVisible('#tabs button[data-tab="'+k+'"]').catch(()=>false))
+    await pag.click('#tabs button[data-tab="'+k+'"]').catch(()=>{});
+  await pag.waitForTimeout(250);
+};
 const ajustes = JSON.parse(readFileSync(join(AQUI, 'ajustes.json'), 'utf8'));
 const ENV = { ...process.env, LANG:'es_ES.UTF-8', LANGUAGE:'es_ES:es', LC_ALL:'es_ES.UTF-8' };
 const nav = await chromium.launch({ env: ENV, args:['--lang=es-ES'] });
@@ -37,7 +56,7 @@ async function abrir(){
   return { ctx, pag };
 }
 const irAPuerta = async (pag) => {
-  await pag.click('#tabs button[data-tab="puertas"]'); await pag.waitForTimeout(350);
+  await irAPestana(pag, 'puertas'); await pag.waitForTimeout(350);
   await pag.locator('#vista .item:has-text("Comunidad Las Flores")').first().click();
   await pag.waitForTimeout(600);
 };
@@ -91,7 +110,7 @@ const abrirDoc = async (pag, sel) => {
 /* ══════ 16b · EL PANEL DE EQUIPO ══════ */
 {
   const { ctx, pag } = await abrir();
-  await pag.click('#tabs button[data-tab="equipo"]'); await pag.waitForTimeout(800);
+  await irAPestana(pag, 'equipo'); await pag.waitForTimeout(800);
   const t = await pag.textContent('#vista');
   paso('16b · Equipo trae el panel de fechas que deciden', /Fechas que deciden/.test(t));
   paso('16b · con las ocho reglas editables',
@@ -119,7 +138,7 @@ const abrirDoc = async (pag, sel) => {
 /* ══════ 16c · CORREGIR UNA FECHA CAMBIA LO QUE HACE LA APLICACIÓN ══════ */
 {
   const { ctx, pag } = await abrir();
-  await pag.click('#tabs button[data-tab="equipo"]'); await pag.waitForTimeout(800);
+  await irAPestana(pag, 'equipo'); await pag.waitForTimeout(800);
   // Se aplaza el Reglamento de máquinas un año, como si Bruselas lo moviera
   await pag.fill('[data-regla="maquinas_reglamento"]', '2028-01-20');
   await pag.click('[data-act="guardar-reglas"]'); await pag.waitForTimeout(1200);
@@ -249,7 +268,10 @@ const abrirDoc = async (pag, sel) => {
   if (await fe.count()){ await fe.fill('2026-09-16'); }
   const inst = pag.locator('#vista input[data-exp="fuerzas.instrumento"]');
   if (await inst.count()){ await inst.fill('Dinamómetro Sensor FM-200'); }
-  await pag.locator('#vista').click({ position:{ x:4, y:4 } });
+  /* Salirse del campo. Antes se hacía pulsando en la esquina de la vista, pero
+     desde el 02-11-2026 la barra de pestañas se queda fija arriba y esa esquina
+     cae debajo de la barra. Salir del campo es lo que se quería hacer. */
+  await pag.evaluate(() => { const a = document.activeElement; if (a && a.blur) a.blur(); });
   await pag.waitForTimeout(900);
 
   // volvemos a la puerta y abrimos la vida

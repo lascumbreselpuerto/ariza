@@ -163,6 +163,7 @@ presuDelAviso pactadoDe matSinPrecioDe visitasConMatSinPrecio dlgMatSinPrecio
 exactoEnCatalogo mismoNombreQueElServidor
 PARADO esRojo quietoDesde diasQuieto sinFechasDeMovimiento avisoDelPresu
 IMPAGO_ROJO impagados porCobrar plazoDe venceProponer dlgFacturar FORMAS_PAGO
+GRUPOS grupoDeTab tabDisponible pintarBarras indiceSecciones
 loQueSeQuedoParado vistaGestion
 dlgValoracion precioVentaMaterial convertirPresupuesto
 dlgEngancharPuerta pideEntrega avisosDe minimoObra

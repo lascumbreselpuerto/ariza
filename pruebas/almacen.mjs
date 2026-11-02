@@ -497,6 +497,70 @@ paso('y la foto, copiada a la línea para que el presupuesto mandado no cambie',
 paso('con la referencia del catálogo', !!venta.linea.ref, venta.linea.ref);
 
 /* ================================================================
+   La foto del material                               02-11-2026
+
+   «Al arrastrar una foto no se adjunta al producto, al menos en el
+   almacén, que es donde he probado.» Lo contó David. Y no fallaba
+   solo al arrastrar: no funcionaba tampoco con el botón, y nunca
+   había funcionado.
+
+   La causa es la misma de otras veces: el campo de fichero vive
+   dentro del diálogo del artículo, y quien escuchaba estaba colgado
+   de la vista principal. Un <dialog> no está dentro de la vista, así
+   que el aviso de «hay un fichero elegido» no llegaba a nadie.
+
+   Lo que se prueba aquí es el oyente, que es lo que estaba roto:
+   soltar una foto y elegirla con el botón acaban los dos poniendo el
+   fichero en ese mismo campo y avisando igual.
+   ================================================================ */
+bloque('La foto del material');
+
+const artFoto = await T(() => {
+  const g = window.__T;
+  const a = g.S.catalogo.find(x => x.id === 'art-foto') || g.S.catalogo[0];
+  g.dlgArticulo(a.id);
+  const inp = document.querySelector('#dlg-form [data-act="subir-foto-art"]');
+  return { id: a.id, hay: !!inp, antes: a.foto_ruta || null,
+    acepta: inp ? inp.getAttribute('accept') : '' };
+});
+paso('la ficha del material ofrece subirle una foto', artFoto.hay === true);
+paso('y solo acepta fotos, para que no se cuele un PDF',
+  /image/.test(artFoto.acepta), artFoto.acepta);
+
+await pag.setInputFiles('#dlg-form [data-act="subir-foto-art"]', [{
+  name:'fotocelula.png', mimeType:'image/png',
+  buffer: Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c6300010000050001' +
+                      '0d0a2db40000000049454e44ae426082', 'hex') }]);
+await pag.waitForTimeout(2500);
+const trasFoto = await T(id => {
+  const g = window.__T;
+  const a = g.S.catalogo.find(x => x.id === id) || {};
+  const abierto = document.getElementById('dlg').open === true;
+  return { ruta: a.foto_ruta || null, abierto,
+    enPantalla: !!document.querySelector('#dlg-form img') };
+}, artFoto.id);
+paso('al elegir la foto, se sube y queda guardada en la ficha',
+  !!trasFoto.ruta && trasFoto.ruta !== artFoto.antes, trasFoto.ruta);
+paso('va al cubo de las ofertas, que es el que ve el cliente',
+  /^catalogo\//.test(trasFoto.ruta || ''), trasFoto.ruta);
+paso('y la ficha se vuelve a abrir con la foto puesta',
+  trasFoto.abierto === true && trasFoto.enPantalla === true);
+
+/* Y el recuadro de la ficha es zona de soltar: es lo que David probó */
+const zona = await T(() => {
+  const g = window.__T;
+  const inp = document.querySelector('#dlg-form [data-act="subir-foto-art"]');
+  const z = g.zonaDeSoltar(inp.closest('label') || inp, [{ type:'image/png', name:'x.png' }]);
+  const zPdf = g.zonaDeSoltar(inp.closest('label') || inp, [{ type:'application/pdf', name:'x.pdf' }]);
+  g.cerrarDlg();
+  return { acierta: !!(z && z.input && z.input.dataset.act === 'subir-foto-art'),
+           rechazaPdf: !!(zPdf && !zPdf.input) };
+});
+paso('soltar una foto encima de ese recuadro apunta a ese campo',
+  zona.acierta === true);
+paso('y soltar un PDF ahí no se cuela', zona.rechazaPdf === true);
+
+/* ================================================================
    Conjuntos: la receta de venta
    ================================================================ */
 bloque('Conjuntos');

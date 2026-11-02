@@ -22,6 +22,25 @@ import { dirname, join } from 'path';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const URL_APP = process.env.ARIZA_URL || 'http://127.0.0.1:8899/index.html';
 
+/* ---- Ir a una pestaña como va una persona (02-11-2026) ----
+   Desde esta fecha las trece pestañas van agrupadas en seis grupos, y solo se
+   enseñan las del grupo en el que estás. Así que para llegar a una pestaña hay
+   que pulsar antes su grupo. Esto hace las dos cosas, con clics de verdad: no
+   se salta la interfaz, se usa. */
+const irAPestana = async (pag, k) => {
+  const g = await pag.evaluate(t => {
+    const x = (window.__T.GRUPOS || []).find(y => y.tabs.includes(t));
+    return x ? x.k : null;
+  }, k);
+  if (g) {
+    await pag.click('#grupos button[data-grupo="'+g+'"]').catch(()=>{});
+    await pag.waitForTimeout(300);
+  }
+  if (await pag.isVisible('#tabs button[data-tab="'+k+'"]').catch(()=>false))
+    await pag.click('#tabs button[data-tab="'+k+'"]').catch(()=>{});
+  await pag.waitForTimeout(250);
+};
+
 const ajustes = JSON.parse(readFileSync(join(AQUI,'ajustes.json'),'utf8'));
 const ENV = { ...process.env, LANG:'es_ES.UTF-8', LANGUAGE:'es_ES:es', LC_ALL:'es_ES.UTF-8' };
 const nav = await chromium.launch({ env: ENV, args:['--lang=es-ES'] });
@@ -118,7 +137,7 @@ paso('la línea de debajo del nombre junta NIF, dirección, población y teléfo
    ================================================================ */
 bloque('2. Alta de puerta eligiendo un cliente que ya existe');
 
-await pag.click('#tabs button[data-tab="puertas"]'); await esperar(400);
+await irAPestana(pag, 'puertas'); await esperar(400);
 await pag.click('[data-act="puerta-nueva"]'); await esperar(600);
 
 paso('el formulario tiene UN solo campo de cliente, con buscador',
@@ -224,7 +243,7 @@ paso('con la dirección del cliente heredada', /Avenida de la Playa 2/.test(alta
 bloque('3. Crear el cliente desde el formulario de la puerta');
 
 await T(() => { const d = document.getElementById('dlg'); if (d && d.open) d.close(); });
-await pag.click('#tabs button[data-tab="puertas"]'); await esperar(400);
+await irAPestana(pag, 'puertas'); await esperar(400);
 await pag.click('[data-act="puerta-nueva"]'); await esperar(600);
 await pag.fill('#f-cbusca', 'Restaurante El Faro'); await esperar(300);
 paso('si no hay ninguno que coincida, la lista lo dice y manda a crearlo',
@@ -277,7 +296,7 @@ paso('y sin duplicar la ficha',
    ================================================================ */
 bloque('4. La ficha de la puerta');
 
-await pag.click('#tabs button[data-tab="puertas"]'); await esperar(500);
+await irAPestana(pag, 'puertas'); await esperar(500);
 await pag.locator('#vista .item:has-text("Comunidad Las Flores")').first().click(); await esperar(700);
 paso('la ficha tiene un apartado de cliente',
   await pag.locator('#vista .panel:has(h3:text-is("Cliente"))').count() === 1);
@@ -290,7 +309,7 @@ paso('que lleva de verdad a la ficha del cliente',
   /Comunidad Las Flores/.test(await pag.textContent('#vista h2')));
 
 /* Ahora la puerta suelta: la que lleva el nombre escrito y ninguna ficha */
-await pag.click('#tabs button[data-tab="puertas"]'); await esperar(500);
+await irAPestana(pag, 'puertas'); await esperar(500);
 await pag.locator('#vista .item:has-text("Bodegas Sin Ficha")').first().click(); await esperar(700);
 const sin = await pag.textContent('#vista .panel:has(h3:text-is("Cliente"))');
 paso('una puerta sin ficha lo dice con claridad', /no está enlazada con ninguna ficha/.test(sin));
@@ -301,7 +320,7 @@ paso('y ofrece buscar el cliente o crearlo',
 paso('no propone enlazarla con nadie, porque ninguna ficha se llama así',
   await pag.locator('#vista .panel:has(h3:text-is("Cliente")) [data-act="puerta-enlazar"]').count() === 0);
 
-await pag.click('#tabs button[data-tab="puertas"]'); await esperar(500);
+await irAPestana(pag, 'puertas'); await esperar(500);
 await pag.locator('#vista .item:has-text("Portón trasero")').first().click(); await esperar(700);
 const parecida = await pag.locator('#vista .panel:has(h3:text-is("Cliente")) [data-act="puerta-enlazar"]');
 paso('si el nombre escrito coincide con una ficha, la ficha propone enlazarla',
@@ -319,7 +338,7 @@ paso('quedándose con el nombre de la ficha', enlazada.cliente === 'Talleres Gua
    ================================================================ */
 bloque('5. La ficha del cliente');
 
-await pag.click('#tabs button[data-tab="clientes"]'); await esperar(600);
+await irAPestana(pag, 'clientes'); await esperar(600);
 await pag.locator('#vista .item:has-text("Talleres Guadalete")').first().click(); await esperar(700);
 paso('la ficha del cliente lista sus puertas',
   await pag.locator('#vista .panel:has(h3:text-is("Puertas")) .item').count() >= 2,
@@ -350,7 +369,7 @@ await T(() => {
   const p = window.__T.S.puertas.find(x => x.codigo === 'AR-0004');
   if (p){ p.cliente_id = null; }               // se vuelve a soltar solo en memoria
 });
-await pag.click('#tabs button[data-tab="clientes"]'); await esperar(500);
+await irAPestana(pag, 'clientes'); await esperar(500);
 await pag.locator('#vista .item:has-text("Talleres Guadalete")').first().click(); await esperar(700);
 const panelP = await pag.textContent('#vista .panel:has(h3:text-is("Puertas"))');
 paso('la ficha del cliente avisa de las puertas con su nombre y sin enlazar',
@@ -363,7 +382,7 @@ paso('y ofrece engancharlas',
    ================================================================ */
 bloque('6. La lista de puertas');
 
-await pag.click('#tabs button[data-tab="puertas"]'); await esperar(600);
+await irAPestana(pag, 'puertas'); await esperar(600);
 const cab = await pag.textContent('#vista');
 paso('la lista avisa de cuántas puertas no tienen ficha de cliente',
   /sin ficha de cliente/.test(cab));
@@ -385,7 +404,7 @@ await pag.fill('#busca', 'AR-0006'); await esperar(500);
 paso('y por código de etiqueta', await pag.locator('#vista .item').count() === 1);
 await pag.fill('#busca', ''); await esperar(400);
 
-await pag.click('#tabs button[data-tab="avisos"]'); await esperar(600);
+await irAPestana(pag, 'avisos'); await esperar(600);
 paso('la pestaña de asistencias trae su botón de alta',
   await pag.locator('[data-act="asistencia-nueva"]').count() >= 1);
 await pag.locator('[data-act="asistencia-nueva"]').first().click(); await esperar(700);
@@ -429,7 +448,7 @@ paso('y nace asignada, no suelta', av.estado === 'asignado' && !!av.tecnico_id, 
 bloque('8. Asignar, cerrar la visita y sacar el parte');
 
 const avId = await T(() => window.__T.S.avisos[0].id);
-await pag.click('#tabs button[data-tab="avisos"]'); await esperar(600);
+await irAPestana(pag, 'avisos'); await esperar(600);
 await pag.evaluate(id => {
   const b = document.querySelector('[data-act="asignar"][data-id="'+id+'"]');
   if (b) b.click();
@@ -517,7 +536,7 @@ if (parte){
 
 /* ---- Contrato de mantenimiento ---- */
 bloque('9. Contrato de mantenimiento');
-await pag.click('#tabs button[data-tab="clientes"]'); await esperar(600);
+await irAPestana(pag, 'clientes'); await esperar(600);
 await pag.locator('#vista .item:has-text("Talleres Guadalete")').first().click(); await esperar(700);
 await pag.click('[data-act="contrato-nuevo"]'); await esperar(800);
 paso('el contrato nace con el cliente ya puesto',
@@ -572,7 +591,7 @@ paso('y la plantilla rehecha respeta las condiciones de ahora',
 await T(() => { const d = document.getElementById('dlg'); if (d && d.open) d.close(); });
 await esperar(300);
 
-await pag.click('#tabs button[data-tab="etiquetas"]'); await esperar(600);
+await irAPestana(pag, 'etiquetas'); await esperar(600);
 paso('la pestaña de etiquetas dice cuántas quedan libres',
   /sin asignar/.test(await pag.textContent('#vista')));
 const libres = await T(() => {
@@ -582,7 +601,7 @@ const libres = await T(() => {
 paso('y la cuenta cuadra con las que no están puestas en ninguna puerta',
   new RegExp(libres+' sin asignar').test(await pag.textContent('#vista')), libres);
 
-await pag.click('#tabs button[data-tab="clientes"]'); await esperar(600);
+await irAPestana(pag, 'clientes'); await esperar(600);
 await pag.fill('#busca-cli', 'B11000111'); await esperar(500);
 paso('los clientes se buscan por NIF', await pag.locator('#vista .item').count() === 1);
 paso('y es el que toca', /Restaurante El Faro/.test(await pag.textContent('#vista .lista')));
@@ -683,7 +702,7 @@ paso('pero si se escribe su nombre exacto sí sale, para que se vea que está ar
   arch.exacto.length === 1, arch.exacto.join('|'));
 
 /* --- «Cerrado» no se puede elegir en el formulario de la asistencia --- */
-await pag.click('#tabs button[data-tab="avisos"]'); await esperar(600);
+await irAPestana(pag, 'avisos'); await esperar(600);
 await pag.locator('[data-act="asistencia-nueva"]').first().click(); await esperar(700);
 const sits = await T(() => Array.from(document.getElementById('a-estado').options).map(o => o.value));
 paso('la situación de una asistencia no se puede poner en «Cerrado» a mano',
@@ -745,7 +764,7 @@ const puertaPrev = await T(() => {
   const p = window.__T.S.puertas.find(x => x.codigo === 'AR-0001');
   return { id: p.id, prox: p.proxima_revision || null };
 });
-await pag.click('#tabs button[data-tab="puertas"]'); await esperar(500);
+await irAPestana(pag, 'puertas'); await esperar(500);
 await pag.locator('#vista .item:has-text("Comunidad Las Flores")').first().click(); await esperar(700);
 await pag.click('[data-act="abrir-preventiva"]'); await esperar(1500);
 const prevId = await T(pid => (window.__T.S.avisos.find(a => a.puerta_id === pid && a.tipo === 'mantenimiento' && !a.cerrado)||{}).id, puertaPrev.id);
@@ -952,7 +971,11 @@ await T(() => {
   const av = g.S.avisos.find(a => a.cerrado && !a.sin_cargo && !a.cobrado);
   if (av) g.S.valoraciones[av.id] = { aviso_id: av.id, imp_total: 0, coste_total: 0, margen: 0, facturado: false };
 });
-await pag.click('#tabs button[data-tab="gestion"]').catch(()=>{});
+/* Desde el 02-11-2026 las pestañas van agrupadas: Gestión vive dentro del grupo
+   «Oficina», así que para llegar hay que pulsar antes su grupo, igual que hace
+   una persona. Antes bastaba con pulsar la pestaña, porque estaban las trece a
+   la vista. */
+await irAPestana(pag, 'gestion');
 await esperar(800);
 const gestion = await pag.textContent('#vista').catch(() => '');
 paso('las visitas cerradas y valoradas en 0 € salen señaladas en gestión',
@@ -1014,7 +1037,7 @@ paso('una visita todavía abierta no lo ofrece: no hay parte que mandar',
 
 /* Mandarlo de verdad, con los dos toques */
 /* «Realizadas» es la pantalla de las visitas cerradas: ahí tiene que estar */
-await pag.click('#tabs button[data-tab="realizadas"]'); await esperar(900);
+await irAPestana(pag, 'realizadas'); await esperar(900);
 let hayBoton = await pag.locator('[data-act="parte-enviar"]').count();
 paso('el botón está a la vista en «Realizadas»', hayBoton > 0, hayBoton);
 if (hayBoton){
@@ -1051,6 +1074,142 @@ const abiertaNo = await T(async () => {
 });
 paso('el servidor no manda el parte de una visita que no está cerrada',
   abiertaNo === false || abiertaNo === 'no hay ninguna abierta', String(abiertaNo));
+
+/* ================================================================
+   12. La barra de arriba: seis grupos y se queda fija  02-11-2026
+
+   Trece pestañas en una fila no son un menú, son una lista por la que
+   hay que buscar. Y en una pantalla larga (Gestión, el almacén, una
+   obra con varias puertas) había que subir del todo para cambiar de
+   sitio. Las dos cosas las pidió David.
+
+   Lo que se fija aquí: que están los seis grupos, que cada uno lleva
+   a lo suyo, que un grupo con una sola pestaña no enseña una segunda
+   fila para repetir lo que acabas de pulsar, que la barra se queda
+   pegada arriba, y que a quien no puede ver Oficina no se le pone el
+   botón de Oficina.
+   ================================================================ */
+bloque('12. La barra de arriba');
+
+const barra = await T(() => {
+  const g = window.__T;
+  return { grupos: [...document.querySelectorAll('#grupos button')].map(b => b.textContent),
+           claves: g.GRUPOS.map(x => x.k),
+           pegada: getComputedStyle(document.querySelector('.barras')).position,
+           deAlmacen: g.grupoDeTab('almacen').k,
+           deGestion: g.grupoDeTab('gestion').k,
+           deEquipo: g.grupoDeTab('equipo').k,
+           dePresu: g.grupoDeTab('presupuestos').k,
+           deEtiquetas: g.grupoDeTab('etiquetas').k };
+});
+paso('arriba hay seis grupos, no trece pestañas',
+  barra.grupos.length === 6, barra.grupos.join(' · '));
+paso('con los nombres que se usan hablando',
+  barra.grupos.join('|') === 'Mi trabajo|Clientes y trabajos|Calendario|Almacén|Oficina|Manuales',
+  barra.grupos.join('|'));
+paso('gestión y equipo caen en Oficina, que es como se llaman en casa',
+  barra.deGestion === 'oficina' && barra.deEquipo === 'oficina');
+paso('y todo lo que cuelga de un cliente, en Clientes y trabajos',
+  barra.dePresu === 'cartera' && barra.deEtiquetas === 'cartera');
+paso('la barra se queda pegada arriba al bajar por la página',
+  barra.pegada === 'sticky', barra.pegada);
+
+const navega = await T(async () => {
+  const pulsa = async k => {
+    const b = document.querySelector('#grupos button[data-grupo="'+k+'"]');
+    if (!b) return null;
+    b.click();
+    await new Promise(r => setTimeout(r, 500));
+    return { tab: window.__T.S.tab,
+             filaOculta: document.querySelector('nav.tabs').hidden,
+             visibles: [...document.querySelectorAll('#tabs button')]
+               .filter(x => !x.hidden && !x.classList.contains('fuera-de-grupo'))
+               .map(x => x.dataset.tab) };
+  };
+  const alm = await pulsa('almacen');
+  const car = await pulsa('cartera');
+  /* Estando ya en una pestaña del grupo, volver a pulsar el grupo no te mueve */
+  window.__T.S.tab = 'etiquetas'; window.__T.pintar();
+  await new Promise(r => setTimeout(r, 300));
+  const mismo = await pulsa('cartera');
+  return { alm, car, mismo };
+});
+paso('al pulsar Almacén se va al almacén', navega.alm.tab === 'almacen', navega.alm.tab);
+paso('y como ese grupo tiene una sola pestaña, no se enseña la segunda fila',
+  navega.alm.filaOculta === true);
+paso('en Clientes y trabajos sí sale, con sus pestañas dentro',
+  navega.car.filaOculta === false && navega.car.visibles.length > 3,
+  navega.car.visibles.join(' · '));
+paso('y pulsar el grupo en el que ya estás no te saca de donde estabas',
+  navega.mismo.tab === 'etiquetas', navega.mismo.tab);
+
+/* A un técnico no se le pone un botón que no lleva a ninguna parte */
+const comoTecnico = await T(async () => {
+  const tabs = ['gestion','equipo','presupuestos'].map(k =>
+    document.querySelector('#tabs button[data-tab="'+k+'"]'));
+  const antes = tabs.map(b => b.hidden);
+  tabs.forEach(b => { b.hidden = true; });
+  window.__T.S.tab = 'trabajo';
+  window.__T.pintar();
+  await new Promise(r => setTimeout(r, 400));
+  const grupos = [...document.querySelectorAll('#grupos button')].map(b => b.dataset.grupo);
+  tabs.forEach((b, i) => { b.hidden = antes[i]; });
+  window.__T.pintar();
+  return grupos;
+});
+paso('sin gestión ni equipo, el grupo Oficina no se enseña',
+  !comoTecnico.includes('oficina'), comoTecnico.join(' · '));
+
+/* ================================================================
+   13. El índice de la pantalla                       02-11-2026
+
+   «Todos los botones que tengan más de una lista deben tener un botón
+   arriba que nos lleve al punto en cuestión.» Lo pidió David.
+
+   Sale cuando hay dos o más apartados Y la página no cabe en la
+   pantalla, que es exactamente cuando sirve de algo: si se ve entera,
+   un índice son botones para llegar a lo que ya estás viendo.
+   ================================================================ */
+bloque('13. El índice de la pantalla');
+
+const indice = await T(async () => {
+  const g = window.__T;
+  g.S.tab = 'equipo'; g.pintar();
+  await new Promise(r => setTimeout(r, 900));
+  const n = document.querySelector('.eq-indice');
+  const entradas = n ? [...n.querySelectorAll('[data-act="eq-ir"]')] : [];
+  let llega = false, destacado = false;
+  if (entradas.length > 2){
+    const destino = document.getElementById(entradas[2].dataset.ir);
+    entradas[2].click();
+    await new Promise(r => setTimeout(r, 500));
+    llega = !!destino;
+    destacado = !!destino && destino.classList.contains('eq-destacado');
+  }
+  return { hay: !!n, titulo: n ? n.querySelector('h2').textContent : '',
+           n: entradas.length, llega, destacado,
+           textos: entradas.slice(0, 3).map(b => b.textContent) };
+});
+paso('una pantalla larga lleva su índice arriba', indice.hay === true);
+paso('titulado con el nombre de la propia pantalla',
+  /Equipo/.test(indice.titulo), indice.titulo);
+paso('con una entrada por apartado', indice.n > 3, indice.n+' apartados');
+paso('cada una con el nombre del apartado, no un número',
+  indice.textos.every(t => t && t.length > 3), indice.textos.join(' · '));
+paso('al pulsar, lleva al apartado y lo destaca',
+  indice.llega === true && indice.destacado === true);
+
+const corta = await T(async () => {
+  const g = window.__T;
+  /* Una pantalla que cabe entera: el índice no tiene nada que resolver */
+  g.S.tab = 'calendario'; g.pintar();
+  await new Promise(r => setTimeout(r, 700));
+  const alto = document.documentElement.scrollHeight;
+  return { hay: !!document.querySelector('.eq-indice'), alto, ventana: window.innerHeight };
+});
+paso('y una pantalla que cabe entera no lleva índice: no hay nada que buscar',
+  corta.hay === false || corta.alto > corta.ventana + 160,
+  corta.alto+'px de alto, ventana '+corta.ventana);
 
 console.log('\n'+ok+' bien, '+mal+' mal.');
 /* «fallo provocado por la prueba» es un error que esta suite provoca a propósito,

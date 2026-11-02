@@ -610,6 +610,31 @@ paso('y lo que de verdad decide: que la declaración responsable la firma el fab
   /declaraci[óo]n/.test(F) && /fabricante/.test(F));
 
 /* ================================================================
+   16. El manual cuenta cómo moverse                  02-11-2026
+
+   Las pestañas pasaron de trece sueltas a seis grupos. Si el manual
+   sigue nombrando «la pestaña Manual», el técnico la busca y no está:
+   ahora es un grupo. Un manual que nombra botones que no existen hace
+   más daño que no tener manual.
+   ================================================================ */
+bloque('16. El manual cuenta cómo moverse');
+
+paso('el manual del técnico explica los seis grupos',
+  /seis grupos/.test(M));
+paso('y dice que se quedan fijos arriba',
+  /se quedan fijos/.test(M));
+paso('con la tabla de qué hay en cada uno',
+  /Clientes y trabajos/.test(M) && /Mi trabajo/.test(M) && /Oficina/.test(M));
+paso('dice que Oficina solo la ve quien tiene permiso',
+  /permiso/.test(M));
+paso('explica la segunda fila de pestañas',
+  /segunda fila/.test(M));
+paso('y el índice de las pantallas largas',
+  /pantallas largas/.test(M) && /índice/.test(M));
+paso('ya no manda al técnico a una «pestaña Manual» que no existe',
+  !/pestaña \*\*Manual\*\*/.test(M), (M.match(/.{0,30}pestaña \*\*Manual\*\*/)||[''])[0]);
+
+/* ================================================================
    El índice del manual
    ================================================================
    El manual ha pasado de dos folios a ocho apartados largos. Buscar

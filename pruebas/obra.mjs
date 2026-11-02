@@ -703,6 +703,79 @@ paso('el componente también ofrece su foto y su papel dentro del diálogo',
   compInput.f === true && compInput.d === true);
 
 /* ================================================================
+   12 bis. Salir del parte para dar de alta la puerta   02-11-2026
+
+   «Al cerrar una asistencia y querer dar de alta una puerta, la
+   aplicación cierra la asistencia y no nos lleva a la página de dar
+   de alta la puerta.» Lo contó David, y era verdad.
+
+   La causa: el parte se guarda y el diálogo se cierra, pero cerrar un
+   <dialog> NO borra lo que tiene dentro. Y los cinco sitios que salen
+   del parte hacia otra pantalla comprobaban si el guardado había ido
+   bien mirando si el campo del parte «seguía en pantalla». Seguía
+   siempre. Así que los cinco creían siempre que había fallado y se
+   volvían sin abrir nada.
+
+   Los cinco: dar de alta la puerta, rellenar su ficha, añadir la
+   matrícula de un elemento, enganchar una puerta ya dada de alta y el
+   acta de entrega. Aquí se prueban dos, que comparten el arreglo.
+   ================================================================ */
+bloque('12 bis. Salir del parte sin perder lo escrito');
+
+const salir = await T(async () => {
+  const g = window.__T;
+  /* Esta asistencia ya la cerraron las pruebas de más arriba, así que lo que se
+     comprueba no es que esté abierta, sino que guardar el avance NO le cambia el
+     estado: guardar no es cerrar, ni al revés. */
+  const estadoAntes = (g.S.avisos.find(x => x.id === 'av-inst') || {}).estado;
+  g.dlgCierre('av-inst');
+  await new Promise(r => setTimeout(r, 800));
+  const campo = document.getElementById('z-trab');
+  campo.value = 'Montado el marco y puesto el motor. Falta la fotocélula.';
+  const boton = document.querySelector('#dlg-form [data-act="alta-puerta-asis"]');
+  const habia = !!boton;
+  if (boton) boton.click();
+  await new Promise(r => setTimeout(r, 2000));
+  const av = g.S.avisos.find(x => x.id === 'av-inst');
+  const dlgTexto = document.getElementById('dlg-form').innerText;
+  return { habia,
+    abierto: document.getElementById('dlg').open === true,
+    esAlta: !!document.getElementById('f-tipo'),
+    titulo: dlgTexto.slice(0, 40),
+    guardado: av ? av.trabajo : null,
+    estadoAntes, estado: av ? av.estado : null };
+});
+paso('el parte tiene el botón de dar de alta la puerta', salir.habia === true);
+paso('al pulsarlo se guarda lo escrito, que es lo que no se puede perder',
+  /Montado el marco/.test(salir.guardado || ''), (salir.guardado||'').slice(0, 30));
+paso('guardar el avance no le cambia el estado a la asistencia',
+  salir.estado === salir.estadoAntes, salir.estadoAntes+' → '+salir.estado);
+paso('y se abre de verdad el alta de la puerta, que es lo que fallaba',
+  salir.abierto === true && salir.esAlta === true,
+  salir.titulo);
+
+/* El segundo de los cinco, para fijar que el arreglo es el mismo */
+const salir2 = await T(async () => {
+  const g = window.__T;
+  g.cerrarDlg();
+  await new Promise(r => setTimeout(r, 200));
+  g.dlgCierre('av-inst');
+  await new Promise(r => setTimeout(r, 800));
+  document.getElementById('z-trab').value = 'Segundo intento, por el otro camino.';
+  const b = document.querySelector('#dlg-form [data-act="enganchar-puerta"]');
+  if (b) b.click();
+  await new Promise(r => setTimeout(r, 1800));
+  const texto = document.getElementById('dlg-form').innerText;
+  const av = g.S.avisos.find(x => x.id === 'av-inst');
+  g.cerrarDlg();
+  return { hubo: !!b, texto: texto.slice(0, 60), guardado: av ? av.trabajo : null };
+});
+paso('enganchar una puerta ya dada de alta también guarda y abre',
+  !salir2.hubo || (/Segundo intento/.test(salir2.guardado || '') &&
+    /puerta/i.test(salir2.texto)),
+  salir2.hubo ? salir2.texto : 'no hay ese botón en este parte');
+
+/* ================================================================
    El dintel
    ================================================================
    La medida que decide si una seccional entra o no entra. Se pide

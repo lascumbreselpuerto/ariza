@@ -26,6 +26,25 @@ import { dirname, join } from 'path';
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const URL_APP = process.env.ARIZA_URL || 'http://127.0.0.1:8899/index.html';
 
+/* ---- Ir a una pestaña como va una persona (02-11-2026) ----
+   Desde esta fecha las trece pestañas van agrupadas en seis grupos, y solo se
+   enseñan las del grupo en el que estás. Así que para llegar a una pestaña hay
+   que pulsar antes su grupo. Esto hace las dos cosas, con clics de verdad: no
+   se salta la interfaz, se usa. */
+const irAPestana = async (pag, k) => {
+  const g = await pag.evaluate(t => {
+    const x = (window.__T.GRUPOS || []).find(y => y.tabs.includes(t));
+    return x ? x.k : null;
+  }, k);
+  if (g) {
+    await pag.click('#grupos button[data-grupo="'+g+'"]').catch(()=>{});
+    await pag.waitForTimeout(300);
+  }
+  if (await pag.isVisible('#tabs button[data-tab="'+k+'"]').catch(()=>false))
+    await pag.click('#tabs button[data-tab="'+k+'"]').catch(()=>{});
+  await pag.waitForTimeout(250);
+};
+
 const ajustes = JSON.parse(readFileSync(join(AQUI,'ajustes.json'),'utf8'));
 const ENV = { ...process.env, LANG:'es_ES.UTF-8', LANGUAGE:'es_ES:es', LC_ALL:'es_ES.UTF-8' };
 const nav = await chromium.launch({ env: ENV, args:['--lang=es-ES'] });
@@ -144,7 +163,7 @@ paso('la matriz no se le aplica, y se dice',
    ================================================================ */
 bloque('2. Alta, edición y retirada de un componente');
 
-await pag.click('#tabs button[data-tab="puertas"]'); await esperar(500);
+await irAPestana(pag, 'puertas'); await esperar(500);
 await pag.locator('#vista .item:has-text("Talleres Guadalete")').first().click(); await esperar(800);
 paso('la ficha de la puerta tiene su apartado de componentes',
   await pag.locator('#vista .panel:has(h3:text-is("Componentes"))').count() === 1);
@@ -185,7 +204,7 @@ paso('y el nombre se pone solo al elegir qué es',
 paso('Y LA CASILLA DE SEGURIDAD SE MARCA SOLA',
   (alta.seguridad||[]).includes('Fotocélulas'), JSON.stringify(alta.seguridad));
 
-await pag.click('#tabs button[data-tab="puertas"]'); await esperar(400);
+await irAPestana(pag, 'puertas'); await esperar(400);
 await pag.locator('#vista .item:has-text("Talleres Guadalete")').first().click(); await esperar(700);
 const tabla = await pag.textContent('#vista .panel:has(h3:text-is("Componentes"))');
 paso('la ficha enseña el componente con sus datos',
@@ -210,7 +229,7 @@ paso('y el motivo', retirado.motivo === 'Sustituida por avería');
    ================================================================ */
 bloque('3. Añadir de una vez los que faltan');
 
-await pag.click('#tabs button[data-tab="puertas"]'); await esperar(400);
+await irAPestana(pag, 'puertas'); await esperar(400);
 await pag.locator('#vista .item:has-text("Talleres Guadalete")').first().click(); await esperar(700);
 const antes = await T(() => {
   const g = window.__T;
