@@ -665,6 +665,16 @@ paso('que el problema no es la fórmula, es el dato',
   /no es la fórmula/.test(F));
 paso('y que una ruta sin importe no se puede elegir',
   /no se puede elegir/.test(F));
+/* Lo del kilometraje doble: el manual lo cuenta con los dos números, porque es
+   la clase de fallo que vuelve si nadie se acuerda de por qué se cambió. */
+paso('el de formación cuenta que el presupuesto y el parte no cuadraban',
+  /no era el mismo en el$|no era el mismo/.test(F.replace(/\n/g, ' ')) ||
+  /mismo viaje medido dos veces/.test(F.replace(/\n/g, ' ')));
+paso('con los dos importes del mismo viaje', /18 €/.test(F) && /39 €/.test(F));
+paso('y dice la regla nueva: viaje completo más el fijo de salida',
+  /viaje completo/.test(F));
+paso('el del técnico se lo dice con un ejemplo',
+  /pones 120/.test(M));
 
 /* ================================================================
    El índice del manual

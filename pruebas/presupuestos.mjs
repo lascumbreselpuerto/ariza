@@ -1170,11 +1170,18 @@ paso('y hay cinco, con las dos nuevas sin valorar todavía',
   tarifas.nombres.slice(3).join(' · '));
 paso('una ruta sin importe no se ofrece: elegirla sería cobrar cero',
   tarifas.ofrecidas.join(',') === 'ruta1,ruta2,ruta3', tarifas.ofrecidas.join(','));
-paso('por kilómetros se cobra la ida y la vuelta',
-  tarifas.km20 === 18, '20 km de ida → '+tarifas.km20+' € (20 × 2 × 0,45)');
-paso('y cuesta también la ida y la vuelta',
-  tarifas.km20coste === 8, tarifas.km20coste);
-paso('sin kilómetros no hay importe', tarifas.km0 === 0);
+/* CAMBIO DEL 02-11-2026: los kilómetros se cuentan igual que en el parte.
+   Antes esta pantalla pedía la IDA y doblaba, sin importe fijo (20 km → 18 €),
+   mientras el servidor cobraba el fijo más los kilómetros tal cual (20 km →
+   39 €). El mismo viaje daba dos números según dónde se mirase. Ahora se
+   teclea el viaje completo y se cobra el fijo más esos kilómetros, aquí y
+   allí: 30 + 20 × 0,45 = 39,00. */
+paso('por kilómetros se cobra el fijo de salida más el viaje entero',
+  tarifas.km20 === 39, '20 km de viaje → '+tarifas.km20+' € (30 + 20 × 0,45)');
+paso('y el coste son esos mismos kilómetros, sin doblar',
+  tarifas.km20coste === 4, tarifas.km20coste);
+/* Sin kilómetros queda el importe fijo de la salida, que es lo que vale salir */
+paso('sin kilómetros queda el importe fijo de salida', tarifas.km0 === 30, tarifas.km0);
 
 const lineasTarifa = await T(async () => {
   const g = window.__T;
@@ -1263,21 +1270,31 @@ paso('el desplazamiento ofrece las tres rutas por su nombre y el cobro por km',
   lineasTarifa.opciones.some(o => /Provincia/.test(o)) &&
   lineasTarifa.opciones.some(o => /Por kilómetros/.test(o)),
   lineasTarifa.opciones.join(' | '));
+/* Y las que no tienen importe no se ofrecen tampoco aquí: una oferta con el
+   desplazamiento a cero es un desplazamiento regalado. (02-11-2026) */
+paso('una zona sin importe no se ofrece en el presupuesto',
+  !lineasTarifa.opciones.some(o => /Ruta 4|Ruta 5/.test(o)),
+  lineasTarifa.opciones.join(' | '));
 paso('el campo de kilómetros solo aparece al elegir «Por kilómetros»',
   lineasTarifa.kmOculto === true && lineasTarifa.kmVisible === true);
 paso('y hasta que no hay kilómetros, no hay importe',
   /Pon los kilómetros/.test(lineasTarifa.sinKm), lineasTarifa.sinKm);
-paso('35 km de ida son 70 de ida y vuelta, a 0,45: 31,50 €',
-  lineasTarifa.de.i === 31.5 && lineasTarifa.de.km === 35, lineasTarifa.conKm);
-paso('con su coste real, no cero',
-  lineasTarifa.de.co === 14, lineasTarifa.de.co);
+/* CAMBIO DEL 02-11-2026: se teclea el viaje completo y se cobra el fijo.
+   35 km de viaje: 30,00 de salida + 35 × 0,45 = 45,75. Y cuesta 35 × 0,20 =
+   7,00. Antes esos 35 se entendían como la ida y se doblaban sin fijo, que es
+   lo que no cuadraba con el parte. */
+paso('35 km de viaje son 30 de salida más 35 × 0,45: 45,75 €',
+  lineasTarifa.de.i === 45.75 && lineasTarifa.de.km === 35, lineasTarifa.conKm);
+paso('con su coste real, no cero y sin doblar',
+  lineasTarifa.de.co === 7, lineasTarifa.de.co);
 paso('el concepto se rellena solo con el nombre de la zona',
   /Por kilómetros/.test(lineasTarifa.descAuto) && /Bahía/.test(lineasTarifa.descRuta),
   lineasTarifa.descRuta);
 paso('una ruta normal trae su importe y su coste',
   lineasTarifa.r2.v === 'ruta2' && lineasTarifa.r2.p === 55 && lineasTarifa.r2.co === 20);
+/* 45,75 de los kilómetros + 55,00 de la ruta 2 = 100,75 */
 paso('y todo suma en el sitio que le toca',
-  lineasTarifa.mano_obra === 223.2 && lineasTarifa.desplazamiento === 86.5,
+  lineasTarifa.mano_obra === 223.2 && lineasTarifa.desplazamiento === 100.75,
   'mano de obra '+lineasTarifa.mano_obra+', desplazamiento '+lineasTarifa.desplazamiento);
 
 /* ================================================================
