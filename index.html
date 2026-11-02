@@ -1522,7 +1522,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.02-8';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.02-9';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -4491,10 +4491,21 @@ const importeRuta = k => {
   return Number(v != null && v !== '' ? v : (k === 'ruta1' ? (t.desplazamiento_fijo || 0) : 0));
 };
 const costeRuta = k => Number((S.tarifas || {})[k + '_coste'] || 0);
-/* Lo que se cobra por kilómetros: ida y vuelta. Se teclea la ida, que es el
-   número que se lee en el mapa, y la aplicación hace el doble. */
-const importePorKm = km => Math.round(Number(km || 0) * 2 * Number((S.tarifas || {}).precio_km || 0) * 100) / 100;
-const costePorKm   = km => Math.round(Number(km || 0) * 2 * Number((S.tarifas || {}).coste_km || 0) * 100) / 100;
+/* ---- Lo que se cobra por kilómetros (corregido el 02-11-2026) ----
+   Esto y la fórmula del servidor decían cosas distintas para el mismo viaje:
+   aquí se tecleaba la ida y se doblaba, sin importe fijo; allí se cobraba el
+   importe fijo más los kilómetros tal cual. Para 20 km, 18 € en el presupuesto
+   y 39 € en el parte. Lo mismo medido dos veces no puede dar dos números.
+
+   La regla, decidida por David: se teclea el VIAJE COMPLETO (ida y vuelta) y se
+   cobra el importe fijo de salida más esos kilómetros. Las dos cuentas, aquí y
+   en el servidor, hacen ya lo mismo.
+
+   Los presupuestos ya emitidos no se tocan: cada línea guarda su precio desde
+   que se emitió, y eso es lo que se le ofreció al cliente. */
+const importePorKm = km => Math.round((Number((S.tarifas || {}).desplazamiento_fijo || 0) +
+  Number(km || 0) * Number((S.tarifas || {}).precio_km || 0)) * 100) / 100;
+const costePorKm   = km => Math.round(Number(km || 0) * Number((S.tarifas || {}).coste_km || 0) * 100) / 100;
 
 /* Lo que suma un presupuesto. Se calcula a partir de sus líneas, siempre igual,
    lo mismo para pintarlo en pantalla que para guardarlo al emitir. */
@@ -5380,13 +5391,16 @@ function dlgDesplazamiento(){
   const t = S.tarifas || {};
   abrirDlg('<h3>Añadir desplazamiento</h3>'+
     '<div class="campos">'+
+    /* Solo las rutas con importe puesto. Ofrecer una a cero euros es ofrecer un
+       desplazamiento gratis en una oferta al cliente. (02-11-2026) */
     '<div class="campo full"><label for="de-ruta">Zona</label><select id="de-ruta">'+
-      RUTAS.map(k => '<option value="'+k+'">'+esc(nombreRuta(k))+' · '+eur(importeRuta(k))+'</option>').join('')+
+      rutasValoradas().map(k => '<option value="'+k+'">'+esc(nombreRuta(k))+' · '+eur(importeRuta(k))+'</option>').join('')+
       '<option value="km">Por kilómetros</option>'+
     '</select></div>'+
-    '<div class="campo" id="de-caja-km" hidden><label for="de-km">Kilómetros hasta el sitio (solo ida)</label>'+
+    '<div class="campo" id="de-caja-km" hidden><label for="de-km">Kilómetros del viaje completo (ida y vuelta)</label>'+
       '<input id="de-km" type="number" step="any" min="0" value="0">'+
-      '<span class="pista">Se cobra la ida y la vuelta: la aplicación hace el doble</span></div>'+
+      '<span class="pista">El viaje entero, no solo la ida. Al importe se le suma el '+
+      'fijo de salida ('+eur((S.tarifas||{}).desplazamiento_fijo || 0)+')</span></div>'+
     '<div class="campo"><label for="de-cant">Número de salidas</label>'+
       '<input id="de-cant" type="number" step="1" min="1" value="1"></div>'+
     '<div class="campo"><label for="de-dto">Descuento (%)</label>'+
@@ -5402,7 +5416,7 @@ function dlgDesplazamiento(){
     const km = parseFloat(val('de-km')) || 0;
     const cant = parseInt(val('de-cant'), 10) || 1;
     const dto = Math.min(100, Math.max(0, parseFloat(val('de-dto')) || 0));
-    if (k === 'km' && !(km > 0)) return setErr('Pon los kilómetros de ida.');
+    if (k === 'km' && !(km > 0)) return setErr('Pon los kilómetros del viaje completo, ida y vuelta.');
     const precio = k === 'km' ? importePorKm(km) : importeRuta(k);
     const coste  = k === 'km' ? costePorKm(km)   : costeRuta(k);
     if (!(precio > 0))
@@ -5411,7 +5425,8 @@ function dlgDesplazamiento(){
       descripcion: val('de-desc') || 'Desplazamiento',
       nombre: val('de-desc') || 'Desplazamiento',
       detalle: k === 'km'
-        ? km+' km de ida, '+(km*2)+' km de ida y vuelta, a '+eur(t.precio_km || 0)+' el km.'
+        ? km+' km de ida y vuelta a '+eur(t.precio_km || 0)+' el km, más '+
+          eur(t.desplazamiento_fijo || 0)+' de salida.'
         : 'Zona: '+nombreRuta(k)+'.',
       cantidad: cant, unidad:'ud', precio, dto, coste };
     l.importe = importeLinea(l);
@@ -5435,9 +5450,12 @@ function dlgDesplazamiento(){
     const c = document.getElementById('de-resumen');
     if (!c) return;
     c.innerHTML = k === 'km' && !(km > 0)
-      ? 'Pon los kilómetros de ida y se calcula el importe.'
+      ? 'Pon los kilómetros del viaje completo y se calcula el importe.'
       : '<b>'+eur(imp)+'</b>'+(dto ? ' (con el '+dto+'% de descuento)' : '')+
-        (k === 'km' ? ' · '+km+' km de ida, '+(km*2)+' ida y vuelta' : '')+
+        (k === 'km'
+          ? ' · '+eur((S.tarifas||{}).desplazamiento_fijo || 0)+' de salida más '+km+
+            ' km a '+eur((S.tarifas||{}).precio_km || 0)
+          : '')+
         '. Te cuesta '+eur(Math.round(coste*100)/100)+'.';
   };
   if (sel) sel.addEventListener('change', resumen);
@@ -21548,11 +21566,12 @@ function dlgCierre(avisoId){
             'Si no eliges, se cobra '+esc(nombreRuta('ruta1'))+'</span>')+
         '</div>'+
         '<div class="campo" id="z-caja-km"'+(puesta === 'km' ? '' : ' hidden')+'>'+
-        '<label for="z-km">Kilómetros</label>'+
+        '<label for="z-km">Kilómetros (ida y vuelta)</label>'+
         '<input id="z-km" type="number" step="1" min="0" value="'+esc(kv)+'">'+
         (r && r.km > 0
           ? '<span class="pista">Suma de los kilómetros de las '+r.jornadas+' jornadas</span>'
-          : '<span class="pista">Solo para lo que cae fuera de las rutas</span>')+'</div>';
+          : '<span class="pista">El viaje entero, no solo la ida. Solo para lo que cae '+
+            'fuera de las rutas</span>')+'</div>';
     })()+
     '</div></div>';
 
