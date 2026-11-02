@@ -1374,11 +1374,13 @@ paso('la visita se vuelve a calcular en el momento, sin pedirlo aparte',
 paso('cada línea ofrece las dos vías: el almacén o el coste',
   sinPrecio.hayCampoCoste === 2, sinPrecio.hayCampoCoste+' campos de coste');
 paso('el coste escrito a mano se guarda', sinPrecio.torniCoste === 7.5, sinPrecio.torniCoste);
-/* Y lo que NO se hace: calcular el precio aquí. Lo calcula el servidor, que es
-   quien sabe el recargo que toca y el descuento del contrato. Calcularlo en dos
-   sitios es garantizar que un día digan cosas distintas. */
-paso('el precio se deja al servidor, no se calcula aquí',
-  sinPrecio.torniPrecio === null && sinPrecio.enlazadaPrecio === null,
+/* El precio lo pone el SERVIDOR al recalcular, no la aplicación: aquí solo se
+   guarda el artículo o el coste y se le pide el cálculo. Lo que se comprueba es
+   que el precio acaba puesto y con el número que toca.
+     · tornillería: 7,50 de coste con el recargo general del 40 % = 10,50
+     · fotocélula: 25 de coste con el recargo PROPIO del artículo, 60 % = 40,00 */
+paso('el servidor acaba poniendo el precio, con el recargo que toca',
+  sinPrecio.torniPrecio === 10.5 && sinPrecio.enlazadaPrecio === 40,
   'tornillería '+sinPrecio.torniPrecio+' · enlazada '+sinPrecio.enlazadaPrecio);
 paso('el diálogo explica que con una de las dos cosas basta',
   /con una de las dos cosas basta/i.test(sinPrecio.textoDlg));
@@ -1449,6 +1451,85 @@ paso('y NO se valora en cero, que era lo que pasaba antes',
 paso('comercial y garantía se valoran en cero, y lo marcado «no se cobra» también',
   tipoTrabajo.ceroComercial === true && tipoTrabajo.ceroGarantia === true &&
   tipoTrabajo.ceroSinCargo === true);
+
+/* ================================================================
+   19. El letrero, y que no se quede callada          02-11-2026
+
+   Dos cosas de las pruebas de campo:
+     · la oficina tiene que ver en la LISTA qué partes llevan material
+       sin valorar, sin abrirlos uno por uno;
+     · y cuando el precio no entra, la aplicación tiene que decir POR
+       QUÉ. Pasó de verdad: enlazabas con el almacén y no ocurría
+       nada, sin un solo aviso.
+   ================================================================ */
+bloque('19. El letrero y el aviso de por qué no entra el precio');
+
+const letrero = await T(async () => {
+  const g = window.__T;
+  const cli = g.S.clientes[0];
+  const ayer = new Date(Date.now() - 86400000).toISOString();
+  /* Un artículo del almacén SIN precio de compra: el caso que no puede dar
+     precio por mucho que se enlace. */
+  await g.sb.from('articulos').insert({ id:'art-nocoste', descripcion:'Perfil sin coste cargado',
+    unidad:'ud', codigo:'MAT-9999', activo:true });
+  await g.sb.from('catalogo').insert({ id:'art-nocoste', descripcion:'Perfil sin coste cargado',
+    unidad:'ud', codigo:'MAT-9999', activo:true });
+  await g.sb.from('avisos').insert({ id:'av-letrero', tipo:'averia', estado:'cerrado',
+    prioridad:'normal', tecnico_id:'usuario-admin', cliente_id:cli.id,
+    puerta_id:g.S.puertas[0].id, trabajo:'Cambiado un perfil.', horas:1,
+    cerrado:ayer, creado:ayer });
+  await g.sb.from('materiales').insert({ aviso_id:'av-letrero', articulo_id:null,
+    descripcion:'Perfil raro', cantidad:1, unidad:'ud' });
+  await g.sb.from('valoraciones').insert({ aviso_id:'av-letrero', imp_mano_obra:45,
+    imp_desplazamiento:30, imp_materiales:0, imp_total:75,
+    coste_total:22, margen:53, facturado:false });
+  await g.cargar();
+
+  /* El letrero en la lista de pendiente de facturar y en el margen del mes */
+  g.S.tab = 'gestion'; g.pintar();
+  await new Promise(r => setTimeout(r, 800));
+  const vista = document.getElementById('vista');
+  const texto = vista.innerText;
+  const hayBoton = !!vista.querySelector('[data-act="mat-sin-precio"][data-id="av-letrero"]');
+
+  /* Y ahora el caso que se queda sin precio: se enlaza con un artículo que no
+     tiene coste en su ficha. */
+  g.dlgMatSinPrecio('av-letrero');
+  await new Promise(r => setTimeout(r, 500));
+  const sel = document.querySelector('#dlg-form select[data-mat]');
+  sel.value = 'art-nocoste';
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 1600));
+  const aviso = document.getElementById('dlg-form').innerText;
+  const puedeReintentar = !!document.querySelector('#dlg-form [data-act="mat-sin-precio"]');
+  g.cerrarDlg();
+  await new Promise(r => setTimeout(r, 300));
+
+  /* Y lo que importa: el coste que hubiera NO se ha borrado al enlazar */
+  const m = (await g.sb.from('materiales').select('*').eq('aviso_id','av-letrero')).data[0];
+  return { texto, hayBoton, aviso, puedeReintentar,
+    enlazado: m.articulo_id, precio: m.precio == null ? null : m.precio };
+});
+paso('la lista de pendiente de facturar lleva el letrero',
+  /Material sin valorar/.test(letrero.texto));
+paso('y el margen del mes también lo dice, que es donde engaña',
+  /sin valorar/.test(letrero.texto));
+paso('con un botón para ponerle precio desde la propia lista',
+  letrero.hayBoton === true);
+/* Lo que no hacía: decir por qué. Se quedaba callada. */
+paso('si el precio no entra, lo dice en vez de callarse',
+  /El precio no ha entrado/.test(letrero.aviso), letrero.aviso.slice(0, 80));
+paso('y dice la causa: el artículo no tiene precio de compra en su ficha',
+  /no tiene <b>precio de compra<\/b>|no tiene .*precio de compra/.test(letrero.aviso) ||
+  /precio de compra/.test(letrero.aviso), letrero.aviso.slice(0, 200));
+paso('ofreciendo el camino que siempre funciona: escribir el coste',
+  /escribir\s+lo que costó|lo que costó la pieza/.test(letrero.aviso));
+paso('y se puede volver a intentar desde el propio aviso',
+  letrero.puedeReintentar === true);
+paso('el artículo queda enlazado aunque no diera precio',
+  letrero.enlazado === 'art-nocoste', letrero.enlazado);
+paso('y la línea sigue sin precio: no se da por buena',
+  letrero.precio === null, letrero.precio);
 
 /* ================================================================
    Final

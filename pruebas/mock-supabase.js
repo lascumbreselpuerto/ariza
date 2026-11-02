@@ -353,11 +353,37 @@ const RPC = {
   },
   siguiente_contrato(){ return 'CT-2026-' + String(DB.contratos.length + 1).padStart(3, '0'); },
   generar_preventivas(){ return { ok:true, creadas:0 }; },
-  /* No calcula nada, igual que antes: la fórmula vive en Supabase. Lo que sí
-     hace desde el 01-11-2026 es dejar constancia de a qué avisos se la ha
-     pedido, para poder comprobar que la aplicación recalcula cuando debe. */
+  /* El simulador NO calcula los importes de la visita: esa fórmula vive en
+     Supabase y se prueba aparte, contra un Postgres de verdad, en
+     pruebas/sql/valoracion-pruebas.sql. Duplicarla aquí sería tener la misma
+     cuenta escrita en dos sitios, que es justo lo que no se quiere.
+
+     Lo que SÍ hace, desde el 02-11-2026, es lo único que la aplicación mira
+     después de llamarla: poner precio a las líneas de material que puedan
+     tenerlo. Sin esto no se podía probar la diferencia entre «se ha puesto el
+     precio» y «no se ha puesto», que es el fallo que apareció en campo.
+     Y deja constancia de a qué avisos se le ha pedido el cálculo. */
   valorar_aviso({ p_aviso }){
     DB.__valorados = (DB.__valorados || []).concat([String(p_aviso)]);
+    const tar = (DB.tarifas || [])[0] || {};
+    (DB.materiales || []).forEach(m => {
+      if (String(m.aviso_id) !== String(p_aviso)) return;
+      if (m.precio != null) return;
+      const art = m.articulo_id
+        ? (DB.articulos || []).find(a => String(a.id) === String(m.articulo_id)) : null;
+      /* (a) enlazada con un artículo que tiene coste: coge su coste y su recargo */
+      if (art && art.coste != null){
+        m.coste = art.coste;
+        const rec = art.recargo != null ? art.recargo : (tar.recargo_material || 0);
+        m.precio = Math.round(art.coste * (1 + rec / 100) * 100) / 100;
+        return;
+      }
+      /* (b) con coste escrito a mano: recargo general */
+      if (m.coste != null){
+        m.precio = Math.round(m.coste * (1 + (tar.recargo_material || 0) / 100) * 100) / 100;
+      }
+      /* (c) ni una cosa ni otra: se queda sin precio, y vale cero */
+    });
     return { ok:true };
   },
   archivar_asistencia(){ return { ok:true }; },
