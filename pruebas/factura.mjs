@@ -163,7 +163,7 @@ const apuntar = await T(async () => {
   const cobMarcada = !!(document.getElementById('fa-cob') || {}).checked;
   /* Se cambia la fecha de la factura: el vencimiento se tiene que recalcular */
   const f = document.getElementById('fa-fecha');
-  const ayer = new Date(Date.now() - 86400000).toISOString().slice(0,10);
+  const ayer = g.iso(new Date(Date.now() - 86400000));   // en local, como cuenta la aplicación
   f.value = ayer;
   f.dispatchEvent(new Event('change', { bubbles:true }));
   await new Promise(r => setTimeout(r, 300));
@@ -189,9 +189,16 @@ const apuntar = await T(async () => {
     ref: val.factura_ref, vence: val.vence_el, cobradoEl: val.cobrado_el,
     cobroForma: val.cobro_forma, cobroRef: val.cobro_ref, facturado: val.facturado };
 });
-const hoyIso = new Date().toISOString().slice(0,10);
-const ayerIso = new Date(Date.now() - 86400000).toISOString().slice(0,10);
-const mas30 = n => { const d = new Date(n); d.setDate(d.getDate()+30); return d.toISOString().slice(0,10); };
+/* ---- Las fechas, en hora LOCAL (02-11-2026) ----
+   Estas pruebas se caían una hora al día: calculaban las fechas en UTC y la
+   aplicación cuenta los días en hora de Madrid, así que entre las 23:00 y la
+   medianoche «hoy» era un día distinto para cada uno. Ahora el día lo da la
+   propia aplicación, que es quien manda. */
+const hoyIso = await T(() => window.__T.hoy());
+const ayerIso = await T(() => window.__T.iso(new Date(Date.now() - 86400000)));
+const mas30 = n => { const [a, m, d] = n.split('-').map(Number);
+  const f = new Date(a, m-1, d); f.setDate(f.getDate()+30);
+  return f.getFullYear()+'-'+String(f.getMonth()+1).padStart(2,'0')+'-'+String(f.getDate()).padStart(2,'0'); };
 paso('el diálogo deja claro que la factura se emite fuera',
   /se emite con tu programa de facturación/i.test(apuntar.texto));
 paso('y no propone ninguna numeración propia: el número se escribe',
@@ -232,7 +239,9 @@ bloque('4. Facturas vencidas sin cobrar');
 const impag = await T(async () => {
   const g = window.__T;
   const hace = d => new Date(Date.now() - d*86400000).toISOString();
-  const dIso = n => { const d = new Date(Date.now() + n*86400000); return d.toISOString().slice(0,10); };
+  /* En hora local, igual que cuenta la aplicación: en UTC, una hora al día
+     daba un día de diferencia y la prueba se caía sola. */
+  const dIso = n => window.__T.iso(new Date(Date.now() + n*86400000));
   const pon = async (id, v) => {
     await g.sb.from('avisos').insert({ id, tipo:'averia', estado:'cerrado', prioridad:'normal',
       tecnico_id:'usuario-admin', cliente_id:'cli-30', horas:2, cerrado:hace(70), creado:hace(75) });
@@ -298,6 +307,128 @@ paso('sin el SQL de la factura, el panel dice que no puede calcularlos',
   /factura\.sql/.test(faltaSql));
 paso('y que no se inventa que nadie te deba dinero',
   /no se lo inventa/.test(faltaSql));
+
+/* ================================================================
+   5. La propuesta de factura                         02-11-2026
+
+   La aplicación no emite facturas. Lo que sí puede hacer es dejarlo
+   todo preparado: las líneas, la base, el IVA y el total, con los
+   datos fiscales del cliente, para teclear la factura en un minuto.
+
+   Lo que esta parte vigila por encima de todo es que ese papel NO se
+   pueda confundir con una factura: sin numeración, sin serie, y
+   diciéndolo en grande. Si algún día alguien le pone un número a esto
+   «para que quede mejor», esta prueba se tiene que poner roja.
+   ================================================================ */
+bloque('5. La propuesta de factura');
+
+const hoja = await T(async () => {
+  const g = window.__T;
+  const hace = d => new Date(Date.now() - d*86400000).toISOString();
+  /* Una visita con de todo: horas, desplazamiento y tres materiales, uno de
+     ellos sin precio, que es el que NO puede colarse en la cuenta. */
+  await g.sb.from('avisos').insert({ id:'pf-1', tipo:'averia', estado:'cerrado',
+    prioridad:'normal', tecnico_id:'usuario-admin', cliente_id:'cli-30',
+    horas:2, num_tecnicos:1, cerrado:hace(3), creado:hace(4) });
+  await g.sb.from('materiales').insert({ aviso_id:'pf-1', descripcion:'Fotocélula de espejo',
+    cantidad:2, unidad:'ud', coste:25, precio:40 });
+  await g.sb.from('materiales').insert({ aviso_id:'pf-1', descripcion:'Banda de seguridad',
+    cantidad:1, unidad:'ud', coste:38.5, precio:53.9 });
+  await g.sb.from('materiales').insert({ aviso_id:'pf-1', descripcion:'Tornillería varia',
+    cantidad:1, unidad:'ud' });
+  await g.sb.from('valoraciones').insert({ aviso_id:'pf-1', imp_mano_obra:90,
+    imp_desplazamiento:45, imp_materiales:133.9, imp_total:268.9,
+    coste_total:120, margen:148.9, facturado:false });
+  await g.cargar();
+
+  const hojas = [];
+  const orig = window.open;
+  window.open = () => ({ document:{ write: h => hojas.push(h), close(){} },
+                         print(){}, focus(){}, close(){} });
+  try {
+    await g.documentoPropuestaFactura('pf-1');
+    await new Promise(r => setTimeout(r, 600));
+  } finally { window.open = orig; }
+  return { n: hojas.length, h: hojas[0] || '' };
+});
+const sinEtiquetas = (hoja.h || '').replace(/<[^>]*>/g, ' ');
+paso('la hoja se genera', hoja.n === 1 && hoja.h.length > 500, hoja.h.length+' caracteres');
+paso('y dice en grande que NO es una factura',
+  /ESTO NO ES UNA FACTURA/.test(hoja.h));
+paso('explicando lo que eso significa: ni justifica gasto ni deduce IVA',
+  /no sirve para justificar un gasto/.test(sinEtiquetas) && /deducir el IVA/.test(sinEtiquetas));
+/* La comprobación que importa de verdad: que no se parezca a una factura.
+   Se buscan los RÓTULOS que llevaría una factura de verdad («Nº de factura»,
+   «Serie:», «Factura nº»). Ojo con buscar la palabra «serie» a secas: el
+   propio documento dice «no lleva número ni serie», y eso haría saltar la
+   comprobación por la frase que precisamente demuestra que está bien. */
+/* Ojo también con la «o» de la abreviatura: escribir n[ºo°] hace que «FACTURA
+   No lleva número...» cuente como «Factura nº». Solo el símbolo. */
+paso('no lleva número ni serie, ni nada que lo parezca',
+  !/Serie\s*:|N[º°]\s*de\s*factura|Factura\s*n[º°]|Número\s*de\s*factura/i.test(sinEtiquetas),
+  (sinEtiquetas.match(/.{0,20}[Ss]erie.{0,20}/)||[''])[0]);
+paso('y lo dice con todas las letras', /No lleva número ni serie/.test(sinEtiquetas));
+paso('lleva los datos fiscales del cliente, que es para lo que sirve',
+  /Comunidad Los Olivos/.test(sinEtiquetas) && /H11000001/.test(sinEtiquetas));
+paso('y los de la empresa', /Ariza Puertas y Automatismos/.test(sinEtiquetas));
+paso('con sus líneas: mano de obra, desplazamiento y cada material',
+  /Mano de obra/.test(sinEtiquetas) && /Desplazamiento/.test(sinEtiquetas) &&
+  /Fotocélula de espejo/.test(sinEtiquetas) && /Banda de seguridad/.test(sinEtiquetas));
+/* 2 × 40,00 = 80,00 de las fotocélulas. Si la hoja pusiera 40 sin multiplicar,
+   la factura saldría corta por la cantidad, que es el error clásico. */
+paso('el material multiplica cantidad por precio',
+  /80,00/.test(sinEtiquetas), (sinEtiquetas.match(/.{0,24}80,00/)||[''])[0]);
+/* base 268,90 · IVA 21 % = 56,47 · total 325,37 */
+paso('la base, el IVA y el total, calculados',
+  /268,90/.test(sinEtiquetas) && /56,47/.test(sinEtiquetas) && /325,37/.test(sinEtiquetas),
+  (sinEtiquetas.match(/Total.{0,16}/)||[''])[0]);
+/* Lo que no puede pasar: que un material sin precio se cuele a cero y nadie
+   lo note. Sale avisado, fuera de la cuenta. */
+paso('el material sin precio NO entra en la cuenta, y se avisa',
+  /Tornillería varia/.test(sinEtiquetas) && /no tiene precio/.test(sinEtiquetas));
+paso('y el desplazamiento dice de qué ruta sale',
+  /Desplazamiento/.test(sinEtiquetas));
+
+/* ================================================================
+   6. El fichero para el programa de facturación
+   ================================================================ */
+bloque('6. El fichero para pasarlo al programa de facturación');
+
+const fichero = await T(async () => {
+  const g = window.__T;
+  let bajado = null;
+  const orig = g.bajarFichero;
+  /* Se le cambia la bajada por una que se queda con el texto */
+  const leer = blob => new Promise(r => { const f = new FileReader();
+    f.onload = () => r(f.result); f.readAsText(blob); });
+  window.__BAJADO = null;
+  const urlOrig = URL.createObjectURL;
+  URL.createObjectURL = blob => { window.__BLOB = blob; return urlOrig.call(URL, blob); };
+  const av = g.S.avisos.filter(a => a.id === 'pf-1');
+  await g.exportarFacturacion(av);
+  await new Promise(r => setTimeout(r, 400));
+  URL.createObjectURL = urlOrig;
+  const texto = window.__BLOB ? await leer(window.__BLOB) : '';
+  return { texto, lineas: texto.split('\r\n').filter(Boolean) };
+});
+paso('se genera el fichero', fichero.lineas.length > 1, fichero.lineas.length+' líneas');
+paso('con su cabecera de columnas',
+  /referencia;fecha;cliente;nif/.test(fichero.texto), fichero.lineas[0]);
+/* Una fila por línea de factura: mano de obra, desplazamiento y dos
+   materiales. El tercero no, que no tiene precio. */
+paso('una fila por cada línea que se va a facturar',
+  fichero.lineas.length === 5, (fichero.lineas.length-1)+' líneas de factura');
+paso('todas con la misma referencia, para que el programa las agrupe en una factura',
+  (() => { const refs = new Set(fichero.lineas.slice(1).map(l => l.split(';')[0]));
+           return refs.size === 1; })(),
+  fichero.lineas[1].split(';')[0]);
+paso('con el NIF del cliente, que es lo que pide cualquier programa',
+  /H11000001/.test(fichero.texto));
+paso('los números en coma decimal, que es como los lee Excel en español',
+  /;40,00?;|;80;|;53,9;/.test(fichero.texto) || /,\d/.test(fichero.lineas[1]),
+  fichero.lineas[1]);
+paso('y el material sin precio tampoco se cuela aquí',
+  !/Torniller/.test(fichero.texto));
 
 console.log('\n'+ok+' bien, '+mal+' mal.');
 const graves = errores.filter(x => !/fonts\.googleapis|ERR_TUNNEL|ERR_NAME|net::ERR|provocado por la prueba/.test(x));

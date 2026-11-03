@@ -675,6 +675,15 @@ paso('y dice la regla nueva: viaje completo más el fijo de salida',
   /viaje completo/.test(F));
 paso('el del técnico se lo dice con un ejemplo',
   /pones 120/.test(M));
+/* La propuesta de factura y el fichero: lo que la aplicación sí hace. */
+paso('el de formación explica la propuesta de factura',
+  /propuesta de factura/i.test(F));
+paso('y que no lleva número ni serie, que es lo que la separa de una factura',
+  /n[uú]mero ni serie/.test(F));
+paso('cuenta también el fichero para el programa de facturación',
+  /fila por línea/.test(F) && /CSV/.test(F));
+paso('y que el material sin precio se queda fuera y se avisa',
+  /se queda fuera de la cuenta/.test(F));
 
 /* ================================================================
    El índice del manual

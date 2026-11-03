@@ -119,6 +119,30 @@ paso('un parte de obra de ayer cuenta como movimiento: la obra no está parada',
   quieto.obra === 1, quieto.obra+' días');
 paso('y sin las fechas del SQL se cuenta desde el alta, que es lo único que hay',
   quieto.sinsql === 12, quieto.sinsql);
+/* ---- La primera hora del día (03-11-2026) ----
+   Estas cuatro comprobaciones saltaron a las 00:20 de Madrid. No era la
+   prueba: era la aplicación. Las marcas de tiempo vienen en UTC, y a esa hora
+   el día en UTC es el de ayer, así que todos los contadores de días sumaban
+   uno de más durante la primera hora de cada día. Un aviso creado a las 00:30
+   nacía diciendo que llevaba un día parado.
+   Esto lo fija para que no vuelva: un instante de hace una hora es de HOY,
+   sea la hora que sea. */
+const madrugada = await T(() => {
+  const g = window.__T;
+  /* Las dos horas en que se ve el fallo, puestas a mano para que la prueba
+     valga a cualquier hora del día: */
+  const hoyTemprano = new Date(); hoyTemprano.setHours(0, 30, 0, 0);   // hoy, 00:30
+  const ayerMedio   = new Date(); ayerMedio.setHours(12, 0, 0, 0);
+  ayerMedio.setDate(ayerMedio.getDate() - 1);                          // ayer, 12:00
+  const como = f => ({ id:'x', movido_el: f.toISOString(), creado: f.toISOString() });
+  return { hoy: g.diasQuieto(como(hoyTemprano)), ayer: g.diasQuieto(como(ayerMedio)) };
+});
+/* Un aviso de hoy a las 00:30 es de HOY. En invierno esa hora, en UTC, es de
+   ayer, y por eso la cuenta daba uno de más. */
+paso('un aviso de hoy a las 00:30 lleva cero días, no uno',
+  madrugada.hoy === 0, madrugada.hoy+' días');
+paso('y uno de ayer al mediodía lleva uno, no dos',
+  madrugada.ayer === 1, madrugada.ayer+' días');
 
 /* ================================================================
    3. Los cuatro grupos
