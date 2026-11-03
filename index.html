@@ -268,6 +268,9 @@ html{scroll-padding-top:104px}
 .lin-bs .lin-b:disabled{opacity:.3;cursor:default}
 /* El índice de Equipo: botones en rejilla, alineados a la izquierda para que
    se lean como una lista y no como una botonera. */
+/* Las frases hechas del parte: botones pequeños que caben varios por línea */
+.frases{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.frases .btn{padding:4px 8px;font-size:12px;border:1px solid var(--line);background:var(--surface)}
 .eq-indice .eq-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:4px}
 .eq-indice .eq-lista .btn{justify-content:flex-start;text-align:left;padding:7px 10px}
 /* El índice del manual: sangrado por nivel, para que se lea como un índice
@@ -605,6 +608,39 @@ const grupoDeTab = k => GRUPOS.find(g => g.tabs.includes(k)) || GRUPOS[0];
    el «hidden» lo pone el arranque según el rol, y aquí no se toca. */
 const tabDisponible = k => { const b = document.querySelector('#tabs button[data-tab="'+k+'"]');
                              return !!b && !b.hidden; };
+/* ---- Frases hechas del parte (03-11-2026) ----
+   Escribir en un móvil, de pie y con las manos sucias, es lo que más tiempo
+   cuesta de cerrar un parte. Estas frases cubren la mayoría de los casos con un
+   toque, y se cambian desde Equipo: son una lista editable, no una jaula.
+   No sustituyen a escribir: meten el texto en el campo y encima se matiza. */
+const FRASES_DIAG = [
+  'Fotocélula desalineada',
+  'Fotocélula averiada',
+  'Banda de seguridad sin continuidad',
+  'Final de carrera desajustado',
+  'Cuadro de maniobra averiado',
+  'Motor bloqueado',
+  'Muelles destensados',
+  'Guía sucia y rodillos gastados',
+  'Mando a distancia sin pila',
+  'Sin suministro eléctrico',
+  'Puerta golpeada por un vehículo',
+  'Desgaste normal por uso'
+];
+const FRASES_TRAB = [
+  'Alineada y comprobada la fotocélula',
+  'Sustituida la fotocélula',
+  'Sustituida la banda de seguridad',
+  'Ajustados los finales de carrera',
+  'Ajustada la fuerza del cuadro de maniobra',
+  'Engrasadas guías y rodillos',
+  'Tensados los muelles',
+  'Sustituido el mando a distancia',
+  'Comprobado el funcionamiento y las seguridades',
+  'Comprobada la maniobra manual de emergencia',
+  'Queda pendiente de repuesto',
+  'Se recomienda presupuestar la sustitución'
+];
 const TIPOS_DOC = ['Manual de instrucciones','Desbloqueo de emergencia','Instrucciones de uso','Esquema eléctrico','Declaración CE','Certificado','Informe técnico','Presupuesto','Fotos de obra','Otro'];
 const EST_AVISO = {recibido:'Recibido', asignado:'Asignado', en_curso:'En curso', repuesto:'Esperando repuesto', cerrado:'Cerrado'};
 /* Tipos de asistencia: clave interna y cómo se llama en pantalla */
@@ -687,6 +723,9 @@ const hoy = () => { const d = new Date();
   return new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,10); };
 const fechaCorta = s => { if(!s) return '—'; const d=new Date(s); return d.toLocaleDateString('es-ES',{day:'numeric',month:'short',year:'numeric'}); };
 const fechaHora = s => { if(!s) return '—'; const d=new Date(s); return d.toLocaleDateString('es-ES',{day:'numeric',month:'short'})+' '+d.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}); };
+/* La hora sola, en hora de aquí. Estaba repetida dentro de dos funciones y la
+   tarjeta del trabajo no podía usarla. (03-11-2026) */
+const hhmm = d => d ? new Date(d).toTimeString().slice(0,5) : '';
 /* Días de diferencia contando días de calendario, no horas. Restar fechas a pelo
    daba -1 para el día de hoy a partir del mediodía, porque una fecha suelta se
    lee como medianoche UTC: una visita de hoy salía marcada como pasada de fecha. */
@@ -1534,7 +1573,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.03-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.03-2';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -2254,6 +2293,15 @@ function tarjetaTrabajo(a){
           (ceT && ceT.contacto_nombre ? ' ('+esc(ceT.contacto_nombre.split(/[\s,;·]+/)[0])+')' : '')+'</a>' : '')+
       (donde ? '<a class="btn sm" target="_blank" rel="noopener" href="'+esc(MAPA(donde))+'">Cómo llegar</a>' : '')+
       (a.puerta_id ? '<button class="btn sm" data-act="abrir" data-id="'+a.puerta_id+'">Ficha de la puerta</button>' : '')+
+      /* ---- La hora de llegada, con un toque (03-11-2026) ----
+         Hasta hoy la hora de entrada se escribía al cerrar el parte, de
+         memoria, a las ocho de la tarde. Eso no es un dato: es un recuerdo.
+         Este botón la sella en el momento de llegar, y al cerrar ya viene
+         puesta. Solo sale mientras no haya una hora apuntada: después sería
+         un botón para estropear lo que ya está bien. */
+      (a.hora_inicio
+        ? '<span class="mini">Llegada '+esc(hhmm(a.hora_inicio))+'</span>'
+        : '<button class="btn sm" data-act="he-llegado" data-id="'+a.id+'">He llegado</button>')+
       '<button class="btn sm plana" data-act="aviso-editar" data-id="'+a.id+'">Detalles</button>'+
       '<span class="sp"></span>'+
       /* Al acabar el día hay dos finales distintos, y conviene que se elija a
@@ -6099,6 +6147,14 @@ function vistaEquipo(){
   h += panelLista('tipos_doc', 'Tipos de documento', TIPOS_DOC,
         'Las opciones del desplegable al subir un PDF a una puerta.');
   h += panelLista('tipos', 'Tipos de puerta', TIPOS, 'Desplegable «Tipo» de la ficha.');
+  /* Las frases del parte. Las mantiene la oficina, no el técnico: son el
+     vocabulario de la casa. (03-11-2026) */
+  h += panelLista('frases_diag', 'Frases de diagnóstico', FRASES_DIAG,
+    'Salen como botones debajo de «Diagnóstico» en el parte. Un toque las mete en el campo, '+
+    'y encima se escribe lo que haga falta.');
+  h += panelLista('frases_trab', 'Frases de trabajo realizado', FRASES_TRAB,
+    'Lo mismo, debajo de «Trabajo realizado». Poned las vuestras: cuanto más se parezcan a '+
+    'como habláis, menos hay que escribir encima.');
   h += panelGuiones();
   h += '</div>';
   return h;
@@ -17387,7 +17443,120 @@ let alGuardar = null;
    enseguida, porque varios diálogos llenan sus desplegables en un setTimeout
    (los centros del cliente, los materiales ya usados) y en el primer pase
    todavía están vacíos. */
+/* ---- Leer la etiqueta de un material desde el propio parte (03-11-2026) ----
+   La etiqueta del material ya existía y la pantalla de escaneo también, pero el
+   único camino era escanear con la cámara del teléfono: eso abre la aplicación
+   otra vez por la dirección del QR, y lo que había en el parte a medio rellenar
+   se queda por el camino. Así que el lector va DENTRO del parte, sin abrir otro
+   diálogo, y lo que lee se añade como una línea de material más.
+   Dos maneras, porque no todos los teléfonos leen códigos igual:
+   1. La cámara, en los navegadores que saben leer códigos ellos solos.
+   2. El código escrito, que está impreso debajo del QR de cada etiqueta.
+   La segunda funciona siempre, también sin cobertura y con la cámara sucia. */
+const LECTOR = { stream:null, timer:null, campo:null };
+const puedeLeerCamara = () => typeof BarcodeDetector !== 'undefined' &&
+  !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+function pararLector(){
+  if (LECTOR.timer){ clearInterval(LECTOR.timer); LECTOR.timer = null; }
+  if (LECTOR.stream){ LECTOR.stream.getTracks().forEach(t => t.stop()); LECTOR.stream = null; }
+}
+/* Del texto del QR, o del código escrito a mano, al material del almacén.
+   El QR lleva la dirección entera (…#M-MAT0001-A3K9) y ahí el código de
+   seguridad tiene que cuadrar, igual que cuando se entra escaneando. Escrito a
+   mano no hay código de seguridad: lo está leyendo una persona de la etiqueta. */
+function articuloDeEtiqueta(txt){
+  const s = String(txt || '').trim();
+  if (!s) return { art:null, motivo:'vacio' };
+  const m = s.match(/M-([A-Za-z]{3}\d{3,6})-([A-Za-z0-9]{4})/);
+  if (m){
+    const cod = m[1].toUpperCase().replace(/^([A-Z]{3})/, '$1-');
+    const tok = m[2].toUpperCase();
+    const a = (S.catalogo || []).find(x => normTxt(x.codigo || '') === normTxt(cod));
+    if (!a) return { art:null, motivo:'sin-material', codigo:cod };
+    if ((a.token || '').toUpperCase() !== tok) return { art:null, motivo:'token', codigo:cod };
+    return { art:a, codigo:cod };
+  }
+  let cod = s.toUpperCase().replace(/\s+/g, '');
+  if (/^\d{1,6}$/.test(cod)) cod = 'MAT-' + cod.padStart(4, '0');
+  cod = cod.replace(/^([A-Z]{3})(\d)/, '$1-$2');
+  if (!/^[A-Z]{3}-\d{3,6}$/.test(cod)) return { art:null, motivo:'no-es-codigo' };
+  const a = (S.catalogo || []).find(x => normTxt(x.codigo || '') === normTxt(cod));
+  return a ? { art:a, codigo:cod } : { art:null, motivo:'sin-material', codigo:cod };
+}
+/* El material leído pasa a ser una línea del parte. Si ya estaba puesto, se le
+   suma uno a la cantidad en vez de repetir la línea: se escanean tres cajas de
+   lo mismo y quedan tres unidades, no tres líneas de una. */
+function meterMaterialLeido(art){
+  const cont = document.getElementById('mats');
+  if (!cont) return false;
+  const filas = Array.from(cont.querySelectorAll('.mat-fila'));
+  const ya = filas.find(f => { const s = f.querySelector('.mat-art'); return s && s.value === art.id; });
+  if (ya){
+    const c = ya.querySelector('.mat-cant');
+    if (c) c.value = Math.round(((parseFloat(c.value) || 0) + 1) * 100) / 100;
+    toast(art.descripcion + ': ya estaba puesto, ahora van ' + ((c && c.value) || '') + '.');
+    return true;
+  }
+  /* Una línea vacía recién añadida se aprovecha; si no, se añade otra */
+  const vacia = filas.find(f => {
+    const s = f.querySelector('.mat-art'), d = f.querySelector('.mat-desc');
+    return s && !s.value && d && !d.value.trim();
+  });
+  if (vacia) vacia.remove();
+  cont.insertAdjacentHTML('beforeend', filaMaterial({
+    descripcion: art.descripcion, cantidad: 1, unidad: art.unidad || 'ud', articulo_id: art.id }));
+  activarCombos(cont);
+  toast(art.descripcion + ' añadido. Corrige la cantidad si has puesto más de uno.');
+  return true;
+}
+/* Lo que lee la cámara o lo que se ha escrito, resuelto y dicho en voz alta */
+function usarEtiqueta(txt){
+  const r = articuloDeEtiqueta(txt);
+  if (r.art){ pararLector(); const c = document.getElementById('mat-lector'); if (c) c.hidden = true;
+    meterMaterialLeido(r.art); return true; }
+  if (r.motivo === 'vacio') toast('Escribe el código de la etiqueta, el que va debajo del QR.');
+  else if (r.motivo === 'token') toast('Esa etiqueta no cuadra con el material '+r.codigo+': avisa a la oficina.');
+  else if (r.motivo === 'sin-material') toast('No hay ningún material con el código '+r.codigo+'.');
+  else toast('Eso no parece el código de una etiqueta de material.');
+  return false;
+}
+async function arrancarLector(){
+  const caja = document.getElementById('mat-lector');
+  if (!caja) return;
+  caja.hidden = false;
+  const campo = document.getElementById('mat-cod');
+  const video = document.getElementById('mat-video');
+  const aviso = document.getElementById('mat-lector-aviso');
+  if (campo) campo.focus();
+  if (!puedeLeerCamara()){
+    if (video) video.hidden = true;
+    if (aviso) aviso.textContent = 'Este teléfono no sabe leer códigos desde la aplicación. '+
+      'Escribe el código que va impreso debajo del QR de la etiqueta: MAT-0012, o solo 12.';
+    return;
+  }
+  try {
+    LECTOR.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+  } catch (e){
+    if (video) video.hidden = true;
+    if (aviso) aviso.textContent = 'No se ha podido abrir la cámara ('+(e && e.name ? e.name : 'sin permiso')+'). '+
+      'Escribe el código impreso debajo del QR.';
+    return;
+  }
+  if (video){ video.hidden = false; video.srcObject = LECTOR.stream; try { await video.play(); } catch(e){} }
+  if (aviso) aviso.textContent = 'Acerca el QR de la etiqueta. Si no lo coge, escribe el código de debajo.';
+  const det = new BarcodeDetector({ formats: ['qr_code'] });
+  LECTOR.timer = setInterval(async () => {
+    if (!video || !video.videoWidth || !LECTOR.stream) return;
+    try {
+      const cods = await det.detect(video);
+      if (cods && cods.length) usarEtiqueta(cods[0].rawValue);
+    } catch (e){ /* un fotograma que no se puede leer no es un error: el siguiente */ }
+  }, 350);
+}
+dlg.addEventListener('close', pararLector);
+
 function abrirDlg(html, guardar){
+  pararLector();   // la cámara no se queda encendida al cambiar de pantalla
   /* Un diálogo que ya está abierto y se vuelve a pintar no es un diálogo nuevo:
      es la misma pantalla puesta al día. Si al repintar salta arriba y el foco se
      va al primer campo, el que estaba escribiendo en la línea doce pierde el
@@ -17475,6 +17644,14 @@ dlgForm.addEventListener('focusin', e => {
   if (e.target.id === 'f-cbusca' && !val('f-clid')) pintarListaCliente();
 });
 dlgForm.addEventListener('keydown', e => {
+  /* Intro en el código de la etiqueta busca el material; NO cierra la visita,
+     que es lo que haría cualquier Intro dentro de un formulario. */
+  if (e.target.id === 'mat-cod'){
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    if (usarEtiqueta(e.target.value)) e.target.value = '';
+    return;
+  }
   if (e.target.id !== 'f-cbusca') return;
   const caja = document.getElementById('f-clista');
   if (e.key === 'Enter'){
@@ -17984,11 +18161,55 @@ function elegirCliente(id){
   estadoCliente();
 }
 
-function dlgPuerta(id, avisoId){
+/* ---- Lo que NO se copia de una puerta a otra (03-11-2026) ----
+   Todo lo que identifica a UNA puerta en concreto. Copiar esto sería crear dos
+   puertas con la misma etiqueta o con el mismo número de serie, que es peor que
+   no copiar nada: un dato repetido parece verdad. */
+const NO_SE_COPIA = ['codigo','token','id','matricula','sin_matricula','num_serie','ubicacion',
+  'ultima_revision','proxima_revision','estado_desde','notas','creado','creado_por',
+  'ficha_tocada_por','ficha_tocada_el',
+  /* Medidas tomadas EN esa puerta, no datos del modelo. El peso se pesó una vez y
+     las vueltas de muelle se contaron en ese eje: copiarlas sería dar por medido
+     lo que nadie ha medido. El arrastre del motor sí se copia, porque viene de la
+     placa del motor y es el mismo motor. */
+  'peso_kg','vueltas_muelle'];
+/* ---- La ficha de otra puerta, lista para servir de molde ----
+   Se queda con lo que es del modelo y del sitio (cliente, centro, dirección, tipo,
+   uso, marca, modelo, año, medidas, motor, cuadro, modo, usuarios y los elementos
+   de seguridad) y tira lo que identifica a cada puerta. La marca y el modelo del
+   motor y del cuadro se sacan aquí, con la puerta original todavía a mano, porque
+   pueden venir de su componente y el molde ya no tiene id con el que buscarlo. */
+function moldeDePuerta(pu){
+  if (!pu) return null;
+  const o = {};
+  Object.keys(pu).forEach(k => { if (!NO_SE_COPIA.includes(k)) o[k] = pu[k]; });
+  o.estado = 'operativa';
+  o.__copiadaDe = pu.codigo || '';
+  const mm = marcaModeloFicha(pu, 'motor'), mc = marcaModeloFicha(pu, 'cuadro');
+  o.__motor  = { marca: mm.marca || '', modelo: mm.modelo || '', de: 'molde' };
+  o.__cuadro = { marca: mc.marca || '', modelo: mc.modelo || '', de: 'molde' };
+  /* Lo que se copia, con el nombre que ve el técnico, para poder decírselo en
+     pantalla en vez de que lo descubra campo por campo. */
+  o.__copiado = [
+    ['Tipo', pu.tipo], ['Uso', pu.uso], ['Marca', pu.marca], ['Modelo', pu.modelo],
+    ['Año', pu.anio], ['Instalada por', pu.instalador],
+    ['Ancho', pu.ancho_mm ? pu.ancho_mm+' mm' : ''], ['Alto', pu.alto_mm ? pu.alto_mm+' mm' : ''],
+    ['Dintel', pu.dintel_mm ? pu.dintel_mm+' mm' : ''],
+    ['Arrastre del motor', pu.arrastre_kg ? pu.arrastre_kg+' kg' : ''],
+    ['Motor', [o.__motor.marca, o.__motor.modelo].filter(Boolean).join(' ')],
+    ['Cuadro', [o.__cuadro.marca, o.__cuadro.modelo].filter(Boolean).join(' ')],
+    ['Seguridad instalada', (pu.seguridad || []).join(', ')]
+  ].filter(x => x[1] !== null && x[1] !== undefined && String(x[1]).trim() !== '');
+  return o;
+}
+function dlgPuerta(id, avisoId, molde){
+  /* Si se viene con molde, cualquier borrador que quedara suelto es de un alta
+     anterior que se abandonó: aplicarlo machacaría lo copiado sin avisar. */
+  if (molde) S.borradorPuerta = null;
   const p = id ? puertaDe(id) : null;
   const usadas = new Set(S.puertas.filter(x => !p || x.id !== p.id).map(x => x.codigo));
   const libres = S.etiquetas.filter(e => !usadas.has(e.codigo)).map(e => e.codigo);
-  const d = p || { estado:'operativa', seguridad:[] };
+  const d = p || molde || { estado:'operativa', seguridad:[] };
 
   /* ---- Ficha de un parte ya firmado (01-11-2026) ----
      Desde que el parte se cierra sin exigir la ficha completa, hay fichas que se
@@ -18013,6 +18234,21 @@ function dlgPuerta(id, avisoId){
   }
 
   let h = '<h3>'+(p ? 'Editar puerta '+esc(p.codigo||'') : 'Nueva puerta')+'</h3>';
+  /* ---- Lo copiado se dice, no se adivina (03-11-2026) ----
+     Un formulario que aparece relleno sin explicar de dónde sale es una trampa:
+     se firma un dato que no se ha mirado. Así que se enseña de qué puerta viene
+     cada cosa, se dice qué NO se ha copiado y se recuerda que hay que repasarlo
+     mirando la puerta que se tiene delante. */
+  if (!p && molde && (molde.__copiado || []).length)
+    h += '<div class="sin-ficha" style="margin-bottom:12px">'+
+      '<b>Copiado de la puerta '+esc(molde.__copiadaDe || 'anterior')+'.</b> '+
+      'Repásalo mirando la puerta que tienes delante: lo que no cuadre, cámbialo.'+
+      '<div class="mini" style="margin-top:6px">'+
+      molde.__copiado.map(x => esc(x[0])+': <b>'+esc(x[1])+'</b>').join(' · ')+'</div>'+
+      '<div class="mini" style="margin-top:6px">No se ha copiado nada que sea de esa puerta '+
+      'y solo de esa: la etiqueta, la matrícula, la ubicación, las observaciones, las fechas '+
+      'de revisión, el peso de la hoja y las vueltas de los muelles. Eso va puerta por puerta.</div>'+
+      '</div>';
   if (p && firmados.length)
     h += '<div class="sin-ficha" style="margin-bottom:12px;background:var(--aviso-bg);color:var(--aviso)">'+
       '<b>Ojo: hay un parte firmado por el cliente</b> el '+esc(fechaCorta(firmados[0].cerrado))+
@@ -18147,8 +18383,8 @@ function dlgPuerta(id, avisoId){
      Es el mismo dato que el componente, y se escribe una sola vez. Lo que se
      ponga aquí crea o actualiza ese componente; el número de serie, la foto de la
      placa y el papel siguen estando en el componente, que es donde caben. */
-  const mMotor  = marcaModeloFicha(d.id ? d : null, 'motor');
-  const mCuadro = marcaModeloFicha(d.id ? d : null, 'cuadro');
+  const mMotor  = (!d.id && d.__motor)  ? d.__motor  : marcaModeloFicha(d.id ? d : null, 'motor');
+  const mCuadro = (!d.id && d.__cuadro) ? d.__cuadro : marcaModeloFicha(d.id ? d : null, 'cuadro');
   const hayCuadro = !!claveFicha(d.id ? d : { tipo: d.tipo }, 'cuadro');
   h += '<div class="grupo"><h3>Cuadro y motor</h3><div class="campos">'+
     '<div class="campo"><label for="f-motor-marca">Motor · marca</label>'+
@@ -20877,6 +21113,34 @@ function dlgValoracion(avisoId){
 /* ================= Cierre de la visita ================= */
 const FIRMA = { canvas:null, ctx:null, pintado:false };
 
+/* ---- Las frases hechas, debajo de su campo (03-11-2026) ----
+   Un toque las añade al final de lo que haya escrito, en su propia línea. No
+   borran nada y no cierran nada: después se escribe encima lo que haga falta,
+   que es como se usa de verdad. El dictado del teclado del móvil funciona en
+   esos mismos campos, y para eso no hace falta programar nada. */
+function frasesDe(clave, defecto, campo){
+  const xs = lista(clave, defecto);
+  if (!xs.length) return '';
+  return '<div class="frases">'+
+    xs.map(f => '<button type="button" class="btn sm plana" data-act="frase" '+
+      'data-campo="'+campo+'" data-txt="'+esc(f)+'">'+esc(f)+'</button>').join('')+
+    '</div>';
+}
+function meterFrase(campo, txt){
+  const e = document.getElementById(campo);
+  if (!e) return;
+  const hay = (e.value || '').trim();
+  /* Si ya estaba escrita, no se repite: el técnico ha dado dos veces sin querer */
+  if (hay && hay.toLowerCase().indexOf(String(txt).toLowerCase()) >= 0){
+    toast('Eso ya está puesto.');
+    return;
+  }
+  e.value = hay ? (hay.replace(/\s*$/, '') + '. ' + txt) : txt;
+  e.dispatchEvent(new Event('input', { bubbles:true }));
+  e.focus();
+  try { e.setSelectionRange(e.value.length, e.value.length); } catch(_){}
+}
+
 /* Una línea de material del parte.
    Lleva dos cosas que parecen la misma y no lo son: el material del almacén
    (que es el que se descuenta al cerrar) y la descripción escrita (que es la que
@@ -20887,10 +21151,23 @@ function filaMaterial(m){
   m = m || { descripcion:'', cantidad:1, unidad:'ud' };
   const cat = (S.catalogo || []).filter(a => a.activo !== false)
     .sort((x, y) => (x.descripcion || '').localeCompare(y.descripcion || '', 'es'));
+  /* ---- Lo de tu furgoneta, primero (03-11-2026) ----
+     El desplegable era el catálogo entero por orden alfabético, así que para
+     elegir una fotocélula había que bajar por cuarenta materiales con una caja
+     en la mano. Lo que el técnico lleva encima sale arriba y aparte: ahí está
+     casi siempre lo que acaba de poner. Y cuanto más fácil es elegir del
+     almacén, menos material escrito a mano llega a la oficina sin precio. */
+  const opcion = a => '<option value="'+a.id+'"'+(m.articulo_id === a.id ? ' selected' : '')+'>'+
+    esc(a.descripcion + (a.codigo ? ' · '+a.codigo : ''))+'</option>';
+  const enFurgo = S.sinAlmacen ? [] : cat.filter(a => existenciasDe(a.id).enMiFurgoneta > 0);
+  const resto = cat.filter(a => !enFurgo.includes(a));
   const sel = S.sinAlmacen ? '' :
     '<select class="mat-art"><option value="">Escrito a mano</option>'+
-    cat.map(a => '<option value="'+a.id+'"'+(m.articulo_id === a.id ? ' selected' : '')+'>'+
-      esc(a.descripcion + (a.codigo ? ' · '+a.codigo : ''))+'</option>').join('')+'</select>';
+    (enFurgo.length
+      ? '<optgroup label="En tu furgoneta">'+enFurgo.map(opcion).join('')+'</optgroup>'+
+        '<optgroup label="Resto del almacén">'+resto.map(opcion).join('')+'</optgroup>'
+      : cat.map(opcion).join(''))+
+    '</select>';
   return '<div class="mat-fila'+(S.sinAlmacen ? '' : ' con-art')+'">'+
     sel+
     '<input type="text" class="mat-desc" list="sugeridos" maxlength="120" placeholder="Material" value="'+esc(m.descripcion||'')+'">'+
@@ -21675,8 +21952,10 @@ function dlgCierre(avisoId){
   if (obligaAltaObra(a)) h += bloqueAltaObra(a, puertas, null);
 
   h += '<div class="grupo"><h3>Qué has encontrado y qué has hecho</h3><div class="campos">'+
-    '<div class="campo full"><label for="z-diag">Diagnóstico</label><textarea id="z-diag" rows="2" placeholder="Ej.: banda de seguridad cortada por roce con el marco">'+esc(a.diagnostico||'')+'</textarea></div>'+
-    '<div class="campo full"><label for="z-trab">Trabajo realizado</label><textarea id="z-trab" rows="3" placeholder="Ej.: sustituida banda, ajustado final de carrera y engrase general">'+esc(a.trabajo||'')+'</textarea></div>'+
+    '<div class="campo full"><label for="z-diag">Diagnóstico</label><textarea id="z-diag" rows="2" placeholder="Ej.: banda de seguridad cortada por roce con el marco">'+esc(a.diagnostico||'')+'</textarea>'+
+      frasesDe('frases_diag', FRASES_DIAG, 'z-diag')+'</div>'+
+    '<div class="campo full"><label for="z-trab">Trabajo realizado</label><textarea id="z-trab" rows="3" placeholder="Ej.: sustituida banda, ajustado final de carrera y engrase general">'+esc(a.trabajo||'')+'</textarea>'+
+      frasesDe('frases_trab', FRASES_TRAB, 'z-trab')+'</div>'+
     '</div></div>';
 
   /* Lo que la oficina ha mandado llevar, antes de la lista de lo gastado: es lo
@@ -21698,14 +21977,37 @@ function dlgCierre(avisoId){
                    ...S.sugerencias.map(x=>[(x.descripcion||'').toLowerCase(), x.descripcion])]).values()]
         .filter(Boolean).map(d=>'<option value="'+esc(d)+'">').join('')+'</datalist>'+
     '<div id="mats"></div>'+
-    '<button type="button" class="btn sm" data-act="mat-anadir">Añadir material</button>'+
-    '<p class="mini" style="margin:8px 0 0">Escribe y te irá sugiriendo los que ya se han usado otras veces.</p></div>';
+    '<div class="fila" style="gap:8px;flex-wrap:wrap">'+
+      '<button type="button" class="btn sm" data-act="mat-anadir">Añadir material</button>'+
+      (S.sinAlmacen ? '' :
+        '<button type="button" class="btn sm pri" data-act="mat-leer">Leer la etiqueta</button>')+
+      '<span class="sp"></span></div>'+
+    /* El lector va aquí dentro a propósito: si abriera otro diálogo, el parte a
+       medio rellenar se iría con él. */
+    (S.sinAlmacen ? '' :
+      '<div id="mat-lector" hidden style="margin-top:10px;border:1px solid var(--line);border-radius:8px;padding:10px">'+
+        '<video id="mat-video" playsinline muted hidden '+
+          'style="width:100%;max-height:240px;border-radius:6px;background:#000"></video>'+
+        '<p class="mini" id="mat-lector-aviso" style="margin:8px 0">Abriendo la cámara…</p>'+
+        '<div class="fila" style="gap:8px">'+
+          '<input id="mat-cod" type="text" inputmode="text" autocomplete="off" maxlength="20" '+
+            'placeholder="Código de la etiqueta: MAT-0012" style="flex:1">'+
+          '<button type="button" class="btn sm pri" data-act="mat-cod-buscar">Buscar</button>'+
+          '<button type="button" class="btn sm plana" data-act="mat-leer-cerrar">Cerrar</button>'+
+        '</div></div>')+
+    '<p class="mini" style="margin:8px 0 0">Escribe y te irá sugiriendo los que ya se han usado otras veces. '+
+    (S.sinAlmacen ? '' : 'Con «Leer la etiqueta» se añade escaneando el QR de la caja, o escribiendo el '+
+      'código que lleva impreso debajo: escanea tres cajas iguales y quedan tres unidades en una sola línea. ')+
+    '</p></div>';
 
   h += '<div class="grupo"><h3>Tiempo y desplazamiento</h3><div class="campos">'+
     /* Si estás cerrando el parte es que ya has terminado, así que la hora que se
        pone sola es la de SALIDA, la de ahora mismo. La de entrada la escribe el
        técnico, que es el único que sabe cuándo empezó de verdad. */
-    '<div class="campo"><label for="z-ini">Hora de entrada</label><input id="z-ini" type="time" value="'+esc(hhmm(a.hora_inicio))+'"><span class="pista">A qué hora empezaste la asistencia</span></div>'+
+    '<div class="campo"><label for="z-ini">Hora de entrada</label><input id="z-ini" type="time" value="'+esc(hhmm(a.hora_inicio))+'">'+
+      '<span class="pista">'+(a.hora_inicio
+        ? 'La selló el botón «He llegado». Cámbiala si no cuadra'
+        : 'A qué hora empezaste la asistencia')+'</span></div>'+
     '<div class="campo"><label for="z-fin">Hora de salida</label><input id="z-fin" type="time" value="'+esc(hhmm(a.hora_fin) || hhmm(ahora))+'"></div>'+
     /* En una obra de varios días lo que se factura NO son las horas de hoy,
        son las de toda la obra. Se rellenan solas con la suma de las jornadas,
@@ -21956,6 +22258,17 @@ function bloquePuertasObra(a, puertas){
   h += '<div class="fila" style="gap:8px;flex-wrap:wrap;margin-top:10px">'+
     '<button type="button" class="btn sm'+(puertas.length?'':' pri')+'" data-act="alta-puerta-asis" data-id="'+a.id+
       '">Dar de alta '+(puertas.length ? 'otra puerta' : 'la puerta')+'</button>'+
+    /* ---- Otra puerta igual (03-11-2026) ----
+       En una obra de cuatro seccionales iguales, dar de alta la segunda, la
+       tercera y la cuarta es teclear tres veces lo mismo. Esto copia la ficha
+       de la última, menos lo que identifica a cada puerta: su etiqueta, su
+       matrícula y su sitio. Eso hay que ponerlo puerta por puerta, que para eso
+       son puertas distintas. */
+    (puertas.length
+      ? '<button type="button" class="btn sm pri" data-act="otra-igual" data-id="'+a.id+
+        '" data-puerta="'+esc(puertas[puertas.length-1].id)+'">Otra igual que '+
+        esc(puertas[puertas.length-1].codigo || 'la anterior')+'</button>'
+      : '')+
     (S.sinAvisoPuertas ? '' :
       '<button type="button" class="btn sm" data-act="enganchar-puerta" data-id="'+a.id+
       '">Añadir una puerta ya dada de alta</button>')+
@@ -23033,6 +23346,22 @@ raiz.addEventListener('click', async e => {
     exportarFacturacion(cerradas.filter(x => { const v = valoracionDe(x.id);
       return v && !v.facturado; }));
   }
+  /* ---- «He llegado» (03-11-2026) ----
+     Sella la hora de llegada y pone la visita en curso. Si ya había una hora
+     apuntada no se toca: el botón ni siquiera sale, pero por si acaso. */
+  else if (a === 'he-llegado'){
+    const av = S.avisos.find(x => x.id === b.dataset.id);
+    if (!av || av.hora_inicio) return;
+    b.disabled = true;
+    const o = { hora_inicio: new Date().toISOString(), actualizado: new Date().toISOString() };
+    if (['recibido','asignado'].includes(av.estado)) o.estado = 'en_curso';
+    try {
+      const { error } = await sb.from('avisos').update(o).eq('id', av.id);
+      if (error) throw error;
+      await cargar(); pintar();
+      toast('Llegada apuntada a las '+hhmm(o.hora_inicio)+'.');
+    } catch(e){ b.disabled = false; fallo(e); }
+  }
   else if (a === 'asignar') dlgAsignar(b.dataset.id);
   else if (a === 'aviso-anular') dlgAnular(b.dataset.id);
   else if (a === 'exp-nuevo') dlgExpedienteNuevo(b.dataset.id);
@@ -23441,7 +23770,8 @@ raiz.addEventListener('click', async e => {
     /* Añade al final los elementos de fábrica que la lista guardada no tiene. No
        reordena nada ni quita nada: lo que hayas puesto tú se queda donde estaba. */
     const clave = b.dataset.clave;
-    const base = { seguridad:SEGURIDAD, tipos_doc:TIPOS_DOC, tipos:TIPOS, usos:USOS, clientes:CLIENTES }[clave] || [];
+    const base = { seguridad:SEGURIDAD, tipos_doc:TIPOS_DOC, tipos:TIPOS, usos:USOS,
+                   clientes:CLIENTES, frases_diag:FRASES_DIAG, frases_trab:FRASES_TRAB }[clave] || [];
     const arr = lista(clave, base).slice();
     const faltan = base.filter(x => !arr.some(y =>
       String(y).trim().toLowerCase() === String(x).trim().toLowerCase()));
@@ -23453,7 +23783,8 @@ raiz.addEventListener('click', async e => {
   }
   else if (a === 'lista-anadir' || a === 'lista-quitar' || a === 'lista-subir' || a === 'lista-bajar'){
     const clave = b.dataset.clave;
-    const base = { seguridad:SEGURIDAD, tipos_doc:TIPOS_DOC, tipos:TIPOS, usos:USOS, clientes:CLIENTES }[clave] || [];
+    const base = { seguridad:SEGURIDAD, tipos_doc:TIPOS_DOC, tipos:TIPOS, usos:USOS,
+                   clientes:CLIENTES, frases_diag:FRASES_DIAG, frases_trab:FRASES_TRAB }[clave] || [];
     const arr = lista(clave, base).slice();
     if (a === 'lista-anadir'){
       const campo = document.getElementById('nuevo-'+clave);
@@ -24018,6 +24349,19 @@ dlgForm.addEventListener('click', async e => {
     if (cont) cont.insertAdjacentHTML('beforeend', filaMaterial());
     return;
   }
+  /* Leer la etiqueta de un material sin salir del parte (03-11-2026) */
+  if (a === 'mat-leer'){ await arrancarLector(); return; }
+  if (a === 'mat-leer-cerrar'){
+    pararLector();
+    const c = document.getElementById('mat-lector'); if (c) c.hidden = true;
+    return;
+  }
+  if (a === 'mat-cod-buscar'){
+    const campo = document.getElementById('mat-cod');
+    if (!campo) return;
+    if (usarEtiqueta(campo.value)) campo.value = '';
+    return;
+  }
   if (a === 'comp-borrar'){
     /* Borrar de verdad es para lo que se metió por error. Lo que estuvo puesto y se
        ha quitado se marca como retirado, que para eso está la casilla de arriba. */
@@ -24061,6 +24405,8 @@ dlgForm.addEventListener('click', async e => {
   }
   if (a === 'contrato-hoja'){ cerrarDlg(); hojaContrato(b.dataset.id); return; }
   if (a === 'contrato-firmar'){ cerrarDlg(); dlgFirmaContrato(b.dataset.id); return; }
+  /* Las frases hechas del parte (03-11-2026) */
+  if (a === 'frase'){ meterFrase(b.dataset.campo, b.dataset.txt); return; }
   if (a === 'mat-quitar'){
     const fila = b.closest('.mat-fila');
     if (fila) fila.remove();
@@ -24141,6 +24487,18 @@ dlgForm.addEventListener('click', async e => {
   }
   if (a === 'cliente-rapido'){
     dlgCliente(null, async (id) => { if (id) toast('Cliente creado. Vuelve a abrir la asistencia para elegirlo.'); });
+    return;
+  }
+  /* Otra puerta igual que la anterior de esta obra (03-11-2026) */
+  if (a === 'otra-igual'){
+    const id = b.dataset.id;
+    const av = S.avisos.find(x => x.id === id);
+    const molde = moldeDePuerta(puertaDe(b.dataset.puerta));
+    if (!molde) return;
+    if (av && document.getElementById('z-trab')){
+      if (!await guardarCierre(av, false)) return;   // no se guardó: el error está en pantalla
+    } else cerrarDlg();
+    dlgPuerta(null, id, molde);
     return;
   }
   if (a === 'alta-puerta-asis'){
