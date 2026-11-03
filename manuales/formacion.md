@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.11.03-2**
+> **Versión de la aplicación que describe este manual: 2026.11.03-3**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -724,6 +724,7 @@ Hazle la cuenta a una obra de cuatro puertas iguales:
 | Diagnóstico y trabajo | Se escribe todo | Frases hechas y se matiza |
 | Material gastado | Buscarlo en el catálogo entero | Lo de la furgoneta arriba, o se lee la etiqueta |
 | Hora de entrada | De memoria al cerrar | Sellada al llegar |
+| Ruta del desplazamiento | Se elige visita a visita | Puesta una vez en la ficha del cliente o del centro, y se propone sola |
 
 Los dos efectos van juntos y los dos valen dinero. El primero es obvio: menos
 minutos tecleando. El segundo importa más: **lo que se escribe de memoria al
@@ -823,4 +824,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.03-2 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.03-3 de ARIZA SAT*

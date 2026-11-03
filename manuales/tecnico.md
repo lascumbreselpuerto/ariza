@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.03-2**
+> **Versión de la aplicación que describe este manual: 2026.11.03-3**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -145,6 +145,13 @@ Las horas se facturan completas: los 30 minutos exactos suben.
 **El desplazamiento ya no son kilómetros, es una ruta.** Eliges la zona de la
 lista y ya está: lo que cuesta cada ruta lo tiene puesto la oficina. Si la
 oficina ya la puso al darte el aviso, la ves pero no la cambias.
+
+Desde el 3 de noviembre de 2026, además, **puede salirte ya puesta**. Si ese
+cliente o ese centro tienen su ruta habitual en la ficha, el campo sale con ella
+y debajo te dice de dónde viene: «Puesta sola: Jerez, la habitual de Nave del
+polígono». No está fijada, está propuesta: si ese día has ido a otro sitio, la
+cambias. Pero si no la tocas, es la que queda guardada y la que se cobra, así
+que mírala.
 
 Solo hay un caso en el que se escriben kilómetros: cuando la visita cae **fuera
 de ruta**, que es el viaje que no entra en ninguna zona. Eliges «Fuera de ruta»
@@ -669,4 +676,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.03-2 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.03-3 de ARIZA SAT*
