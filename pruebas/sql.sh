@@ -46,7 +46,7 @@ export PATH="$PGBIN:$PATH"
 ORDEN="componentes.sql centros.sql parte-por-correo.sql obra.sql ficha.sql \
 almacen.sql presupuestos.sql presupuestos2.sql comercial.sql anexos.sql \
 tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos3.sql valoracion.sql \
-parado.sql factura.sql rutas.sql"
+parado.sql factura.sql rutas.sql ruta-cliente.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -164,6 +164,21 @@ if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/rutas-pruebas.sql" ]; then
     fallos=$((fallos+1))
     echo " FALLA el desplazamiento por ruta:"
     grep -a -m3 -E "ERROR|EXCEPTION" /tmp/rutas-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
+# La ruta habitual del cliente. Lo que se vigila aquí no es que se proponga bien,
+# que eso es pantalla, sino que NO decida lo que se cobra: una ruta que nadie ha
+# elegido en esa visita no puede acabar en la factura.
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/ruta-cliente-pruebas.sql" ]; then
+  echo ""
+  echo "── La ruta habitual del cliente ────────────────"
+  if $PSQL -f "$AQUI/sql/ruta-cliente-pruebas.sql" > /tmp/ruta-cliente-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/ruta-cliente-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA la ruta habitual del cliente:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/ruta-cliente-pruebas.log | sed 's/^/         /'
   fi
 fi
 

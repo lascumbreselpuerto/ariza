@@ -165,6 +165,7 @@ PARADO esRojo quietoDesde diasQuieto sinFechasDeMovimiento avisoDelPresu
 IMPAGO_ROJO impagados porCobrar plazoDe venceProponer dlgFacturar FORMAS_PAGO
 GRUPOS grupoDeTab tabDisponible pintarBarras indiceSecciones
 rutasValoradas rutaValorada visitasRutaSinValorar dlgTarifas dlgAviso
+rutaHabitual deDondeLaRuta clientesSinRuta rutaDelAviso dlgCentro
 documentoPropuestaFactura exportarFacturacion bajarFichero
 loQueSeQuedoParado vistaGestion
 dlgValoracion precioVentaMaterial convertirPresupuesto

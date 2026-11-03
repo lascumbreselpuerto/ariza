@@ -313,6 +313,179 @@ paso('Tarifas tiene las cinco rutas, con nombre, importe y coste',
   tarifas.campos.map(c => c.valor).join(' · '));
 paso('y explica que el nombre lo ponen ellos', /nombre que uséis vosotros/.test(tarifas.texto));
 
+/* ================================================================
+   7. La ruta habitual del cliente y del centro       03-11-2026
+   ================================================================
+   «Desde oficina se puede dejar ya marcada la ruta. En la oficina
+   saben de primera mano dónde es la instalación. De esta manera el
+   técnico no tiene que marcarlo, ya que por experiencia, todo lo
+   que se le deje hecho al técnico mejor para él por ahorro de
+   tiempo y disminución de errores.» David.
+
+   La línea roja: lo que se cobra sale de la ruta guardada EN LA
+   VISITA, igual que antes. La del cliente es una propuesta de
+   pantalla, y si no se toca nada tiene que quedar guardada en la
+   visita como cualquier otra ruta elegida a mano.
+   ================================================================ */
+bloque('7. La ruta habitual del cliente y del centro');
+
+const habitual = await T(async () => {
+  const g = window.__T;
+  const cli = g.S.clientes[0];
+  const pu = g.S.puertas[0];
+  /* El cliente va a Jerez (ruta2) */
+  await g.sb.from('clientes').update({ ruta:'ruta2' }).eq('id', cli.id);
+  await g.cargar();
+  const soloCliente = g.rutaHabitual(cli.id, pu.id);
+  const deDondeCli = g.deDondeLaRuta(cli.id, pu.id);
+  /* Y la puerta está en un centro que va a Cádiz (ruta3): manda el centro */
+  const { data: ce } = await g.sb.from('centros').insert({
+    id:'ce-ruta', cliente_id:cli.id, nombre:'Nave del polígono',
+    direccion:'Camino de la Nave 4', ruta:'ruta3' }).select().maybeSingle();
+  await g.sb.from('puertas').update({ centro_id:'ce-ruta' }).eq('id', pu.id);
+  await g.cargar();
+  const conCentro = g.rutaHabitual(cli.id, pu.id);
+  const deDondeCen = g.deDondeLaRuta(cli.id, pu.id);
+  /* Una ruta sin valorar en la ficha no se propone: se cobraría a cero */
+  await g.sb.from('centros').update({ ruta:'ruta4' }).eq('id', 'ce-ruta');
+  await g.cargar();
+  const sinValorar = g.rutaHabitual(cli.id, pu.id);
+  await g.sb.from('centros').update({ ruta:'ruta3' }).eq('id', 'ce-ruta');
+  await g.cargar();
+  /* Un cliente sin ruta y sin centro con ruta: no se propone nada */
+  const otro = g.S.clientes[1];
+  const nada = otro ? g.rutaHabitual(otro.id, null) : 'no hay otro cliente';
+  return { soloCliente, deDondeCli, conCentro, deDondeCen, sinValorar, nada,
+           centro: !!ce };
+});
+paso('la ruta de la ficha del cliente se propone', habitual.soloCliente === 'ruta2',
+  habitual.soloCliente);
+paso('y se dice de dónde sale', /habitual de /.test(habitual.deDondeCli), habitual.deDondeCli);
+paso('la del centro manda sobre la del cliente: se conduce a una dirección',
+  habitual.conCentro === 'ruta3', habitual.conCentro);
+paso('y se nombra el centro, no el cliente',
+  /Nave del polígono/.test(habitual.deDondeCen), habitual.deDondeCen);
+paso('una ruta sin importe puesto NO se propone: se cobraría a cero',
+  habitual.sinValorar === 'ruta2', habitual.sinValorar);
+paso('sin ruta en ninguna parte no se propone nada', habitual.nada === '', habitual.nada);
+
+const enAlta = await T(async () => {
+  const g = window.__T;
+  const pu = g.S.puertas[0];
+  /* dlgAviso(puertaId, avisoId, clienteId, fecha): el primero es la puerta */
+  g.dlgAviso(pu.id);
+  await new Promise(r => setTimeout(r, 900));
+  const sel = document.getElementById('a-ruta');
+  const puesta = sel ? sel.value : null;
+  const pista = (document.getElementById('a-rpista') || {}).textContent || '';
+  /* Si la oficina la cambia a mano, deja de proponerse */
+  sel.value = 'ruta1';
+  sel.dispatchEvent(new Event('change', { bubbles:true }));
+  await new Promise(r => setTimeout(r, 200));
+  const puerta = document.getElementById('a-puerta');
+  puerta.dispatchEvent(new Event('change', { bubbles:true }));
+  await new Promise(r => setTimeout(r, 300));
+  const trasTocar = sel.value;
+  g.cerrarDlg();
+  return { puesta, pista, trasTocar };
+});
+paso('al crear la asistencia la ruta sale ya puesta', enAlta.puesta === 'ruta3', enAlta.puesta);
+paso('y la pantalla dice que la ha puesto ella y de dónde',
+  /Puesta sola/.test(enAlta.pista) && /Nave del polígono/.test(enAlta.pista), enAlta.pista);
+paso('si la oficina la cambia a mano, no se la vuelve a pisar',
+  enAlta.trasTocar === 'ruta1', enAlta.trasTocar);
+
+const enElParte = await T(async () => {
+  const g = window.__T;
+  const cli = g.S.clientes[0];
+  /* Una visita SIN ruta, de las que ya existían antes de todo esto */
+  await g.sb.from('avisos').insert({ id:'rt-habitual', tipo:'averia', estado:'asignado',
+    prioridad:'normal', tecnico_id:'usuario-admin', cliente_id:cli.id,
+    puerta_id:g.S.puertas[0].id, horas:2, creado:new Date().toISOString() });
+  await g.cargar();
+  g.dlgCierre('rt-habitual');
+  await new Promise(r => setTimeout(r, 900));
+  const sel = document.getElementById('z-ruta');
+  const propuesta = sel ? sel.value : null;
+  const esSelect = sel ? sel.tagName : '';
+  const texto = document.getElementById('dlg-form').innerText;
+  /* Y lo que se guarda si el técnico no toca nada tiene que ser esa ruta */
+  document.querySelector('#dlg-form [data-act="guardar-avance"]').click();
+  await new Promise(r => setTimeout(r, 1500));
+  const av = g.S.avisos.find(x => x.id === 'rt-habitual');
+  g.cerrarDlg();
+  return { propuesta, esSelect, guardada: av.ruta,
+           dice: /Puesta sola/.test(texto),
+           deDonde: (texto.match(/Puesta sola:[^.]*/) || [''])[0] };
+});
+paso('en el parte la ruta sale propuesta, no vacía', enElParte.propuesta === 'ruta3',
+  enElParte.propuesta);
+paso('pero se PROPONE, no se fija: el técnico la puede cambiar',
+  enElParte.esSelect === 'SELECT', enElParte.esSelect);
+paso('y se le dice de dónde viene, con el nombre del sitio',
+  enElParte.dice === true && /Nave del polígono/.test(enElParte.deDonde), enElParte.deDonde);
+paso('si no la toca, queda guardada en la visita como cualquier otra',
+  enElParte.guardada === 'ruta3', enElParte.guardada);
+
+const fichas = await T(async () => {
+  const g = window.__T;
+  const cli = g.S.clientes[0];
+  g.dlgCliente(cli.id);
+  await new Promise(r => setTimeout(r, 700));
+  const selC = document.getElementById('c-ruta');
+  const ops = selC ? [...selC.options].map(o => o.value) : [];
+  const textoC = document.getElementById('dlg-form').innerText;
+  g.cerrarDlg();
+  await new Promise(r => setTimeout(r, 200));
+  g.dlgCentro('ce-ruta', cli.id);
+  await new Promise(r => setTimeout(r, 700));
+  const selCe = document.getElementById('ce-ruta');
+  const valCe = selCe ? selCe.value : null;
+  const textoCe = document.getElementById('dlg-form').innerText;
+  g.cerrarDlg();
+  return { ops, valC: selC ? selC.value : null, textoC, valCe, textoCe };
+});
+paso('la ficha del cliente tiene su ruta habitual, con la que ya tiene elegida',
+  fichas.valC === 'ruta2', fichas.valC);
+paso('solo se ofrecen las rutas valoradas, más fuera de ruta y «sin ruta fija»',
+  fichas.ops.join(',') === ',ruta1,ruta2,ruta3,km', fichas.ops.join(' · '));
+paso('y avisa de que los centros con ruta propia mandan sobre esta',
+  /esa manda/.test(fichas.textoC) && /Nave del polígono/.test(fichas.textoC));
+paso('el centro tiene la suya', fichas.valCe === 'ruta3', fichas.valCe);
+paso('y dice que manda sobre la del cliente', /Manda sobre la del cliente/.test(fichas.textoCe));
+
+const quienFalta = await T(async () => {
+  const g = window.__T;
+  const cli = g.S.clientes[0];
+  const lista1 = g.clientesSinRuta().map(x => x.cliente.id);
+  /* Se le quita la ruta al cliente: sigue teniéndola el centro, así que no
+     cuenta como cliente sin ruta */
+  await g.sb.from('clientes').update({ ruta:null }).eq('id', cli.id);
+  await g.cargar();
+  const conCentro = g.clientesSinRuta().map(x => x.cliente.id);
+  /* Y sin ruta en ninguna parte, sí */
+  await g.sb.from('centros').update({ ruta:null }).eq('id','ce-ruta');
+  await g.cargar();
+  const sinNada = g.clientesSinRuta();
+  g.S.tab = 'gestion'; g.pintar();
+  await new Promise(r => setTimeout(r, 900));
+  const texto = document.getElementById('vista').innerText;
+  return { lista1, conCentro, sinNada: sinNada.map(x => x.cliente.id),
+           visitas: (sinNada[0] || {}).visitas, texto,
+           mio: cli.id };
+});
+paso('un cliente con ruta en su ficha no sale en la lista de los que faltan',
+  !quienFalta.lista1.includes(quienFalta.mio), quienFalta.lista1.join(' · '));
+paso('tampoco si la tiene en un centro suyo',
+  !quienFalta.conCentro.includes(quienFalta.mio), quienFalta.conCentro.join(' · '));
+paso('sin ruta en ninguna parte, sale, y con sus visitas contadas',
+  quienFalta.sinNada.includes(quienFalta.mio) && quienFalta.visitas > 0,
+  quienFalta.sinNada.length+' clientes · '+quienFalta.visitas+' visitas');
+paso('y Gestión lo saca en su recuadro, diciendo para qué sirve ponerla',
+  /Clientes sin ruta habitual/.test(quienFalta.texto) &&
+  /no se vuelve a preguntar/.test(quienFalta.texto),
+  (quienFalta.texto.match(/Clientes sin ruta habitual/) || ['no sale'])[0]);
+
 console.log('\n'+ok+' bien, '+mal+' mal.');
 const graves = errores.filter(x => !/fonts\.googleapis|ERR_TUNNEL|ERR_NAME|net::ERR|provocado por la prueba/.test(x));
 if (graves.length) console.log('Errores de JavaScript:\n'+graves.join('\n'));
