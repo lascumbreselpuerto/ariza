@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.11.02-9**
+> **Versión de la aplicación que describe este manual: 2026.11.03-1**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -692,6 +692,23 @@ facturar, lo tiene todo preparado y apunta la factura emitida fuera, pero no
 pone números de factura ni genera documentos con validez fiscal. Lo que se
 imprime desde aquí lleva escrito que no es una factura.
 
+En la práctica eso son dos cosas:
+
+- La **propuesta de factura**, una hoja por visita con las líneas (mano de obra
+  con sus horas, desplazamiento con su ruta, y cada material con su cantidad y
+  su precio), la base, el IVA y el total, más los datos fiscales del cliente.
+  Es lo que se tiene delante para teclear la factura en un minuto. No lleva
+  número ni serie, y lo dice en grande: eso es justo lo que la separa de una
+  factura.
+- El **fichero para el programa de facturación**, con una fila por línea y la
+  referencia de la visita delante, para que las líneas de una misma visita se
+  agrupen solas en una factura. En CSV, que lo abre cualquier programa y
+  también Excel.
+
+En los dos, el material sin precio **se queda fuera de la cuenta y se avisa**.
+Facturar a cero lo que no se sabe cuánto vale es peor que no facturarlo: lo
+primero no se nota nunca; lo segundo salta a la vista.
+
 ---
 
 ## 9. Cómo se registra todo esto en ARIZA SAT
@@ -776,4 +793,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.02-9 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.03-1 de ARIZA SAT*
