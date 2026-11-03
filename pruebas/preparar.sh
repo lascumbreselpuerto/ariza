@@ -173,6 +173,10 @@ dlgEntregaObra leerEntregaObra guardarEntregaObra documentoEntrega
 panelGuionEntrega GRUPOS_ENTREGA tarjetaTrabajo resumenHorasObra guardarCierre esObraLarga dlgObraSinTerminar indiceManual panelIndiceManual
 sumaDias iso deIso
 vistaManual cargarManual mdAHtml MANUALES
+FRASES_DIAG FRASES_TRAB frasesDe meterFrase hhmm
+NO_SE_COPIA moldeDePuerta
+LECTOR puedeLeerCamara pararLector articuloDeEtiqueta meterMaterialLeido
+usarEtiqueta arrancarLector
 guardarBorradorPuerta aplicarBorradorPuerta CAMPOS_PUERTA dlgPuerta dlgCliente
 libroExpediente informeSituacion propuestaActuaciones actaEntrega vidaPuerta
 hojaDeCampo libroMantenimiento etiquetaCE documentoDTE documentoCPF hojaParte

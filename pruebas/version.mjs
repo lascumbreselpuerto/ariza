@@ -237,7 +237,14 @@ const esperado = ['Técnicos con acceso', 'Dar de alta a alguien del equipo',
   'Protección exigida según accionamiento y usuario', 'Límites de fuerza',
   'Límites de obra', 'Fechas que deciden', 'Copia de seguridad',
   'Control de producción en fábrica', 'Elementos de seguridad',
-  'Tipos de documento', 'Tipos de puerta', 'Guiones de revisión'];
+  'Tipos de documento', 'Tipos de puerta',
+  /* Y el 03-11-2026, delante de los guiones, las dos listas de frases hechas que
+     el técnico tiene debajo del diagnóstico y del trabajo realizado en el parte.
+     Van ahí porque son listas que mantiene la oficina, como los tipos de puerta
+     y los elementos de seguridad, y no al lado de los guiones por casualidad:
+     las tres cosas son lo que el técnico se encuentra escrito al abrir el parte. */
+  'Frases de diagnóstico', 'Frases de trabajo realizado',
+  'Guiones de revisión'];
 paso('los paneles de Equipo salen en el orden documentado',
   JSON.stringify(enEquipo.titulos) === JSON.stringify(esperado),
   enEquipo.titulos.join(' | '));
