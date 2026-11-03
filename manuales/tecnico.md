@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.03-1**
+> **Versión de la aplicación que describe este manual: 2026.11.03-2**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -177,6 +177,115 @@ Si no marcas ninguna, la visita queda **pendiente de facturar** y la oficina la 
 Firma en la pantalla y pones el **Nombre de quien firma**. Si no puede firmar, hay que indicar el motivo.
 
 > **La firma no arregla nada.** Un punto marcado Mal sigue estando Mal después de firmar. La firma dice que el cliente ha visto lo que has hecho, no que la puerta esté conforme.
+
+---
+
+## 3 bis. Cinco atajos para teclear menos (3 de noviembre de 2026)
+
+Rellenar el parte con el móvil, de pie, con las manos sucias y la furgoneta
+abierta es lo que de verdad cuesta de este trabajo. Estos cinco atajos están
+puestos para eso. Ninguno rellena nada por su cuenta: todos dejan el dato a la
+vista para que lo repases, porque un dato puesto solo y sin mirar es peor que un
+hueco en blanco.
+
+### 1. Frases hechas en el diagnóstico y en el trabajo
+
+Debajo de **Diagnóstico** y de **Trabajo realizado** hay una fila de botones con
+las frases de siempre: «Fotocélula desalineada», «Alineada y comprobada la
+fotocélula» y así. Un toque y la frase se escribe en el campo. Si das a dos, se
+ponen las dos separadas por un punto. Si das dos veces a la misma, no se repite:
+te avisa de que ya está puesta.
+
+Después puedes seguir escribiendo a mano lo que haga falta, que es un campo
+normal. Las frases son un arranque, no el parte entero: si la avería tiene algo
+particular, se escribe.
+
+Las listas las mantiene la oficina en **Gestión y equipo**, igual que la de tipos
+de puerta o la de elementos de seguridad. Si echas de menos una frase que dices
+cuarenta veces al año, pídela y se añade para todos.
+
+### 2. Lo que llevas en la furgoneta sale primero
+
+En **Materiales**, el desplegable ya no es el catálogo entero por orden
+alfabético. Está partido en dos:
+
+- **En tu furgoneta:** lo que el almacén dice que llevas encima ahora mismo.
+- **Resto del almacén:** todo lo demás.
+
+Casi siempre lo que acabas de poner está en el primer grupo, a un dedo de
+distancia. Si lo que has gastado no te aparece arriba, es que el almacén cree que
+no lo llevas: puedes elegirlo del resto igualmente, pero cuéntalo, porque
+significa que un traspaso no se apuntó.
+
+### 3. Añadir material leyendo su etiqueta
+
+Botón **Leer la etiqueta**, dentro del propio apartado de Materiales. Se abre ahí
+mismo, sin salir del parte.
+
+1. Si tu teléfono sabe leer códigos desde la aplicación, se abre la cámara:
+   acercas el QR de la caja y el material entra como una línea más.
+2. Si no, o si el QR está roto, sucio o no hay luz, escribes el **código que va
+   impreso debajo del QR**: `MAT-0012`, o solo `12`. Intro, y listo.
+
+Escanea tres cajas de lo mismo y quedan **tres unidades en una línea**, no tres
+líneas de una. La cantidad siempre se puede corregir a mano.
+
+> **Por qué este botón existe.** La etiqueta del material se podía escanear desde
+> antes, pero con la cámara del teléfono: eso abre la aplicación otra vez por la
+> dirección del QR y lo que tuvieras a medio rellenar en el parte se quedaba por
+> el camino. Con este botón no se sale del parte en ningún momento.
+
+Y un aviso: si al leer una etiqueta te dice que **no cuadra con el material**,
+no insistas ni lo metas a mano. Significa que ese QR no es el de ese código, y
+eso lo tiene que mirar la oficina.
+
+### 4. «He llegado»
+
+En la tarjeta de **Mi trabajo**, mientras no haya hora apuntada, tienes el botón
+**He llegado**. Dale al llegar: sella la hora de entrada en ese momento y la
+visita pasa a **en curso**.
+
+Después, al cerrar el parte, la hora de entrada ya viene puesta y el campo te dice
+que la selló el botón. Si no cuadra, la cambias: manda lo que pasó de verdad.
+
+El botón desaparece en cuanto hay hora. No es para estropear lo que ya está bien.
+
+> La hora de entrada se escribía al cerrar el parte, de memoria, a las ocho de la
+> tarde. Eso no es un dato: es un recuerdo. Y de ahí salen las horas que se
+> facturan.
+
+### 5. «Otra igual que…» al dar de alta puertas
+
+En una obra con cuatro seccionales iguales, das de alta la primera y en el
+apartado **Puertas de esta obra** aparece el botón **Otra igual que AR-0012** (con
+el código de la última que diste de alta). Abre un alta nueva con la ficha de esa
+puerta ya copiada.
+
+**Lo que se copia:** cliente, centro, dirección, tipo, uso, marca, modelo, año,
+quién la instaló, ancho, alto, dintel, arrastre del motor, marca y modelo del
+motor y del cuadro, modo de accionamiento, tipo de usuario y los elementos de
+seguridad instalados.
+
+**Lo que NO se copia, y hay que poner puerta por puerta:**
+
+| Dato | Por qué no se copia |
+|---|---|
+| Etiqueta / código | Dos puertas con la misma etiqueta es peor que ninguna |
+| Matrícula o placa | Es la placa de ESA puerta, con su número de serie |
+| Ubicación en el edificio | Dos puertas no están en el mismo sitio |
+| Observaciones | Hablan de la otra puerta |
+| Últimas y próximas revisiones | La nueva no se ha revisado |
+| Peso de la hoja | Se pesó una vez, en la otra |
+| Vueltas de los muelles | Se cuentan en el eje de esta |
+
+La pantalla del alta te dice, arriba, **de qué puerta se ha copiado**, la lista de
+lo copiado y lo que no se ha copiado. Repásalo mirando la puerta que tienes
+delante: medidas incluidas, que entre la primera y la cuarta hay huecos de
+distinto ancho más veces de las que parece. Lo que no cuadre, lo cambias.
+
+Si estabas rellenando el parte cuando le das al botón, **el parte se guarda antes
+de salir**: el diagnóstico, el trabajo, los materiales, las horas y el guión se
+quedan como estaban.
 
 ---
 
@@ -560,4 +669,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.03-1 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.03-2 de ARIZA SAT*

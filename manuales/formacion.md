@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.11.03-1**
+> **Versión de la aplicación que describe este manual: 2026.11.03-2**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -460,14 +460,14 @@ Los que más veces se ven, por orden de gravedad:
 
 ---
 
-## 8 bis. Cinco maneras de perder dinero sin enterarse
+## 8 bis. Seis maneras de perder dinero sin enterarse
 
 Esto no es técnica de puertas, es oficio de empresa, y se pone aquí porque las
 dos cosas pasan en el mismo sitio donde se documenta el trabajo.
 
-Las tres primeras son cuentas que salen mal. La cuarta es distinta y es la peor
-de las cuatro, porque no sale mal ninguna cuenta: simplemente no se hace el
-trabajo.
+Las tres primeras son cuentas que salen mal. Las tres últimas son distintas y son
+peores, porque no sale mal ninguna cuenta: simplemente hay trabajo que no se hace,
+o que se hace dos veces.
 
 ### El precio pactado y el precio calculado no son el mismo número
 
@@ -709,6 +709,36 @@ En los dos, el material sin precio **se queda fuera de la cuenta y se avisa**.
 Facturar a cero lo que no se sabe cuánto vale es peor que no facturarlo: lo
 primero no se nota nunca; lo segundo salta a la vista.
 
+### El tiempo administrativo en obra, que nadie apunta y se paga igual
+
+La sexta es la más silenciosa de todas: el tiempo que un técnico pasa teclando en
+lugar de trabajando. No aparece en ninguna cuenta porque no se factura ni se
+descuenta; se paga en horas de técnico que se van en el móvil, y en datos que
+acaban peor escritos por la prisa.
+
+Hazle la cuenta a una obra de cuatro puertas iguales:
+
+| Lo que se teclea | A mano | Con el atajo |
+|---|---|---|
+| Ficha de las cuatro puertas | 4 fichas enteras | 1 ficha y 3 copias, cambiando etiqueta y medidas |
+| Diagnóstico y trabajo | Se escribe todo | Frases hechas y se matiza |
+| Material gastado | Buscarlo en el catálogo entero | Lo de la furgoneta arriba, o se lee la etiqueta |
+| Hora de entrada | De memoria al cerrar | Sellada al llegar |
+
+Los dos efectos van juntos y los dos valen dinero. El primero es obvio: menos
+minutos tecleando. El segundo importa más: **lo que se escribe de memoria al
+final del día se escribe mal**. La hora de entrada recordada a las ocho de la
+tarde es la que se factura; el material que no se encuentra en el desplegable se
+escribe a mano y llega a la oficina sin precio, y eso ya es la cuarta manera de
+perder dinero de esta misma lista.
+
+La trampa, y por eso se dice aquí: **ahorrar pasos no es dar por hecho lo que
+nadie ha mirado**. Una ficha copiada que arrastra la matrícula de otra puerta, o
+las vueltas de muelle de otro eje, no ahorra tiempo: crea un dato falso en un
+papel que luego se firma. De ahí la regla con la que están hechos los atajos: se
+copia lo que es del modelo, no se copia nunca lo que identifica o lo que se mide
+en una puerta concreta, y lo copiado se enseña en pantalla para que se repase.
+
 ---
 
 ## 9. Cómo se registra todo esto en ARIZA SAT
@@ -793,4 +823,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.03-1 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.03-2 de ARIZA SAT*
