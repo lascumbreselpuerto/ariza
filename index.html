@@ -692,7 +692,19 @@ const fechaHora = s => { if(!s) return '—'; const d=new Date(s); return d.toLo
    lee como medianoche UTC: una visita de hoy salía marcada como pasada de fecha. */
 const dias = s => {
   if (!s) return 0;
-  const [a, m, d] = String(s).slice(0,10).split('-').map(Number);
+  let txt = String(s);
+  /* Segunda parte del mismo problema (03-11-2026). Lo de arriba arregla las
+     FECHAS sueltas. Pero a esta función también le llegan MARCAS DE TIEMPO, y
+     esas vienen en UTC: a las 00:20 de aquí son las 23:20 del día anterior
+     allí, así que cortar el texto daba el día de ayer y todos los contadores
+     de días sumaban uno de más durante la primera hora del día.
+     Se convierte a la fecha local antes de contar. */
+  if (txt.indexOf('T') > 0){
+    const f = new Date(txt);
+    if (!isNaN(f)) txt = f.getFullYear()+'-'+String(f.getMonth()+1).padStart(2,'0')+
+                         '-'+String(f.getDate()).padStart(2,'0');
+  }
+  const [a, m, d] = txt.slice(0,10).split('-').map(Number);
   if (!a || !m || !d) return 0;
   const cuando = new Date(a, m-1, d);
   const hoyCero = new Date(); hoyCero.setHours(0,0,0,0);
@@ -1522,7 +1534,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.02-9';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.03-1';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -3292,7 +3304,10 @@ function vistaGestion(){
 
   // --- Pendiente de facturar ---
   h += '<div class="panel"><div class="panel-h"><h3>Pendiente de facturar</h3>'+
-       '<span class="mini">'+pendientes.length+' · '+eur(totalPendiente)+'</span></div>';
+       '<span class="mini">'+pendientes.length+' · '+eur(totalPendiente)+'</span>'+
+       (pendientes.length
+         ? '<button class="btn sm" data-act="exportar-facturar">Bajar en fichero</button>' : '')+
+       '</div>';
   if (!pendientes.length) h += '<p class="muted" style="margin:0">Nada pendiente. Todo lo cerrado está facturado.</p>';
   else {
     h += '<p class="mini" style="margin:0 0 10px">Visitas cerradas <b>sin factura</b>. Márcalas cuando '+
@@ -3350,6 +3365,10 @@ function vistaGestion(){
               '<button class="btn sm" data-act="marcar-facturado" data-id="'+a.id+'">Marcar facturada</button>'
             : '<button class="btn sm pri" data-act="marcar-facturado" data-id="'+a.id+'">Marcar facturada</button>')+
           '<button class="btn sm plana" data-act="parte" data-id="'+a.id+'">Parte</button>'+
+          /* La hoja con la que se teclea la factura en el programa de
+             facturación: líneas, base, IVA y total. (02-11-2026) */
+          '<button class="btn sm plana" data-act="propuesta-factura" data-id="'+a.id+
+            '">Propuesta de factura</button>'+
           '<span class="sp"></span>'+
           '<button class="btn sm plana" data-act="revalorar" data-id="'+a.id+'">Volver a calcular</button>'+
         '</div></div>';
@@ -20570,6 +20589,182 @@ function dlgMatSinPrecio(avisoId){
   });
 }
 
+/* ================================================================
+   LA PROPUESTA DE FACTURA                            02-11-2026
+
+   Lo que esta aplicación puede hacer sin convertirse en un programa
+   de facturación: dejarlo todo preparado. Las líneas, la base, el
+   IVA y el total, con los datos fiscales del cliente, para teclear la
+   factura en un minuto en el programa que sea.
+
+   NO LLEVA NUMERACIÓN, y no es un olvido: es la diferencia entre un
+   documento de trabajo y una factura. Un número de serie es lo que
+   convierte un papel en factura a efectos del reglamento, así que
+   este papel no lo tiene, y lo dice en grande.
+
+   Se identifica por el parte del que sale: cliente, fecha y puerta.
+   ================================================================ */
+async function documentoPropuestaFactura(avisoId){
+  const a = S.avisos.find(x => x.id === avisoId);
+  const v = valoracionDe(avisoId);
+  if (!a || !v) return toast('Esa visita todavía no está valorada.');
+  const em = datosEmpresa();
+  const pu = a.puerta_id ? puertaDe(a.puerta_id) : null;
+  const cli = a.cliente_id ? clienteDe(a.cliente_id)
+            : (pu && pu.cliente_id ? clienteDe(pu.cliente_id) : null);
+  const { data: mats } = await sb.from('materiales').select('*')
+    .eq('aviso_id', a.id).order('creado');
+  const iva = +((S.tarifas || {}).iva) || 0;
+  const base = +v.imp_total || 0;
+  const impIva = Math.round(base * iva / 100 * 100) / 100;
+  const total = Math.round((base + impIva) * 100) / 100;
+  const w = window.open('', '_blank');
+  if (!w){ toast('El navegador ha bloqueado la ventana.'); return; }
+
+  const linea = (concepto, detalle, importe) =>
+    '<tr><td><b>'+esc(concepto)+'</b>'+(detalle ? '<br><span class="g">'+esc(detalle)+'</span>' : '')+
+    '</td><td class="n">'+eur(importe)+'</td></tr>';
+  /* El desplazamiento, con el nombre de su ruta: si en la factura pone solo un
+     importe, dentro de un año nadie sabe de dónde salió. */
+  const rutaTexto = (() => {
+    if (S.sinRutas) return a.desplazamiento != null ? a.desplazamiento+' km' : '';
+    const r = (a.ruta || '').trim() || 'ruta1';
+    return r === 'km'
+      ? 'Fuera de ruta'+(a.desplazamiento != null ? ', '+a.desplazamiento+' km ida y vuelta' : '')
+      : nombreRuta(r);
+  })();
+  const conPrecio = (mats || []).filter(m => m.precio != null && +m.precio > 0);
+  const sinPrecio = (mats || []).filter(m => m.precio == null || !(+m.precio > 0));
+
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
+    '<title>Propuesta de factura · '+esc(nombreCliente(a))+'</title><style>'+
+    '@page{size:A4;margin:16mm 14mm}*{box-sizing:border-box}'+
+    'body{font:11px/1.55 -apple-system,Segoe UI,Roboto,sans-serif;color:#1C1817;margin:0;padding:14mm}'+
+    CSS_CABECERA+
+    'h2{font-size:11.5px;margin:16px 0 5px;color:#C98F08;text-transform:uppercase;'+
+      'letter-spacing:.04em;border-bottom:1px solid #d8d4d0;padding-bottom:3px}'+
+    '.dos{display:flex;gap:8mm;margin:4px 0 10px}.dos>div{flex:1}'+
+    '.g{color:#6B6560;font-size:10px}'+
+    'table{width:100%;border-collapse:collapse;margin-top:4px}'+
+    'th,td{border-bottom:1px solid #ece9e6;padding:6px 5px;text-align:left;vertical-align:top}'+
+    'thead th{font-size:8.5px;text-transform:uppercase;color:#6B6560;border-bottom:1px solid #1C1817}'+
+    '.n{text-align:right;white-space:nowrap;width:90px}'+
+    '.tot td{border:0;padding:3px 5px}.tot .n{font-variant-numeric:tabular-nums}'+
+    '.tot .fin td{border-top:2px solid #1C1817;font-weight:700;font-size:13px;padding-top:6px}'+
+    '.sello{border:2px solid #B3261E;color:#B3261E;border-radius:6px;padding:8px 10px;'+
+      'margin:12px 0 0;font-weight:700;text-align:center;letter-spacing:.02em}'+
+    '.sello span{display:block;font-weight:400;font-size:10px;letter-spacing:0;margin-top:3px;color:#6B6560}'+
+    '.aviso{background:#FDF3E3;border-left:3px solid #E3AC4F;padding:7px 9px;margin:10px 0 0;font-size:10px}'+
+    '</style></head><body>'+
+    cabeceraDocumento(em, 'Propuesta de factura',
+      'Documento interno de trabajo. No tiene validez fiscal.')+
+
+    '<div class="dos"><div><h2>Cliente</h2>'+
+      '<b>'+esc((cli && cli.nombre) || nombreCliente(a))+'</b><br>'+
+      (cli && cli.nif ? 'NIF/CIF: '+esc(cli.nif)+'<br>' : '<span class="g">Sin NIF en la ficha</span><br>')+
+      esc([cli && cli.direccion, cli && cli.poblacion].filter(Boolean).join(', '))+
+    '</div><div><h2>De dónde sale</h2>'+
+      '<span class="g">Visita:</span> '+esc(tipoAsis(a.tipo))+'<br>'+
+      '<span class="g">Fecha:</span> '+esc(fechaCorta(a.cerrado))+'<br>'+
+      (pu ? '<span class="g">Puerta:</span> '+esc([pu.codigo, pu.tipo].filter(Boolean).join(' · '))+'<br>' : '')+
+      '<span class="g">Dirección:</span> '+esc(dondeAsistencia(a))+
+    '</div></div>'+
+
+    '<h2>Conceptos</h2>'+
+    '<table><thead><tr><th>Concepto</th><th class="n">Importe</th></tr></thead><tbody>'+
+    (+v.imp_mano_obra > 0
+      ? linea('Mano de obra',
+          (a.horas != null ? a.horas+' h' : '')+
+          ((a.num_tecnicos || 1) > 1 ? ' × '+a.num_tecnicos+' técnicos' : '')+
+          (a.tipo === 'urgencia' ? ' · urgencia fuera de horario' : ''),
+          v.imp_mano_obra)
+      : '')+
+    (+v.imp_desplazamiento > 0 ? linea('Desplazamiento', rutaTexto, v.imp_desplazamiento) : '')+
+    conPrecio.map(m => linea(m.descripcion || 'Material',
+      (+m.cantidad || 1)+' '+(m.unidad || 'ud')+' × '+eur(m.precio),
+      Math.round((+m.precio) * (+m.cantidad || 1) * 100) / 100)).join('')+
+    '</tbody></table>'+
+
+    '<table class="tot" style="margin-top:8px;width:50%;margin-left:auto">'+
+    '<tr><td>Base imponible</td><td class="n">'+eur(base)+'</td></tr>'+
+    '<tr><td>IVA '+iva+' %</td><td class="n">'+eur(impIva)+'</td></tr>'+
+    '<tr class="fin"><td>Total</td><td class="n">'+eur(total)+'</td></tr>'+
+    '</table>'+
+
+    (sinPrecio.length
+      ? '<div class="aviso"><b>Ojo:</b> '+sinPrecio.length+' material'+(sinPrecio.length===1?'':'es')+
+        ' de esta visita no tiene'+(sinPrecio.length===1?'':'n')+' precio y no está'+
+        (sinPrecio.length===1?'':'n')+' en esta cuenta: '+
+        esc(sinPrecio.map(m => m.descripcion).join(', '))+
+        '. Si hay que cobrarlo, ponle precio antes de facturar.</div>'
+      : '')+
+    (a.cobrado
+      ? '<div class="aviso"><b>Ya cobrado en obra:</b> '+eur(a.cobro_importe)+
+        (a.cobro_forma ? ' en '+esc(a.cobro_forma) : '')+'. Hay que facturarlo igual, '+
+        'pero no volver a cobrarlo.</div>'
+      : '')+
+    (v.factura_ref
+      ? '<div class="aviso">Esta visita ya está apuntada como facturada con la factura '+
+        '<b>'+esc(v.factura_ref)+'</b>'+(v.facturado_el ? ' de '+esc(fechaCorta(v.facturado_el)) : '')+'.</div>'
+      : '')+
+
+    '<div class="sello">ESTO NO ES UNA FACTURA'+
+      '<span>No lleva número ni serie, y no sirve para justificar un gasto ni para deducir el IVA. '+
+      'Es el detalle de lo que hay que facturar, para emitir la factura con el programa de facturación.</span>'+
+    '</div>'+
+    '<p class="g" style="margin-top:10px">'+esc(em.razon_social || '')+
+      (em.nif ? ' · NIF '+esc(em.nif) : '')+' · generado el '+esc(fechaCorta(hoy()))+'</p>'+
+    '</body></html>');
+  w.document.close();
+  setTimeout(() => w.print(), 400);
+}
+
+/* ---- Lo que hay que facturar, en un fichero (02-11-2026) ----
+   Una fila por LÍNEA de factura, con la referencia de la visita delante: así
+   las líneas de una misma visita se agrupan solas en el programa que sea. Va
+   en CSV con punto y coma, que es lo que abre Excel en español sin pelearse,
+   y con los números en coma decimal por lo mismo. */
+async function exportarFacturacion(avisos){
+  if (!avisos || !avisos.length) return toast('No hay nada que exportar.');
+  const ids = avisos.map(a => a.id);
+  const { data: mats } = await sb.from('materiales').select('*').in('aviso_id', ids);
+  const iva = +((S.tarifas || {}).iva) || 0;
+  const num = n => String(Math.round((+n || 0) * 100) / 100).replace('.', ',');
+  const txt = x => { const s = String(x == null ? '' : x).replace(/"/g, '""');
+                     return /[;"\n]/.test(s) ? '"'+s+'"' : s; };
+  const filas = [['referencia','fecha','cliente','nif','direccion','poblacion',
+                  'concepto','cantidad','precio','importe','iva_pct','parte','puerta']];
+  avisos.forEach(a => {
+    const v = valoracionDe(a.id);
+    if (!v) return;
+    const pu = a.puerta_id ? puertaDe(a.puerta_id) : null;
+    const cli = a.cliente_id ? clienteDe(a.cliente_id)
+              : (pu && pu.cliente_id ? clienteDe(pu.cliente_id) : null);
+    const cab = ['V-'+String(a.id).slice(0, 8), String(a.cerrado || '').slice(0,10),
+                 (cli && cli.nombre) || nombreCliente(a), (cli && cli.nif) || '',
+                 (cli && cli.direccion) || '', (cli && cli.poblacion) || ''];
+    const pon = (concepto, cant, precio, importe) =>
+      filas.push(cab.concat([concepto, num(cant), num(precio), num(importe), num(iva),
+        tipoAsis(a.tipo), (pu && pu.codigo) || '']));
+    if (+v.imp_mano_obra > 0)
+      pon('Mano de obra'+(a.horas != null ? ' ('+a.horas+' h)' : ''), 1, v.imp_mano_obra, v.imp_mano_obra);
+    if (+v.imp_desplazamiento > 0){
+      const r = (a.ruta || '').trim() || 'ruta1';
+      pon('Desplazamiento'+(S.sinRutas || r === 'km' ? '' : ' · '+nombreRuta(r)),
+          1, v.imp_desplazamiento, v.imp_desplazamiento);
+    }
+    (mats || []).filter(m => m.aviso_id === a.id && m.precio != null && +m.precio > 0)
+      .forEach(m => pon(m.descripcion || 'Material', +m.cantidad || 1, m.precio,
+        Math.round((+m.precio) * (+m.cantidad || 1) * 100) / 100));
+  });
+  if (filas.length < 2) return toast('No hay líneas que exportar: están todas a cero.');
+  /* El BOM del principio es lo que hace que Excel abra las tildes bien. */
+  const csv = '﻿' + filas.map(f => f.map(txt).join(';')).join('\r\n');
+  bajarFichero(new Blob([csv], { type:'text/csv;charset=utf-8' }),
+    'facturar-'+hoy()+'.csv');
+  toast((filas.length-1)+' líneas de '+avisos.length+' visita'+(avisos.length===1?'':'s')+'.');
+}
+
 function dlgValoracion(avisoId){
   const a = S.avisos.find(x => x.id === avisoId);
   const v = valoracionDe(avisoId);
@@ -20667,8 +20862,12 @@ function dlgValoracion(avisoId){
   }
   if (a.cobrado) h += '<p class="mini" style="margin:0">Cobrada en obra: '+eur(a.cobro_importe)+' · '+esc(a.cobro_forma||'')+'</p>';
   if (v.facturado) h += '<p class="mini" style="margin:0">Facturada el '+esc(fechaCorta(v.facturado_el))+(v.factura_ref?(' · '+esc(v.factura_ref)):'')+'</p>';
-  h += '<p class="err"></p><div class="pie">'+
+  h += '<p class="err"></p><div class="pie" style="flex-wrap:wrap;gap:6px">'+
     '<button type="button" class="btn plana" data-act="revalorar" data-id="'+a.id+'">Volver a calcular</button>'+
+    /* La hoja para teclear la factura en el programa de facturación. No lleva
+       numeración, y lo dice en grande: no es una factura. (02-11-2026) */
+    '<button type="button" class="btn sm" data-act="propuesta-factura" data-id="'+a.id+
+      '">Propuesta de factura</button>'+
     '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cerrar</button>'+
     (v.facturado ? '' : '<button type="button" class="btn pri" data-act="marcar-facturado" data-id="'+a.id+'">Marcar facturada</button>')+
     '</div>';
@@ -22827,6 +23026,13 @@ raiz.addEventListener('click', async e => {
   }
   else if (a === 'cerrar-asistencia') dlgCierre(b.dataset.id);
   else if (a === 'parte') hojaParte(b.dataset.id);
+  else if (a === 'propuesta-factura') documentoPropuestaFactura(b.dataset.id);
+  else if (a === 'exportar-facturar'){
+    /* Lo mismo que se está viendo en la lista: lo cerrado sin facturar */
+    const cerradas = S.avisos.filter(x => x.cerrado && !x.anulada && !x.sin_cargo);
+    exportarFacturacion(cerradas.filter(x => { const v = valoracionDe(x.id);
+      return v && !v.facturado; }));
+  }
   else if (a === 'asignar') dlgAsignar(b.dataset.id);
   else if (a === 'aviso-anular') dlgAnular(b.dataset.id);
   else if (a === 'exp-nuevo') dlgExpedienteNuevo(b.dataset.id);
@@ -24324,6 +24530,7 @@ dlgForm.addEventListener('click', async e => {
   }
   /* Desde la valoración, ir a enlazar el material que entró a cero euros */
   if (a === 'mat-sin-precio'){ cerrarDlg(); dlgMatSinPrecio(b.dataset.id); return; }
+  if (a === 'propuesta-factura'){ documentoPropuestaFactura(b.dataset.id); return; }
   if (a === 'revalorar'){
     try { await sb.rpc('valorar_aviso', { p_aviso: b.dataset.id }); cerrarDlg(); await cargar(); toast('Visita recalculada.'); }
     catch(err){ fallo(err); }
