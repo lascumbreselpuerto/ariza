@@ -768,7 +768,7 @@ const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etique
             cliArchivados:false, centros:[], sinCentros:false, versionNueva:null, versionAvisada:null,
             manual:null, manuales:null, sinObra:false, sinModo:false, sinFicha3:false,
             sinPresuAviso:false, matSinPrecio:null, fotosCuenta:{}, sinFactura:false,
-            sinRutas:false,
+            sinRutas:false, sinRutaCliente:false,
             sinAlmacen:false, ubicaciones:[], existencias:[], movimientos:[], previstos:[],
             buscaMat:'', matFamilia:'', matProveedor:'', matFiltro:'', fichaMat:null,
             sinPresupuestos:false, presupuestos:[], presuLineas:[], articulos:[], textosPresu:[], sinTextos:false,
@@ -1410,6 +1410,11 @@ async function cargar(){
      pidiendo kilómetros, como antes, y no se manda ninguna ruta al guardar. */
   const rt = await sb.from('avisos').select('ruta').limit(1);
   S.sinRutas = !!rt.error;
+  /* La ruta habitual del cliente y de cada centro: servidor/ruta-cliente.sql.
+     Sin esas columnas la ruta se sigue eligiendo visita a visita, como hasta el
+     03-11-2026, y la ficha del cliente no enseña el campo. */
+  const rc = await sb.from('clientes').select('ruta').limit(1);
+  S.sinRutaCliente = !!rc.error;
   /* ---- El almacén ----
      Las existencias no se guardan en ninguna columna: se leen de la vista, que
      las suma de los movimientos. Si falta el SQL del almacén, la aplicación
@@ -1573,7 +1578,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.03-2';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.03-3';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -3456,6 +3461,37 @@ function vistaGestion(){
     }
   }
 
+  /* ---- Clientes sin ruta habitual (03-11-2026) ----
+     No es dinero perdido: es trabajo que se le sigue dejando al técnico. Cada
+     cliente de esta lista obliga a elegir la ruta visita a visita, y una ruta
+     elegida con prisa a las ocho de la tarde es la que se factura. */
+  if (!S.sinRutas && !S.sinRutaCliente){
+    const csr = clientesSinRuta();
+    if (csr.length){
+      h += '<div class="panel"><div class="panel-h"><h3>Clientes sin ruta habitual</h3>'+
+        '<span class="mini">'+csr.length+'</span></div>'+
+        '<p class="mini" style="margin:0 0 10px">Estos clientes tienen visitas y no tienen ruta puesta '+
+        'ni en su ficha ni en ningún centro suyo, así que el técnico la elige a mano cada vez. '+
+        'Ponla una vez y no se vuelve a preguntar: sale propuesta al crear la visita y al cerrar el '+
+        'parte, y se puede cambiar. Empieza por los de arriba, que son los que más visitas llevan.</p>'+
+        '<div class="lista-simple">';
+      csr.slice(0, 25).forEach(x => {
+        h += '<div class="item-plano">'+
+          '<button class="item sp" data-act="cliente-editar" data-id="'+x.cliente.id+'">'+
+            '<span><span class="tit">'+esc(x.cliente.nombre || 'Sin nombre')+'</span>'+
+            '<span class="sub">'+esc([x.cliente.poblacion, x.cliente.direccion].filter(Boolean).join(' · ') ||
+              'Sin dirección en la ficha')+'</span></span>'+
+            '<span style="text-align:right"><span class="tit">'+x.visitas+'</span>'+
+            '<span class="sub">visita'+(x.visitas===1?'':'s')+'</span></span>'+
+          '</button>'+
+          '<button class="btn sm pri" data-act="cliente-editar" data-id="'+x.cliente.id+'">Ponerle la ruta</button></div>';
+      });
+      h += '</div>'+
+        (csr.length > 25 ? '<p class="mini" style="margin:8px 0 0">Y '+(csr.length-25)+' más.</p>' : '')+
+        '</div>';
+    }
+  }
+
   /* ---- Facturas vencidas sin cobrar (02-11-2026) ----
      El final del circuito: emitir la factura no es cobrarla. Esto solo puede
      existir desde que se apunta el vencimiento, y por eso antes no estaba. */
@@ -4558,6 +4594,56 @@ const importeRuta = k => {
   return Number(v != null && v !== '' ? v : (k === 'ruta1' ? (t.desplazamiento_fijo || 0) : 0));
 };
 const costeRuta = k => Number((S.tarifas || {})[k + '_coste'] || 0);
+/* ---- La ruta habitual del cliente y del centro (03-11-2026) ----
+   «Desde oficina se puede dejar ya marcada la ruta. En la oficina saben de
+   primera mano dónde es la instalación.» David. La ruta no cambia de una visita
+   a otra: a la misma nave se conduce lo mismo hoy que el mes que viene. Lo que
+   cambiaba era quién se acordaba de ponerla.
+   Manda el centro sobre el cliente, porque la ruta depende de dónde se conduce
+   y no de quién paga: un cliente con nave en Jerez y tienda en Cádiz son dos
+   rutas distintas.
+   Lo que sale de aquí es una PROPUESTA de pantalla. Lo que se cobra sale de la
+   ruta que queda guardada en la visita, de la misma manera que antes. */
+function rutaHabitual(clienteId, puertaId){
+  if (S.sinRutas || S.sinRutaCliente) return '';
+  const pu = puertaId ? puertaDe(puertaId) : null;
+  const ce = pu ? centroDePuerta(pu) : null;
+  const cli = clienteId ? clienteDe(clienteId) : null;
+  for (const v of [ce && ce.ruta, cli && cli.ruta]){
+    const k = String(v == null ? '' : v).trim();
+    /* Una ruta que la oficina dejó sin valorar no se propone: se cobraría a
+       cero y nadie lo vería. */
+    if (k && rutaValorada(k)) return k;
+  }
+  return '';
+}
+/* De dónde sale la ruta propuesta, dicho con nombres, para que quien la vea
+   sepa qué está aceptando si no la toca. */
+function deDondeLaRuta(clienteId, puertaId){
+  if (S.sinRutas || S.sinRutaCliente) return '';
+  const pu = puertaId ? puertaDe(puertaId) : null;
+  const ce = pu ? centroDePuerta(pu) : null;
+  if (ce && String(ce.ruta || '').trim() && rutaValorada(String(ce.ruta).trim()))
+    return 'la habitual de ' + (ce.nombre || 'este centro');
+  const cli = clienteId ? clienteDe(clienteId) : null;
+  if (cli && String(cli.ruta || '').trim() && rutaValorada(String(cli.ruta).trim()))
+    return 'la habitual de ' + (cli.nombre || 'este cliente');
+  return '';
+}
+/* Clientes con visitas y sin ruta habitual, ni en su ficha ni en ningún centro
+   suyo: los que siguen obligando a elegirla visita a visita. */
+function clientesSinRuta(){
+  if (S.sinRutas || S.sinRutaCliente) return [];
+  const conVisitas = new Set((S.avisos || []).filter(a => !a.anulada)
+    .map(a => a.cliente_id).filter(Boolean));
+  return (S.clientes || []).filter(c => {
+    if (!conVisitas.has(c.id)) return false;
+    if (String(c.ruta || '').trim()) return false;
+    return !(S.centros || []).some(ce => ce.cliente_id === c.id && String(ce.ruta || '').trim());
+  }).map(c => ({ cliente: c, visitas: (S.avisos || [])
+      .filter(a => !a.anulada && a.cliente_id === c.id).length }))
+    .sort((a, b) => b.visitas - a.visitas);
+}
 /* ---- Lo que se cobra por kilómetros (corregido el 02-11-2026) ----
    Esto y la fórmula del servidor decían cosas distintas para el mismo viaje:
    aquí se tecleaba la ida y se doblaba, sin importe fijo; allí se cobraba el
@@ -17688,7 +17774,11 @@ dlgForm.addEventListener('change', e => {
   /* Asistencia: al elegir puerta se pone su cliente a la vista, ahora mismo.
      Antes solo se deducía al guardar, de modo que en pantalla parecía que la
      asistencia iba sin cliente; y si la puerta estaba sin ficha, nada lo decía. */
-  if (t.id === 'a-puerta'){ clienteDeLaPuertaDelAviso(); return; }
+  if (t.id === 'a-puerta'){ clienteDeLaPuertaDelAviso(); rutaDelAviso(); return; }
+  /* Al cambiar el cliente a mano, la ruta propuesta cambia con él */
+  if (t.id === 'a-cliente'){ rutaDelAviso(); return; }
+  /* Si la oficina toca la ruta, deja de proponerse: manda lo que eligió */
+  if (t.id === 'a-ruta'){ t.dataset.tocado = '1'; return; }
   // Puerta: al elegir centro, su dirección baja a la puerta
   if (t.id === 'f-centro'){ centroElegido(); return; }
   /* El dintel y las vueltas de muelle aparecen o desaparecen según el tipo de
@@ -18040,6 +18130,27 @@ function estadoCliente(){
   }
 }
 /* Asistencia: el cliente sale de la puerta elegida, y se ve en pantalla */
+/* ---- La ruta que se propone al crear la asistencia (03-11-2026) ----
+   La oficina sabe dónde es la instalación mejor que quien cierra el parte a las
+   ocho de la tarde. Si el cliente o el centro tienen ruta habitual, sale ya
+   elegida y debajo se dice de dónde viene. Se puede cambiar: en cuanto se toca
+   el desplegable, deja de proponerse nada.
+   Nunca machaca una ruta ya elegida, ni la de una asistencia ya guardada. */
+function rutaDelAviso(){
+  const sel = document.getElementById('a-ruta');
+  const pista = document.getElementById('a-rpista');
+  if (!sel) return;
+  if (sel.dataset.tocado === '1') return;
+  const pid = (document.getElementById('a-puerta') || {}).value || null;
+  const cid = (document.getElementById('a-cliente') || {}).value || null;
+  const k = rutaHabitual(cid, pid);
+  /* Solo se rellena lo que está vacío: lo que ya hay lo puso una persona */
+  if (!sel.value && k) sel.value = k;
+  if (pista)
+    pista.textContent = (k && sel.value === k)
+      ? 'Puesta sola: ' + nombreRuta(k) + ', ' + deDondeLaRuta(cid, pid) + '. Cámbiala si hoy vas a otro sitio.'
+      : 'Si la pones, el técnico no la cambia.';
+}
 function clienteDeLaPuertaDelAviso(){
   const sel = document.getElementById('a-puerta'), cli = document.getElementById('a-cliente');
   const pista = document.getElementById('a-cestado');
@@ -18646,7 +18757,7 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
       rutasValoradas().map(k => '<option value="'+k+'"'+((d.ruta||'')===k?' selected':'')+'>'+
         esc(nombreRuta(k))+'</option>').join('')+
       '<option value="km"'+((d.ruta||'')==='km'?' selected':'')+'>Fuera de ruta (por kilómetros)</option>'+
-      '</select><span class="pista">Si la pones, el técnico no la cambia</span></div>')+
+      '</select><span class="pista" id="a-rpista">Si la pones, el técnico no la cambia</span></div>')+
     '</div></div>';
 
   if (a && a.anulada)
@@ -18659,7 +18770,10 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
     '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button><button type="submit" class="btn pri">Guardar</button></div>';
 
   // en un alta nueva, si ya viene puerta elegida, su cliente se pone de entrada
-  if (!a) setTimeout(clienteDeLaPuertaDelAviso, 0);
+  if (!a) setTimeout(() => { clienteDeLaPuertaDelAviso(); rutaDelAviso(); }, 0);
+  /* En una asistencia que ya existe y todavía no tiene ruta, también se propone:
+     la mayoría de las que hay ahora mismo se crearon antes de que esto existiera. */
+  else if (!String(a.ruta || '').trim()) setTimeout(rutaDelAviso, 0);
   abrirDlg(h, async () => {
     const tid = val('a-tec') || null;
     const nom = val('a-cnom'), tel = val('a-ctel'), mail = val('a-cmail');
@@ -18962,6 +19076,24 @@ function dlgCliente(id, alGuardarExtra, pre){
     '<datalist id="formas-pago">'+lista('formas_pago', FORMAS_PAGO).map(x =>
       '<option value="'+esc(x)+'">').join('')+'</datalist>'+
     '<span class="pista">Cómo paga habitualmente. No obliga a nada: es para saberlo al cobrar</span></div>')+
+    /* ---- La ruta habitual (03-11-2026) ----
+       Puesta aquí una vez, el técnico no la elige nunca más en este cliente.
+       Solo la ve la oficina, porque la ruta es lo que se cobra de
+       desplazamiento. Si el cliente tiene varias direcciones, la de cada centro
+       manda sobre esta: se pone en el centro. */
+    (S.sinRutas || S.sinRutaCliente || !esGestion() ? '' :
+    '<div class="campo"><label for="c-ruta">Ruta habitual</label><select id="c-ruta">'+
+    '<option value="">Sin ruta fija: se elige en cada visita</option>'+
+    rutasValoradas().map(k => '<option value="'+k+'"'+((d.ruta||'')===k?' selected':'')+'>'+
+      esc(nombreRuta(k))+'</option>').join('')+
+    '<option value="km"'+((d.ruta||'')==='km'?' selected':'')+'>Fuera de ruta (por kilómetros)</option>'+
+    '</select><span class="pista">Se propone sola al crear la visita y al cerrar el parte, y se '+
+    'puede cambiar. Si este cliente tiene varias direcciones, pon la ruta en cada centro: esa manda'+
+    (c ? ((centrosDe(c.id) || []).filter(x => String(x.ruta||'').trim()).length
+        ? '. Ya hay centros con su propia ruta: '+
+          esc(centrosDe(c.id).filter(x => String(x.ruta||'').trim())
+              .map(x => (x.nombre||'centro')+' → '+nombreRuta(String(x.ruta).trim())).join(' · '))
+        : '') : '')+'</span></div>')+
     '<div class="campo full"><label for="c-notas">Notas internas</label><textarea id="c-notas" rows="2" placeholder="Ej.: facturar a nombre de la comunidad, llaves en portería">'+esc(d.notas||'')+'</textarea></div>'+
     '</div>';
   /* Las personas del cliente. Solo cuando ya existe: un contacto cuelga de un
@@ -19002,6 +19134,11 @@ function dlgCliente(id, alGuardarExtra, pre){
       o.plazo_pago_dias = val('c-plazo') === '' ? null : +val('c-plazo');
       o.forma_pago = val('c-forma') || null;
     }
+    /* La ruta habitual solo se manda si la base la tiene y si el campo estaba en
+       pantalla: un técnico editando un cliente no puede borrar lo que puso la
+       oficina por el hecho de guardar un teléfono. */
+    if (!S.sinRutas && !S.sinRutaCliente && document.getElementById('c-ruta'))
+      o.ruta = val('c-ruta') || null;
     if (!o.nombre) return setErr('El cliente necesita un nombre.');
     try {
       let nuevoId = id;
@@ -19110,6 +19247,19 @@ function dlgCentro(id, clienteId, alGuardarExtra){
     '<div class="campo"><label for="ce-pob">Población</label><input id="ce-pob" type="text" maxlength="80" value="'+esc(d.poblacion||'')+'"></div>'+
     '<div class="campo"><label for="ce-cp">Código postal</label><input id="ce-cp" type="text" maxlength="10" value="'+esc(d.cp||'')+'"></div>'+
     '<div class="campo"><label for="ce-prov">Provincia</label><input id="ce-prov" type="text" maxlength="60" value="'+esc(d.provincia||'')+'"></div>'+
+    /* ---- La ruta de ESTA dirección (03-11-2026) ----
+       Aquí es donde la ruta tiene su sitio natural: se conduce a una dirección,
+       no a un cliente. Lo que se ponga aquí manda sobre la ruta del cliente. */
+    (S.sinRutas || S.sinRutaCliente || !esGestion() ? '' :
+      '<div class="campo"><label for="ce-ruta">Ruta de este sitio</label><select id="ce-ruta">'+
+      '<option value="">La del cliente'+
+        (cli && String(cli.ruta||'').trim() && rutaValorada(String(cli.ruta).trim())
+          ? ' ('+esc(nombreRuta(String(cli.ruta).trim()))+')' : ' (no tiene)')+'</option>'+
+      rutasValoradas().map(k => '<option value="'+k+'"'+((d.ruta||'')===k?' selected':'')+'>'+
+        esc(nombreRuta(k))+'</option>').join('')+
+      '<option value="km"'+((d.ruta||'')==='km'?' selected':'')+'>Fuera de ruta (por kilómetros)</option>'+
+      '</select><span class="pista">Manda sobre la del cliente. Es lo que se propone al crear una '+
+      'visita a una puerta de este centro</span></div>')+
     '</div></div>';
 
   h += '<div class="grupo"><h3>Lo que el técnico tiene que saber antes de ir</h3>'+
@@ -19158,6 +19308,10 @@ function dlgCentro(id, clienteId, alGuardarExtra){
                 contacto_nombre: val('ce-cnom')||null, contacto_telefono: val('ce-ctel')||null,
                 avisos_seguridad: val('ce-seg')||null, notas: val('ce-notas')||null,
                 actualizado: new Date().toISOString() };
+    /* Igual que en el cliente: solo si la base la tiene y el campo estaba en
+       pantalla, para que guardar un teléfono no borre la ruta. */
+    if (!S.sinRutas && !S.sinRutaCliente && document.getElementById('ce-ruta'))
+      o.ruta = val('ce-ruta') || null;
     if (!o.nombre) return setErr('El centro necesita un nombre: «Portal 3», «Nave 7», lo que uséis para llamarlo.');
     try {
       let nuevoId = id;
@@ -22049,9 +22203,17 @@ function dlgCierre(avisoId){
       /* Si la oficina puso la ruta al crear la asistencia, el técnico no la
          cambia: la eligió quien sabe lo que se le cobra a ese cliente. */
       const puesta = (a.ruta || '').trim();
+      /* ---- La ruta habitual del cliente, propuesta (03-11-2026) ----
+         Si la oficina no puso ninguna, en vez de dejarlo vacío (y acabar
+         cobrando la ruta 1 por defecto, que es lo que pasaba) se propone la
+         habitual del centro o del cliente. El técnico la ve, sabe de dónde
+         viene y la cambia si ese día ha ido a otro sitio. Se PROPONE, no se
+         fija: fijarla sigue siendo cosa de la oficina. */
+      const propuesta = puesta ? '' : rutaHabitual(a.cliente_id, a.puerta_id);
+      const elegida = puesta || propuesta;
       const fijada = !!puesta && !esGestion();
       const ops = rutasValoradas();
-      const opcion = k => '<option value="'+k+'"'+(puesta === k ? ' selected' : '')+'>'+
+      const opcion = k => '<option value="'+k+'"'+(elegida === k ? ' selected' : '')+'>'+
         esc(nombreRuta(k))+'</option>';
       return '<div class="campo"><label for="z-ruta">Desplazamiento</label>'+
         (fijada
@@ -22059,14 +22221,17 @@ function dlgCierre(avisoId){
             '<input id="z-ruta" type="hidden" value="'+esc(puesta)+'">'+
             '<span class="pista">La puso la oficina al crear el aviso</span>'
           : '<select id="z-ruta" data-act="z-ruta">'+
-            (puesta ? '' : '<option value="">Elige la ruta</option>')+
+            (elegida ? '' : '<option value="">Elige la ruta</option>')+
             ops.map(opcion).join('')+
-            '<option value="km"'+(puesta === 'km' ? ' selected' : '')+'>Fuera de ruta (por kilómetros)</option>'+
+            '<option value="km"'+(elegida === 'km' ? ' selected' : '')+'>Fuera de ruta (por kilómetros)</option>'+
             '</select>'+
             '<span class="pista">La ruta decide lo que se cobra de desplazamiento. '+
-            'Si no eliges, se cobra '+esc(nombreRuta('ruta1'))+'</span>')+
+            (propuesta
+              ? 'Puesta sola: '+esc(nombreRuta(propuesta))+', '+esc(deDondeLaRuta(a.cliente_id, a.puerta_id))+
+                '. Cámbiala si hoy has ido a otro sitio'
+              : 'Si no eliges, se cobra '+esc(nombreRuta('ruta1')))+'</span>')+
         '</div>'+
-        '<div class="campo" id="z-caja-km"'+(puesta === 'km' ? '' : ' hidden')+'>'+
+        '<div class="campo" id="z-caja-km"'+(elegida === 'km' ? '' : ' hidden')+'>'+
         '<label for="z-km">Kilómetros (ida y vuelta)</label>'+
         '<input id="z-km" type="number" step="1" min="0" value="'+esc(kv)+'">'+
         (r && r.km > 0
