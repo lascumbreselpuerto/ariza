@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.03-3**
+> **Versión de la aplicación que describe este manual: 2026.11.04-1**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -63,6 +63,28 @@ En la tarjeta de **Mi trabajo**, además del cliente y la dirección, puedes ten
 - **Falta documentar la puerta:** en instalación, puesta en servicio, adecuación a normativa y preventiva, si la puerta no está documentada la tarjeta te lo dice **antes de salir**. Llévate el flexómetro y cuenta con el tiempo. Si la obra lleva varias puertas, te dice **cuáles** están sin documentar, con su código. No te va a impedir cerrar, pero cada dato que no tomes allí es un viaje de vuelta: el apartado 7 explica qué se toma y qué se puede rematar en oficina.
 
 > Los avisos de seguridad del sitio van separados del resto a propósito. No son un dato más: son lo que te vas a encontrar al llegar.
+
+### El tipo de asistencia, con dos apellidos (4 de noviembre de 2026)
+
+Desde hoy la etiqueta de la tarjeta lleva dos cosas: el tipo y, detrás, **qué
+clase de trabajo es**. «Correctiva (avería) · Garantía» no es lo mismo que
+«Correctiva (avería) · Avería», y «Instalación · Automatismo sobre puerta
+existente» no es lo mismo que «Instalación · Puerta completa automática».
+
+Lo que te interesa de eso:
+
+- **Garantía** quiere decir que esa visita **no se le cobra al cliente**: ni
+  horas, ni desplazamiento, ni material. Tú apunta las horas de verdad igual, que
+  para eso están: lo que no se cobra sigue costando y eso se ve en la empresa.
+- **Automatismo sobre puerta existente** y **normativa y adecuación** te dicen
+  además **sobre qué tipo de puerta** vas a trabajar, aunque esa puerta todavía
+  no esté dada de alta en la aplicación. Lo pone la oficina al crear el aviso.
+- **Puesta en servicio** es solo para rematar y programar lo que no se pudo
+  terminar por causas de la obra: sin corriente definitiva, albañilería sin
+  acabar, remates del cliente. No es una instalación nueva.
+
+Si la etiqueta no cuadra con lo que te encuentras, díselo a la oficina antes de
+ponerte: el tipo decide lo que se cobra.
 
 Botones de la tarjeta:
 
@@ -700,4 +722,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.03-3 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.04-1 de ARIZA SAT*
