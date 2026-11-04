@@ -14,6 +14,22 @@ const ok = (c: unknown, e = 200) =>
 const AMARILLO = '#FCBA1D';
 const APP = 'https://arizapa.es/';
 
+/* Los subtipos, para que el aviso al grupo diga «Correctiva (avería) · Garantía»
+   y no solo «Correctiva». Desde el 04-11-2026. Si algún día se añaden más en la
+   aplicación, aquí hay que añadirlos también: esta función no lee ese catálogo. */
+const SUBTIPOS: Record<string, string> = {
+  averia: 'Avería', garantia: 'Garantía',
+  puerta_automatica: 'Puerta completa automática',
+  puerta_manual: 'Puerta completa manual',
+  puerta_peatonal: 'Puerta completa peatonal',
+  automatismo: 'Automatismo sobre puerta existente',
+  normativa: 'Normativa y adecuación',
+};
+const laVisita = (a: Record<string, unknown>) => {
+  const base = TIPOS[String(a.tipo)] || String(a.tipo);
+  const s = String(a.subtipo || '').trim();
+  return s ? base + ' · ' + (SUBTIPOS[s] || s) : base;
+};
 const TIPOS: Record<string, string> = {
   averia: 'Correctiva (avería)', mantenimiento: 'Preventiva (mantenimiento)', comercial: 'Comercial (ofertar)',
   instalacion: 'Instalación', puesta_servicio: 'Puesta en servicio', normativa: 'Normativa y adecuación',
@@ -265,7 +281,7 @@ Deno.serve(async (req) => {
       `<b>${escTg(titulo)}</b> · ${escTg(quien)}`,
       escTg(nombreCli || 'Sin cliente en la ficha'),
       donde ? escTg(donde) : '',
-      `${escTg(TIPOS[a.tipo] || a.tipo)} · ${escTg(laPuerta)}`,
+      `${escTg(laVisita(a))} · ${escTg(laPuerta)}`,
     ].filter(Boolean);
     const pieTg = `\n${APP}`;
 
@@ -354,7 +370,9 @@ Deno.serve(async (req) => {
         : 'Cobro: <b>no se ha cobrado en obra</b>';
       /* Por qué NO se factura, cuando no se factura. Dos motivos distintos:
          el que marcó el técnico a mano, y el que viene del tipo de visita. */
-      const porTipo = a.tipo === 'garantia' ? 'es una visita de garantía'
+      /* La garantía es subtipo desde el 04-11-2026, pero el histórico la tiene
+         como tipo. Se miran las dos, igual que en la base de datos. */
+      const porTipo = (a.tipo === 'garantia' || a.subtipo === 'garantia') ? 'es una visita de garantía'
                     : (a.tipo === 'comercial' ? 'es una visita comercial, para ofertar' : '');
       const facturar = a.sin_cargo
         ? 'Facturar: <b>NO</b>. ' + escTg(a.sin_cargo_motivo || 'marcada como que no se cobra')
@@ -393,7 +411,7 @@ Deno.serve(async (req) => {
       ['Puerta', `<b>${p?.codigo || ''}</b> · ${p?.tipo || ''} ${p?.marca || ''} ${p?.modelo || ''}`],
       ['Cliente', p?.cliente || ''],
       ['Dirección', [p?.direccion, p?.ubicacion].filter(Boolean).join(' · ')],
-      ['Tipo', TIPOS[a.tipo] || a.tipo],
+      ['Tipo', laVisita(a)],
       ['Lo que dice', a.descripcion || ''],
       ['Contacto', tel ? `${a.contacto_nombre || ''} · <a href="tel:${tel}" style="color:#1C1817">${a.contacto_telefono}</a>${a.contacto_email ? ' · ' + a.contacto_email : ''}` : contacto],
       ['Visita prevista', a.fecha_prevista || ''],
@@ -469,7 +487,7 @@ Deno.serve(async (req) => {
         return ok({ ok: true, ...rc });
       }
 
-      const asunto = `Visita cerrada · ${TIPOS[a.tipo] || a.tipo} · ${p?.codigo || ''} ${p?.cliente || ''}`;
+      const asunto = `Visita cerrada · ${laVisita(a)} · ${p?.codigo || ''} ${p?.cliente || ''}`;
       const cuerpo = plantilla('Parte de asistencia', cierre,
         `${a.cerrado_por || 'El técnico'} ha cerrado la visita${a.pendiente ? '. <b>Queda algo pendiente.</b>' : '.'}`,
         'Parte generado por ARIZA SAT');
