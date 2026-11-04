@@ -261,6 +261,30 @@ El botón desaparece en cuanto hay hora. No es para estropear lo que ya está bi
 > tarde. Eso no es un dato: es un recuerdo. Y de ahí salen las horas que se
 > facturan.
 
+### 4 bis. Ya no hace falta el WhatsApp de «he llegado» y «he salido»
+
+Desde el 3 de noviembre de 2026, la aplicación avisa sola al grupo de la oficina
+en tres momentos:
+
+| Cuando tú… | A la oficina le llega |
+|---|---|
+| Das a **He llegado** | Que has llegado, a qué cliente, a qué puerta y a qué hora |
+| **Cierras el parte** | Horas, desplazamiento, trabajo, firma, si se ha cobrado y cómo, y si hay que facturarla o no |
+| Guardas una **jornada** de obra sin terminar | Lo hecho ese día y lo que dejas dicho para el siguiente |
+
+Así que **el WhatsApp al llegar y al salir ya no hay que mandarlo**: lo manda la
+aplicación, y lo manda siempre, que es la diferencia. Lo que sigue teniendo
+sentido escribir al grupo es lo que una aplicación no sabe: que te has quedado
+tirado, que el cliente no aparece, que hace falta una mano.
+
+Dos cosas que conviene saber:
+
+- El aviso sale **cuando se guarda**, así que necesita cobertura. Si estás en un
+  sótano sin línea, el botón no guarda y no sale nada: cuando salgas a la calle,
+  dale otra vez.
+- Si el aviso al grupo falla por lo que sea, **tu parte se guarda igual**. Eso
+  está probado a propósito: lo que no puede fallar nunca es guardar el trabajo.
+
 ### 5. «Otra igual que…» al dar de alta puertas
 
 En una obra con cuatro seccionales iguales, das de alta la primera y en el
