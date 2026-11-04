@@ -840,7 +840,7 @@ const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etique
             cliArchivados:false, centros:[], sinCentros:false, versionNueva:null, versionAvisada:null,
             manual:null, manuales:null, sinObra:false, sinModo:false, sinFicha3:false,
             sinPresuAviso:false, matSinPrecio:null, fotosCuenta:{}, sinFactura:false,
-            sinRutas:false, sinRutaCliente:false, sinSubtipo:false,
+            sinRutas:false, sinRutaCliente:false, sinSubtipo:false, sinUrgencia:false,
             sinAlmacen:false, ubicaciones:[], existencias:[], movimientos:[], previstos:[],
             buscaMat:'', matFamilia:'', matProveedor:'', matFiltro:'', fichaMat:null,
             sinPresupuestos:false, presupuestos:[], presuLineas:[], articulos:[], textosPresu:[], sinTextos:false,
@@ -1505,6 +1505,11 @@ async function cargar(){
      no manda nada, y la aplicación sigue funcionando como antes del 04-11-2026. */
   const st = await sb.from('avisos').select('subtipo').limit(1);
   S.sinSubtipo = !!st.error;
+  /* El recargo de urgencia por franja horaria: servidor/urgencia.sql. Sin esa
+     columna la urgencia se sigue cobrando con el porcentaje de Tarifas, como
+     antes del 04-11-2026, y la aplicación no propone ningún factor. */
+  const ug = await sb.from('avisos').select('urgencia_factor').limit(1);
+  S.sinUrgencia = !!ug.error;
   /* ---- El almacén ----
      Las existencias no se guardan en ninguna columna: se leen de la vista, que
      las suma de los movimientos. Si falta el SQL del almacén, la aplicación
@@ -1668,7 +1673,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.04-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.04-2';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -4684,6 +4689,81 @@ const importeRuta = k => {
   return Number(v != null && v !== '' ? v : (k === 'ruta1' ? (t.desplazamiento_fijo || 0) : 0));
 };
 const costeRuta = k => Number((S.tarifas || {})[k + '_coste'] || 0);
+/* ================================================================
+   EL RECARGO DE URGENCIA                             04-11-2026
+
+   David: «Para una urgencia en horario laboral el precio hora y el
+   desplazamiento sería por dos. Si hay que realizarla fuera del
+   horario, en un horario nocturno o en fin de semana, sería tanto
+   hora como desplazamiento por tres.»
+
+   Antes era un porcentaje fijo, el mismo a las once de la mañana que
+   a las tres de la madrugada de un domingo.
+
+   El factor lo propone la aplicación con el día y la hora REALES de
+   la visita, los que sella el botón «He llegado», y la oficina lo
+   puede cambiar. El cálculo vive aquí y no en la base de datos por
+   una razón concreta: hace falta saber si ese día era festivo, y eso
+   solo lo sabe el calendario que mantiene la oficina.
+   ================================================================ */
+/* Los festivos NO vienen de fábrica, a propósito: los de Andalucía y los de El
+   Puerto cambian cada año y no me los voy a inventar. Mientras la lista esté
+   vacía, la aplicación lo avisa en vez de cobrar como laborable un día que no
+   lo era. */
+const festivos = () => (Array.isArray(S.ajustes.festivos) ? S.ajustes.festivos : [])
+  .filter(x => /^\d{4}-\d{2}-\d{2}$/.test(String(x).trim()))
+  .map(x => String(x).trim()).sort();
+const esFestivo = f => festivos().includes(String(f || '').slice(0, 10));
+const festivosDe = y => festivos().filter(x => x.slice(0, 4) === String(y));
+const URGENCIA_DEF = { laboral: 2, fuera: 3, desde: 8, hasta: 18 };
+const urgenciaCfg = () => {
+  const t = S.tarifas || {};
+  const n = (v, d) => (v == null || v === '' ? d : Number(v));
+  return { laboral: n(t.urgencia_x_laboral, URGENCIA_DEF.laboral),
+           fuera:   n(t.urgencia_x_fuera,   URGENCIA_DEF.fuera),
+           desde:   n(t.urgencia_desde,     URGENCIA_DEF.desde),
+           hasta:   n(t.urgencia_hasta,     URGENCIA_DEF.hasta) };
+};
+/* Qué factor le toca a esta urgencia y POR QUÉ. El porqué importa tanto como el
+   número: la oficina tiene que poder decírselo al cliente, y tiene que poder
+   ver que el dato del que sale es la hora de llegada y no una suposición. */
+function factorUrgencia(a){
+  if (!a || a.tipo !== 'urgencia') return null;
+  const c = urgenciaCfg();
+  const DIAS = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+  if (a.hora_inicio){
+    const d = new Date(a.hora_inicio);
+    const f = iso(d), dw = d.getDay();
+    const h = d.getHours() + d.getMinutes() / 60;
+    if (dw === 0 || dw === 6)
+      return { factor: c.fuera, motivo: 'llegó en '+DIAS[dw], seguro: true };
+    if (esFestivo(f))
+      return { factor: c.fuera, motivo: 'llegó en festivo ('+fechaCorta(f)+')', seguro: true };
+    if (h < c.desde || h >= c.hasta)
+      return { factor: c.fuera, motivo: 'llegó a las '+hhmm(a.hora_inicio)+', fuera del horario de '+
+               c.desde+':00 a '+c.hasta+':00', seguro: true };
+    return { factor: c.laboral, motivo: 'llegó a las '+hhmm(a.hora_inicio)+', dentro del horario laboral',
+             seguro: true };
+  }
+  /* Sin hora de llegada sellada no se puede saber la hora, solo el día. Se dice
+     claramente que no es seguro, en vez de dar un número con aplomo. */
+  const dp = String(a.fecha_prevista || '').slice(0, 10);
+  if (!dp)
+    return { factor: c.laboral, motivo: 'no hay ni hora de llegada ni fecha prevista: '+
+             'se propone el de horario laboral', seguro: false };
+  const d = deIso(dp), dw = d.getDay();
+  if (dw === 0 || dw === 6)
+    return { factor: c.fuera, motivo: 'la fecha prevista cae en '+DIAS[dw]+', pero no hay hora de llegada',
+             seguro: false };
+  if (esFestivo(dp))
+    return { factor: c.fuera, motivo: 'la fecha prevista es festivo, pero no hay hora de llegada',
+             seguro: false };
+  return { factor: c.laboral, motivo: 'día laborable, pero sin hora de llegada sellada: '+
+           'si se fue de noche, hay que cambiarlo a mano', seguro: false };
+}
+/* Mientras no haya festivos cargados del año que toca, un festivo entre semana
+   se cobraría como un día normal y nadie lo vería. */
+const faltanFestivos = (ano) => !festivosDe(ano || new Date().getFullYear()).length;
 /* ---- La ruta habitual del cliente y del centro (03-11-2026) ----
    «Desde oficina se puede dejar ya marcada la ruta. En la oficina saben de
    primera mano dónde es la instalación.» David. La ruta no cambia de una visita
@@ -6331,6 +6411,7 @@ function vistaEquipo(){
   h += panelLista('frases_trab', 'Frases de trabajo realizado', FRASES_TRAB,
     'Lo mismo, debajo de «Trabajo realizado». Poned las vuestras: cuanto más se parezcan a '+
     'como habláis, menos hay que escribir encima.');
+  h += panelFestivos();
   h += panelGuiones();
   h += '</div>';
   return h;
@@ -7909,6 +7990,50 @@ function panelGuiones(){
 }
 
 /* Lista editable (añadir, quitar, ordenar) guardada en la tabla ajustes */
+/* ---- Los días festivos (04-11-2026) ----
+   De esta lista depende que una urgencia se cobre ×2 o ×3, así que no es un
+   adorno: un festivo que falte aquí se cobra como un martes cualquiera.
+   No vienen de fábrica a propósito. Los nacionales cambian de fecha, los de
+   Andalucía y los de El Puerto los pone cada ayuntamiento, y una lista
+   inventada por la aplicación sería peor que ninguna: parecería verdad. */
+function panelFestivos(){
+  if (S.sinUrgencia) return '';
+  const xs = festivos();
+  const ano = new Date().getFullYear();
+  const porAno = {};
+  xs.forEach(f => { (porAno[f.slice(0,4)] = porAno[f.slice(0,4)] || []).push(f); });
+  const anos = Object.keys(porAno).sort();
+  let h = '<div class="panel"><div class="panel-h"><h3>Días festivos</h3>'+
+    '<span class="mini">'+xs.length+'</span></div>'+
+    '<p class="mini" style="margin:0 0 10px">De esto depende que una urgencia se cobre '+
+    'por dos o por tres. Pon los festivos nacionales, los de Andalucía y los de El Puerto, '+
+    'cada año. Un festivo que falte aquí se cobra como un día normal y no lo ve nadie.</p>';
+  if (faltanFestivos(ano))
+    h += '<div class="sin-ficha" style="margin-bottom:10px;background:var(--aviso-bg);color:var(--aviso)">'+
+      '<b>No hay ningún festivo de '+ano+'.</b> Hasta que los pongas, una urgencia en festivo '+
+      'entre semana se está cobrando al factor de horario laboral.</div>';
+  h += '<div class="fila" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">'+
+    '<input id="fest-f" type="date" style="max-width:190px">'+
+    '<button class="btn sm pri" data-act="fest-add">Añadir</button>'+
+    '<span class="sp"></span></div>'+
+    '<div class="campo full" style="margin-bottom:10px"><label for="fest-pega">O pégalos todos de una vez</label>'+
+    '<textarea id="fest-pega" rows="2" placeholder="2027-01-01, 2027-01-06, 2027-02-28…"></textarea>'+
+    '<span class="pista">Separados por comas, espacios o saltos de línea, en formato aaaa-mm-dd. '+
+    'Lo que ya esté no se repite</span></div>'+
+    '<div class="fila" style="margin-bottom:10px"><button class="btn sm" data-act="fest-pegar">Añadir los pegados</button><span class="sp"></span></div>';
+  if (!xs.length) h += '<p class="muted" style="margin:0">Todavía no hay ninguno.</p>';
+  anos.forEach(y => {
+    h += '<p class="mini" style="margin:10px 0 4px"><b>'+esc(y)+'</b> · '+porAno[y].length+'</p>'+
+      '<div class="lista-simple">';
+    porAno[y].forEach(f => {
+      h += '<div class="fila" style="padding:6px 0;border-bottom:1px solid var(--line)">'+
+        '<span class="sp">'+esc(fechaCorta(f))+'</span>'+
+        '<button class="btn sm" data-act="fest-quitar" data-f="'+esc(f)+'">Quitar</button></div>';
+    });
+    h += '</div>';
+  });
+  return h + '</div>';
+}
 function panelLista(clave, titulo, defecto, ayuda){
   const arr = lista(clave, defecto);
   let h = '<div class="panel"><div class="panel-h"><h3>'+esc(titulo)+'</h3><span class="mini">'+arr.length+'</span></div>';
@@ -19833,8 +19958,26 @@ function dlgTarifas(){
           'El de toda la vida. Se usa si alguno de los tres queda vacío') +
     campo('t-ch', 'Coste hora de técnico (€)', t.coste_hora, '0.01', 'Sueldo, seguridad social y estructura') +
     campo('t-min', 'Mínimo facturable (horas)', t.minimo_horas, '1', 'Horas completas, aunque la visita dure menos') +
-    campo('t-urg', 'Recargo de urgencia (%)', t.recargo_urgencia, '1', 'Se aplica al tipo «Urgencia fuera de horario»') +
+    campo('t-urg', 'Recargo de urgencia (%)', t.recargo_urgencia, '1',
+      S.sinUrgencia ? 'Se aplica al tipo «Urgencia fuera de horario»'
+                    : 'Ya NO se usa: lo sustituyen los factores de abajo. Se queda para que las '+
+                      'urgencias anteriores al 04-11-2026 sigan valiendo lo que valían') +
     '</div></div>';
+
+  /* ---- El recargo de urgencia por franja (04-11-2026) ----
+     Van en Tarifas y no en el código porque son dinero, y el dinero lo pone
+     administración sin esperar a una versión nueva de la aplicación. */
+  if (!S.sinUrgencia)
+    h += '<div class="grupo"><h3>Urgencias: cuánto se multiplica y cuándo</h3>'+
+      '<p class="mini" style="margin:0 0 10px">En una urgencia, la hora y el desplazamiento se '+
+      'multiplican por uno de estos dos números. El coste sube con el mismo factor, para que el '+
+      'margen de una nocturna no salga inflado. Lo elige la aplicación con la hora de llegada que '+
+      'selló el técnico, y la oficina lo puede cambiar visita a visita.</p><div class="campos">'+
+      campo('t-ulab', 'Dentro del horario laboral (×)', t.urgencia_x_laboral, '0.1', 'David, 04-11-2026: 2') +
+      campo('t-ufue', 'Fuera de horario, fin de semana y festivos (×)', t.urgencia_x_fuera, '0.1', 'David: 3') +
+      campo('t-udes', 'El horario laboral empieza a las', t.urgencia_desde, '1', 'Hora en punto, de lunes a viernes') +
+      campo('t-uhas', 'y acaba a las', t.urgencia_hasta, '1', 'A partir de ahí, y hasta el día siguiente, va el factor de fuera') +
+      '</div></div>';
 
   const texto = (id, eti, v, pista) =>
     '<div class="campo"><label for="'+id+'">'+eti+'</label>'+
@@ -19885,6 +20028,23 @@ function dlgTarifas(){
       extra[k+'_importe'] = n('t-'+k+'-i');
       extra[k+'_coste']   = n('t-'+k+'-c');
     });
+    /* Los factores de urgencia y la franja. Van en «extra» a propósito: si
+       alguno se queda vacío, se cae al valor de fábrica en vez de bloquear el
+       guardado de toda la tarifa. */
+    if (!S.sinUrgencia){
+      extra.urgencia_x_laboral = n('t-ulab');
+      extra.urgencia_x_fuera   = n('t-ufue');
+      extra.urgencia_desde     = n('t-udes');
+      extra.urgencia_hasta     = n('t-uhas');
+      if (extra.urgencia_x_laboral != null && extra.urgencia_x_laboral < 1)
+        return setErr('El factor de urgencia en horario laboral no puede ser menor que 1: eso sería cobrar menos por una urgencia.');
+      if (extra.urgencia_x_fuera != null && extra.urgencia_x_laboral != null &&
+          extra.urgencia_x_fuera < extra.urgencia_x_laboral)
+        return setErr('Fuera de horario no puede cobrarse menos que dentro. Revisa los dos factores.');
+      if (extra.urgencia_desde != null && extra.urgencia_hasta != null &&
+          extra.urgencia_hasta <= extra.urgencia_desde)
+        return setErr('El horario laboral tiene que acabar más tarde de lo que empieza.');
+    }
     for (const [k, v] of Object.entries(o))
       if (v === null && !['actualizado_por'].includes(k)) return setErr('Faltan campos por rellenar.');
     if (o.coste_hora >= o.precio_hora)
@@ -21420,6 +21580,43 @@ function dlgValoracion(avisoId){
         '<button type="button" class="btn sm pri" data-act="mat-sin-precio" data-id="'+a.id+
         '">Ponerles precio</button><span class="sp"></span></div></div>';
   }
+  /* ---- El recargo de urgencia, desde la valoración (04-11-2026) ----
+     Aquí es donde la oficina lo cambia si la aplicación propuso mal, y desde
+     aquí se vuelve a calcular. Se enseña siempre en las urgencias, aunque esté
+     bien, porque un importe por tres sin explicación no se le puede justificar
+     a un cliente que llama preguntando. */
+  if (!S.sinUrgencia && a.tipo === 'urgencia' && esGestion()){
+    const f = factorUrgencia(a);
+    const puesto = a.urgencia_factor != null ? Number(a.urgencia_factor) : null;
+    const c = urgenciaCfg();
+    const ops = [...new Set([c.laboral, c.fuera, puesto].filter(x => x != null))].sort((x, y) => x - y);
+    h += '<div class="grupo"><h3>Recargo de urgencia</h3>'+
+      (puesto == null
+        ? '<p class="mini" style="margin:0 0 8px">Esta urgencia no tiene factor guardado, así que se '+
+          'está valorando con el <b>recargo en porcentaje</b> de antes del 04-11-2026. '+
+          (f ? 'Por el día y la hora le tocaría <b>×'+esc(String(f.factor).replace('.', ','))+'</b>: '+esc(f.motivo)+'.' : '')+
+          '</p>'
+        : '<p class="mini" style="margin:0 0 8px">Se está cobrando <b>×'+esc(String(puesto).replace('.', ','))+
+          '</b> sobre la hora y el desplazamiento'+
+          (f && f.factor !== puesto
+            ? '. La aplicación propondría ×'+esc(String(f.factor).replace('.', ','))+': '+esc(f.motivo)
+            : (f ? '. '+esc(f.motivo.charAt(0).toUpperCase()+f.motivo.slice(1)) : ''))+'.</p>')+
+      '<div class="fila" style="gap:8px;flex-wrap:wrap">'+
+      '<select id="v-urg" style="max-width:260px">'+
+      (puesto == null ? '<option value="">Dejarlo como está (porcentaje antiguo)</option>' : '')+
+      ops.map(x => '<option value="'+x+'"'+(x === puesto ? ' selected' : '')+'>×'+
+        esc(String(x).replace('.', ','))+
+        (x === c.laboral ? ' · horario laboral' : (x === c.fuera ? ' · fuera de horario' : ''))+
+        '</option>').join('')+'</select>'+
+      '<button type="button" class="btn sm pri" data-act="urg-guardar" data-id="'+a.id+
+        '">Guardar y volver a calcular</button><span class="sp"></span></div>'+
+      (f && !f.seguro
+        ? '<p class="mini" style="margin:8px 0 0;color:var(--aviso)">No hay hora de llegada sellada en '+
+          'esta visita, así que lo que propone la aplicación es una suposición a partir de la fecha '+
+          'prevista. Compruébalo antes de facturar.</p>'
+        : '')+
+      '</div>';
+  }
   if (a.cobrado) h += '<p class="mini" style="margin:0">Cobrada en obra: '+eur(a.cobro_importe)+' · '+esc(a.cobro_forma||'')+'</p>';
   if (v.facturado) h += '<p class="mini" style="margin:0">Facturada el '+esc(fechaCorta(v.facturado_el))+(v.factura_ref?(' · '+esc(v.factura_ref)):'')+'</p>';
   h += '<p class="err"></p><div class="pie" style="flex-wrap:wrap;gap:6px">'+
@@ -22409,6 +22606,42 @@ function dlgCierre(avisoId){
           : '<span class="pista">El viaje entero, no solo la ida. Solo para lo que cae '+
             'fuera de las rutas</span>')+'</div>';
     })()+
+    /* ---- El recargo de urgencia (04-11-2026) ----
+       Sale solo en las urgencias y solo si la base lo tiene. El técnico lo ve
+       pero no lo toca: el factor multiplica por dos o por tres lo que se le
+       cobra al cliente, y eso es cosa de oficina. Lo que sí hace el técnico, sin
+       enterarse, es darle el dato: la hora de llegada. */
+    (() => {
+      if (S.sinUrgencia || a.tipo !== 'urgencia') return '';
+      const f = factorUrgencia(a);
+      if (!f) return '';
+      const puesto = a.urgencia_factor != null ? Number(a.urgencia_factor) : null;
+      const vale = puesto != null ? puesto : f.factor;
+      const c = urgenciaCfg();
+      const ops = [...new Set([c.laboral, c.fuera, vale])].sort((x, y) => x - y);
+      return '<div class="campo full"><label for="z-urg">Recargo de urgencia</label>'+
+        (esGestion()
+          ? '<select id="z-urg">'+ops.map(x => '<option value="'+x+'"'+(x === vale ? ' selected' : '')+'>'+
+              '×'+String(x).replace('.', ',')+(x === c.laboral ? ' · horario laboral' : (x === c.fuera ? ' · fuera de horario' : ''))+
+              '</option>').join('')+'</select>'
+          : '<input type="text" value="×'+esc(String(vale).replace('.', ','))+'" disabled>'+
+            '<input id="z-urg" type="hidden" value="'+esc(vale)+'">')+
+        '<span class="pista">'+
+        (puesto != null && puesto !== f.factor
+          ? 'Puesto a mano en ×'+esc(String(puesto).replace('.', ','))+'. La aplicación propondría ×'+esc(String(f.factor).replace('.', ','))+
+            ': '+esc(f.motivo)
+          : 'Puesto solo: '+esc(f.motivo))+
+        '. Multiplica la hora y el desplazamiento'+
+        (esGestion() ? '' : '. Lo cambia la oficina, no tú')+'</span>'+
+        (f.seguro ? '' :
+          '<span class="pista" style="color:var(--aviso)">Ojo: sale de la fecha prevista, no de una hora '+
+          'de llegada sellada. Si de verdad se fue de noche o en fin de semana, hay que corregirlo</span>')+
+        (faltanFestivos(String(a.hora_inicio || a.fecha_prevista || '').slice(0, 4) || undefined)
+          ? '<span class="pista" style="color:var(--aviso)">No hay festivos cargados de ese año en '+
+            'Equipo: un festivo entre semana se estaría cobrando como un día normal</span>'
+          : '')+
+        '</div>';
+    })()+
     '</div></div>';
 
   if (a.tipo === 'mantenimiento') h += bloqueGuion(a, p);
@@ -22991,7 +23224,17 @@ async function guardarCierre(a, cerrando){
   const o = {
     diagnostico: val('z-diag') || null,
     trabajo: val('z-trab') || null,
-    hora_inicio: hora('z-ini'), hora_fin: hora('z-fin'),
+    /* ---- La hora de llegada sellada no se pisa (04-11-2026) ----
+       El campo de la hora se reconstruye con el DÍA DEL CIERRE, así que una
+       visita del sábado cerrada el lunes se quedaba fechada en lunes. Daba
+       igual mientras solo se usaba para contar horas; desde que el recargo de
+       urgencia depende del día de la semana, eso cuesta dinero: un sábado a ×3
+       pasaba a cobrarse a ×2.
+       Así que si nadie ha tocado el campo, manda la hora que selló «He
+       llegado», con su día de verdad. Si la han corregido, manda la corregida. */
+    hora_inicio: (a.hora_inicio && hhmm(a.hora_inicio) === val('z-ini'))
+                   ? a.hora_inicio : hora('z-ini'),
+    hora_fin: hora('z-fin'),
     horas: val('z-horas') ? +val('z-horas') : null,
     num_tecnicos: val('z-ntec') ? +val('z-ntec') : 1,
     desplazamiento: val('z-km') ? +val('z-km') : null,
@@ -23017,6 +23260,26 @@ async function guardarCierre(a, cerrando){
     /* Y los kilómetros solo cuentan fuera de ruta: dentro de una ruta, el
        importe es el de la ruta, y dejar un número suelto ahí confunde. */
     if (r && r !== 'km') o.desplazamiento = null;
+  }
+  /* ---- El factor de urgencia (04-11-2026) ----
+     Se guarda en la visita, no se recalcula cada vez: si dentro de un año
+     cambian los factores de Tarifas, lo ya cobrado no puede moverse. Y si
+     alguien corrige la hora de entrada en este mismo parte, el factor se vuelve
+     a proponer con la hora nueva, que es de donde sale. */
+  if (!S.sinUrgencia && a.tipo === 'urgencia'){
+    const puesto = val('z-urg');
+    if (puesto) o.urgencia_factor = +puesto;
+    else {
+      /* Qué hora se mira: la sellada por «He llegado» si nadie la ha tocado,
+         porque esa lleva el DÍA de verdad. La del campo se reconstruye con el
+         día del cierre, y una obra cerrada al día siguiente cambiaría de día de
+         la semana (y con él, el factor). Si la han corregido, manda la
+         corregida, que para eso se corrige. */
+      const tocada = a.hora_inicio && hhmm(a.hora_inicio) !== val('z-ini');
+      const cuando = (a.hora_inicio && !tocada) ? a.hora_inicio : o.hora_inicio;
+      const f = factorUrgencia(Object.assign({}, a, { hora_inicio: cuando }));
+      if (f) o.urgencia_factor = f.factor;
+    }
   }
   if (conCobro){
     o.cobrado = chk('z-cobrado');
@@ -23876,6 +24139,23 @@ raiz.addEventListener('click', async e => {
     try { await sb.rpc('valorar_aviso', { p_aviso: b.dataset.id }); await cargar(); toast('Visita recalculada.'); }
     catch(err){ fallo(err); }
   }
+  /* El factor de urgencia corregido a mano, y a recalcular con él (04-11-2026) */
+  else if (a === 'urg-guardar'){
+    const sel = document.getElementById('v-urg');
+    const v = sel ? sel.value : '';
+    b.disabled = true;
+    try {
+      const { error } = await sb.from('avisos')
+        .update({ urgencia_factor: v === '' ? null : +v, actualizado: new Date().toISOString() })
+        .eq('id', b.dataset.id);
+      if (error) throw error;
+      await sb.rpc('valorar_aviso', { p_aviso: b.dataset.id });
+      await cargar();
+      cerrarDlg(); dlgValoracion(b.dataset.id);
+      toast(v === '' ? 'Se queda con el recargo antiguo. Recalculada.'
+                     : 'Recargo ×'+String(v).replace('.', ',')+' guardado. Recalculada.');
+    } catch(err){ b.disabled = false; fallo(err); }
+  }
   else if (a === 'revalorar-todo'){
     if (!armar(b, 'Confirmar')) return;
     b.disabled = true; b.textContent = 'Calculando…';
@@ -24115,6 +24395,40 @@ raiz.addEventListener('click', async e => {
     try { await guardarLista(clave, arr.concat(faltan)); pintar();
           toast(faltan.length+' añadido'+(faltan.length===1?'':'s')+' a la lista.'); }
     catch(err){ fallo(err); }
+  }
+  /* ---- Los festivos (04-11-2026) ----
+     Lista aparte de las demás porque son fechas, no nombres: se ordenan solas,
+     no se repiten y hay que poder pegarlas en bloque, que es como las publica
+     cualquier ayuntamiento. */
+  else if (a === 'fest-add' || a === 'fest-pegar' || a === 'fest-quitar'){
+    const arr = festivos().slice();
+    if (a === 'fest-quitar'){
+      if (!armar(b, 'Confirmar')) return;
+      const i = arr.indexOf(b.dataset.f);
+      if (i < 0) return;
+      arr.splice(i, 1);
+    } else {
+      const campo = document.getElementById(a === 'fest-add' ? 'fest-f' : 'fest-pega');
+      const texto = campo ? campo.value : '';
+      const nuevas = String(texto).split(/[\s,;]+/).map(x => x.trim())
+        .filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x));
+      /* Una fecha que no existe (31 de febrero) no entra: se escribe mal más a
+         menudo de lo que parece al copiar de un boletín. */
+      const buenas = nuevas.filter(x => { const d = new Date(x+'T12:00:00'); return !isNaN(d) && iso(d) === x; });
+      if (!buenas.length) return toast('Pon la fecha en formato aaaa-mm-dd.');
+      let n = 0;
+      buenas.forEach(x => { if (!arr.includes(x)){ arr.push(x); n++; } });
+      if (campo) campo.value = '';
+      if (!n) return toast('Ya estaban todas puestas.');
+      arr.sort();
+      try { await guardarLista('festivos', arr); pintar();
+            toast(n+' festivo'+(n===1?'':'s')+' añadido'+(n===1?'':'s')+'.'); }
+      catch(e){ fallo(e); }
+      return;
+    }
+    arr.sort();
+    try { await guardarLista('festivos', arr); pintar(); toast('Festivo quitado.'); }
+    catch(e){ fallo(e); }
   }
   else if (a === 'lista-anadir' || a === 'lista-quitar' || a === 'lista-subir' || a === 'lista-bajar'){
     const clave = b.dataset.clave;
