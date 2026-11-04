@@ -249,7 +249,10 @@ const bajarCopia = async (pag, act) => {
   const { ctx, pag } = await abrir();
   /* Como si la última copia fuera de hace 40 días */
   await pag.evaluate(() => {
-    const hace40 = new Date(Date.now() - 40*86400000).toISOString();
+    /* Días locales, no milisegundos: con el cambio de hora de octubre esto
+       decía 39 (04-11-2026). */
+    const f40 = new Date(); f40.setHours(12,0,0,0); f40.setDate(f40.getDate() - 40);
+    const hace40 = f40.toISOString();
     window.__T.S.ajustes.backup = { fecha:hace40, filas:120, tipo:'completa',
       ficheros:30, mb:12.4, avisos:0, por:'David Ariza Arana' };
   });
@@ -270,7 +273,10 @@ const bajarCopia = async (pag, act) => {
 
   /* A los 10 días avisa, pero no en rojo */
   await pag.evaluate(() => {
-    const hace10 = new Date(Date.now() - 10*86400000).toISOString();
+    /* Días locales, no milisegundos: con el cambio de hora de octubre esto
+       decía 9 (04-11-2026). */
+    const f10 = new Date(); f10.setHours(12,0,0,0); f10.setDate(f10.getDate() - 10);
+    const hace10 = f10.toISOString();
     window.__T.S.ajustes.backup = { fecha:hace10, filas:120, tipo:'datos', por:'David' };
   });
   await irAPestana(pag, 'trabajo'); await pag.waitForTimeout(600);

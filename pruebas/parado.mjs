@@ -87,7 +87,15 @@ bloque('2. Desde cuándo está quieto');
 
 const quieto = await T(async () => {
   const g = window.__T;
-  const hace = d => new Date(Date.now() - d*86400000).toISOString();
+  /* Fechas en días de CALENDARIO LOCAL, no en milisegundos (04-11-2026).
+     Restar d*86400000 parecía lo mismo y no lo es: España pasó de CEST a CET el
+     25 de octubre, así que a partir de las 23:00 de Madrid restar 30 días de
+     milisegundos caía en el día 29, y tres comprobaciones de fecha se ponían
+     rojas solas de noche. La aplicación cuenta días locales (dias()), así que
+     la prueba también: mediodía de hoy y luego setDate, que respeta el cambio
+     de hora. */
+  const hace = d => { const x = new Date(); x.setHours(12,0,0,0);
+                      x.setDate(x.getDate() - d); return x.toISOString(); };
   const cli = g.S.clientes[0];
   const base = { tipo:'averia', estado:'asignado', prioridad:'normal',
                  tecnico_id:'usuario-admin', cliente_id:cli.id };
@@ -102,7 +110,7 @@ const quieto = await T(async () => {
     tipo:'instalacion', obra_larga:true, creado: hace(60),
     movido_el: hace(60), estado_el: hace(60) }));
   await g.sb.from('jornadas').insert({ aviso_id:'q-obra',
-    fecha: new Date(Date.now() - 86400000).toISOString().slice(0,10),
+    fecha: hace(1).slice(0,10),
     horas:6, trabajo:'Montado el marco', creado: hace(1) });
   /* Y uno sin ninguna de las dos fechas del SQL: solo tiene el alta */
   await g.sb.from('avisos').insert(Object.assign({}, base, { id:'q-sinsql',
@@ -151,7 +159,8 @@ bloque('3. Los cuatro grupos');
 
 const grupos = await T(async () => {
   const g = window.__T;
-  const hace = d => new Date(Date.now() - d*86400000).toISOString();
+  const hace = d => { const x = new Date(); x.setHours(12,0,0,0);
+                      x.setDate(x.getDate() - d); return x.toISOString(); };
   const cli = g.S.clientes[0];
   const pon = async o => { await g.sb.from('avisos').insert(o); };
   /* --- sin asignar --- */
@@ -225,7 +234,8 @@ bloque('4. Los presupuestos');
 
 const presus = await T(async () => {
   const g = window.__T;
-  const hace = d => new Date(Date.now() - d*86400000).toISOString();
+  const hace = d => { const x = new Date(); x.setHours(12,0,0,0);
+                      x.setDate(x.getDate() - d); return x.toISOString(); };
   const cli = g.S.clientes[0];
   await g.sb.from('presupuestos').insert({ id:'pz-emi', referencia:'P-900',
     cliente_id:cli.id, estado:'emitido', total:1000, base:826.45, creado:hace(6) });

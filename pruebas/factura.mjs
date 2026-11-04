@@ -66,7 +66,15 @@ bloque('1. Cobrar en obra no es facturar');
 
 const cobro = await T(async () => {
   const g = window.__T;
-  const hace = d => new Date(Date.now() - d*86400000).toISOString();
+  /* Fechas en días de CALENDARIO LOCAL, no en milisegundos (04-11-2026).
+     Restar d*86400000 parecía lo mismo y no lo es: España pasó de CEST a CET el
+     25 de octubre, así que a partir de las 23:00 de Madrid restar 30 días de
+     milisegundos caía en el día 29, y tres comprobaciones de fecha se ponían
+     rojas solas de noche. La aplicación cuenta días locales (dias()), así que
+     la prueba también: mediodía de hoy y luego setDate, que respeta el cambio
+     de hora. */
+  const hace = d => { const x = new Date(); x.setHours(12,0,0,0);
+                      x.setDate(x.getDate() - d); return x.toISOString(); };
   const pon = async (id, cli, o, v) => {
     await g.sb.from('avisos').insert(Object.assign({ id, tipo:'averia', estado:'cerrado',
       prioridad:'normal', tecnico_id:'usuario-admin', cliente_id:cli, horas:2,
@@ -238,10 +246,12 @@ bloque('4. Facturas vencidas sin cobrar');
 
 const impag = await T(async () => {
   const g = window.__T;
-  const hace = d => new Date(Date.now() - d*86400000).toISOString();
+  const hace = d => { const x = new Date(); x.setHours(12,0,0,0);
+                      x.setDate(x.getDate() - d); return x.toISOString(); };
   /* En hora local, igual que cuenta la aplicación: en UTC, una hora al día
      daba un día de diferencia y la prueba se caía sola. */
-  const dIso = n => window.__T.iso(new Date(Date.now() + n*86400000));
+  const dIso = n => { const x = new Date(); x.setHours(12,0,0,0);
+                      x.setDate(x.getDate() + n); return window.__T.iso(x); };
   const pon = async (id, v) => {
     await g.sb.from('avisos').insert({ id, tipo:'averia', estado:'cerrado', prioridad:'normal',
       tecnico_id:'usuario-admin', cliente_id:'cli-30', horas:2, cerrado:hace(70), creado:hace(75) });
@@ -324,7 +334,8 @@ bloque('5. La propuesta de factura');
 
 const hoja = await T(async () => {
   const g = window.__T;
-  const hace = d => new Date(Date.now() - d*86400000).toISOString();
+  const hace = d => { const x = new Date(); x.setHours(12,0,0,0);
+                      x.setDate(x.getDate() - d); return x.toISOString(); };
   /* Una visita con de todo: horas, desplazamiento y tres materiales, uno de
      ellos sin precio, que es el que NO puede colarse en la cuenta. */
   await g.sb.from('avisos').insert({ id:'pf-1', tipo:'averia', estado:'cerrado',
