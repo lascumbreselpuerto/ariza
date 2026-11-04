@@ -244,6 +244,10 @@ const esperado = ['Técnicos con acceso', 'Dar de alta a alguien del equipo',
      y los elementos de seguridad, y no al lado de los guiones por casualidad:
      las tres cosas son lo que el técnico se encuentra escrito al abrir el parte. */
   'Frases de diagnóstico', 'Frases de trabajo realizado',
+  /* Y el 04-11-2026, delante de los guiones, los días festivos. De esa lista
+     depende que una urgencia se cobre por dos o por tres, así que no es un
+     ajuste más: es dinero, y va donde la oficina lo vea. */
+  'Días festivos',
   'Guiones de revisión'];
 paso('los paneles de Equipo salen en el orden documentado',
   JSON.stringify(enEquipo.titulos) === JSON.stringify(esperado),

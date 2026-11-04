@@ -46,7 +46,7 @@ export PATH="$PGBIN:$PATH"
 ORDEN="componentes.sql centros.sql parte-por-correo.sql obra.sql ficha.sql \
 almacen.sql presupuestos.sql presupuestos2.sql comercial.sql anexos.sql \
 tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos3.sql valoracion.sql \
-parado.sql factura.sql rutas.sql ruta-cliente.sql telegram.sql subtipo.sql"
+parado.sql factura.sql rutas.sql ruta-cliente.sql telegram.sql subtipo.sql urgencia.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -208,6 +208,21 @@ if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/subtipo-pruebas.sql" ]; then
     fallos=$((fallos+1))
     echo " FALLA el subtipo:"
     grep -a -m3 -E "ERROR|EXCEPTION" /tmp/subtipo-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
+# El recargo de urgencia. Multiplica por dos o por tres lo que se cobra, así que
+# los números van calculados a mano. Y hay una prueba que vale por todas: que una
+# urgencia anterior al 04-11-2026 siga valiendo exactamente lo que valía.
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/urgencia-pruebas.sql" ]; then
+  echo ""
+  echo "── El recargo de urgencia ──────────────────────"
+  if $PSQL -f "$AQUI/sql/urgencia-pruebas.sql" > /tmp/urgencia-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/urgencia-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA el recargo de urgencia:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/urgencia-pruebas.log | sed 's/^/         /'
   fi
 fi
 
