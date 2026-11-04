@@ -46,7 +46,7 @@ export PATH="$PGBIN:$PATH"
 ORDEN="componentes.sql centros.sql parte-por-correo.sql obra.sql ficha.sql \
 almacen.sql presupuestos.sql presupuestos2.sql comercial.sql anexos.sql \
 tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos3.sql valoracion.sql \
-parado.sql factura.sql rutas.sql ruta-cliente.sql"
+parado.sql factura.sql rutas.sql ruta-cliente.sql telegram.sql subtipo.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -179,6 +179,35 @@ if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/ruta-cliente-pruebas.sql" ]; then
     fallos=$((fallos+1))
     echo " FALLA la ruta habitual del cliente:"
     grep -a -m3 -E "ERROR|EXCEPTION" /tmp/ruta-cliente-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
+# Los avisos al grupo de la oficina. Lo que se vigila es lo contrario de lo que
+# parece: que un aviso que falla NO pueda impedir que el técnico guarde. Aquí no
+# hay pg_net ni config_interna, o sea el peor caso, y aun así tiene que guardar.
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/telegram-pruebas.sql" ]; then
+  echo ""
+  echo "── Los avisos al grupo ─────────────────────────"
+  if $PSQL -f "$AQUI/sql/telegram-pruebas.sql" > /tmp/telegram-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/telegram-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA el aviso al grupo:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/telegram-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
+# El subtipo de las asistencias. Lo que se vigila es la regla de la garantía, en
+# las dos direcciones: que la nueva no se facture y que la vieja tampoco.
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/subtipo-pruebas.sql" ]; then
+  echo ""
+  echo "── El subtipo de las asistencias ───────────────"
+  if $PSQL -f "$AQUI/sql/subtipo-pruebas.sql" > /tmp/subtipo-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/subtipo-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA el subtipo:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/subtipo-pruebas.log | sed 's/^/         /'
   fi
 fi
 

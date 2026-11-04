@@ -85,6 +85,8 @@ TIPOS_SIN_CUESTIONARIO PREGUNTAS_CRITICAS PREGUNTA_DESTINO VISTAS_FOTO
 FOTOS_RECOMENDADAS CRITERIOS_MODIFICACION EXP_MARCO
 REGLAS_FECHA ESTADO_REGLA fechaRegla reglaCompleta diasHasta reglasProximas
 CLASES_VIDA recogerVida EXP_SITUACION ASISTENCIAS tipoAsis nombreTec
+SUBTIPOS ASIST_VIEJOS subtiposDe nombreSubtipo esGarantia pideTiposPuerta
+AYUDA_TIPO AYUDA_SUBTIPO pintarSubtipo pintarTiposPuerta TIPOS_SIN_VALOR
 TABLAS_COPIA BUCKETS_COPIA crc32 crearZip sqlValor sqlInserts copiaUltima
 copiaSeguridad listarBucket
 normTxt buscarClientes lineaCliente elegirCliente estadoCliente pintarListaCliente
