@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.04-1**
+> **Versión de la aplicación que describe este manual: 2026.11.04-2**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -82,9 +82,38 @@ Lo que te interesa de eso:
 - **Puesta en servicio** es solo para rematar y programar lo que no se pudo
   terminar por causas de la obra: sin corriente definitiva, albañilería sin
   acabar, remates del cliente. No es una instalación nueva.
+- **Urgencia** se cobra con recargo según **cuándo** se hace. Mira el apartado
+  siguiente, porque ahí tu botón **He llegado** decide dinero.
 
 Si la etiqueta no cuadra con lo que te encuentras, díselo a la oficina antes de
 ponerte: el tipo decide lo que se cobra.
+
+### En una urgencia, «He llegado» decide el precio (4 de noviembre de 2026)
+
+Una urgencia no se cobra igual a las once de la mañana que a las tres de la
+madrugada de un domingo. Desde hoy:
+
+| Cuándo llegas | Hora y desplazamiento |
+|---|---|
+| De lunes a viernes, de 8:00 a 18:00 | **×2** |
+| Fuera de esa franja, fines de semana y festivos | **×3** |
+
+**Y el factor lo decide la hora que selló tu botón «He llegado».** No es una
+estimación de nadie: es el dato que tú diste al llegar. Por eso en las urgencias
+ese botón importa más que en ninguna otra visita.
+
+Al cerrar el parte lo verás escrito, con el motivo: «Puesto solo: llegó en
+sábado», o «llegó a las 23:40, fuera del horario de 8:00 a 18:00». Tú **no lo
+cambias**: eso es precio y lo lleva la oficina. Lo que sí puedes hacer, y debes,
+es decirlo si no cuadra con lo que pasó.
+
+Dos cosas prácticas:
+
+- Si se te olvidó dar a **He llegado**, la aplicación no sabe la hora y te lo
+  dice: propone el de horario laboral y avisa de que no está segura. Si fuiste
+  de noche, avisa a la oficina o lo cobráis de menos.
+- La hora que sellaste **no se pierde aunque cierres el parte otro día**. Una
+  urgencia del sábado que cierras el lunes sigue siendo del sábado.
 
 Botones de la tarjeta:
 
@@ -722,4 +751,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.04-1 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.04-2 de ARIZA SAT*
