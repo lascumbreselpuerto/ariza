@@ -1673,7 +1673,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.04-2';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.04-3';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -5852,11 +5852,17 @@ function dlgDetalleLinea(i){
 async function presupuestoDesdeAsistencia(av){
   let texto = '';
   try {
-    const { data } = await sb.from('revisiones').select('*').eq('aviso_id', av.id).limit(1).maybeSingle();
-    if (data){
-      if (data.recomendaciones) texto += data.recomendaciones;
-      if (data.deficiencias) texto += (texto ? '\n\n' : '')+'Deficiencias encontradas:\n'+data.deficiencias;
-    }
+    /* Todas las revisiones de la visita, no solo la primera: una preventiva de
+       cuatro puertas con problemas en tres tiene que ofertar las tres. */
+    const { data } = await sb.from('revisiones').select('*').eq('aviso_id', av.id);
+    (data || []).forEach(r => {
+      const pu = r.puerta_id ? puertaDe(r.puerta_id) : null;
+      const cual = (pu && pu.codigo) ? pu.codigo + (r.tipo_puerta ? ' ('+r.tipo_puerta+')' : '')
+                                     : (r.tipo_puerta || '');
+      const cab = ((data || []).length > 1 && cual) ? cual + ':\n' : '';
+      if (r.recomendaciones) texto += (texto ? '\n\n' : '') + cab + r.recomendaciones;
+      if (r.deficiencias) texto += (texto ? '\n\n' : '') + cab + 'Deficiencias encontradas:\n' + r.deficiencias;
+    });
   } catch(_){ /* sin revisión, se parte de lo que diga el parte */ }
   if (!texto) texto = [av.diagnostico, av.pendiente_texto].filter(Boolean).join('\n\n');
   const pu = av.puerta_id ? puertaDe(av.puerta_id) : null;
@@ -17989,12 +17995,13 @@ dlgForm.addEventListener('change', e => {
   /* Asistencia: al elegir puerta se pone su cliente a la vista, ahora mismo.
      Antes solo se deducía al guardar, de modo que en pantalla parecía que la
      asistencia iba sin cliente; y si la puerta estaba sin ficha, nada lo decía. */
-  if (t.id === 'a-puerta'){ clienteDeLaPuertaDelAviso(); rutaDelAviso(); return; }
+  if (t.id === 'a-puerta'){ clienteDeLaPuertaDelAviso(); rutaDelAviso();
+    pintarPuertasAviso(dlgForm.dataset.aviso || null); return; }
   /* ---- El tipo manda sobre el subtipo, y los dos sobre lo demás ---- */
-  if (t.id === 'a-tipo'){ pintarSubtipo(); return; }
+  if (t.id === 'a-tipo'){ pintarSubtipo(); pintarPuertasAviso(dlgForm.dataset.aviso || null); return; }
   if (t.id === 'a-sub'){ pintarTiposPuerta(); return; }
   /* Al cambiar el cliente a mano, la ruta propuesta cambia con él */
-  if (t.id === 'a-cliente'){ rutaDelAviso(); return; }
+  if (t.id === 'a-cliente'){ rutaDelAviso(); pintarPuertasAviso(dlgForm.dataset.aviso || null); return; }
   /* Si la oficina toca la ruta, deja de proponerse: manda lo que eligió */
   if (t.id === 'a-ruta'){ t.dataset.tocado = '1'; return; }
   // Puerta: al elegir centro, su dirección baja a la puerta
@@ -18387,6 +18394,37 @@ function pintarSubtipo(){
   const pt = document.getElementById('a-tipopista');
   if (pt) pt.textContent = AYUDA_TIPO[tipo] || '';
   pintarTiposPuerta();
+}
+/* Las puertas que se pueden revisar en esta preventiva: las del cliente
+   elegido. Se repinta al cambiar el tipo o el cliente, porque las dos cosas
+   cambian la lista. Lo ya marcado se conserva. */
+function pintarPuertasAviso(avisoId){
+  const caja = document.getElementById('a-caja-pts');
+  const cont = document.getElementById('a-pts');
+  if (!caja || !cont) return;
+  const tipo = (document.getElementById('a-tipo') || {}).value || '';
+  caja.hidden = tipo !== 'mantenimiento';
+  if (caja.hidden) return;
+  const cid = (document.getElementById('a-cliente') || {}).value || '';
+  const pid = (document.getElementById('a-puerta') || {}).value || '';
+  const marcadas = new Set(Array.from(cont.querySelectorAll('.a-pt:checked')).map(x => x.value));
+  /* La primera vez se marcan las que ya tiene la asistencia guardadas */
+  if (!cont.dataset.pintado && avisoId)
+    puertasDeAviso(avisoId).forEach(p => marcadas.add(p.id));
+  cont.dataset.pintado = '1';
+  const xs = (S.puertas || []).filter(p => cid ? p.cliente_id === cid : p.id === pid)
+    .sort((x, y) => String(x.codigo || '').localeCompare(String(y.codigo || ''), 'es'));
+  if (!xs.length){
+    cont.innerHTML = '<p class="mini" style="margin:0">'+
+      (cid ? 'Este cliente no tiene puertas dadas de alta.' : 'Elige primero el cliente.')+'</p>';
+    return;
+  }
+  cont.className = 'checks';
+  cont.innerHTML = xs.map(p =>
+    '<label><input type="checkbox" class="a-pt" value="'+p.id+'"'+
+    ((marcadas.has(p.id) || p.id === pid) ? ' checked' : '')+'>'+
+    esc((p.codigo || 'sin código')+' · '+(p.tipo || 'sin tipo')+(sitioPuerta(p) ? ' · '+sitioPuerta(p) : ''))+
+    '</label>').join('');
 }
 function pintarTiposPuerta(){
   const caja = document.getElementById('a-caja-tp');
@@ -18975,6 +19013,16 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
        ficha de puerta, y sin saber sobre qué se trabaja ni el técnico puede
        prepararse ni la oferta puede decir nada. En cuanto la puerta exista en
        la aplicación, manda su ficha y esto sobra. */
+    /* ---- Las puertas de una preventiva (04-11-2026) ----
+       David: que la oficina elija, al crear la preventiva, qué puertas entran.
+       Cada una traerá su guion según el tipo de su ficha, y dejará su propia
+       revisión. Solo salen las del cliente elegido: una revisión de puertas de
+       dos clientes distintos no existe. */
+    (S.sinAvisoPuertas ? '' : '<div class="campo full" id="a-caja-pts"'+
+      (d.tipo === 'mantenimiento' ? '' : ' hidden')+'>'+
+      '<label>Qué puertas se revisan</label><div id="a-pts"></div>'+
+      '<span class="pista">Se marcan las del cliente. Cada una lleva el guión de su tipo, y cada una '+
+      'deja su revisión firmada. Si no marcas ninguna, se revisa solo la puerta de arriba</span></div>')+
     (S.sinSubtipo ? '' :
     '<div class="campo full" id="a-caja-tp"'+(pideTiposPuerta(d.tipo, d.subtipo) ? '' : ' hidden')+'>'+
       '<label>Sobre qué tipos de puerta</label>'+
@@ -19051,10 +19099,14 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
     '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button><button type="submit" class="btn pri">Guardar</button></div>';
 
   // en un alta nueva, si ya viene puerta elegida, su cliente se pone de entrada
-  if (!a) setTimeout(() => { clienteDeLaPuertaDelAviso(); rutaDelAviso(); }, 0);
+  /* Qué asistencia se está editando, para que lo que se repinte al vuelo sepa
+     de cuál son las puertas ya guardadas. */
+  setTimeout(() => { dlgForm.dataset.aviso = a ? a.id : ''; }, 0);
+  if (!a) setTimeout(() => { clienteDeLaPuertaDelAviso(); rutaDelAviso(); pintarPuertasAviso(null); }, 0);
   /* En una asistencia que ya existe y todavía no tiene ruta, también se propone:
      la mayoría de las que hay ahora mismo se crearon antes de que esto existiera. */
   else if (!String(a.ruta || '').trim()) setTimeout(rutaDelAviso, 0);
+  if (a) setTimeout(() => pintarPuertasAviso(a.id), 0);
   abrirDlg(h, async () => {
     const tid = val('a-tec') || null;
     const nom = val('a-cnom'), tel = val('a-ctel'), mail = val('a-cmail');
@@ -19093,8 +19145,30 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
     if (tid && o.estado === 'recibido') o.estado = 'asignado';
     const mapa = { recibido:'aviso_recibido', asignado:'tecnico_asignado', en_curso:'en_reparacion', repuesto:'esperando_repuesto' };
     try {
+      let avisoId = a ? a.id : null;
       if (a){ const { error } = await sb.from('avisos').update(o).eq('id', a.id); if (error) throw error; }
-      else { const { error } = await sb.from('avisos').insert(o); if (error) throw error; }
+      else {
+        const { data, error } = await sb.from('avisos').insert(o).select().maybeSingle();
+        if (error) throw error;
+        avisoId = data ? data.id : null;
+      }
+      /* ---- Las puertas de la preventiva (04-11-2026) ----
+         Se enganchan DESPUÉS de guardar, porque hasta entonces la asistencia no
+         tiene número al que colgarlas. La primera marcada pasa a ser la puerta
+         principal si no había ninguna; las demás van a la lista. Y lo que se
+         desmarca se suelta: si no, quitar una puerta de la revisión no serviría
+         de nada. */
+      if (avisoId && !S.sinAvisoPuertas && o.tipo === 'mantenimiento'){
+        const caja = document.getElementById('a-caja-pts');
+        if (caja && !caja.hidden){
+          const marcadas = Array.from(document.querySelectorAll('#a-pts .a-pt:checked')).map(x => x.value);
+          const antes = puertasDeAviso(avisoId).map(p => p.id);
+          for (const pid of marcadas)
+            if (!antes.includes(pid)) await engancharPuerta(avisoId, pid, o.cliente_id);
+          for (const pid of antes)
+            if (!marcadas.includes(pid)) await soltarPuerta(avisoId, pid);
+        }
+      }
       if (o.puerta_id && !SIN_COBRO.includes(o.tipo) && mapa[o.estado])
         await sb.from('puertas').update({ estado: mapa[o.estado], estado_desde: new Date().toISOString() }).eq('id', o.puerta_id);
       cerrarDlg(); await cargar(); toast('Asistencia guardada.');
@@ -22644,7 +22718,23 @@ function dlgCierre(avisoId){
     })()+
     '</div></div>';
 
-  if (a.tipo === 'mantenimiento') h += bloqueGuion(a, p);
+  /* ---- Un guion por cada puerta de la visita (04-11-2026) ----
+     Las puertas de la preventiva son las de la asistencia: la principal y las
+     que la oficina haya añadido al crearla. Cada una trae el guion de SU tipo,
+     que es lo que estaba mal hasta hoy.
+     Si no hay ninguna puerta dada de alta pero la oficina dijo sobre qué tipos
+     se trabaja, se pinta un guion por tipo: es el caso de la puerta que todavía
+     no existe en la aplicación. */
+  if (a.tipo === 'mantenimiento'){
+    const xs = puertasDeAviso(a.id);
+    if (xs.length > 1) xs.forEach((pu, i) => { h += bloqueGuion(a, pu, i); });
+    else if (xs.length === 1) h += bloqueGuion(a, xs[0]);
+    else {
+      const tps = (a.tipos_puerta || []).filter(Boolean);
+      if (tps.length) tps.forEach((t, i) => { h += bloqueGuion(a, { tipo: t }, i); });
+      else h += bloqueGuion(a, p);
+    }
+  }
 
   h += '<div class="grupo"><h3>Cómo queda</h3><div class="campos">'+
     '<div class="campo"><label for="z-estado">Estado de la puerta</label><select id="z-estado">'+
@@ -22999,18 +23089,32 @@ async function pintarAltaObra(a){
 }
 
 /* Guión de revisión: los puntos del tipo de puerta, en bloques que se abren y cierran */
-function bloqueGuion(a, p){
+/* ---- Un guion por puerta (04-11-2026) ----
+   David: «Preventiva debería contener checklist en función del tipo de puerta,
+   por lo tanto un listado de los diferentes tipos de puerta a seleccionar por
+   oficina y que esto lo lleve al chequeo previsto para ellas.»
+   Hasta hoy había UN guion por visita, el de la puerta principal. Una
+   preventiva de un contrato con cuatro puertas distintas se revisaba con el
+   guion de la primera, y las otras tres quedaban sin revisar o revisadas con
+   la lista equivocada.
+   Ahora hay uno por puerta, cada uno con el suyo según su ficha, y cada uno
+   deja su propia revisión firmada. Todo lo del guion vive DENTRO de su
+   contenedor y se busca por clase, no por identificador: con cuatro guiones en
+   la misma pantalla, un id repetido devuelve siempre el primero. */
+function bloqueGuion(a, p, n){
   const tipo = (p && p.tipo) || 'Otro';
   const g = guionDe(tipo);
-  if (!g.length) return '<div class="grupo"><h3>Guión de revisión</h3>'+
-    '<p class="mini" style="margin:0">No hay guión cargado para este tipo de puerta. '+
+  const cual = (p && p.codigo) ? p.codigo : 'esta puerta';
+  const quePuerta = (n == null) ? '' : ' · '+esc(cual);
+  if (!g.length) return '<div class="grupo"><h3>Guión de revisión'+quePuerta+'</h3>'+
+    '<p class="mini" style="margin:0">No hay guión cargado para el tipo «'+esc(tipo)+'». '+
     (esAdmin() ? 'Lo puedes crear en Equipo → Guiones de revisión.' : 'Díselo a la oficina.')+'</p></div>';
 
   const puntos = g.filter(x => x.t).length;
-  let h = '<div class="grupo"><h3>Guión de revisión · '+esc(tipo)+'</h3>'+
+  let h = '<div class="grupo"><h3>Guión de revisión · '+esc(tipo)+quePuerta+'</h3>'+
     '<p class="mini" style="margin:0 0 10px">'+puntos+' puntos. Marca <b>Bien</b>, <b>Mal</b> o <b>N/A</b> en cada uno. '+
     'Con «Todo bien» marcas el bloque entero de una vez.</p>'+
-    '<div class="guion" id="guion" data-tipo="'+esc(tipo)+'">';
+    '<div class="guion" data-tipo="'+esc(tipo)+'" data-puerta="'+esc((p && p.id) || '')+'">';
 
   // se recorre el guión partiéndolo por cabeceras
   let abierto = false, nb = -1, cuerpo = '', titulo = '', ini = 0;
@@ -23043,28 +23147,29 @@ function bloqueGuion(a, p){
       '</div>';
   });
   h += cerrarBloque();
-  h += '</div>';
-  h += '<p class="g-aviso" id="g-mal" hidden></p>';
+  /* El pie va DENTRO del contenedor del guion, y por clase: así cada puerta
+     tiene su resultado, su riesgo, sus deficiencias y sus recomendaciones. */
+  h += '<p class="g-aviso g-mal" hidden></p>';
   h += '<div class="campos" style="margin-top:12px">'+
-    '<div class="campo"><label for="g-apta">Resultado de la revisión</label><select id="g-apta">'+
+    '<div class="campo"><label>Resultado de la revisión</label><select class="g-apta">'+
       '<option value="si">Apta para el servicio</option>'+
       '<option value="reservas">Apta con reservas</option>'+
       '<option value="no">No apta</option></select></div>'+
     '<div class="campo" style="align-content:end"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
-      '<input type="checkbox" id="g-riesgo" style="accent-color:var(--amarillo);width:18px;height:18px">Riesgo para las personas</label>'+
+      '<input type="checkbox" class="g-riesgo" style="accent-color:var(--amarillo);width:18px;height:18px">Riesgo para las personas</label>'+
       '<span class="pista">Márcalo si hay que dejarla fuera de servicio</span></div>'+
-    '<div class="campo full"><label for="g-defic">Deficiencias detectadas</label>'+
-      '<textarea id="g-defic" rows="3" placeholder="Si lo dejas vacío se rellena solo con los puntos marcados Mal"></textarea></div>'+
-    '<div class="campo full"><label for="g-reco">Recomendaciones y presupuesto a ofertar</label>'+
-      '<textarea id="g-reco" rows="2" placeholder="Ej.: sustituir banda de seguridad y añadir fotocélulas exteriores"></textarea></div>'+
-    '</div>';
+    '<div class="campo full"><label>Deficiencias detectadas</label>'+
+      '<textarea class="g-defic" rows="3" placeholder="Si lo dejas vacío se rellena solo con los puntos marcados Mal"></textarea></div>'+
+    '<div class="campo full"><label>Recomendaciones y presupuesto a ofertar</label>'+
+      '<textarea class="g-reco" rows="2" placeholder="Ej.: sustituir banda de seguridad y añadir fotocélulas exteriores"></textarea></div>'+
+    '</div></div>';
   return h + '</div>';
 }
 
-/* Lee el guión tal y como está relleno en pantalla */
-function guionDelForm(){
-  const cont = document.getElementById('guion');
+/* Lee UN guión tal y como está relleno en pantalla */
+function leerGuion(cont){
   if (!cont) return null;
+  const dentro = (sel) => cont.querySelector(sel);
   const puntos = Array.from(cont.querySelectorAll('.g-punto')).map(d => {
     const i = d.dataset.i;
     const marcado = d.querySelector('.g-resp button[aria-pressed="true"]');
@@ -23073,11 +23178,21 @@ function guionDelForm(){
              v: val && val.value !== '' ? val.value : null,
              nota: nota && nota.value.trim() ? nota.value.trim() : null };
   });
-  return { tipo: cont.dataset.tipo, puntos };
+  const v = (sel) => { const e = dentro(sel); return e ? e.value : ''; };
+  return { tipo: cont.dataset.tipo, puerta_id: cont.dataset.puerta || null, puntos,
+           res: v('.g-apta') || 'si',
+           riesgo: !!(dentro('.g-riesgo') || {}).checked,
+           defic: v('.g-defic').trim(), reco: v('.g-reco').trim() };
 }
-function repintarCuentas(){
-  const cont = document.getElementById('guion');
-  if (!cont) return;
+/* Todos los guiones de la pantalla, uno por puerta */
+function guionesDelForm(){
+  return Array.from(document.querySelectorAll('#dlg-form .guion')).map(leerGuion).filter(Boolean);
+}
+/* El de siempre, para lo que solo necesita uno. Devuelve el primero. */
+function guionDelForm(){ return guionesDelForm()[0] || null; }
+function repintarCuentas(cont){
+  /* Sin contenedor se repintan todos: es lo que hace falta al abrir el parte */
+  if (!cont){ document.querySelectorAll('#dlg-form .guion').forEach(x => repintarCuentas(x)); return; }
   const cuentas = {};
   cont.querySelectorAll('.g-punto').forEach(d => {
     const b = d.dataset.b;
@@ -23091,7 +23206,7 @@ function repintarCuentas(){
     s.style.color = c.hechos === c.total ? 'var(--ok)' : '';
   });
   const malos = Array.from(cont.querySelectorAll('.g-resp button[data-r="mal"][aria-pressed="true"]')).length;
-  const av = document.getElementById('g-mal');
+  const av = cont.querySelector('.g-mal');
   if (av){ av.hidden = !malos; av.textContent = malos + (malos===1?' punto marcado Mal':' puntos marcados Mal')+'. Se pasarán a las deficiencias del parte.'; }
 }
 
@@ -23104,23 +23219,33 @@ async function prepararCierre(a){
     const { data } = await sb.from('materiales').select('*').eq('aviso_id', a.id).order('creado');
     cont.innerHTML = (data && data.length ? data : [null]).map(filaMaterial).join('');
   }
-  // guión de revisión ya empezado
-  if (document.getElementById('guion')){
-    const { data: rev } = await sb.from('revisiones').select('*').eq('aviso_id', a.id).limit(1).maybeSingle();
-    if (rev){
+  /* ---- Los guiones ya empezados (04-11-2026) ----
+     Se traen TODAS las revisiones de la visita y cada una va a su guion, el de
+     su puerta. Antes se traía una sola y se volcaba en el único guion que
+     había; con varias puertas eso habría puesto lo de una puerta en otra. */
+  const guiones = Array.from(document.querySelectorAll('#dlg-form .guion'));
+  if (guiones.length){
+    const { data: revs } = await sb.from('revisiones').select('*').eq('aviso_id', a.id);
+    (revs || []).forEach(rev => {
+      /* A qué guion va: al de su puerta y, si la revisión es de las antiguas y
+         no tiene puerta apuntada, al primero que no esté ya ocupado. */
+      let cont = rev.puerta_id ? guiones.find(x => x.dataset.puerta === rev.puerta_id) : null;
+      if (!cont && !rev.puerta_id) cont = guiones.find(x => !x.dataset.hecho);
+      if (!cont) return;
+      cont.dataset.hecho = '1';
       (rev.puntos || []).forEach(pt => {
-        const d = document.querySelector('.g-punto[data-i="'+pt.i+'"]');
+        const d = cont.querySelector('.g-punto[data-i="'+pt.i+'"]');
         if (!d || d.dataset.t !== pt.t) return;    // el guión ha cambiado desde entonces
         if (pt.r){ const btn = d.querySelector('.g-resp button[data-r="'+pt.r+'"]'); if (btn) btn.setAttribute('aria-pressed','true'); }
         if (pt.v != null){ const v = d.querySelector('.g-val'); if (v) v.value = pt.v; }
         if (pt.nota){ const n = d.querySelector('.g-nota'); if (n) n.value = pt.nota; }
       });
-      const sel = document.getElementById('g-apta');
+      const sel = cont.querySelector('.g-apta');
       if (sel) sel.value = ({ apta:'si', reservas:'reservas', no_apta:'no' })[rev.resultado] || (rev.apta === false ? 'no' : 'si');
-      const ri = document.getElementById('g-riesgo'); if (ri) ri.checked = !!rev.riesgo;
-      const de = document.getElementById('g-defic'); if (de) de.value = rev.deficiencias || '';
-      const re = document.getElementById('g-reco'); if (re) re.value = rev.recomendaciones || '';
-    }
+      const ri = cont.querySelector('.g-riesgo'); if (ri) ri.checked = !!rev.riesgo;
+      const de = cont.querySelector('.g-defic'); if (de) de.value = rev.deficiencias || '';
+      const re = cont.querySelector('.g-reco'); if (re) re.value = rev.recomendaciones || '';
+    });
     repintarCuentas();
   }
   // firma: lienzo para dibujar con el dedo
@@ -23289,35 +23414,60 @@ async function guardarCierre(a, cerrando){
     if (o.cobrado && !o.cobro_forma) return setErr('Di cómo has cobrado: efectivo, datáfono…');
     if (o.cobrado && !o.cobro_importe) return setErr('Pon el importe que has cobrado.');
   }
-  // Guión de revisión (solo en preventivas)
-  const g = guionDelForm();
-  let revision = null;
-  if (g){
+  /* ---- Los guiones de revisión, uno por puerta (04-11-2026) ----
+     Antes había uno solo. Ahora se recorren todos y cada uno deja su propia
+     revisión, con su puerta y su tipo. Las comprobaciones son por guion: si
+     falta un punto en la tercera puerta, se dice en cuál y se lleva al técnico
+     hasta él, no a un punto cualquiera con el mismo número de otra. */
+  const gs = guionesDelForm();
+  const revisiones = [];
+  let malosTotal = 0, tiposRev = [];
+  for (const cont of document.querySelectorAll('#dlg-form .guion')){
+    const g = leerGuion(cont);
+    if (!g) continue;
+    const pu = g.puerta_id ? puertaDe(g.puerta_id) : null;
+    const cual = pu ? (pu.codigo || 'la puerta') : g.tipo;
     const sinMarcar = g.puntos.filter(x => !x.r);
     if (cerrando && sinMarcar.length){
       // se abre el bloque del primer punto que falta y se lleva al técnico hasta él
-      const d = document.querySelector('.g-punto[data-i="'+sinMarcar[0].i+'"]');
+      const d = cont.querySelector('.g-punto[data-i="'+sinMarcar[0].i+'"]');
       if (d){ const det = d.closest('.g-bloque'); if (det) det.open = true; d.scrollIntoView({block:'center'}); }
-      return setErr('Te quedan '+sinMarcar.length+' punto'+(sinMarcar.length===1?'':'s')+' del guión sin marcar. El primero: «'+sinMarcar[0].t+'».');
+      return setErr('Te quedan '+sinMarcar.length+' punto'+(sinMarcar.length===1?'':'s')+' del guión sin marcar'+
+        (gs.length > 1 ? ' en '+cual : '')+'. El primero: «'+sinMarcar[0].t+'».');
     }
     const malos = g.puntos.filter(x => x.r === 'mal');
-    const res = val('g-apta') || 'si';
-    let defic = val('g-defic');
+    malosTotal += malos.length;
+    tiposRev.push(g.tipo);
+    let defic = g.defic;
     if (!defic && malos.length)
       defic = malos.map(x => '· ' + x.t + (x.nota ? ' (' + x.nota + ')' : '') + (x.v != null ? ' [' + x.v + ']' : '')).join('\n');
-    revision = {
-      aviso_id: a.id, puerta_id: a.puerta_id || null, tipo_puerta: g.tipo,
+    const riesgo = !!g.riesgo;
+    if (cerrando && riesgo && o.estado_final !== 'Fuera de servicio')
+      return setErr('Has marcado riesgo para las personas'+(gs.length > 1 ? ' en '+cual : '')+
+        ': pon «Fuera de servicio» en cómo queda la puerta, o quita la marca.');
+    revisiones.push({
+      aviso_id: a.id,
+      /* La puerta de cada revisión es la suya. Con un solo guion y sin ficha se
+         conserva lo de antes: la puerta principal de la visita. */
+      puerta_id: g.puerta_id || (gs.length === 1 ? (a.puerta_id || null) : null),
+      tipo_puerta: g.tipo,
       fecha: dia, tecnico: yo(), puntos: g.puntos,
-      resultado: ({ si:'apta', reservas:'reservas', no:'no_apta' })[res],
-      apta: res !== 'no',
-      riesgo: !!(document.getElementById('g-riesgo')||{}).checked,
+      resultado: ({ si:'apta', reservas:'reservas', no:'no_apta' })[g.res],
+      apta: g.res !== 'no',
+      riesgo,
       deficiencias: defic || null,
-      recomendaciones: val('g-reco') || null,
-    };
-    if (cerrando && revision.riesgo && o.estado_final !== 'Fuera de servicio')
-      return setErr('Has marcado riesgo para las personas: pon «Fuera de servicio» en cómo queda la puerta, o quita la marca.');
-    if (!o.diagnostico && malos.length) o.diagnostico = 'Revisión con ' + malos.length + ' punto' + (malos.length===1?'':'s') + ' no conforme' + (malos.length===1?'':'s') + '.';
-    if (!o.trabajo && cerrando) o.trabajo = 'Revisión periódica según guión de ' + g.tipo + '.';
+      recomendaciones: g.reco || null,
+    });
+  }
+  if (revisiones.length){
+    if (!o.diagnostico && malosTotal)
+      o.diagnostico = 'Revisión con ' + malosTotal + ' punto' + (malosTotal===1?'':'s') +
+        ' no conforme' + (malosTotal===1?'':'s') +
+        (revisiones.length > 1 ? ' en '+revisiones.length+' puertas' : '') + '.';
+    if (!o.trabajo && cerrando)
+      o.trabajo = revisiones.length > 1
+        ? 'Revisión periódica de ' + revisiones.length + ' puertas según su guión.'
+        : 'Revisión periódica según guión de ' + tiposRev[0] + '.';
   }
   if (cerrando){
     if (!o.trabajo) return setErr('Escribe al menos qué has hecho.');
@@ -23433,7 +23583,7 @@ async function guardarCierre(a, cerrando){
     // lo gastado sale del almacén, y solo al cerrar
     let almacen = null;
     if (cerrando) almacen = await descontarMaterialDelParte(a, mats);
-    if (revision) await rehacer('revisiones', [revision]);
+    if (revisiones.length) await rehacer('revisiones', revisiones);
     const { error } = await sb.from('avisos').update(o).eq('id', a.id);
     if (error) throw error;
     // estado de la puerta según cómo queda
@@ -23508,7 +23658,11 @@ function bloqueRevisionHTML(rev, fila){
   const marca = { ok:'Conforme', mal:'NO CONFORME', na:'No aplica' };
   const res = rev.resultado || (rev.apta === false ? 'no_apta' : 'apta');
   const malos = (rev.puntos||[]).filter(x => x.r === 'mal');
-  let h = '<h2>Revisión periódica</h2><table>'+
+  /* Con varias puertas hay que decir de cuál es cada revisión, o el cliente
+     firma tres bloques iguales sin saber a qué puerta corresponde cada uno. */
+  const puE = rev.puerta_id ? puertaDe(rev.puerta_id) : null;
+  let h = '<h2>Revisión periódica'+(puE && puE.codigo ? ' · '+esc(puE.codigo) : '')+'</h2><table>'+
+    (puE ? fila('Puerta', [puE.codigo, sitioPuerta(puE)].filter(Boolean).join(' · ')) : '')+
     fila('Tipo de puerta', rev.tipo_puerta)+
     fila('Fecha', fechaCorta(rev.fecha))+
     fila('Resultado', nombreRes[res])+
@@ -23532,7 +23686,10 @@ async function hojaParte(avisoId){
   const pu = a.puerta_id ? puertaDe(a.puerta_id) : null;
   const cli = a.cliente_id ? clienteDe(a.cliente_id) : (pu && pu.cliente_id ? clienteDe(pu.cliente_id) : null);
   const { data: mats } = await sb.from('materiales').select('*').eq('aviso_id', a.id).order('creado');
-  const { data: rev } = await sb.from('revisiones').select('*').eq('aviso_id', a.id).limit(1).maybeSingle();
+  /* Todas las revisiones de la visita: desde el 04-11-2026 una preventiva
+     puede llevar varias puertas, y el parte que firma el cliente tiene que
+     llevarlas todas. Antes salía solo la primera. */
+  const { data: revs } = await sb.from('revisiones').select('*').eq('aviso_id', a.id);
   let firma = '';
   if (a.firma_ruta){
     const { data } = await sb.storage.from('firmas').createSignedUrl(a.firma_ruta, 3600);
@@ -23604,7 +23761,7 @@ async function hojaParte(avisoId){
       fila('Técnico', a.tecnico_id ? nombreTec(a.tecnico_id) : a.tecnico)+
     '</table>'+
     (a.cobrado ? ('<h2>Cobro</h2><table>'+fila('Importe cobrado', (a.cobro_importe||0) + ' €')+fila('Forma', a.cobro_forma)+fila('Referencia', a.cobro_ref)+'</table>') : '')+
-    (rev ? bloqueRevisionHTML(rev, fila) : '')+
+    ((revs || []).map(r => bloqueRevisionHTML(r, fila)).join(''))+
     '<h2>Conformidad del cliente</h2>'+
     (firma ? ('<div>'+esc(a.firma_nombre||'')+'</div><img class="firma" src="'+firma+'">')
            : ('<div>Sin firma. '+esc(a.firma_sin||'')+'</div>'))+
@@ -25070,7 +25227,9 @@ dlgForm.addEventListener('click', async e => {
     const ya = b.getAttribute('aria-pressed') === 'true';
     grupo.querySelectorAll('button[data-act="g-r"]').forEach(x => x.setAttribute('aria-pressed','false'));
     b.setAttribute('aria-pressed', ya ? 'false' : 'true');
-    repintarCuentas();
+    /* Solo el guion de esta puerta: con cuatro en pantalla, repintar todos
+       haría que la cuenta de una puerta saltara al tocar otra. */
+    repintarCuentas(b.closest('.guion'));
     return;
   }
   if (a === 'g-todo'){
@@ -25080,7 +25239,7 @@ dlgForm.addEventListener('click', async e => {
       const ok = d.querySelector('.g-resp button[data-r="ok"]');
       if (ok) ok.setAttribute('aria-pressed','true');
     });
-    repintarCuentas();
+    repintarCuentas(b.closest('.guion'));
     return;
   }
   if (a === 'guardar-avance'){
