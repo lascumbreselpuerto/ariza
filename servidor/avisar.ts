@@ -53,6 +53,81 @@ async function enviar(to: string[], subject: string, html: string) {
   return { enviado: r.ok, destinos, detalle: r.ok ? '' : (await r.text()).slice(0, 300) };
 }
 
+/* ============================================================================
+   AVISOS AL GRUPO DE TELEGRAM                                     03-11-2026
+
+   POR QUÉ
+   David, 03-11-2026: «Cuando se pulsa el botón de He llegado se le podría
+   enviar a la oficina un whatsapp o similar e incluso cuando cierre el parte
+   otro mensaje. De esta manera no tendrían que enviar un whatsapp al llegar y
+   otro al salir al grupo de técnicos, que es lo que deben hacer pero muchas
+   veces se les olvida.»
+
+   El dato ya estaba: «He llegado» sella la hora y cerrar el parte sella el
+   cierre. Lo que faltaba era que saliera del ordenador de la oficina.
+
+   POR QUÉ TELEGRAM Y NO WHATSAPP
+   Decisión de David el 03-11-2026, sobre cuatro opciones. La API oficial de
+   WhatsApp no puede escribir en un grupo que ya existe, necesita un número
+   dedicado, verificación de Meta y plantillas aprobadas, y cobra por mensaje.
+   Los puentes no oficiales sí escriben en el grupo, pero van contra las
+   condiciones de WhatsApp y el riesgo es que baneen el número de la empresa,
+   que está impreso en las etiquetas QR de todas las puertas y en los contratos.
+   Telegram es gratis, el grupo es un grupo de verdad y no hay nada que aprobar.
+
+   DÓNDE VIVE EL TOKEN
+   Aquí, en las variables de la función, NUNCA en la aplicación: el index.html
+   es público y cualquiera podría escribir en el grupo.
+   ============================================================================ */
+const escTg = (s: unknown) => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/* La hora, SIEMPRE en hora de Madrid. La función corre en UTC: sin esto, un
+   técnico que llega a las 00:30 saldría llegando «a las 23:30 de ayer». */
+const hhmm = (d: unknown) => d
+  ? new Date(String(d)).toLocaleTimeString('es-ES',
+      { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit' })
+  : '';
+const diaES = (d: unknown) => d
+  ? new Date(String(d)).toLocaleDateString('es-ES',
+      { timeZone: 'Europe/Madrid', day: 'numeric', month: 'long' })
+  : '';
+const num = (n: unknown) => n == null || n === '' ? '' : String(n).replace('.', ',');
+/* El dinero, siempre con sus dos decimales: «121 €» en una nota de la que sale
+   una factura se lee como un redondeo, y «121,00 €» no. */
+const eur = (n: unknown) => (Number(n) || 0).toFixed(2).replace('.', ',') + ' €';
+
+async function telegram(texto: string) {
+  const TOKEN = Deno.env.get('TELEGRAM_TOKEN');
+  const CHAT = Deno.env.get('TELEGRAM_CHAT');
+  if (!TOKEN || !CHAT) return { telegram: false, detalle: 'sin configurar' };
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: CHAT, text: texto, parse_mode: 'HTML',
+        link_preview_options: { is_disabled: true },
+      }),
+    });
+    return { telegram: r.ok, detalle: r.ok ? '' : (await r.text()).slice(0, 300) };
+  } catch (e) {
+    return { telegram: false, detalle: String(e).slice(0, 300) };
+  }
+}
+
+/* ---- Un aviso, una vez ----
+   Los disparadores de la base pueden llamar aquí más de una vez para el mismo
+   hecho (un update que vuelve a pasar por la misma condición, un reintento).
+   Un correo repetido se perdona; un grupo que suena tres veces por la misma
+   llegada se silencia, y entonces no sirve de nada. Así que cada aviso se
+   apunta y el segundo no sale. */
+async function yaAvisado(admin: ReturnType<typeof createClient>, clave: string) {
+  const { error } = await admin.from('telegram_enviados').insert({ clave });
+  // si la clave ya estaba, el insert falla por clave duplicada: ya se avisó
+  return !!error;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   try {
@@ -61,7 +136,7 @@ Deno.serve(async (req) => {
 
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const ADMIN_MAIL = Deno.env.get('AVISOS_ADMIN') || 'arizapuertasautomaticas@gmail.com';
-    const { tipo, aviso_id, contrato_id } = await req.json();
+    const { tipo, aviso_id, contrato_id, jornada_id } = await req.json();
 
     // ---- Resumen semanal de revisiones ----
     if (tipo === 'revisiones') {
@@ -164,6 +239,153 @@ Deno.serve(async (req) => {
     const { data: a } = await admin.from('avisos').select('*').eq('id', aviso_id).maybeSingle();
     if (!a) return ok({ error: 'aviso no encontrado' }, 404);
     const { data: p } = await admin.from('puertas').select('*').eq('id', a.puerta_id).maybeSingle();
+
+    /* ---- Quién, dónde y qué, para los avisos de Telegram (03-11-2026) ----
+       El grupo tiene que poder leerse de un vistazo y sin abrir nada: quién ha
+       llegado, a casa de quién y a qué puerta. Así que el sitio se busca igual
+       que lo hace la aplicación: el centro de la puerta, si lo tiene, y si no
+       la dirección escrita en la puerta, y si no la del propio aviso. */
+    let nombreCli = (p?.cliente || '').trim();
+    const cliId = a.cliente_id || p?.cliente_id || null;
+    if (!nombreCli && cliId) {
+      const { data: c } = await admin.from('clientes').select('nombre').eq('id', cliId).maybeSingle();
+      nombreCli = (c?.nombre || '').trim();
+    }
+    let donde = '';
+    if (p?.centro_id) {
+      const { data: ce } = await admin.from('centros')
+        .select('nombre, direccion, poblacion').eq('id', p.centro_id).maybeSingle();
+      if (ce) donde = [ce.nombre, ce.direccion, ce.poblacion].filter(Boolean).join(' · ');
+    }
+    if (!donde) donde = [p?.direccion, p?.ubicacion].filter(Boolean).join(' · ');
+    if (!donde) donde = (a.direccion_libre || '').trim();
+    const quien = (a.tecnico || a.cerrado_por || '').trim() || 'Un técnico';
+    const laPuerta = p?.codigo ? `puerta ${p.codigo}` : 'sin puerta concreta';
+    const cabecera = (titulo: string) => [
+      `<b>${escTg(titulo)}</b> · ${escTg(quien)}`,
+      escTg(nombreCli || 'Sin cliente en la ficha'),
+      donde ? escTg(donde) : '',
+      `${escTg(TIPOS[a.tipo] || a.tipo)} · ${escTg(laPuerta)}`,
+    ].filter(Boolean);
+    const pieTg = `\n${APP}`;
+
+    /* ---- Ha llegado (03-11-2026) ----
+       Lo dispara la base de datos cuando se sella la hora de entrada, que es lo
+       que hace el botón «He llegado». Solo va a Telegram: un correo por cada
+       llegada sería un correo que nadie abre. */
+    if (tipo === 'llegada') {
+      if (await yaAvisado(admin, 'llegada:' + a.id)) return ok({ ok: true, repetido: true });
+      const r = await telegram([
+        ...cabecera('HA LLEGADO'),
+        `Hora de entrada: <b>${escTg(hhmm(a.hora_inicio))}</b>`,
+        a.fecha_prevista ? `Estaba prevista para el ${escTg(a.fecha_prevista)}` : '',
+        a.descripcion ? `Lo que dice el cliente: ${escTg(a.descripcion)}` : '',
+      ].filter(Boolean).join('\n') + pieTg);
+      return ok({ ok: true, ...r });
+    }
+
+    /* ---- Obra sin terminar al final del día (03-11-2026) ----
+       Lo que el técnico deja dicho para el día siguiente es lo que la oficina
+       necesita para saber qué hay que llevar mañana, y hasta hoy solo lo veía
+       quien abriera la asistencia. */
+    if (tipo === 'jornada') {
+      const { data: j } = await admin.from('jornadas').select('*').eq('id', jornada_id).maybeSingle();
+      if (!j) return ok({ error: 'jornada no encontrada' }, 404);
+      if (await yaAvisado(admin, 'jornada:' + j.id)) return ok({ ok: true, repetido: true });
+      const r = await telegram([
+        ...cabecera('OBRA SIN TERMINAR'),
+        `Jornada del ${escTg(diaES(j.fecha))}: ` + [
+          j.horas != null ? `<b>${escTg(num(j.horas))} h</b>` : '',
+          j.num_tecnicos > 1 ? `${j.num_tecnicos} técnicos` : '',
+          j.hora_inicio && j.hora_fin ? `de ${escTg(hhmm(j.hora_inicio))} a ${escTg(hhmm(j.hora_fin))}` : '',
+        ].filter(Boolean).join(' · '),
+        j.trabajo ? `Lo hecho hoy: ${escTg(j.trabajo)}` : '',
+        j.proxima ? `<b>Para el día siguiente:</b> ${escTg(j.proxima)}` : 'No ha dejado dicho nada para el día siguiente.',
+      ].filter(Boolean).join('\n') + pieTg);
+      return ok({ ok: true, ...r });
+    }
+
+    /* ---- Parte cerrado (03-11-2026) ----
+       Es el mensaje que sustituye al WhatsApp que el técnico tenía que mandar
+       al salir. Va aparte del correo del parte a propósito: el correo lleva el
+       parte entero para archivarlo, y esto es para leerlo de un vistazo en el
+       móvil. Y va con su propio disparador, no colgado del que manda el correo:
+       así uno no se lleva al otro por delante si algún día cambia. */
+    if (tipo === 'cierre') {
+      if (await yaAvisado(admin, 'cierre:' + a.id)) return ok({ ok: true, repetido: true });
+      const { data: mats } = await admin.from('materiales')
+        .select('descripcion, precio').eq('aviso_id', a.id);
+      /* Lo que hay que rematar antes de facturar. Esto no se le dice al cliente
+         ni sale en el parte: es trabajo de oficina, y hasta hoy solo se veía si
+         alguien entraba en Gestión a mirarlo. */
+      const sinPrecio = (mats || []).filter((m: Record<string, unknown>) => m.precio == null);
+      const pendientes: string[] = [];
+      if (sinPrecio.length)
+        pendientes.push(`${sinPrecio.length} material${sinPrecio.length === 1 ? '' : 'es'} sin precio: ` +
+          sinPrecio.map((m: Record<string, string>) => m.descripcion).filter(Boolean).join(', ') +
+          '. No entra en la factura hasta que se le ponga.');
+      const ruta = String(a.ruta || '').trim();
+      let nombreRuta = '';
+      if (ruta && ruta !== 'km') {
+        const { data: t } = await admin.from('tarifas').select('*').eq('id', 1).maybeSingle();
+        const tt = (t || {}) as Record<string, unknown>;
+        const imp = tt[ruta + '_importe'];
+        nombreRuta = String(tt[ruta + '_nombre'] || '').trim() || 'Ruta ' + ruta.slice(-1);
+        // la ruta 1 cae al importe fijo de siempre: solo está sin valorar si tampoco lo hay
+        const respaldo = ruta === 'ruta1' ? tt.desplazamiento_fijo : null;
+        if ((imp == null || imp === '') && (respaldo == null || respaldo === ''))
+          pendientes.push(`la ruta ${nombreRuta} no tiene importe puesto en Tarifas: ` +
+            'el desplazamiento de esta visita entra a cero euros.');
+      }
+      /* ---- El cobro y la factura, SIEMPRE los dos (04-11-2026) ----
+         David: «Falta en la nota que envía a Telegram en el cierre si se ha
+         cobrado o no, y el cómo, y si hay que facturar o no.»
+         Antes la línea del cobro solo salía cuando se había cobrado. Y en un
+         grupo donde la oficina se fía de lo que lee, que no aparezca nada no
+         se entiende como «no se ha cobrado»: se entiende como «no se sabe».
+         Así que las dos líneas salen siempre, pase lo que pase.
+         Y van separadas a propósito, porque cobrar y facturar son dos cosas
+         distintas: lo que se cobra en obra hay que facturarlo igual, y eso ya
+         nos dejó una vez visitas cobradas que no facturaba nadie. */
+      const cobro = a.cobrado
+        ? 'Cobro: <b>cobrado en obra</b>, ' + escTg(eur(a.cobro_importe)) +
+          (a.cobro_forma ? ' en ' + escTg(a.cobro_forma) : '') +
+          (a.cobro_ref ? ' (' + escTg(a.cobro_ref) + ')' : '')
+        : 'Cobro: <b>no se ha cobrado en obra</b>';
+      /* Por qué NO se factura, cuando no se factura. Dos motivos distintos:
+         el que marcó el técnico a mano, y el que viene del tipo de visita. */
+      const porTipo = a.tipo === 'garantia' ? 'es una visita de garantía'
+                    : (a.tipo === 'comercial' ? 'es una visita comercial, para ofertar' : '');
+      const facturar = a.sin_cargo
+        ? 'Facturar: <b>NO</b>. ' + escTg(a.sin_cargo_motivo || 'marcada como que no se cobra')
+        : (porTipo
+            ? 'Facturar: <b>NO</b>, ' + porTipo
+            : (a.cobrado
+                ? 'Facturar: <b>SÍ</b>. Hay que facturarla igual, aunque esté cobrada'
+                : 'Facturar: <b>SÍ</b>. Queda pendiente de facturar'));
+      const r = await telegram([
+        ...cabecera('PARTE CERRADO'),
+        [
+          a.hora_inicio && a.hora_fin ? `De ${escTg(hhmm(a.hora_inicio))} a ${escTg(hhmm(a.hora_fin))}` : '',
+          a.horas != null ? `<b>${escTg(num(a.horas))} h</b>` : '',
+          a.num_tecnicos > 1 ? `${a.num_tecnicos} técnicos` : '',
+        ].filter(Boolean).join(' · '),
+        ruta ? `Desplazamiento: ${escTg(ruta === 'km'
+          ? (a.desplazamiento != null ? num(a.desplazamiento) + ' km' : 'por kilómetros')
+          : nombreRuta)}` : '',
+        a.trabajo ? `Trabajo: ${escTg(a.trabajo)}` : '',
+        a.firma_ruta
+          ? `Firmado por ${escTg(a.firma_nombre || 'el cliente')}`
+          : `<b>Sin firma del cliente.</b> ${escTg(a.firma_sin || '')}`,
+        cobro,
+        facturar,
+        a.pendiente ? `<b>QUEDA PENDIENTE:</b> ${escTg(a.pendiente_texto || 'sí')}` : '',
+        pendientes.length
+          ? '<b>A rematar en oficina:</b>\n' + pendientes.map(x => '· ' + escTg(x)).join('\n')
+          : '',
+      ].filter(Boolean).join('\n') + pieTg);
+      return ok({ ok: true, ...r });
+    }
 
     const contacto = [a.contacto_nombre, a.contacto_telefono, a.contacto_email].filter(Boolean).join(' · ') || a.contacto || '';
     const tel = (a.contacto_telefono || '').replace(/\s/g, '');
