@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.04-2**
+> **Versión de la aplicación que describe este manual: 2026.11.04-3**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -146,6 +146,24 @@ Se abre con el botón **Cerrar visita**. Tiene estos apartados, en este orden.
 Los dos son para el cliente. Escribe como si lo fuera a leer él, porque lo va a leer.
 
 ### Guión de revisión
+
+**Desde el 4 de noviembre de 2026, un guión por puerta.** Si la preventiva lleva
+varias puertas, te encontrarás un guión por cada una, con su código en el título:
+«Guión de revisión · Seccional · AR-9001». Cada uno trae los puntos de **su**
+tipo de puerta, y cada uno tiene su propio resultado, su riesgo, sus deficiencias
+y sus recomendaciones. Al cerrar, cada puerta deja su propia revisión firmada.
+
+Antes había uno solo, el de la puerta principal, así que una visita a un contrato
+con una corredera, una seccional y una peatonal se revisaba entera con el guión
+de la corredera. Las otras dos quedaban con la lista equivocada y firmadas igual,
+que es peor que no revisarlas: consta que se revisaron.
+
+Dos cosas prácticas:
+
+- Si te falta un punto, la aplicación te dice **en qué puerta** falta y te lleva
+  hasta él. No te manda a buscar.
+- Lo que marcas en una puerta no toca a las demás. Si una está mal y las otras
+  bien, el parte lo dice así.
 
 Aparecen los puntos que le tocan a **ese tipo de puerta**. Cada uno se marca **Bien**, **Mal** o **N/A**. Los que piden un valor medido llevan su casilla y su unidad.
 
@@ -751,4 +769,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.04-2 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.04-3 de ARIZA SAT*
