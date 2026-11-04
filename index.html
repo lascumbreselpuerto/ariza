@@ -655,6 +655,74 @@ const ASISTENCIAS = {
   falso:           'Desplazamiento en falso',
   urgencia:        'Urgencia fuera de horario',
 };
+/* ---- Los subtipos (04-11-2026) ----
+   David: «Al crear aviso deberíamos diferenciar cada tipo de avisos en función
+   de su forma y contenido.» Un tipo dice de qué va la visita; el subtipo dice
+   qué clase de trabajo es dentro de ese tipo, y de eso depende lo que hay que
+   preguntar al crearla y lo que hay que pedirle al técnico al cerrarla.
+
+   Dos de los subtipos eran tipos hasta hoy: la garantía y la normativa. Los
+   tipos viejos NO se tocan (decisión de David, 04-11-2026), así que siguen en
+   ASISTENCIAS para que el histórico se lea igual; lo que pasa es que ya no se
+   ofrecen al crear una asistencia nueva. */
+const SUBTIPOS = {
+  averia: [
+    ['averia',   'Avería'],
+    ['garantia', 'Garantía'],
+  ],
+  instalacion: [
+    ['puerta_automatica', 'Puerta completa automática'],
+    ['puerta_manual',     'Puerta completa manual'],
+    ['puerta_peatonal',   'Puerta completa peatonal'],
+    ['automatismo',       'Automatismo sobre puerta existente'],
+    ['normativa',         'Normativa y adecuación'],
+  ],
+};
+/* Los tipos que ya no se crean, porque ahora son subtipos. Se siguen pintando
+   en lo que ya existe: una garantía de octubre sigue diciendo que es garantía. */
+const ASIST_VIEJOS = ['garantia', 'normativa'];
+/* ---- Para qué es cada tipo, dicho en el propio alta (04-11-2026) ----
+   Esto son las definiciones de David, puestas donde se crea la asistencia. Una
+   definición que solo vive en la cabeza de quien la dictó se pierde con el
+   primer suplente que coja el teléfono. */
+const AYUDA_TIPO = {
+  averia: 'Lo que se ha roto o no funciona. Se apunta lo que cuenta el cliente, tal como lo cuenta.',
+  mantenimiento: 'Revisión periódica. El guion sale del tipo de cada puerta, y la periodicidad del contrato.',
+  comercial: 'Visita para ofertar: tomar medidas, ver el sitio y valorar lo que hay que vender. No se factura.',
+  instalacion: 'Montaje nuevo. Elige abajo si es puerta completa, automatismo sobre una puerta que ya está, '+
+    'o normativa y adecuación.',
+  puesta_servicio: 'Remate de una instalación y programación del equipo. Solo para lo que no se pudo '+
+    'terminar por causas de la obra: sin corriente definitiva, albañilería o remates del cliente.',
+  urgencia: 'Avería en servicio de urgencia: abrir, dejar la puerta en seguridad tras un accidente, cerrar '+
+    'un comercio, o repararla en el momento. Se cobra con recargo sobre la hora y el desplazamiento.',
+  falso: 'Se fue y no se pudo trabajar. No se factura, pero el coste del viaje sí cuenta.',
+};
+const AYUDA_SUBTIPO = {
+  garantia: 'NO se factura: ni mano de obra, ni desplazamiento, ni material. El coste sí cuenta y el '+
+    'margen sale negativo, que es la verdad.',
+  automatismo: 'La puerta ya está; lo que se monta es el automatismo. Marca abajo sobre qué tipo de puerta.',
+  normativa: 'Adecuar una puerta que ya existe a lo que exige la norma. Marca abajo de qué tipo de puerta es.',
+  puerta_peatonal: 'Peatonal automática: va por la UNE-EN 16005, no por la 12453.',
+};
+const subtiposDe = t => SUBTIPOS[t] || [];
+const nombreSubtipo = (t, s) => {
+  const k = String(s == null ? '' : s).trim();
+  if (!k) return '';
+  const f = subtiposDe(t).find(x => x[0] === k);
+  return f ? f[1] : k;
+};
+/* Garantía: la nueva por subtipo y la vieja por tipo. Las dos valen cero al
+   facturar, y mirar solo una de las dos cuesta dinero en una dirección o en la
+   otra. Es la misma regla que el servidor en subtipo.sql. */
+const esGarantia = a => !!a && (a.tipo === 'garantia' || a.subtipo === 'garantia');
+/* ---- Sobre qué tipos de puerta se trabaja ----
+   Un automatismo «para corredera» no es el mismo trabajo que uno «para
+   seccional», y quien crea el aviso lo sabe. Esto NO sustituye a las puertas
+   dadas de alta: es para lo que todavía no existe en la aplicación, que es
+   justo el caso de una instalación nueva o de una oferta. */
+const pideTiposPuerta = (tipo, sub) =>
+  tipo === 'comercial' ||
+  (tipo === 'instalacion' && ['automatismo', 'normativa'].includes(String(sub || '')));
 const ORIGENES = ['QR','Teléfono','Correo','WhatsApp','Interno','Cliente en oficina'];
 const COBROS = ['Efectivo','Datáfono','Bizum','Cheque','Transferencia'];
 const EST_FINAL = ['Operativa','Operativa con reservas','Fuera de servicio','Esperando repuesto'];
@@ -672,7 +740,11 @@ const SIN_COBRO = ['comercial','falso'];
    garantía SÍ se apunta con sus horas, porque hay que saber lo que cuesta,
    aunque no se cobre. El margen sale negativo, que es la verdad. */
 const TIPOS_SIN_VALOR = ['comercial','garantia'];
-const seValoraEnCero = a => !!a && (TIPOS_SIN_VALOR.includes(a.tipo) || !!a.sin_cargo);
+/* Desde el 04-11-2026 la garantía también puede venir como subtipo de la
+   correctiva. Mirar solo el tipo facturaría las garantías nuevas; mirar solo el
+   subtipo facturaría las viejas. Se miran las dos. */
+const seValoraEnCero = a => !!a &&
+  (TIPOS_SIN_VALOR.includes(a.tipo) || esGarantia(a) || !!a.sin_cargo);
 /* Mantenimiento: periodicidades que se ofrecen y estados del contrato */
 const PERIODOS = [[1,'Cada mes'],[2,'Cada 2 meses'],[3,'Cada trimestre'],[4,'Cada 4 meses'],[6,'Cada 6 meses'],[12,'Una vez al año'],[24,'Cada 2 años']];
 const FORMAS_PAGO = ['Transferencia','Domiciliación','Efectivo','Tarjeta'];
@@ -768,7 +840,7 @@ const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etique
             cliArchivados:false, centros:[], sinCentros:false, versionNueva:null, versionAvisada:null,
             manual:null, manuales:null, sinObra:false, sinModo:false, sinFicha3:false,
             sinPresuAviso:false, matSinPrecio:null, fotosCuenta:{}, sinFactura:false,
-            sinRutas:false, sinRutaCliente:false,
+            sinRutas:false, sinRutaCliente:false, sinSubtipo:false,
             sinAlmacen:false, ubicaciones:[], existencias:[], movimientos:[], previstos:[],
             buscaMat:'', matFamilia:'', matProveedor:'', matFiltro:'', fichaMat:null,
             sinPresupuestos:false, presupuestos:[], presuLineas:[], articulos:[], textosPresu:[], sinTextos:false,
@@ -1015,7 +1087,20 @@ const dondeAsistencia = a => {
   if (dc) return dc;
   return a.direccion_libre || '';
 };
-const tipoAsis = t => (S.ajustes.etiquetas_tipo && S.ajustes.etiquetas_tipo[t]) || ASISTENCIAS[t] || t;
+/* ---- El tipo de una asistencia, con su subtipo (04-11-2026) ----
+   Se le puede pasar el tipo suelto (una cadena) o la asistencia entera. Con la
+   asistencia entera añade el subtipo, que es lo que se quiere ver en pantalla:
+   «Correctiva (avería) · Garantía» dice mucho más que «Correctiva». Admite las
+   dos cosas a propósito: hay sitios, como el convertir un presupuesto, donde
+   solo hay una lista de tipos y ninguna asistencia todavía. */
+function tipoAsis(x){
+  const esObj = !!x && typeof x === 'object';
+  const t = esObj ? x.tipo : x;
+  const base = (S.ajustes.etiquetas_tipo && S.ajustes.etiquetas_tipo[t]) || ASISTENCIAS[t] || t;
+  if (!esObj) return base;
+  const ns = nombreSubtipo(t, x.subtipo);
+  return ns ? base + ' · ' + ns : base;
+}
 /* Listas que el administrador puede cambiar desde la app; si no hay nada guardado, valen las de fábrica. */
 const lista = (clave, defecto) => (Array.isArray(S.ajustes[clave]) && S.ajustes[clave].length) ? S.ajustes[clave] : defecto;
 const esAdmin = () => !!(S.perfil && S.perfil.rol === 'admin');
@@ -1415,6 +1500,11 @@ async function cargar(){
      03-11-2026, y la ficha del cliente no enseña el campo. */
   const rc = await sb.from('clientes').select('ruta').limit(1);
   S.sinRutaCliente = !!rc.error;
+  /* El subtipo de la asistencia y sobre qué tipos de puerta se trabaja:
+     servidor/subtipo.sql. Sin esas columnas el alta no enseña el desplegable y
+     no manda nada, y la aplicación sigue funcionando como antes del 04-11-2026. */
+  const st = await sb.from('avisos').select('subtipo').limit(1);
+  S.sinSubtipo = !!st.error;
   /* ---- El almacén ----
      Las existencias no se guardan en ninguna columna: se leen de la vista, que
      las suma de los movimientos. Si falta el SQL del almacén, la aplicación
@@ -1578,7 +1668,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.03-3';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.04-1';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -2100,7 +2190,7 @@ function dlgAsignar(id){
   const a = S.avisos.find(x => x.id === id);
   if (!a) return;
   const h = '<h3>Asignar asistencia</h3>'+
-    '<p class="mini" style="margin:0 0 12px">'+esc(tipoAsis(a.tipo))+' · '+esc(nombreCliente(a))+
+    '<p class="mini" style="margin:0 0 12px">'+esc(tipoAsis(a))+' · '+esc(nombreCliente(a))+
     (dondeAsistencia(a) ? ' · '+esc(dondeAsistencia(a)) : '')+'</p><div class="campos">'+
     '<div class="campo full"><label for="as-tec">Técnico</label><select id="as-tec"><option value="">Sin asignar</option>'+
       activos().map(t => '<option value="'+t.id+'"'+(a.tecnico_id===t.id?' selected':'')+'>'+
@@ -2142,7 +2232,7 @@ function tarjetaAviso(a){
   const firmada = !!a.firma_ruta;
   return '<div class="aviso'+(a.anulada?' anulada':'')+(a.archivado?' archivada':'')+'"><div class="cab">'+
     caraTec(a.tecnico_id)+
-    '<span class="chip '+(a.tipo==='comercial'?'ok':(a.tipo==='mantenimiento'?'gris':'aviso'))+'">'+esc(tipoAsis(a.tipo))+'</span>'+
+    '<span class="chip '+(a.tipo==='comercial'?'ok':(a.tipo==='mantenimiento'?'gris':'aviso'))+'">'+esc(tipoAsis(a))+'</span>'+
     (a.anulada ? '' : '<span class="chip gris sin">'+(EST_AVISO[a.estado]||a.estado)+'</span>')+
     (a.prioridad==='urgente' && !a.cerrado ? '<span class="chip aviso sin">Urgente</span>' : '')+
     chipsEstadoAsis(a)+
@@ -2242,7 +2332,7 @@ function tarjetaTrabajo(a){
   const vencida = a.fecha_prevista && dias(a.fecha_prevista) < 0;
   return '<div class="trab'+(a.prioridad==='urgente'?' urg':'')+'">'+
     '<div class="cab">'+
-      '<span class="chip '+(a.tipo==='comercial'?'ok':(a.tipo==='mantenimiento'?'gris':'aviso'))+'">'+esc(tipoAsis(a.tipo))+'</span>'+
+      '<span class="chip '+(a.tipo==='comercial'?'ok':(a.tipo==='mantenimiento'?'gris':'aviso'))+'">'+esc(tipoAsis(a))+'</span>'+
       (a.prioridad==='urgente' ? '<span class="chip mal sin">Urgente</span>' : '')+
       (vencida ? '<span class="chip mal sin">Se pasó de fecha</span>' : '')+
       '<span class="chip gris sin">'+(EST_AVISO[a.estado]||a.estado)+'</span>'+
@@ -2704,7 +2794,7 @@ function pastillaAgenda(x){
   const a = x.aviso;
   const cl = a.prioridad === 'urgente' ? 'urg' : (a.tipo === 'mantenimiento' ? 'mto' : (a.tipo === 'comercial' ? 'com' : ''));
   return '<button class="pastilla '+cl+'" data-act="cerrar-asistencia" data-id="'+a.id+'" '+
-    'title="'+esc(tipoAsis(a.tipo)+' · '+nombreCliente(a))+'">'+
+    'title="'+esc(tipoAsis(a)+' · '+nombreCliente(a))+'">'+
     esc(nombreCliente(a).slice(0,20))+
     (a.tecnico ? '<span class="quien">'+esc(a.tecnico.slice(0,8))+'</span>' : '<span class="quien sin">sin asignar</span>')+
     '</button>';
@@ -3395,7 +3485,7 @@ function vistaGestion(){
                 (a.cobro_importe != null ? ' · '+eur(a.cobro_importe) : '')+'</span>'
               : '')+
           '</span>'+
-          '<span class="sub">'+esc(tipoAsis(a.tipo))+' · cerrada '+esc(fechaCorta(a.cerrado))+
+          '<span class="sub">'+esc(tipoAsis(a))+' · cerrada '+esc(fechaCorta(a.cerrado))+
             (dias_ > 30 ? ' · <b style="color:var(--mal)">hace '+dias_+' días</b>' : ' · hace '+dias_+' días')+'</span>'+
           '<span class="sub">'+esc(dondeAsistencia(a))+'</span></span>'+
           '<span style="text-align:right"><span class="tit">'+eur(v.imp_total)+'</span>'+
@@ -3597,7 +3687,7 @@ function vistaGestion(){
                 '<span><span class="tit">'+esc(nombreCliente(x.a))+
                 (x.urgente ? ' <span class="chip mal sin">Urgente</span>' : '')+
                 (x.obra ? ' <span class="chip gris sin">Obra</span>' : '')+'</span>'+
-                '<span class="sub">'+esc(tipoAsis(x.a.tipo))+' · '+esc(EST_AVISO[x.a.estado] || x.a.estado)+
+                '<span class="sub">'+esc(tipoAsis(x.a))+' · '+esc(EST_AVISO[x.a.estado] || x.a.estado)+
                 ' · '+esc(dondeAsistencia(x.a))+'</span></span>'+
                 '<span style="text-align:right"><span class="tit" style="font-size:15px'+col+'">'+
                 x.dias+' días</span><span class="sub">quieto</span></span>'+
@@ -3638,7 +3728,7 @@ function vistaGestion(){
              (a.cobrado ? ' · cobrada en obra' : '')+(a.sin_cargo ? ' · sin cargo' : '')+
              (nSin ? ' · <b style="color:var(--mal)">'+nSin+' material'+(nSin===1?'':'es')+
                ' sin valorar</b>' : '')+'</span></td>'+
-           '<td>'+esc(tipoAsis(a.tipo))+'</td>'+
+           '<td>'+esc(tipoAsis(a))+'</td>'+
            '<td class="num" style="text-align:right">'+(v ? eur(v.imp_total) : '—')+'</td>'+
            '<td class="num" style="text-align:right">'+(v ? eur(v.coste_total) : '—')+'</td>'+
            '<td class="num" style="text-align:right;color:'+col+'">'+(v ? eur(v.margen) : 'sin valorar')+'</td></tr>';
@@ -3735,7 +3825,7 @@ function vistaGestion(){
         h += '<div class="item-plano">'+
           '<button class="item sp" data-act="ver-valoracion" data-id="'+x.a.id+'">'+
             '<span><span class="tit">'+esc(nombreCliente(x.a))+'</span>'+
-            '<span class="sub">'+esc([(pre||{}).referencia, tipoAsis(x.a.tipo)].filter(Boolean).join(' · '))+
+            '<span class="sub">'+esc([(pre||{}).referencia, tipoAsis(x.a)].filter(Boolean).join(' · '))+
             ' · cerrada '+esc(fechaCorta(x.a.cerrado))+'</span></span>'+
             '<span style="text-align:right"><span class="tit">'+eur(x.pac)+'</span>'+
             '<span class="sub">calculado '+eur(x.v.imp_total)+'</span></span>'+
@@ -3996,7 +4086,7 @@ function dlgPrevistos(avisoId){
   const cat = (S.catalogo || []).filter(a => a.activo !== false)
     .sort((x, y) => (x.descripcion||'').localeCompare(y.descripcion||'', 'es'));
   let h = '<h3>Material que hay que llevar</h3>'+
-    '<p class="mini" style="margin:0 0 10px">'+esc(nombreCliente(av))+' · '+esc(tipoAsis(av.tipo))+
+    '<p class="mini" style="margin:0 0 10px">'+esc(nombreCliente(av))+' · '+esc(tipoAsis(av))+
     (av.puerta_id ? ' · '+esc((puertaDe(av.puerta_id)||{}).codigo || '') : '')+'</p>';
 
   h += '<div class="grupo"><h3>Ya apuntado</h3>';
@@ -4111,7 +4201,7 @@ function dlgMover(articuloId, modo, avisoId){
       '<div class="campo full"><label for="mv-aviso">¿En qué asistencia?</label><select id="mv-aviso">'+
         '<option value="">Sin asistencia</option>'+
         mias.map(x => '<option value="'+x.id+'"'+(x.id===avisoId?' selected':'')+'>'+
-          esc(nombreCliente(x)+' · '+tipoAsis(x.tipo)+(x.puerta_id ? ' · '+((puertaDe(x.puerta_id)||{}).codigo||'') : ''))+
+          esc(nombreCliente(x)+' · '+tipoAsis(x)+(x.puerta_id ? ' · '+((puertaDe(x.puerta_id)||{}).codigo||'') : ''))+
           '</option>').join('')+
       '</select><span class="pista">Así el material queda imputado a esa obra y sale en su parte.</span></div>'+
       '<div class="campo full"><label for="mv-nota">Nota</label>'+
@@ -14833,7 +14923,7 @@ function libroMantenimiento(expId, conHistorial){
     if (a){
       const t = [a.trabajo, a.diagnostico].filter(Boolean).join('. ') || a.descripcion || '';
       filas += '<tr><td class="n">'+(i+1)+'</td><td>'+esc(fechaCorta(a.cerrado))+'</td>'+
-        '<td>'+esc(tipoAsis(a.tipo))+'</td><td>'+esc(t)+'</td>'+
+        '<td>'+esc(tipoAsis(a))+'</td><td>'+esc(t)+'</td>'+
         '<td>'+esc((a.tecnico_id ? nombreTec(a.tecnico_id) : a.tecnico) || '')+'</td><td></td></tr>';
     } else {
       filas += '<tr><td class="n">'+(i+1)+'</td><td></td><td></td><td></td><td></td><td></td></tr>';
@@ -16675,7 +16765,7 @@ async function recogerVida(puertaId){
     const clase = (a.tipo === 'instalacion' ? 'instalacion'
                  : (a.tipo === 'puesta_servicio' ? 'servicio' : 'asistencia'));
     mete(a.cerrado || a.fecha_prevista || a.creado, clase,
-      tipoAsis(a.tipo) + (a.cerrado ? '' : ' (sin cerrar)'),
+      tipoAsis(a) + (a.cerrado ? '' : ' (sin cerrar)'),
       [a.diagnostico, a.trabajo].filter(Boolean).join(' — '),
       { aviso: a,
         estado_final: a.estado_final || '',
@@ -16736,7 +16826,7 @@ async function recogerVida(puertaId){
   av.forEach(a => matsDe(a.id).forEach(m => piezas.push({
     fecha: String(a.cerrado || a.creado || '').slice(0,10),
     descripcion: m.descripcion || '', cantidad: m.cantidad, unidad: m.unidad || '',
-    motivo: tipoAsis(a.tipo), aviso: a.id })));
+    motivo: tipoAsis(a), aviso: a.id })));
   piezas.sort((x, y) => x.fecha < y.fecha ? -1 : 1);
 
   const desde = hechos.length ? hechos[0].fecha : '';
@@ -16962,7 +17052,7 @@ async function vidaPuerta(puertaId, modo){
       campo('Estado que consta', ({ ok:'Operativa', aviso:'Con incidencias',
         fuera:'Fuera de servicio' })[p.estado] || p.estado, 'no_verificado')+
       campo('Asistencias abiertas', abiertas.length
-        ? abiertas.map(a => tipoAsis(a.tipo)+' del '+fechaCorta(a.creado)).join('; ') : 'ninguna')+
+        ? abiertas.map(a => tipoAsis(a)+' del '+fechaCorta(a.creado)).join('; ') : 'ninguna')+
     '</table>'+
     (pendientesHoy.length
       ? '<p>Lo que consta pendiente:</p><ul>'+
@@ -17775,6 +17865,9 @@ dlgForm.addEventListener('change', e => {
      Antes solo se deducía al guardar, de modo que en pantalla parecía que la
      asistencia iba sin cliente; y si la puerta estaba sin ficha, nada lo decía. */
   if (t.id === 'a-puerta'){ clienteDeLaPuertaDelAviso(); rutaDelAviso(); return; }
+  /* ---- El tipo manda sobre el subtipo, y los dos sobre lo demás ---- */
+  if (t.id === 'a-tipo'){ pintarSubtipo(); return; }
+  if (t.id === 'a-sub'){ pintarTiposPuerta(); return; }
   /* Al cambiar el cliente a mano, la ruta propuesta cambia con él */
   if (t.id === 'a-cliente'){ rutaDelAviso(); return; }
   /* Si la oficina toca la ruta, deja de proponerse: manda lo que eligió */
@@ -18150,6 +18243,34 @@ function rutaDelAviso(){
     pista.textContent = (k && sel.value === k)
       ? 'Puesta sola: ' + nombreRuta(k) + ', ' + deDondeLaRuta(cid, pid) + '. Cámbiala si hoy vas a otro sitio.'
       : 'Si la pones, el técnico no la cambia.';
+}
+/* ---- El desplegable de subtipo, al vuelo (04-11-2026) ----
+   Al cambiar el tipo, el subtipo que había deja de tener sentido: «garantía» no
+   existe dentro de una instalación. Así que se vuelve a pintar entero y, si el
+   subtipo anterior no está en la lista nueva, se pierde a propósito. */
+function pintarSubtipo(){
+  const sel = document.getElementById('a-sub');
+  const caja = document.getElementById('a-caja-sub');
+  if (!sel || !caja) return;
+  const tipo = (document.getElementById('a-tipo') || {}).value || '';
+  const subs = subtiposDe(tipo);
+  const antes = sel.value;
+  caja.hidden = !subs.length;
+  sel.innerHTML = '<option value="">Sin concretar</option>' +
+    subs.map(([k, n]) => '<option value="'+k+'"'+(antes === k ? ' selected' : '')+'>'+esc(n)+'</option>').join('');
+  if (!subs.some(x => x[0] === antes)) sel.value = '';
+  const pt = document.getElementById('a-tipopista');
+  if (pt) pt.textContent = AYUDA_TIPO[tipo] || '';
+  pintarTiposPuerta();
+}
+function pintarTiposPuerta(){
+  const caja = document.getElementById('a-caja-tp');
+  const tipo = (document.getElementById('a-tipo') || {}).value || '';
+  const sub = (document.getElementById('a-sub') || {}).value || '';
+  const ps = document.getElementById('a-subpista');
+  if (ps) ps.textContent = AYUDA_SUBTIPO[sub] || 'De esto depende lo que se le pide al técnico';
+  if (!caja) return;
+  caja.hidden = !pideTiposPuerta(tipo, sub);
 }
 function clienteDeLaPuertaDelAviso(){
   const sel = document.getElementById('a-puerta'), cli = document.getElementById('a-cliente');
@@ -18698,12 +18819,47 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
                    tecnico_id: admin, fecha_prevista: fecha || null };
   const tipos = lista('tipos_asistencia', Object.keys(ASISTENCIAS));
   const puertasOrd = S.puertas.slice().sort((x,y)=> (x.codigo||'') < (y.codigo||'') ? -1 : 1);
-  let h = '<h3>'+(a ? 'Asistencia '+esc(tipoAsis(d.tipo)) : 'Nueva asistencia')+'</h3>';
+  let h = '<h3>'+(a ? 'Asistencia '+esc(tipoAsis(d)) : 'Nueva asistencia')+'</h3>';
 
   h += '<div class="grupo"><h3>Qué es y a quién</h3><div class="campos">'+
+    /* Los tipos que ahora son subtipos (garantía, normativa) ya no se ofrecen,
+       pero si la asistencia que se está abriendo es de uno de ellos, se deja en
+       la lista: si no, al abrir una garantía de octubre para corregir un
+       teléfono se le cambiaría el tipo sin querer. */
     '<div class="campo"><label for="a-tipo">Tipo de asistencia</label><select id="a-tipo">'+
-      tipos.map(t => '<option value="'+esc(t)+'"'+(d.tipo===t?' selected':'')+'>'+esc(ASISTENCIAS[t]||t)+'</option>').join('')+
-      '</select></div>'+
+      tipos.filter(t => !ASIST_VIEJOS.includes(t) || d.tipo === t)
+        .map(t => '<option value="'+esc(t)+'"'+(d.tipo===t?' selected':'')+'>'+esc(ASISTENCIAS[t]||t)+'</option>').join('')+
+      '</select>'+
+      (ASIST_VIEJOS.includes(d.tipo)
+        ? '<span class="pista">Este tipo ya no se usa en las nuevas: ahora es un subtipo. '+
+          'Se deja aquí para no cambiarte lo que ya estaba guardado</span>'
+        : '<span class="pista" id="a-tipopista">'+esc(AYUDA_TIPO[d.tipo] || '')+'</span>')+'</div>'+
+    /* ---- El subtipo (04-11-2026) ----
+       Aparece y desaparece según el tipo, y de él sale lo que hay que preguntar
+       al crear la asistencia y lo que hay que pedirle al técnico al cerrarla. */
+    (S.sinSubtipo ? '' :
+    '<div class="campo" id="a-caja-sub"'+(subtiposDe(d.tipo).length ? '' : ' hidden')+'>'+
+      '<label for="a-sub">Qué clase de trabajo</label><select id="a-sub">'+
+      '<option value="">Sin concretar</option>'+
+      subtiposDe(d.tipo).map(([k, n]) => '<option value="'+k+'"'+((d.subtipo||'')===k?' selected':'')+'>'+
+        esc(n)+'</option>').join('')+
+      '</select><span class="pista" id="a-subpista">'+
+      esc(AYUDA_SUBTIPO[d.subtipo] || 'De esto depende lo que se le pide al técnico')+'</span></div>')+
+    /* ---- Sobre qué tipos de puerta (04-11-2026) ----
+       Para el automatismo, la normativa y la comercial: ahí todavía no hay
+       ficha de puerta, y sin saber sobre qué se trabaja ni el técnico puede
+       prepararse ni la oferta puede decir nada. En cuanto la puerta exista en
+       la aplicación, manda su ficha y esto sobra. */
+    (S.sinSubtipo ? '' :
+    '<div class="campo full" id="a-caja-tp"'+(pideTiposPuerta(d.tipo, d.subtipo) ? '' : ' hidden')+'>'+
+      '<label>Sobre qué tipos de puerta</label>'+
+      '<div class="checks" id="a-tp">'+
+      lista('tipos', TIPOS).map(t =>
+        '<label><input type="checkbox" class="a-tp-c" value="'+esc(t)+'"'+
+        ((d.tipos_puerta || []).includes(t) ? ' checked' : '')+'>'+esc(t)+'</label>').join('')+
+      '</div>'+
+      '<span class="pista">Marca los que entran en este trabajo. Si la puerta ya está dada de '+
+      'alta, no hace falta: manda su ficha</span></div>')+
     '<div class="campo"><label for="a-origen">Cómo ha entrado</label><select id="a-origen">'+
       opts(lista('origenes', ORIGENES), d.origen==='cliente' ? 'QR' : (d.origen||''))+'</select></div>'+
     '<div class="campo full"><label for="a-puerta">Puerta</label><select id="a-puerta"><option value="">Sin puerta concreta</option>'+
@@ -18794,6 +18950,19 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
        un técnico editando el aviso no puede borrar lo que puso la oficina. */
     if (!S.sinRutas && esGestion() && document.getElementById('a-ruta'))
       o.ruta = val('a-ruta') || null;
+    /* El subtipo y los tipos de puerta solo se mandan si la base los tiene: sin
+       subtipo.sql ejecutado, mandarlos haría fallar el guardado entero y no se
+       podría ni corregir un teléfono. */
+    if (!S.sinSubtipo){
+      /* Un subtipo de otro tipo no se guarda: si estaba puesto «garantía» y se
+         cambia el tipo a instalación, la garantía no puede quedarse pegada. */
+      const sub = val('a-sub');
+      o.subtipo = subtiposDe(o.tipo).some(x => x[0] === sub) ? sub : null;
+      o.tipos_puerta = pideTiposPuerta(o.tipo, o.subtipo)
+        ? Array.from(document.querySelectorAll('#a-tp .a-tp-c:checked')).map(x => x.value)
+        : null;
+      if (o.tipos_puerta && !o.tipos_puerta.length) o.tipos_puerta = null;
+    }
     if (!o.puerta_id && !o.cliente_id && !o.direccion_libre && !o.contacto_nombre)
       return setErr('Pon al menos la puerta, el cliente, una dirección o el nombre de quien avisa.');
     if (tid && o.estado === 'recibido') o.estado = 'asignado';
@@ -20750,7 +20919,7 @@ function dlgMatSinPrecio(avisoId){
 
   let h = '<h3>Material sin precio</h3>'+
     '<p class="mini" style="margin:0 0 12px">'+esc(nombreCliente(a))+' · '+
-    esc(tipoAsis(a.tipo))+' · cerrada '+esc(fechaCorta(a.cerrado))+'</p>'+
+    esc(tipoAsis(a))+' · cerrada '+esc(fechaCorta(a.cerrado))+'</p>'+
     '<p style="margin:0 0 12px">Estas líneas no tienen precio, así que <b>entran en la valoración '+
     'a cero euros</b>. Cada una se arregla de una de dos maneras: diciendo qué artículo del '+
     'almacén es, o escribiendo lo que costó. Y si es material que vais a volver a gastar, al '+
@@ -21054,7 +21223,7 @@ async function documentoPropuestaFactura(avisoId){
       (cli && cli.nif ? 'NIF/CIF: '+esc(cli.nif)+'<br>' : '<span class="g">Sin NIF en la ficha</span><br>')+
       esc([cli && cli.direccion, cli && cli.poblacion].filter(Boolean).join(', '))+
     '</div><div><h2>De dónde sale</h2>'+
-      '<span class="g">Visita:</span> '+esc(tipoAsis(a.tipo))+'<br>'+
+      '<span class="g">Visita:</span> '+esc(tipoAsis(a))+'<br>'+
       '<span class="g">Fecha:</span> '+esc(fechaCorta(a.cerrado))+'<br>'+
       (pu ? '<span class="g">Puerta:</span> '+esc([pu.codigo, pu.tipo].filter(Boolean).join(' · '))+'<br>' : '')+
       '<span class="g">Dirección:</span> '+esc(dondeAsistencia(a))+
@@ -21135,7 +21304,7 @@ async function exportarFacturacion(avisos){
                  (cli && cli.direccion) || '', (cli && cli.poblacion) || ''];
     const pon = (concepto, cant, precio, importe) =>
       filas.push(cab.concat([concepto, num(cant), num(precio), num(importe), num(iva),
-        tipoAsis(a.tipo), (pu && pu.codigo) || '']));
+        tipoAsis(a), (pu && pu.codigo) || '']));
     if (+v.imp_mano_obra > 0)
       pon('Mano de obra'+(a.horas != null ? ' ('+a.horas+' h)' : ''), 1, v.imp_mano_obra, v.imp_mano_obra);
     if (+v.imp_desplazamiento > 0){
@@ -21162,7 +21331,7 @@ function dlgValoracion(avisoId){
   const p = a.puerta_id ? puertaDe(a.puerta_id) : null;
   const fila = (k, x, fuerte) => '<div><dt>'+k+'</dt><dd'+(fuerte?' style="font-weight:600"':'')+'>'+x+'</dd></div>';
   let h = '<h3>'+esc(nombreCliente(a))+'</h3>'+
-    '<p class="mini" style="margin:0 0 12px">'+esc(tipoAsis(a.tipo))+' · '+esc(fechaCorta(a.cerrado))+
+    '<p class="mini" style="margin:0 0 12px">'+esc(tipoAsis(a))+' · '+esc(fechaCorta(a.cerrado))+
     (p ? ' · '+esc(p.codigo||'') : '')+'</p>';
   /* ---- Lo pactado, delante de todo (01-11-2026) ----
      Si este trabajo viene de un presupuesto aceptado, el precio que el cliente
@@ -21177,10 +21346,11 @@ function dlgValoracion(avisoId){
        en una línea pequeña, porque es dinero que desaparece entero. */
     if (pre && seValoraEnCero(a))
       h += '<div class="sin-ficha" style="margin-bottom:10px">Este trabajo salió de un presupuesto '+
-        'aceptado, pero es de tipo <b>'+esc(tipoAsis(a.tipo))+'</b>'+
+        'aceptado, pero es de tipo <b>'+esc(tipoAsis(a))+'</b>'+
         (a.sin_cargo ? ' y está marcado como que no se cobra' : '')+
-        ', y eso se valora en <b>cero euros</b>. Si hay que cobrarlo, cambia el tipo de la '+
-        'asistencia'+(a.sin_cargo ? ' o quítale la marca de «no se cobra»' : '')+
+        ', y eso se valora en <b>cero euros</b>. Si hay que cobrarlo, cambia '+
+        (esGarantia(a) && a.subtipo === 'garantia' ? 'la clase de trabajo' : 'el tipo de la asistencia')+
+        (a.sin_cargo ? ' o quítale la marca de «no se cobra»' : '')+
         ' y vuelve a calcular.</div>';
     if (pre && pac != null){
       const dif = Math.round((pac - (+v.imp_total || 0)) * 100) / 100;
@@ -21346,7 +21516,7 @@ function dlgAnular(id){
   if (!a) return;
   if (a.firma_ruta){ toast('Esta visita ya está firmada por el cliente: no se puede anular.'); return; }
   const h = '<h3>Anular la asistencia</h3>'+
-    '<p class="mini" style="margin:0 0 12px">'+esc(tipoAsis(a.tipo))+' · '+esc(nombreCliente(a))+
+    '<p class="mini" style="margin:0 0 12px">'+esc(tipoAsis(a))+' · '+esc(nombreCliente(a))+
       (dondeAsistencia(a) ? ' · '+esc(dondeAsistencia(a)) : '')+'</p>'+
     '<div class="campos">'+
     '<div class="campo full"><label for="an-motivo">Por qué no se hace</label>'+
@@ -22043,7 +22213,7 @@ function dlgCierre(avisoId){
      días suele llevar más de una. */
   const puertas = puertasDeAviso(a.id);
   const varias = puertas.length > 1;
-  let h = '<h3>'+(larga ? 'Cerrar la obra' : 'Cerrar visita')+' · '+esc(tipoAsis(a.tipo))+'</h3>';
+  let h = '<h3>'+(larga ? 'Cerrar la obra' : 'Cerrar visita')+' · '+esc(tipoAsis(a))+'</h3>';
 
   /* Marcada como obra larga pero todavía sin ningún parte: o se apunta el de
      hoy, o se deshace. Cerrar así perdería las horas de los días anteriores,
@@ -22462,7 +22632,7 @@ function bloqueAltaObra(a, puertas, fotos){
 
   let h = '<div class="grupo" id="obra-bloque"><h3>Documentar '+
     (varias ? 'las puertas' : 'la puerta')+' en obra</h3>'+
-    '<p class="mini" style="margin:0">Esta visita es de <b>'+esc(tipoAsis(a.tipo))+'</b>, así que '+
+    '<p class="mini" style="margin:0">Esta visita es de <b>'+esc(tipoAsis(a))+'</b>, así que '+
     (varias ? 'conviene dejar documentadas las '+xs.length+' puertas de la obra'
             : 'conviene dejar la puerta documentada')+
     ' aquí mismo: las medidas, las fotos y la placa están en la puerta, no en la oficina. '+
@@ -22900,7 +23070,7 @@ async function guardarCierre(a, cerrando){
          primera esté bien sería cerrar dos puertas sin medidas ni fotos. */
       const xs = puertasDeAviso(a.id);
       if (!xs.length)
-        return setErr('Esta visita es de '+tipoAsis(a.tipo)+' y no hay ninguna puerta dada de alta. '+
+        return setErr('Esta visita es de '+tipoAsis(a)+' y no hay ninguna puerta dada de alta. '+
           'Dale a «Dar de alta la puerta» aquí arriba: no se puede cerrar sin ficha.');
       const ms = [];
       for (const pu of xs) ms.push({ p: pu, m: minimoObra(pu, await contarFotos(pu.id)) });
@@ -23132,7 +23302,7 @@ async function hojaParte(avisoId){
     '.quien .ini{width:54px;height:54px;border-radius:50%;background:#f0eeec;color:#6B6560;'+
       'display:flex;align-items:center;justify-content:center;font:700 18px sans-serif;border:1px solid #ddd}'+
     '@media print{body{padding:0}}</style></head><body>'+
-    '<div class="cab"><div><h1>Parte de asistencia</h1><div>'+esc(tipoAsis(a.tipo))+' · '+fechaHora(a.creado)+'</div></div>'+
+    '<div class="cab"><div><h1>Parte de asistencia</h1><div>'+esc(tipoAsis(a))+' · '+fechaHora(a.creado)+'</div></div>'+
     '<div style="text-align:right"><b>ARIZA</b> puertas automáticas<br><span style="color:#6B6560">arizapa.es</span></div></div>'+
     (nomTec ? ('<div class="quien">'+
       (caraUrl ? '<img src="'+caraUrl+'" alt="'+esc(nomTec)+'">'
