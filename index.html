@@ -1583,6 +1583,12 @@ async function cargar(){
      sola y se factura, como antes del 05-11-2026. */
   const ps = await sb.from('avisos').select('instalacion_id, ps_causa, repercutible').limit(1);
   S.sinRemates = !!ps.error;
+  /* La salida al alta de puerta obligatoria: servidor/alta-puerta.sql. Sin esas
+     columnas no se puede declarar que la visita no era de ninguna puerta, así
+     que tampoco se bloquea el cierre por no tener ficha en los tipos nuevos:
+     se vuelve a lo de antes del 05-11-2026, que solo las obras lo exigían. */
+  const ap2 = await sb.from('avisos').select('sin_puerta, sin_puerta_motivo').limit(1);
+  S.sinAltaPuerta = !!ap2.error;
   /* ---- El almacén ----
      Las existencias no se guardan en ninguna columna: se leen de la vista, que
      las suma de los movimientos. Si falta el SQL del almacén, la aplicación
@@ -1746,7 +1752,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.05-2';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.05-4';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -2437,13 +2443,29 @@ function tarjetaTrabajo(a){
        (haría una consulta por tarjeta); se cuentan en el parte y al cerrar. */
     (() => {
       if (!obligaAltaObra(a)) return '';
+      /* La visita que declaró no ser de ninguna puerta no tiene nada que avisar */
+      if (visitaSinPuerta(a)) return '';
       /* Todas las puertas de la obra, no solo la principal: si la segunda no
          está documentada, el técnico tiene que saberlo desde la furgoneta. */
       const xs = puertasDeAviso(a.id);
       if (!xs.length) return '<p class="nota-oficina" style="border-left-color:var(--mal)">'+
         '<b>Puerta sin documentar.</b> No tiene ficha ni QR: hay que darla de alta y hacerle al '+
         'menos una foto. Lo demás (medidas, etiqueta, matrícula) mejor allí, pero se puede '+
-        'rematar en oficina.</p>';
+        'rematar en oficina.'+
+        /* En una avería puede que la visita no sea de ninguna puerta, y conviene
+           decirlo en la tarjeta: si no, el técnico llega al cierre creyendo que
+           tiene que inventarse una ficha para poder cerrar. */
+        (admiteSinPuerta(a)
+          ? ' Si al llegar ves que esta visita no es de ninguna puerta, en el parte hay una '+
+            'casilla para decirlo con su motivo.'
+          : '')+
+        '</p>';
+      /* La ficha A MEDIAS se avisa antes de salir solo en las obras: ahí hay que
+         contar con el tiempo y llevarse el flexómetro. En una avería se dice en
+         el parte, con la puerta delante, para no llenar la tarjeta de ruido
+         (decisión de David, 05-11-2026). Lo que sí se avisa siempre es que la
+         puerta NO tenga ficha, que es lo de arriba. */
+      if (!altaEsObra(a)) return '';
       const ms = xs.map(pu => ({ p: pu, f: minimoObra(pu, null).faltan.filter(x => !x.duda) }))
         .filter(x => x.f.length);
       if (!ms.length) return '';
@@ -3691,6 +3713,40 @@ function vistaGestion(){
       });
       h += '</div>'+
         (obr.length > 25 ? '<p class="mini" style="margin:8px 0 0">Y '+(obr.length-25)+' más.</p>' : '')+
+        '</div>';
+    }
+  }
+
+  /* ---- Visitas cerradas sin ninguna puerta (05-11-2026) ----
+     Desde hoy el alta de puerta se exige en todas las visitas, y la única salida
+     es declarar que no se trabajó sobre ninguna. Esa salida tiene que verse: una
+     válvula sin contador es un agujero. Si se repite siempre con el mismo
+     técnico, o con el mismo motivo copiado, lo que hay no es una excepción, es
+     que el alta de puerta no se está haciendo. */
+  if (!S.sinAltaPuerta){
+    const vsp = (S.avisos || [])
+      .filter(x => x.sin_puerta && !x.anulada && x.cerrado)
+      .sort((x, y) => String(y.cerrado || '').localeCompare(String(x.cerrado || '')));
+    if (vsp.length){
+      h += '<div class="panel"><div class="panel-h"><h3>Visitas cerradas sin ninguna puerta</h3>'+
+        '<span class="mini">'+vsp.length+'</span></div>'+
+        '<p class="mini" style="margin:0 0 10px">En estas visitas el técnico ha declarado que no '+
+        'trabajó sobre ninguna puerta, y por eso se cerraron sin ficha. Es una salida legítima (el '+
+        'cuadro general de un edificio, una puerta que no era del cliente), pero conviene leerlas: '+
+        'si se repiten con el mismo motivo, lo que falta es el alta de la puerta.</p>'+
+        '<div class="lista-simple">';
+      vsp.slice(0, 20).forEach(x => {
+        h += '<div class="item-plano">'+
+          '<button class="item sp" data-act="aviso-editar" data-id="'+x.id+'">'+
+            '<span><span class="tit">'+esc((clienteDe(x.cliente_id) || {}).nombre || 'Sin cliente')+'</span>'+
+            '<span class="sub">'+esc(x.sin_puerta_motivo || 'sin motivo apuntado')+'</span></span>'+
+            '<span style="text-align:right"><span class="tit">'+esc(tipoAsis(x))+'</span>'+
+            '<span class="sub">'+esc(fechaCorta(x.cerrado))+' · '+
+              esc(x.tecnico_id ? nombreTec(x.tecnico_id) : (x.tecnico || ''))+'</span></span>'+
+          '</button></div>';
+      });
+      h += '</div>'+
+        (vsp.length > 20 ? '<p class="mini" style="margin:8px 0 0">Y '+(vsp.length-20)+' más.</p>' : '')+
         '</div>';
     }
   }
@@ -10576,9 +10632,41 @@ function seguridadSegunComponentes(p){
    El peso de la hoja NO se exige: no se puede pesar una hoja en obra sin
    báscula ni ficha del fabricante. Se pide como recomendado, no como mínimo.
    ================================================================ */
-const ALTA_OBRA_OBLIGA = ['instalacion','puesta_servicio','normativa','mantenimiento'];
+/* ---- Documentar la puerta: en TODAS las visitas (05-11-2026) ----
+   David: el alta de puerta es una de las cosas comunes a todas las asistencias,
+   no solo a las obras.
+
+   Hasta hoy esto era obligatorio en cuatro tipos y voluntario en los demás.
+   Pero la mayoría de las visitas son averías, y es en una avería donde se entra
+   por primera vez en casa de un cliente nuevo. Una puerta que no se da de alta
+   ahí no existe para la empresa: no tiene QR, no entra en ningún contrato de
+   mantenimiento, no se le puede ofrecer una revisión, y la siguiente avería
+   empieza otra vez de cero. El viaje ya estaba pagado y el dato estaba delante.
+
+   Se escribe al revés que antes, por una lista de EXCEPCIONES en vez de una de
+   obligados: así un tipo nuevo de visita entra pidiendo la ficha, que es lo que
+   se quiere, en vez de quedarse fuera porque nadie se acordó de añadirlo.
+     · comercial  ahí la puerta todavía no existe, y tiene su toma de medidas
+     · falso      no se ha trabajado: no hay nada que documentar */
+const ALTA_NO_PIDE = ['comercial','falso'];
+/* Los cuatro tipos en los que documentar la puerta es parte del trabajo. La
+   diferencia con los demás no es qué se pide, que es lo mismo, sino CUÁNDO se
+   avisa: en estos la ficha a medias se dice ya en la tarjeta, antes de salir,
+   porque hay que llevarse el flexómetro. En una avería eso sería ruido: se dice
+   en el parte, con la puerta delante. Decisión de David el 05-11-2026. */
+const ALTA_ES_OBRA = ['instalacion','puesta_servicio','normativa','mantenimiento'];
+/* Y los tipos en los que la visita puede no ser de ninguna puerta: una avería
+   del cuadro general del edificio, una barrera que al final no era del cliente.
+   Ahí hay una salida al bloqueo, con motivo escrito. En una instalación o en
+   una preventiva no la hay, porque una obra sin puerta no es una obra. */
+const ALTA_ADMITE_SIN = ['averia','urgencia','garantia'];
 const MIN_FOTOS_OBRA = 2;
-const obligaAltaObra = a => !!a && ALTA_OBRA_OBLIGA.includes(a.tipo);
+const obligaAltaObra = a => !!a && !ALTA_NO_PIDE.includes(a.tipo);
+const altaEsObra = a => !!a && ALTA_ES_OBRA.includes(a.tipo);
+const admiteSinPuerta = a => !!a && !S.sinAltaPuerta && ALTA_ADMITE_SIN.includes(a.tipo);
+/* La válvula, usada: marcada y con motivo. Sin motivo no vale, ni guardada ni en
+   pantalla, porque entonces sería un botón de saltarse el alta. */
+const visitaSinPuerta = a => !!a && !!a.sin_puerta && !!String(a.sin_puerta_motivo || '').trim();
 
 /* Hay matrícula tomada si está escrita en la ficha, o si algún componente de la
    puerta lleva su número de serie o, al menos, marca y modelo: la placa del motor
@@ -22894,7 +22982,11 @@ function dlgCierre(avisoId){
   /* Las puertas de la obra y, con ellas, el acta de entrega de cada una. Sale
      cuando hay más de una, cuando la obra es de varios días, cuando hay que
      entregar, o cuando todavía no hay ninguna puerta y hace falta. */
-  if (varias || larga || pideEntrega(a) || (obligaAltaObra(a) && !puertas.length))
+  /* La lista de puertas de la obra sigue siendo cosa de OBRAS: en una avería de
+     una sola puerta, un bloque titulado «Puertas de esta obra» no es lo que el
+     técnico tiene delante. La caja del mínimo, que es la que importa, sí sale en
+     todas (05-11-2026). */
+  if (varias || larga || pideEntrega(a) || (altaEsObra(a) && !puertas.length))
     h += bloquePuertasObra(a, puertas);
 
   /* El alta en obra va aquí, antes de todo lo demás: en estos tipos de asistencia
@@ -23366,20 +23458,31 @@ function bloqueAltaObra(a, puertas, fotos){
                                : (fotos == null ? null : fotos);
   const varias = xs.length > 1;
 
+  /* El mismo bloque sirve para una obra y para una avería, pero no se explica
+     igual: en una obra documentar la puerta es parte del trabajo, y en una
+     avería es aprovechar que se está delante de ella. Lo que se pide es lo
+     mismo; lo que cambia es por qué (05-11-2026). */
+  const obra = altaEsObra(a);
   let h = '<div class="grupo" id="obra-bloque"><h3>Documentar '+
-    (varias ? 'las puertas' : 'la puerta')+' en obra</h3>'+
-    '<p class="mini" style="margin:0">Esta visita es de <b>'+esc(tipoAsis(a))+'</b>, así que '+
-    (varias ? 'conviene dejar documentadas las '+xs.length+' puertas de la obra'
-            : 'conviene dejar la puerta documentada')+
-    ' aquí mismo: las medidas, las fotos y la placa están en la puerta, no en la oficina. '+
-    'Para <b>cerrar</b> basta con la ficha y una foto; lo que falte se remata en oficina y queda '+
+    (varias ? 'las puertas' : 'la puerta')+(obra ? ' en obra' : '')+'</h3>'+
+    '<p class="mini" style="margin:0">'+
+    (obra
+      ? 'Esta visita es de <b>'+esc(tipoAsis(a))+'</b>, así que '+
+        (varias ? 'conviene dejar documentadas las '+xs.length+' puertas de la obra'
+                : 'conviene dejar la puerta documentada')+
+        ' aquí mismo: las medidas, las fotos y la placa están en la puerta, no en la oficina.'
+      : 'Estás delante de '+(varias ? 'estas puertas' : 'esta puerta')+', y eso es lo que no se '+
+        'puede repetir desde la oficina. Una puerta sin ficha no existe para la empresa: no tiene '+
+        'QR, no entra en ningún contrato de mantenimiento y no se le puede ofrecer una revisión.')+
+    ' Para <b>cerrar</b> basta con la ficha y una foto; lo que falte se remata en oficina y queda '+
     'señalado, pero cada dato que se quede sin tomar es un viaje de vuelta.</p>';
 
   /* Sin ninguna puerta todavía. En una instalación esto es lo NORMAL hasta que
      la puerta está montada: no se documenta lo que aún no existe. */
   if (!xs.length){
     const instala = ['instalacion','puesta_servicio'].includes(a.tipo);
-    h += '<div class="sin-ficha" style="margin-top:10px">Esta obra no tiene ninguna puerta dada de alta. '+
+    h += '<div class="sin-ficha" style="margin-top:10px">'+
+      (obra ? 'Esta obra no tiene ninguna puerta dada de alta. ' : 'Esta visita no tiene ninguna puerta dada de alta. ')+
       (instala
         ? 'Si todavía la estás montando, está bien: la ficha se crea cuando la puerta ya está puesta, '+
           'con sus medidas reales y su placa. Pero la obra no se cierra sin ella.'
@@ -23392,7 +23495,30 @@ function bloqueAltaObra(a, puertas, fotos){
       (S.sinAvisoPuertas ? '' :
         '<button type="button" class="btn sm" data-act="enganchar-puerta" data-id="'+a.id+
         '">Ya está dada de alta</button>')+
-      '</div></div>';
+      '</div>'+
+      /* ---- La única salida (05-11-2026) ----
+         No todas las averías son de una puerta: el cuadro general del edificio,
+         una barrera que al final no era del cliente, una visita en la que no se
+         llega a ver la puerta. Si el bloqueo no tuviera salida, el técnico se
+         quedaría sin poder cerrar un parte legítimo, y un bloqueo que no se
+         puede cumplir se acaba sorteando. Así que la salida existe, pide motivo
+         y se mira: esas visitas salen en una lista de la oficina. */
+      (admiteSinPuerta(a)
+        ? '<div class="campos" style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">'+
+          '<div class="campo full" style="align-content:end"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+          '<input type="checkbox" id="z-sinpta"'+(a.sin_puerta?' checked':'')+
+          ' style="accent-color:var(--amarillo);width:18px;height:18px">En esta visita no he trabajado '+
+          'sobre ninguna puerta</label>'+
+          '<span class="pista">Márcalo solo si es verdad: el cuadro general del edificio, una puerta '+
+          'que no era de este cliente, o una visita en la que no has llegado a verla. Con esto se '+
+          'cierra el parte sin ficha, pero hay que decir por qué, y la oficina ve estas visitas en '+
+          'una lista</span></div>'+
+          '<div class="campo full"><label for="z-sinptam">Por qué no había puerta</label>'+
+          '<input id="z-sinptam" type="text" maxlength="200" value="'+esc(a.sin_puerta_motivo||'')+'" '+
+          'placeholder="Ej.: era el cuadro general del edificio, no una puerta"></div>'+
+          '</div>'
+        : '')+
+      '</div>';
     return h;
   }
 
@@ -23974,6 +24100,26 @@ async function guardarCierre(a, cerrando){
       if (f) o.urgencia_factor = f.factor;
     }
   }
+  /* ---- La visita que no era de ninguna puerta (05-11-2026) ----
+     Se lee siempre que el campo esté en pantalla, también al guardar el avance:
+     si solo se leyera al cerrar, el técnico marcaría la casilla, guardaría a
+     medias y al volver se la encontraría sin marcar.
+     El motivo es obligatorio: sin él, la casilla sería un botón de saltarse el
+     alta de puerta, y eso es justo lo que no se quiere. */
+  if (!S.sinAltaPuerta && document.getElementById('z-sinpta')){
+    o.sin_puerta = chk('z-sinpta');
+    o.sin_puerta_motivo = val('z-sinptam') || null;
+    if (o.sin_puerta && !o.sin_puerta_motivo)
+      return setErr('Has marcado que en esta visita no has trabajado sobre ninguna puerta: escribe '+
+        'por qué. Sin el motivo no vale, porque entonces sería una manera de saltarse el alta de '+
+        'la puerta.');
+    /* Y al revés: si hay puerta dada de alta, la casilla no tiene sentido. Se
+       quita sola en vez de dejar una visita que se contradice. */
+    if (o.sin_puerta && puertasDeAviso(a.id).length){
+      o.sin_puerta = false; o.sin_puerta_motivo = null;
+      toast('Esta visita ya tiene una puerta dada de alta, así que se ha quitado la marca de «sin puerta».');
+    }
+  }
   /* ---- Quién paga el remate (05-11-2026) ----
      Solo lo manda la oficina, y solo si el campo está en pantalla. Un técnico
      editando el parte no puede poner ni quitar una marca que decide si esa
@@ -24117,14 +24263,17 @@ async function guardarCierre(a, cerrando){
        pantalla sino con lo que hay guardado, y las fotos se cuentan otra vez contra
        la base de datos: un parte abierto hace media hora puede traer un número de
        fotos que ya no es el bueno. */
-    if (obligaAltaObra(a)){
+    if (obligaAltaObra(a) && !(o.sin_puerta && o.sin_puerta_motivo)){
       /* Se comprueban TODAS las puertas de la obra, no solo la principal: en una
          instalación de tres puertas, dar por documentada la obra porque la
          primera esté bien sería cerrar dos puertas sin medidas ni fotos. */
       const xs = puertasDeAviso(a.id);
       if (!xs.length)
         return setErr('Esta visita es de '+tipoAsis(a)+' y no hay ninguna puerta dada de alta. '+
-          'Dale a «Dar de alta la puerta» aquí arriba: no se puede cerrar sin ficha.');
+          'Dale a «Dar de alta la puerta» aquí arriba: no se puede cerrar sin ficha.'+
+          (admiteSinPuerta(a)
+            ? ' Y si esta visita no era de ninguna puerta, márcalo ahí mismo y di por qué.'
+            : ''));
       const ms = [];
       for (const pu of xs) ms.push({ p: pu, m: minimoObra(pu, await contarFotos(pu.id)) });
       /* Lo único que impide cerrar es que una puerta no tenga ni una foto. Todo
