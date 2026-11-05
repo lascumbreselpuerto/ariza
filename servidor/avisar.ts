@@ -30,6 +30,24 @@ const laVisita = (a: Record<string, unknown>) => {
   const s = String(a.subtipo || '').trim();
   return s ? base + ' · ' + (SUBTIPOS[s] || s) : base;
 };
+/* ---- La toma de medidas de la comercial (05-11-2026) ----
+   Los mismos textos que la aplicación, escritos aquí porque esta función no
+   comparte código con ella. Si un día se añade una opción en un sitio y no en
+   el otro, el grupo recibiría la clave en crudo («por_comprobar») en vez de la
+   frase: fea, pero no engaña a nadie, que es lo que importa. */
+const SIT_TG: Record<string, string> = {
+  hueco: 'hueco vacío, obra nueva',
+  manual: 'sustituye a una puerta manual',
+  automatica: 'sustituye a una puerta automática',
+  otro: 'otra situación, ver notas',
+};
+const ELEC_TG: Record<string, string> = {
+  existe: 'hay acometida',
+  llevar: '<b>hay que llevar la acometida</b>',
+  por_comprobar: 'acometida por comprobar',
+};
+/* Los milímetros, enteros: un hueco no mide 4000,5 mm */
+const mmTg = (n: unknown) => String(Math.round(Number(n) || 0));
 const TIPOS: Record<string, string> = {
   averia: 'Correctiva (avería)', mantenimiento: 'Preventiva (mantenimiento)', comercial: 'Comercial (ofertar)',
   instalacion: 'Instalación', puesta_servicio: 'Puesta en servicio', normativa: 'Normativa y adecuación',
@@ -363,6 +381,41 @@ Deno.serve(async (req) => {
          Y van separadas a propósito, porque cobrar y facturar son dos cosas
          distintas: lo que se cobra en obra hay que facturarlo igual, y eso ya
          nos dejó una vez visitas cobradas que no facturaba nadie. */
+      /* ---- Las medidas de la comercial (05-11-2026) ----
+         De una visita comercial lo que espera la oficina es la medida, para
+         ponerse a redactar la oferta sin llamar al tecnico. Una linea por
+         hueco, igual que hay una linea por puerta en las revisiones. */
+      const medFilas: string[] = [];
+      if (a.tipo === 'comercial') {
+        const { data: meds } = await admin.from('medidas').select('*').eq('aviso_id', a.id).order('orden');
+        const lis = (meds || []) as Record<string, unknown>[];
+        const variosH = lis.length > 1;
+        lis.forEach((m, i) => {
+          const et = variosH ? `Hueco ${i + 1}` : 'Hueco';
+          if (m.sin_medir) {
+            medFilas.push(`${et}: <b>SIN MEDIR</b>. ` +
+              escTg(String(m.sin_medir_motivo || 'sin motivo apuntado')) + '. Hay que volver');
+            return;
+          }
+          const trozos = [
+            m.ubicacion ? escTg(String(m.ubicacion)) : '',
+            m.tipo_puerta ? escTg(String(m.tipo_puerta)) : '',
+            (Number(m.ancho_mm) > 0 && Number(m.alto_mm) > 0)
+              ? `<b>${escTg(mmTg(m.ancho_mm))} x ${escTg(mmTg(m.alto_mm))} mm</b>` : '',
+          ].filter(Boolean).join(' · ');
+          medFilas.push(`${et}: ${trozos || 'sin datos'}`);
+          const extra = [
+            (m.dintel_mm != null && m.dintel_mm !== '') ? `dintel ${mmTg(m.dintel_mm)} mm` : '',
+            (m.lateral_mm != null && m.lateral_mm !== '') ? `lateral ${mmTg(m.lateral_mm)} mm` : '',
+            m.situacion ? SIT_TG[String(m.situacion)] || String(m.situacion) : '',
+            m.electricidad ? ELEC_TG[String(m.electricidad)] || String(m.electricidad) : '',
+          ].filter(Boolean).join(' · ');
+          if (extra) medFilas.push('  ' + escTg(extra));
+          if (m.auxiliares) medFilas.push('  Auxiliares: ' + escTg(String(m.auxiliares)));
+          if (m.notas) medFilas.push('  Notas: ' + escTg(String(m.notas)));
+        });
+        if (!lis.length) medFilas.push('<b>Visita comercial cerrada sin ninguna medida apuntada.</b>');
+      }
       const cobro = a.cobrado
         ? 'Cobro: <b>cobrado en obra</b>, ' + escTg(eur(a.cobro_importe)) +
           (a.cobro_forma ? ' en ' + escTg(a.cobro_forma) : '') +
@@ -392,6 +445,7 @@ Deno.serve(async (req) => {
           ? (a.desplazamiento != null ? num(a.desplazamiento) + ' km' : 'por kilómetros')
           : nombreRuta)}` : '',
         a.trabajo ? `Trabajo: ${escTg(a.trabajo)}` : '',
+        medFilas.length ? medFilas.join('\n') : '',
         a.firma_ruta
           ? `Firmado por ${escTg(a.firma_nombre || 'el cliente')}`
           : `<b>Sin firma del cliente.</b> ${escTg(a.firma_sin || '')}`,
@@ -427,21 +481,32 @@ Deno.serve(async (req) => {
     if (tipo === 'cerrado' || tipo === 'parte') {
       const { data: mats } = await admin.from('materiales').select('*').eq('aviso_id', a.id).order('creado');
       const material = (mats || []).map(m => `${m.descripcion} · ${m.cantidad} ${m.unidad || ''}`).join('<br>');
-      // si fue una revisión periódica, el resumen del guión
-      const { data: rev } = await admin.from('revisiones').select('*').eq('aviso_id', a.id).limit(1).maybeSingle();
+      /* ---- El resumen del guión, UNA POR PUERTA (04-11-2026) ----
+         Desde hoy una preventiva puede llevar varias puertas y cada una deja su
+         propia revisión. Antes se traía una sola con .limit(1), así que en una
+         visita de cuatro puertas el correo contaba la primera y callaba las
+         otras tres: tres puertas revisadas que no constaban en ninguna parte. */
+      const { data: revs } = await admin.from('revisiones').select('*').eq('aviso_id', a.id);
       const revFilas: string[][] = [];
-      if (rev) {
+      const nombreRes: Record<string, string> = { apta: 'Apta para el servicio', reservas: 'Apta con reservas', no_apta: 'NO APTA' };
+      const varias = (revs || []).length > 1;
+      for (const rev of (revs || [])) {
+        let cual = '';
+        if (rev.puerta_id) {
+          const { data: pr } = await admin.from('puertas').select('codigo').eq('id', rev.puerta_id).maybeSingle();
+          cual = pr?.codigo ? String(pr.codigo) : '';
+        }
+        const et = (t: string) => varias ? `${t} · ${cual || rev.tipo_puerta || ''}` : t;
         const malos = (rev.puntos || []).filter((x: Record<string, unknown>) => x.r === 'mal');
-        const nombreRes: Record<string, string> = { apta: 'Apta para el servicio', reservas: 'Apta con reservas', no_apta: 'NO APTA' };
-        revFilas.push(['Revisión', `${rev.tipo_puerta || ''} · ${nombreRes[rev.resultado] || 'Apta'}`]);
-        if (rev.riesgo) revFilas.push(['Atención', '<b style="color:#B3271E">Riesgo para las personas: procede dejarla fuera de servicio</b>']);
-        revFilas.push(['No conformes', malos.length
+        revFilas.push([et('Revisión'), `${rev.tipo_puerta || ''} · ${nombreRes[rev.resultado] || 'Apta'}`]);
+        if (rev.riesgo) revFilas.push([et('Atención'), '<b style="color:#B3271E">Riesgo para las personas: procede dejarla fuera de servicio</b>']);
+        revFilas.push([et('No conformes'), malos.length
           ? malos.map((x: Record<string, string>) => '· ' + x.t + (x.nota ? ' (' + x.nota + ')' : '')).join('<br>')
           : 'Ninguno']);
         const medidos = (rev.puntos || []).filter((x: Record<string, unknown>) => x.v != null);
-        if (medidos.length) revFilas.push(['Valores medidos',
+        if (medidos.length) revFilas.push([et('Valores medidos'),
           medidos.map((x: Record<string, string>) => x.t + ': <b>' + x.v + '</b>').join('<br>')]);
-        if (rev.recomendaciones) revFilas.push(['Recomendaciones', rev.recomendaciones]);
+        if (rev.recomendaciones) revFilas.push([et('Recomendaciones'), rev.recomendaciones]);
       }
       const cierre: string[][] = [
         ...filas,
