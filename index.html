@@ -723,6 +723,34 @@ const esGarantia = a => !!a && (a.tipo === 'garantia' || a.subtipo === 'garantia
 const pideTiposPuerta = (tipo, sub) =>
   tipo === 'comercial' ||
   (tipo === 'instalacion' && ['automatismo', 'normativa'].includes(String(sub || '')));
+/* ---- La toma de medidas de la visita comercial (05-11-2026) ----
+   La comercial es la visita de ir a ofertar, y lo que se trae de ella son las
+   medidas del hueco y los auxiliares que hacen falta. Hasta hoy eso se
+   escribía todo seguido en «Qué has hecho», y en la oficina había que leer un
+   párrafo y adivinar cuál era el ancho. Lo que no tiene un sitio fijo no se
+   puede pasar a un presupuesto sin volver a llamar al técnico.
+
+   Las medidas se guardan en el AVISO, no dando de alta la puerta: una oferta
+   que no se ha vendido no es una puerta todavía. Decisión de David el
+   05-11-2026. Si la oferta se vende, estos datos rellenan el alta.
+
+   Los nombres ancho_mm, alto_mm y dintel_mm son los mismos que en la ficha de
+   la puerta, a propósito: el día que se venda se copia, sin traducir nombres
+   de un sitio a otro, que es donde se cuelan los errores. */
+const MED_SIT = [
+  ['hueco',      'Hueco vacío, obra nueva'],
+  ['manual',     'Hay una puerta manual que se sustituye'],
+  ['automatica', 'Hay una puerta automática que se sustituye'],
+  ['otro',       'Otra cosa, lo explico en las notas']];
+const MED_ELEC = [
+  ['existe',        'Hay acometida en el sitio'],
+  ['llevar',        'Hay que llevarla'],
+  ['por_comprobar', 'Por comprobar']];
+const MED_SIT_TXT  = o => (MED_SIT.find(x => x[0] === o)  || [null, ''])[1];
+const MED_ELEC_TXT = o => (MED_ELEC.find(x => x[0] === o) || [null, ''])[1];
+/* Los milímetros se escriben enteros. Un hueco no mide 4000,5 mm, y un decimal
+   en el papel del cliente solo hace dudar de la medida. */
+const mm = n => String(Math.round(Number(n) || 0));
 const ORIGENES = ['QR','Teléfono','Correo','WhatsApp','Interno','Cliente en oficina'];
 const COBROS = ['Efectivo','Datáfono','Bizum','Cheque','Transferencia'];
 const EST_FINAL = ['Operativa','Operativa con reservas','Fuera de servicio','Esperando repuesto'];
@@ -1673,7 +1701,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.04-3';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.05-1';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -5849,7 +5877,78 @@ function dlgDetalleLinea(i){
    presupuesto a ofertar» de su revisión, o en las deficiencias del informe. Eso
    es la materia prima: se trae aquí para no volver a teclear la puerta, el
    cliente ni lo que se vio. */
+/* ---- El rótulo y el detalle de un hueco medido (05-11-2026) ----
+   Lo que se escribe en el presupuesto sale de aquí, así que está en un solo
+   sitio: el papel que ve el cliente, la hoja del parte y el aviso al grupo
+   dicen lo mismo del mismo hueco. */
+function rotuloMedida(m, n){
+  const partes = [];
+  if (m.ubicacion) partes.push(m.ubicacion);
+  if (m.tipo_puerta) partes.push(m.tipo_puerta);
+  if (+m.ancho_mm > 0 && +m.alto_mm > 0) partes.push(mm(m.ancho_mm)+' x '+mm(m.alto_mm)+' mm');
+  if (!partes.length) partes.push('Hueco '+(n || 1)+' sin medir');
+  return partes.join(' · ');
+}
+function detalleMedida(m){
+  const l = [];
+  if (+m.ancho_mm > 0) l.push('Ancho del hueco: '+mm(m.ancho_mm)+' mm');
+  if (+m.alto_mm > 0)  l.push('Alto del hueco: '+mm(m.alto_mm)+' mm');
+  if (m.dintel_mm != null && m.dintel_mm !== '')  l.push('Dintel libre: '+mm(m.dintel_mm)+' mm');
+  if (m.lateral_mm != null && m.lateral_mm !== '') l.push('Espacio lateral libre: '+mm(m.lateral_mm)+' mm');
+  if (m.situacion)    l.push('Situación: '+MED_SIT_TXT(m.situacion));
+  if (m.electricidad) l.push('Acometida eléctrica: '+MED_ELEC_TXT(m.electricidad));
+  if (m.auxiliares)   l.push('Auxiliares que hacen falta: '+m.auxiliares);
+  if (m.notas)        l.push('Notas: '+m.notas);
+  if (m.sin_medir)    l.push('NO SE HA PODIDO MEDIR: '+(m.sin_medir_motivo || 'sin motivo apuntado')+
+    '. Hay que volver antes de ofertar este hueco.');
+  return l.join('\n');
+}
+
 async function presupuestoDesdeAsistencia(av){
+  /* ---- La comercial va por otro camino (05-11-2026) ----
+     De una visita comercial lo que se trae son los huecos medidos, y cada hueco
+     es un capítulo del presupuesto con su detalle debajo. Así la oficina solo
+     tiene que colgar la puerta, el material y la mano de obra de cada capítulo,
+     en vez de leerse un párrafo y teclear otra vez las medidas. */
+  if (av.tipo === 'comercial'){
+    let meds = [];
+    try {
+      const { data } = await sb.from('medidas').select('*').eq('aviso_id', av.id).order('orden');
+      meds = data || [];
+    } catch(_){ /* sin tabla de medidas todavía: se sigue por el camino de siempre */ }
+    if (meds.length){
+      const lineas = [];
+      meds.forEach((m, i) => {
+        lineas.push({ tipo:'capitulo', descripcion: rotuloMedida(m, i + 1),
+          nombre: rotuloMedida(m, i + 1), detalle: detalleMedida(m) || null,
+          cantidad:0, unidad:'', precio:0, importe:0, coste:0 });
+        const det = detalleMedida(m);
+        if (det) lineas.push({ tipo:'texto', descripcion: det, nombre: det,
+          cantidad:0, unidad:'', precio:0, importe:0, coste:0 });
+      });
+      const sinMedir = meds.filter(m => m.sin_medir).length;
+      const cli = av.cliente_id ? clienteDe(av.cliente_id) : null;
+      dlgPresupuesto(null, {
+        cliente_id: av.cliente_id || null,
+        puerta_id: null,
+        aviso_id: av.id,
+        titulo: meds.length > 1
+          ? ('Oferta de '+meds.length+' puertas'+(cli && cli.nombre ? ' para '+cli.nombre : ''))
+          : ('Oferta de '+(meds[0].tipo_puerta || 'puerta')+
+             (meds[0].ubicacion ? ' en '+meds[0].ubicacion : '')),
+        descripcion: [
+          'Medidas tomadas en la visita del '+fechaCorta(av.cerrado || new Date())+
+            '. Las medidas son del hueco.',
+          av.descripcion || '',
+          sinMedir ? 'Ojo: hay '+sinMedir+' hueco'+(sinMedir === 1 ? '' : 's')+
+            ' sin medir. Antes de mandar esta oferta hay que volver a medirlo'+
+            (sinMedir === 1 ? '' : 's')+'.' : '',
+        ].filter(Boolean).join('\n\n'),
+        lineas,
+      });
+      return;
+    }
+  }
   let texto = '';
   try {
     /* Todas las revisiones de la visita, no solo la primera: una preventiva de
@@ -22736,6 +22835,23 @@ function dlgCierre(avisoId){
     }
   }
 
+  /* ---- La toma de medidas, solo en la comercial (05-11-2026) ----
+     Si la oficina marcó sobre qué tipos de puerta va la oferta, se pinta un
+     bloque por tipo y ya viene elegido: es lo que se sabe antes de ir. Si no
+     marcó nada, un bloque en blanco. El técnico añade los que haga falta.
+     Los bloques van numerados siempre, aunque solo haya uno, porque siempre se
+     puede añadir otro y un título sin número se queda viejo en cuanto lo haces. */
+  if (a.tipo === 'comercial'){
+    const tps = (a.tipos_puerta || []).filter(Boolean);
+    h += '<div id="med-zona">';
+    if (tps.length) tps.forEach((t, i) => { h += bloqueMedidas(a, { tipo_puerta: t }, i); });
+    else h += bloqueMedidas(a, null, 0);
+    h += '</div>'+
+      '<div class="fila" style="margin:0 0 14px">'+
+      '<button type="button" class="btn sm plana" data-act="med-add">Añadir otro hueco</button>'+
+      '<span class="sp"></span></div>';
+  }
+
   h += '<div class="grupo"><h3>Cómo queda</h3><div class="campos">'+
     '<div class="campo"><label for="z-estado">Estado de la puerta</label><select id="z-estado">'+
       opts(lista('estados_final', EST_FINAL), a.estado_final || 'Operativa')+'</select></div>'+
@@ -23190,6 +23306,134 @@ function guionesDelForm(){
 }
 /* El de siempre, para lo que solo necesita uno. Devuelve el primero. */
 function guionDelForm(){ return guionesDelForm()[0] || null; }
+
+/* ---- La toma de medidas de la comercial (05-11-2026) ----
+   Un bloque por hueco, igual que hay un guion por puerta. El técnico puede
+   añadir los que haga falta: una nave con tres portones se oferta en una sola
+   visita, y hasta hoy había que abrir tres avisos o escribirlo todo junto.
+
+   Todo lo del bloque vive DENTRO de su contenedor y se busca por clase, no por
+   identificador: con cuatro bloques en pantalla, cuatro campos con el mismo id
+   no son cuatro campos, son uno que gana y tres que se pierden. */
+function bloqueMedidas(a, m, n){
+  m = m || {};
+  const tipos = lista('tipos', TIPOS);
+  const tp = m.tipo_puerta || '';
+  const cual = (n == null) ? '' : ' · hueco '+(n + 1);
+  const v = x => (x == null || x === '') ? '' : esc(String(x));
+  return '<div class="grupo"><h3>Toma de medidas'+cual+'</h3>'+
+    '<p class="mini" style="margin:0 0 10px">Las medidas son del <b>hueco</b>, no de la hoja, y en '+
+    'milímetros. De esto sale el presupuesto tal cual, así que una medida mal apuntada aquí es una '+
+    'puerta mal pedida después. Si hay más de un hueco, dale a «Añadir otro hueco» al final.</p>'+
+    '<div class="medida" data-id="'+v(m.id)+'"><div class="campos">'+
+    '<div class="campo full"><label>Dónde está el hueco</label>'+
+      '<input class="m-ubi" type="text" maxlength="160" value="'+v(m.ubicacion)+'" '+
+      'placeholder="Ej.: nave trasera, portón izquierdo">'+
+      '<span class="pista">Es lo que distingue un hueco de otro en el presupuesto. Con «portón 1» y '+
+      '«portón 2» nadie sabe cuál es cuál dentro de un mes</span></div>'+
+    '<div class="campo"><label>Tipo de puerta previsto</label><select class="m-tipo">'+
+      '<option value="">Sin decidir todavía</option>'+
+      tipos.map(t => '<option'+(tp === t ? ' selected' : '')+'>'+esc(t)+'</option>').join('')+
+      '</select></div>'+
+    '<div class="campo"><label>Qué hay ahora en el hueco</label><select class="m-sit">'+
+      '<option value="">Sin indicar</option>'+
+      MED_SIT.map(([k, t]) => '<option value="'+k+'"'+(m.situacion === k ? ' selected' : '')+'>'+
+        esc(t)+'</option>').join('')+'</select>'+
+      '<span class="pista">Quitar lo viejo y llevárselo también se cobra, y se olvida de ofertar</span></div>'+
+    '<div class="campo"><label>Ancho del hueco (mm)</label>'+
+      '<input class="m-ancho" type="number" step="1" min="0" inputmode="numeric" value="'+v(m.ancho_mm)+'"></div>'+
+    '<div class="campo"><label>Alto del hueco (mm)</label>'+
+      '<input class="m-alto" type="number" step="1" min="0" inputmode="numeric" value="'+v(m.alto_mm)+'"></div>'+
+    '<div class="campo"><label>Dintel libre por encima (mm)</label>'+
+      '<input class="m-dintel" type="number" step="1" min="0" inputmode="numeric" value="'+v(m.dintel_mm)+'">'+
+      '<span class="pista">Lo que hay entre el hueco y el techo. Decide si cabe una seccional y con '+
+      'qué guía</span></div>'+
+    '<div class="campo"><label>Espacio lateral libre (mm)</label>'+
+      '<input class="m-lateral" type="number" step="1" min="0" inputmode="numeric" value="'+v(m.lateral_mm)+'">'+
+      '<span class="pista">Lo que hay a un lado para que corra la hoja. Decide si cabe una corredera '+
+      'y hacia dónde abre</span></div>'+
+    '<div class="campo full"><label>Acometida eléctrica</label><select class="m-elec">'+
+      '<option value="">Sin indicar</option>'+
+      MED_ELEC.map(([k, t]) => '<option value="'+k+'"'+(m.electricidad === k ? ' selected' : '')+'>'+
+        esc(t)+'</option>').join('')+'</select>'+
+      '<span class="pista">Una acometida que hay que llevar y no se ofertó la acaba pagando la '+
+      'empresa</span></div>'+
+    '<div class="campo full"><label>Auxiliares que hacen falta</label>'+
+      '<textarea class="m-aux" rows="2" maxlength="600" placeholder="Ej.: dos mandos, fotocélulas '+
+      'exteriores, pulsador interior y semáforo">'+v(m.auxiliares)+'</textarea>'+
+      '<span class="pista">Escríbelo como se lo dirías a la oficina. Pasa al presupuesto tal y como '+
+      'lo escribas</span></div>'+
+    '<div class="campo full"><label>Notas de este hueco</label>'+
+      '<textarea class="m-notas" rows="2" maxlength="600" placeholder="Lo que haya que saber para '+
+      'ofertarlo y para montarlo: acceso, suelo, pendiente, obra que hace falta...">'+v(m.notas)+'</textarea></div>'+
+    '<div class="campo full" style="align-content:end"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+      '<input type="checkbox" class="m-sinmed"'+(m.sin_medir ? ' checked' : '')+
+      ' style="accent-color:var(--amarillo);width:18px;height:18px">No se ha podido medir este hueco</label>'+
+      '<span class="pista">Márcalo si no has podido llegar o medir. Así se puede cerrar la visita sin '+
+      'medidas, pero hay que decir por qué: la oficina tiene que saber que hay que volver</span></div>'+
+    '<div class="campo full"><label>Por qué no se ha podido medir</label>'+
+      '<input class="m-sinmedm" type="text" maxlength="200" value="'+v(m.sin_medir_motivo)+'" '+
+      'placeholder="Ej.: había mercancía delante y no se podía acceder"></div>'+
+    '</div>'+
+    '<div class="fila" style="margin-top:8px"><span class="sp"></span>'+
+      '<button type="button" class="btn sm plana" data-act="med-quitar">Quitar este hueco</button></div>'+
+    '</div></div>';
+}
+/* Lee UN bloque de medidas tal y como está en pantalla. Devuelve null si está
+   entero vacío: un bloque que nadie ha tocado no es un hueco, y guardarlo
+   dejaría filas sin nada en la lista de la oficina. */
+function leerMedida(cont){
+  if (!cont) return null;
+  const v = sel => { const e = cont.querySelector(sel); return e ? String(e.value || '').trim() : ''; };
+  const num = sel => { const t = v(sel); return t === '' ? null : Number(t); };
+  const ch = sel => { const e = cont.querySelector(sel); return !!(e && e.checked); };
+  const o = {
+    id: cont.dataset.id || null,
+    ubicacion: v('.m-ubi') || null,
+    tipo_puerta: v('.m-tipo') || null,
+    ancho_mm: num('.m-ancho'), alto_mm: num('.m-alto'),
+    dintel_mm: num('.m-dintel'), lateral_mm: num('.m-lateral'),
+    situacion: v('.m-sit') || null,
+    electricidad: v('.m-elec') || null,
+    auxiliares: v('.m-aux') || null,
+    notas: v('.m-notas') || null,
+    sin_medir: ch('.m-sinmed'),
+    sin_medir_motivo: v('.m-sinmedm') || null,
+  };
+  const algo = o.ubicacion || o.tipo_puerta || o.ancho_mm != null || o.alto_mm != null ||
+    o.dintel_mm != null || o.lateral_mm != null || o.situacion || o.electricidad ||
+    o.auxiliares || o.notas || o.sin_medir;
+  return algo ? o : null;
+}
+function medidasDelForm(){
+  return Array.from(document.querySelectorAll('#dlg-form .medida')).map(leerMedida).filter(Boolean);
+}
+/* Cuántos bloques hay en pantalla, vacíos incluidos: lo necesita el botón de
+   añadir para numerar el siguiente. */
+const bloquesMedidaEnForm = () => document.querySelectorAll('#dlg-form .medida').length;
+/* Los títulos se vuelven a escribir después de añadir o quitar. Si no, quitas
+   el hueco 1 de tres y en pantalla quedan el «hueco 2» y el «hueco 3», que no
+   es lo que tienes delante. */
+function renumerarMedidas(){
+  const zona = document.getElementById('med-zona');
+  if (!zona) return;
+  Array.from(zona.querySelectorAll('.grupo')).forEach((g, i) => {
+    const t = g.querySelector('h3');
+    if (t) t.textContent = 'Toma de medidas · hueco '+(i + 1);
+  });
+}
+/* Añade un bloque vacío al final y lleva la pantalla hasta él */
+function anadirHueco(){
+  const zona = document.getElementById('med-zona');
+  if (!zona) return;
+  zona.insertAdjacentHTML('beforeend', bloqueMedidas(null, null, bloquesMedidaEnForm()));
+  renumerarMedidas();
+  const ult = zona.querySelector('.grupo:last-child');
+  if (ult){
+    ult.scrollIntoView({ block:'nearest' });
+    const u = ult.querySelector('.m-ubi'); if (u) u.focus();
+  }
+}
 function repintarCuentas(cont){
   /* Sin contenedor se repintan todos: es lo que hace falta al abrir el parte */
   if (!cont){ document.querySelectorAll('#dlg-form .guion').forEach(x => repintarCuentas(x)); return; }
@@ -23247,6 +23491,33 @@ async function prepararCierre(a){
       const re = cont.querySelector('.g-reco'); if (re) re.value = rev.recomendaciones || '';
     });
     repintarCuentas();
+  }
+  /* ---- Las medidas ya apuntadas (05-11-2026) ----
+     La pantalla se pinta con los bloques que se saben de antemano (uno por tipo
+     de puerta marcado por la oficina, o uno en blanco). Si hay más medidas
+     guardadas que bloques pintados (porque el técnico añadió huecos y guardó el
+     avance), se añaden los que falten ANTES de rellenar: si no, la cuarta
+     medida de un parte guardado a medias se quedaría sin sitio y se perdería al
+     volver a guardar. */
+  if (a.tipo === 'comercial' && document.getElementById('med-zona')){
+    const { data: meds } = await sb.from('medidas').select('*').eq('aviso_id', a.id).order('orden');
+    const lis = meds || [];
+    while (lis.length > bloquesMedidaEnForm()) anadirHueco();
+    renumerarMedidas();
+    const bloques = Array.from(document.querySelectorAll('#dlg-form .medida'));
+    lis.forEach((m, i) => {
+      const cont = bloques[i];
+      if (!cont) return;
+      cont.dataset.id = m.id || '';
+      const pon = (sel, val) => { const e = cont.querySelector(sel); if (e) e.value = (val == null ? '' : val); };
+      pon('.m-ubi', m.ubicacion); pon('.m-tipo', m.tipo_puerta || '');
+      pon('.m-sit', m.situacion || ''); pon('.m-elec', m.electricidad || '');
+      pon('.m-ancho', m.ancho_mm); pon('.m-alto', m.alto_mm);
+      pon('.m-dintel', m.dintel_mm); pon('.m-lateral', m.lateral_mm);
+      pon('.m-aux', m.auxiliares); pon('.m-notas', m.notas);
+      pon('.m-sinmedm', m.sin_medir_motivo);
+      const c = cont.querySelector('.m-sinmed'); if (c) c.checked = !!m.sin_medir;
+    });
   }
   // firma: lienzo para dibujar con el dedo
   lienzoFirma('z-firma');
@@ -23459,6 +23730,70 @@ async function guardarCierre(a, cerrando){
       recomendaciones: g.reco || null,
     });
   }
+  /* ---- Las medidas de la comercial (05-11-2026) ----
+     Se leen todos los bloques, se comprueban uno a uno y se avisa diciendo qué
+     hueco es: con tres bloques en pantalla, «falta el ancho» no sirve de nada.
+     Guardar el avance NO comprueba nada: el técnico está midiendo y guarda a
+     medias a propósito. Lo que se comprueba es el cierre, porque una comercial
+     cerrada sin medidas es un viaje hecho del que no sale presupuesto. */
+  const medidas = [];
+  if (a.tipo === 'comercial'){
+    const bloques = Array.from(document.querySelectorAll('#dlg-form .medida'));
+    bloques.forEach((cont, i) => {
+      const m = leerMedida(cont);
+      if (!m) return;
+      m.aviso_id = a.id;
+      m.orden = i;
+      m.creado_por = yo();
+      /* Las medidas se rehacen enteras, igual que los materiales y el guión, así
+         que la fila se vuelve a crear: el identificador de la de antes no se
+         reutiliza. Nada apunta a una medida, así que no hay nada que romper. */
+      delete m.id;
+      medidas.push({ m, cont, n: i + 1 });
+    });
+    if (cerrando){
+      for (const x of medidas){
+        const m = x.m, donde = 'el hueco '+x.n+(m.ubicacion ? ' («'+m.ubicacion+'»)' : '');
+        if (m.sin_medir){
+          if (!m.sin_medir_motivo){
+            x.cont.scrollIntoView({ block:'center' });
+            return setErr('Has marcado que no se ha podido medir '+donde+': escribe por qué. '+
+              'La oficina tiene que saber que hay que volver.');
+          }
+          continue;
+        }
+        if (!(+m.ancho_mm > 0) || !(+m.alto_mm > 0)){
+          x.cont.scrollIntoView({ block:'center' });
+          return setErr('Falta el ancho o el alto en '+donde+'. Sin las dos medidas no se puede '+
+            'ofertar. Si no has podido medirlo, marca «No se ha podido medir» y di por qué.');
+        }
+        /* El error de dedo: 400 en vez de 4000. Medio metro es el corte porque no
+           existe una puerta de menos: el hueco peatonal más estrecho que se monta
+           pasa de 600 mm. El servidor también para lo imposible (menos de 100 mm),
+           pero allí es un error feo en medio del cierre; aquí se dice en claro. */
+        if (+m.ancho_mm < 500 || +m.alto_mm < 500){
+          x.cont.scrollIntoView({ block:'center' });
+          return setErr('Las medidas van en milímetros, y en '+donde+' hay menos de medio metro. '+
+            'Un hueco de 4 metros son 4000, no 400. No existe una puerta de 40 cm.');
+        }
+        if (!m.ubicacion && medidas.length > 1){
+          x.cont.scrollIntoView({ block:'center' });
+          return setErr('Pon dónde está '+donde+'. Con varios huecos en la misma oferta, sin eso '+
+            'nadie sabe en el presupuesto cuál es cuál.');
+        }
+      }
+      if (!medidas.length)
+        return setErr('Esta es una visita comercial y no has apuntado ninguna medida. De aquí sale '+
+          'el presupuesto: rellena al menos un hueco. Si no has podido medir nada, marca «No se ha '+
+          'podido medir» y di por qué.');
+      if (!o.trabajo){
+        const utiles = medidas.filter(x => !x.m.sin_medir).length;
+        o.trabajo = utiles
+          ? 'Visita comercial: toma de medidas de '+utiles+' hueco'+(utiles === 1 ? '' : 's')+'.'
+          : 'Visita comercial sin poder medir.';
+      }
+    }
+  }
   if (revisiones.length){
     if (!o.diagnostico && malosTotal)
       o.diagnostico = 'Revisión con ' + malosTotal + ' punto' + (malosTotal===1?'':'s') +
@@ -23584,6 +23919,11 @@ async function guardarCierre(a, cerrando){
     let almacen = null;
     if (cerrando) almacen = await descontarMaterialDelParte(a, mats);
     if (revisiones.length) await rehacer('revisiones', revisiones);
+    /* Las medidas se rehacen SIEMPRE que la visita es comercial, también cuando
+       la lista se ha quedado vacía: si el técnico quitó un hueco que había
+       apuntado por error, tiene que desaparecer de verdad. Con un «if
+       (medidas.length)» delante, el hueco borrado seguiría en el presupuesto. */
+    if (a.tipo === 'comercial') await rehacer('medidas', medidas.map(x => x.m));
     const { error } = await sb.from('avisos').update(o).eq('id', a.id);
     if (error) throw error;
     // estado de la puerta según cómo queda
@@ -23680,6 +24020,33 @@ function bloqueRevisionHTML(rev, fila){
   return h;
 }
 
+/* ---- Las medidas en la hoja del parte (05-11-2026) ----
+   Una tabla por hueco, con el mismo rótulo que llevará el presupuesto: así el
+   cliente puede comparar el parte que firmó con la oferta que le llega. */
+function bloqueMedidasHTML(meds, fila){
+  let h = '<h2>Toma de medidas</h2>'+
+    '<p style="color:#6B6560;font-size:11px;margin:0 0 6px">Medidas del hueco, en milímetros, '+
+    'tomadas el día de la visita. Sirven para preparar la oferta; las medidas definitivas de '+
+    'fabricación se comprueban antes de pedir la puerta.</p>';
+  meds.forEach((m, i) => {
+    h += '<table>'+
+      fila(meds.length > 1 ? ('Hueco '+(i+1)) : 'Hueco', rotuloMedida(m, i+1))+
+      fila('Ancho del hueco', +m.ancho_mm > 0 ? mm(m.ancho_mm)+' mm' : '')+
+      fila('Alto del hueco',  +m.alto_mm  > 0 ? mm(m.alto_mm)+' mm'  : '')+
+      fila('Dintel libre',    (m.dintel_mm != null && m.dintel_mm !== '') ? mm(m.dintel_mm)+' mm' : '')+
+      fila('Espacio lateral libre', (m.lateral_mm != null && m.lateral_mm !== '') ? mm(m.lateral_mm)+' mm' : '')+
+      fila('Tipo de puerta previsto', m.tipo_puerta)+
+      fila('Qué hay ahora en el hueco', MED_SIT_TXT(m.situacion))+
+      fila('Acometida eléctrica', MED_ELEC_TXT(m.electricidad))+
+      fila('Auxiliares que hacen falta', m.auxiliares)+
+      fila('Notas', m.notas)+
+      (m.sin_medir ? fila('Sin medir', (m.sin_medir_motivo || 'sin motivo apuntado')+
+        '. Hay que volver antes de ofertar este hueco.') : '')+
+      '</table>';
+  });
+  return h;
+}
+
 async function hojaParte(avisoId){
   const a = S.avisos.find(x => x.id === avisoId);
   if (!a) return;
@@ -23690,6 +24057,15 @@ async function hojaParte(avisoId){
      puede llevar varias puertas, y el parte que firma el cliente tiene que
      llevarlas todas. Antes salía solo la primera. */
   const { data: revs } = await sb.from('revisiones').select('*').eq('aviso_id', a.id);
+  /* Las medidas de la comercial (05-11-2026). El cliente firma lo que se ha
+     medido en su casa: si mañana discute una medida, el papel lo dice. */
+  let meds = [];
+  if (a.tipo === 'comercial'){
+    try {
+      const { data } = await sb.from('medidas').select('*').eq('aviso_id', a.id).order('orden');
+      meds = data || [];
+    } catch(_){ /* sin tabla todavía: el parte sale igual */ }
+  }
   let firma = '';
   if (a.firma_ruta){
     const { data } = await sb.storage.from('firmas').createSignedUrl(a.firma_ruta, 3600);
@@ -23762,6 +24138,7 @@ async function hojaParte(avisoId){
     '</table>'+
     (a.cobrado ? ('<h2>Cobro</h2><table>'+fila('Importe cobrado', (a.cobro_importe||0) + ' €')+fila('Forma', a.cobro_forma)+fila('Referencia', a.cobro_ref)+'</table>') : '')+
     ((revs || []).map(r => bloqueRevisionHTML(r, fila)).join(''))+
+    (meds.length ? bloqueMedidasHTML(meds, fila) : '')+
     '<h2>Conformidad del cliente</h2>'+
     (firma ? ('<div>'+esc(a.firma_nombre||'')+'</div><img class="firma" src="'+firma+'">')
            : ('<div>Sin firma. '+esc(a.firma_sin||'')+'</div>'))+
@@ -25240,6 +25617,20 @@ dlgForm.addEventListener('click', async e => {
       if (ok) ok.setAttribute('aria-pressed','true');
     });
     repintarCuentas(b.closest('.guion'));
+    return;
+  }
+  if (a === 'med-add'){ anadirHueco(); return; }
+  if (a === 'med-quitar'){
+    /* El último no se quita: una comercial sin ningún bloque de medidas es una
+       pantalla en la que no se puede apuntar nada. Si de verdad no se ha
+       medido, está la casilla «No se ha podido medir» con su motivo. */
+    if (bloquesMedidaEnForm() <= 1){
+      toast('Este es el único hueco. Si no has podido medirlo, marca «No se ha podido medir» y di por qué.');
+      return;
+    }
+    const g = b.closest('.grupo');
+    if (g) g.remove();
+    renumerarMedidas();
     return;
   }
   if (a === 'guardar-avance'){
