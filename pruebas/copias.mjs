@@ -249,10 +249,13 @@ const bajarCopia = async (pag, act) => {
   const { ctx, pag } = await abrir();
   /* Como si la última copia fuera de hace 40 días */
   await pag.evaluate(() => {
-    /* Días locales, no milisegundos: con el cambio de hora de octubre esto
-       decía 39 (04-11-2026). */
-    const f40 = new Date(); f40.setHours(12,0,0,0); f40.setDate(f40.getDate() - 40);
-    const hace40 = f40.toISOString();
+    /* Aquí SÍ se cuenta en milisegundos, y a propósito (05-11-2026). El aviso
+       de la copia no usa días de calendario: hace la resta en milisegundos y
+       redondea hacia abajo. Restar 40 días exactos da siempre 40, cambio de
+       hora incluido; anclar al mediodía, como se hizo en parado y factura,
+       daba 39 a partir del mediodía y ponía esta prueba en rojo. La prueba
+       mide lo que la aplicación calcula, no otra cosa. */
+    const hace40 = new Date(Date.now() - 40*86400000).toISOString();
     window.__T.S.ajustes.backup = { fecha:hace40, filas:120, tipo:'completa',
       ficheros:30, mb:12.4, avisos:0, por:'David Ariza Arana' };
   });
@@ -273,10 +276,13 @@ const bajarCopia = async (pag, act) => {
 
   /* A los 10 días avisa, pero no en rojo */
   await pag.evaluate(() => {
-    /* Días locales, no milisegundos: con el cambio de hora de octubre esto
-       decía 9 (04-11-2026). */
-    const f10 = new Date(); f10.setHours(12,0,0,0); f10.setDate(f10.getDate() - 10);
-    const hace10 = f10.toISOString();
+    /* Aquí SÍ se cuenta en milisegundos, y a propósito (05-11-2026). El aviso
+       de la copia no usa días de calendario: hace la resta en milisegundos y
+       redondea hacia abajo. Restar 10 días exactos da siempre 10, cambio de
+       hora incluido; anclar al mediodía, como se hizo en parado y factura,
+       daba 9 a partir del mediodía y ponía esta prueba en rojo. La prueba
+       mide lo que la aplicación calcula, no otra cosa. */
+    const hace10 = new Date(Date.now() - 10*86400000).toISOString();
     window.__T.S.ajustes.backup = { fecha:hace10, filas:120, tipo:'datos', por:'David' };
   });
   await irAPestana(pag, 'trabajo'); await pag.waitForTimeout(600);

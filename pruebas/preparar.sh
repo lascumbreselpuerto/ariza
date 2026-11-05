@@ -90,6 +90,8 @@ AYUDA_TIPO AYUDA_SUBTIPO pintarSubtipo pintarTiposPuerta TIPOS_SIN_VALOR
 festivos esFestivo festivosDe faltanFestivos URGENCIA_DEF urgenciaCfg factorUrgencia
 panelFestivos
 leerGuion guionesDelForm pintarPuertasAviso bloqueRevisionHTML soltarPuerta
+MED_SIT MED_ELEC MED_SIT_TXT MED_ELEC_TXT mm bloqueMedidas leerMedida medidasDelForm SIN_COBRO
+bloquesMedidaEnForm renumerarMedidas anadirHueco rotuloMedida detalleMedida bloqueMedidasHTML
 TABLAS_COPIA BUCKETS_COPIA crc32 crearZip sqlValor sqlInserts copiaUltima
 copiaSeguridad listarBucket
 normTxt buscarClientes lineaCliente elegirCliente estadoCliente pintarListaCliente

@@ -71,6 +71,7 @@ function semilla(){
     articulos: [],
     movimientos: [],
     revisiones: [],
+    medidas: [],
     componentes: [],
     centros: [],
     partes: [],

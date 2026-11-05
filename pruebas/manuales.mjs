@@ -125,6 +125,16 @@ paso('y el manual los pone en el MISMO ORDEN que la aplicación',
   })(),
   apartados.titulos.filter(t => M.indexOf(t) >= 0).join(' → '));
 
+/* ---- La toma de medidas (05-11-2026) ----
+   Es un apartado que solo sale en las comerciales, así que no aparece en el
+   parte de arriba, que es de una avería. Pero está en la aplicación y tiene que
+   estar en el manual, con los datos que de verdad se piden: un manual que se
+   queda corto manda al técnico a preguntar, que es lo que se vino a evitar. */
+const medManual = ['Toma de medidas', 'Dintel libre', 'espacio lateral',
+  'Acometida eléctrica', 'Auxiliares', 'No se ha podido medir', 'Añadir otro hueco'];
+medManual.forEach(n => paso('el manual explica «'+n+'» de la visita comercial',
+  M.toLowerCase().includes(n.toLowerCase())));
+
 /* ================================================================
    5. Los campos que nombra, con su etiqueta exacta
    ================================================================ */

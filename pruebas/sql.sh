@@ -46,7 +46,8 @@ export PATH="$PGBIN:$PATH"
 ORDEN="componentes.sql centros.sql parte-por-correo.sql obra.sql ficha.sql \
 almacen.sql presupuestos.sql presupuestos2.sql comercial.sql anexos.sql \
 tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos3.sql valoracion.sql \
-parado.sql factura.sql rutas.sql ruta-cliente.sql telegram.sql subtipo.sql urgencia.sql"
+parado.sql factura.sql rutas.sql ruta-cliente.sql telegram.sql subtipo.sql urgencia.sql \
+medidas.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -223,6 +224,21 @@ if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/urgencia-pruebas.sql" ]; then
     fallos=$((fallos+1))
     echo " FALLA el recargo de urgencia:"
     grep -a -m3 -E "ERROR|EXCEPTION" /tmp/urgencia-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
+# La toma de medidas de la comercial. Lo que se comprueba aquí es que los
+# límites paran el error de dedo (40 mm en vez de 4000) y que una comercial
+# cerrada sin medidas aparece en la lista de la oficina.
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/medidas-pruebas.sql" ]; then
+  echo ""
+  echo "── La toma de medidas ──────────────────────────"
+  if $PSQL -f "$AQUI/sql/medidas-pruebas.sql" > /tmp/medidas-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/medidas-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA la toma de medidas:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/medidas-pruebas.log | sed 's/^/         /'
   fi
 fi
 
