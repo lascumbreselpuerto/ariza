@@ -47,7 +47,7 @@ ORDEN="componentes.sql centros.sql parte-por-correo.sql obra.sql ficha.sql \
 almacen.sql presupuestos.sql presupuestos2.sql comercial.sql anexos.sql \
 tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos3.sql valoracion.sql \
 parado.sql factura.sql rutas.sql ruta-cliente.sql telegram.sql subtipo.sql urgencia.sql \
-medidas.sql"
+medidas.sql puesta-servicio.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -239,6 +239,22 @@ if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/medidas-pruebas.sql" ]; then
     fallos=$((fallos+1))
     echo " FALLA la toma de medidas:"
     grep -a -m3 -E "ERROR|EXCEPTION" /tmp/medidas-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
+# La puesta en servicio. Toca la regla que decide si una visita se cobra, así que
+# los importes van calculados a mano, y hay una prueba que vale por todas: que una
+# puesta en servicio anterior al 05-11-2026 siga valiendo lo que valía, porque ya
+# está facturada.
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/puesta-servicio-pruebas.sql" ]; then
+  echo ""
+  echo "── La puesta en servicio ───────────────────────"
+  if $PSQL -f "$AQUI/sql/puesta-servicio-pruebas.sql" > /tmp/ps-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/ps-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA la puesta en servicio:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/ps-pruebas.log | sed 's/^/         /'
   fi
 fi
 

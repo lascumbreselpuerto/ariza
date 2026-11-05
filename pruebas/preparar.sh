@@ -91,6 +91,8 @@ festivos esFestivo festivosDe faltanFestivos URGENCIA_DEF urgenciaCfg factorUrge
 panelFestivos
 leerGuion guionesDelForm pintarPuertasAviso bloqueRevisionHTML soltarPuerta
 MED_SIT MED_ELEC MED_SIT_TXT MED_ELEC_TXT mm bloqueMedidas leerMedida medidasDelForm SIN_COBRO
+PS_CAUSAS PS_CAUSA_TXT PS_CAUSA_CLIENTE PS_CORTE esRemateSinCargo seValoraEnCero
+pintarRemate pintarCausaRemate obrasDelCliente etiquetaObra obrasConRematePendiente rematePara
 bloquesMedidaEnForm renumerarMedidas anadirHueco rotuloMedida detalleMedida bloqueMedidasHTML
 TABLAS_COPIA BUCKETS_COPIA crc32 crearZip sqlValor sqlInserts copiaUltima
 copiaSeguridad listarBucket

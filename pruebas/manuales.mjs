@@ -135,6 +135,15 @@ const medManual = ['Toma de medidas', 'Dintel libre', 'espacio lateral',
 medManual.forEach(n => paso('el manual explica «'+n+'» de la visita comercial',
   M.toLowerCase().includes(n.toLowerCase())));
 
+/* ---- El remate de una obra (05-11-2026) ----
+   La puesta en servicio es la visita que decide quién paga un viaje, y el
+   manual tiene que decirle al técnico las dos cosas que le afectan: que no se
+   factura, y que aun así apunte las horas. */
+const psManual = ['Remate de la obra', 'no se factura', 'apunta las horas',
+  'dilo en la oficina', 'corriente definitiva'];
+psManual.forEach(n => paso('el manual explica «'+n+'» de la puesta en servicio',
+  M.toLowerCase().includes(n.toLowerCase())));
+
 /* ================================================================
    5. Los campos que nombra, con su etiqueta exacta
    ================================================================ */
