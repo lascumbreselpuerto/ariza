@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.11.05-1**
+> **Versión de la aplicación que describe este manual: 2026.11.05-2**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -460,12 +460,12 @@ Los que más veces se ven, por orden de gravedad:
 
 ---
 
-## 8 bis. Siete maneras de perder dinero sin enterarse
+## 8 bis. Ocho maneras de perder dinero sin enterarse
 
 Esto no es técnica de puertas, es oficio de empresa, y se pone aquí porque las
 dos cosas pasan en el mismo sitio donde se documenta el trabajo.
 
-Las tres primeras son cuentas que salen mal. Las cuatro últimas son distintas y
+Las tres primeras son cuentas que salen mal. Las cinco últimas son distintas y
 son peores, porque no sale mal ninguna cuenta: simplemente hay trabajo que no se
 hace, o que se hace dos veces.
 
@@ -780,6 +780,52 @@ teclearlo otra vez y sin interpretar la letra de nadie.
 La regla, que es la misma de toda esta lista: **lo que no se apunta donde toca no
 se pierde, se olvida, y lo olvidado se paga igual**.
 
+### La obra que se queda a medias, y el viaje que nadie cuenta
+
+La octava se paga dos veces: una en horas y otra en reputación.
+
+Una instalación que se cierra con algo pendiente no está terminada. Falta
+programar el cuadro porque no había corriente definitiva, falta montar la puerta
+porque el albañil no ha acabado el hueco, falta la electrocerradura porque el
+material lo pone el cliente y no ha llegado. La obra se factura, porque el
+trabajo se hizo, pero el cliente no la da por buena hasta que alguien vuelve.
+
+Ese segundo viaje es la puesta en servicio. Y tiene tres propiedades
+incómodas:
+
+**No se factura.** El proyecto ya está vendido y cobrado; volver a terminarlo no
+es un trabajo nuevo. Esto es una decisión de empresa, no una regla contable: se
+puede discutir con el cliente cuando la culpa fue suya, pero por defecto el
+viaje lo pone la casa.
+
+**Cuesta lo mismo que cualquier otro.** Dos horas de técnico y un
+desplazamiento valen lo que valen, se facturen o no. Y en una empresa pequeña
+ese viaje sale de las horas disponibles de la semana: cada remate es una avería
+que no se atiende ese día.
+
+**Se olvida.** Es lo peor de las tres. Una obra cerrada con un «falta programar
+el cuadro» escrito en el parte no se le aparece a nadie: no está en pendiente de
+facturar, porque ya se facturó; no está en avisos abiertos, porque la obra está
+cerrada. Se queda en la ficha de una puerta que nadie abre, hasta que el cliente
+llama tres meses después, y entonces la conversación ya no es sobre una obra bien
+hecha, es sobre tres meses de espera.
+
+De ahí vienen las tres cosas que la aplicación hace con esto:
+
+| Lo que se hace | Para qué sirve |
+|---|---|
+| El remate se enlaza con **su obra** | La ficha de la puerta cuenta la historia completa, y nadie puede usar la puesta en servicio como cajón de sastre |
+| La causa va en **lista cerrada**, no en texto libre | Se puede contar cuántas obras se retrasan por cada motivo. En texto libre no se puede contar, y lo que no se puede contar no se puede reclamar |
+| Las obras con remate pendiente salen **en una lista**, con los días que llevan esperando | Se llama antes de que llame el cliente |
+
+Y la cuenta que esto permite hacer, y que antes no se podía: *de las obras del
+año, cuántas se quedaron a medias, por culpa de quién, y cuántas horas y viajes
+costó volver.* Si la respuesta es que la mitad se queda esperando al albañil del
+cliente, eso no se arregla con la aplicación: se arregla en el presupuesto y en
+la conversación de antes de empezar, poniendo por escrito qué tiene que estar
+hecho el día del montaje. Pero para tener esa conversación hay que llegar con el
+número delante.
+
 ---
 
 ## 9. Cómo se registra todo esto en ARIZA SAT
@@ -864,4 +910,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.05-1 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.05-2 de ARIZA SAT*

@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.05-1**
+> **Versión de la aplicación que describe este manual: 2026.11.05-2**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -87,6 +87,30 @@ Lo que te interesa de eso:
 
 Si la etiqueta no cuadra con lo que te encuentras, díselo a la oficina antes de
 ponerte: el tipo decide lo que se cobra.
+
+### El remate de una obra: la puesta en servicio (5 de noviembre de 2026)
+
+La puesta en servicio es el **final de una obra concreta**, no una visita
+nueva. Desde hoy la aplicación lo trata como lo que es:
+
+- En la tarjeta verás **de qué instalación viene** y **por qué se quedó
+  pendiente**: no había corriente definitiva, albañilería del cliente sin
+  terminar, remates suyos, faltaba material que ponía él, causa nuestra, u otra
+  con su explicación. Eso lo pone la oficina al abrir el aviso.
+- En el parte hay un apartado **Remate de la obra** que te lo recuerda, y que no
+  se puede cambiar desde ahí: si la obra o el motivo están mal, díselo a la
+  oficina, que es donde se arregla.
+- **Esta visita no se factura.** La obra ya se facturó en su día, y el remate es
+  el punto final de ese proyecto.
+
+Y aun así, **apunta las horas y el desplazamiento de verdad**. Es lo único que
+permite saber lo que cuesta volver a una obra, y de ahí sale la cuenta de cuánto
+se pierde al año por obras que se quedan a medias, con el motivo de cada una. Si
+no las apuntas, ese viaje no existe para nadie.
+
+Si crees que el viaje había que cobrarlo porque la culpa fue del cliente,
+**dilo en la oficina**: hay una casilla para eso y la marcan ellos. Tú no la
+verás, y es a propósito: quién paga una visita no se decide en la furgoneta.
 
 ### En una urgencia, «He llegado» decide el precio (4 de noviembre de 2026)
 
@@ -821,4 +845,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.05-1 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.05-2 de ARIZA SAT*
