@@ -501,6 +501,24 @@ await pag.mouse.down();
 await pag.mouse.move(caja.x + 90, caja.y + 20, { steps: 6 });
 await pag.mouse.move(caja.x + 150, caja.y + 55, { steps: 6 });
 await pag.mouse.up(); await esperar(300);
+/* ---- Cambiado el 05-11-2026, y a propósito ----
+   Desde hoy el alta de puerta se pide también en las averías, y lo único que
+   impide cerrar es que la puerta no tenga ni una foto. Este recorrido creaba la
+   puerta y la cerraba sin hacerle ninguna, así que dejó de poder cerrarse: no
+   era un fallo de la aplicación, era el recorrido que ya no se parecía a lo que
+   hace un técnico. Se aprovecha para dejar la regla probada en los dos sentidos:
+   sin foto no se cierra, con una sí. */
+await pag.click('#dlg button[type="submit"]'); await esperar(1400);
+paso('una avería no se cierra si la puerta no tiene ni una foto',
+  /foto/i.test(await T(() => (document.querySelector('#dlg-form .err') || {}).textContent || '')),
+  await T(() => (document.querySelector('#dlg-form .err') || {}).textContent || ''));
+await T(async () => {
+  const g = window.__T;
+  const pid = g.S.avisos[0].puerta_id;
+  await g.sb.from('fotos').insert({ puerta_id: pid, ruta: pid+'/1.jpg',
+    creado: new Date().toISOString() });
+});
+await esperar(400);
 await pag.click('#dlg button[type="submit"]'); await esperar(2200);
 const cerrado = await T(() => window.__T.S.avisos.find(x => x.diagnostico) || {});
 paso('la visita se cierra', cerrado.cerrado === true || !!cerrado.cerrado, String(cerrado.cerrado));

@@ -48,6 +48,22 @@ const T = (f, arg) => arg === undefined ? pag.evaluate(f) : pag.evaluate(f, arg)
    ================================================================ */
 bloque('1. La versión');
 
+/* ---- Que el banco esté montado (05-11-2026) ----
+   Esta suite es la que vigila la salud del banco, así que aquí va la
+   comprobación que todas las demás dan por supuesta: que el bloque que expone
+   las funciones a las pruebas se ha ejecutado. El 05-11-2026 una nota mal
+   puesta dentro de la lista de nombres de preparar.sh generó JavaScript
+   inválido, ese bloque no se ejecutó, y las suites siguieron diciendo que no
+   faltaba ninguna función, porque preguntaban «window.__T_FALTAN || []» y
+   undefined || [] es una lista vacía. Si esto se pone en rojo, el banco no está
+   mirando la aplicación: no se mira ningún otro resultado hasta arreglarlo. */
+const banco = await T(() => ({
+  lista: Array.isArray(window.__T_FALTAN),
+  cuantas: window.__T ? Object.keys(window.__T).length : 0,
+}));
+paso('el bloque que expone las funciones al banco se ha ejecutado', banco.lista === true);
+paso('y hay cientos de funciones a la vista, no cuatro', banco.cuantas > 200, banco.cuantas);
+
 const v = await T(() => window.__T.ARIZA_VERSION);
 paso('la aplicación lleva un número de versión', !!v, v);
 paso('con forma de fecha y número de entrega del día',

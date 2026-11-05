@@ -93,6 +93,8 @@ leerGuion guionesDelForm pintarPuertasAviso bloqueRevisionHTML soltarPuerta
 MED_SIT MED_ELEC MED_SIT_TXT MED_ELEC_TXT mm bloqueMedidas leerMedida medidasDelForm SIN_COBRO
 PS_CAUSAS PS_CAUSA_TXT PS_CAUSA_CLIENTE PS_CORTE esRemateSinCargo seValoraEnCero
 pintarRemate pintarCausaRemate obrasDelCliente etiquetaObra obrasConRematePendiente rematePara
+ALTA_NO_PIDE ALTA_ES_OBRA ALTA_ADMITE_SIN altaEsObra admiteSinPuerta visitaSinPuerta
+obligaAltaObra minimoObra bloqueAltaObra fichasIncompletas
 bloquesMedidaEnForm renumerarMedidas anadirHueco rotuloMedida detalleMedida bloqueMedidasHTML
 TABLAS_COPIA BUCKETS_COPIA crc32 crearZip sqlValor sqlInserts copiaUltima
 copiaSeguridad listarBucket
@@ -123,7 +125,7 @@ FUERZA_12453 FUERZA_MANUAL PUNTOS_12453 limiteDinamico textoLimiteDinamico
 textoFuerzaManual puntosFuerza puntosFuerzaDe perfilFuerza PERFILES_FUERZA
 ARIZA_VERSION ARIZA_VERSION_RE versionPublicada comprobarVersion vigilarVersion
 tarjetaTrabajo dlgCierre vistaMiTrabajo prepararCierre
-ALTA_OBRA_OBLIGA MIN_FOTOS_OBRA obligaAltaObra matriculaTomada minimoObra
+MIN_FOTOS_OBRA obligaAltaObra matriculaTomada minimoObra
 recomendadoObra contarFotos bloqueAltaObra pintarAltaObra
 COMBO_DESDE activarCombos comboPintar comboTiene comboElegir comboTodas
 dlgAviso dlgContrato dlgEstado abrirDlg
@@ -194,6 +196,24 @@ hojaContrato hojaImprimible etiquetaTermica expDe puertaDe clienteDe cargar
 pintar peligrosDe cerrarDlg
 S sb
 """.split()
+
+# ---- Agujero tapado el 05-11-2026 ----
+# Esta lista es un texto que se parte por espacios, así que una línea que empiece
+# por «#» NO es un comentario: cada palabra se convierte en un nombre a exponer.
+# Pasó de verdad al retirar ALTA_OBRA_OBLIGA y dejar una nota explicándolo: se
+# generó «window.__T.# = #;», el bloque entero dejó de ejecutarse, window.__T se
+# quedó sin construir y __T_FALTAN sin existir. Lo peor no fue eso: las suites
+# preguntan «window.__T_FALTAN || []», así que la comprobación de que no falta
+# ninguna función salía EN VERDE mientras no había ninguna función. Un banco que
+# da por bueno lo que no ha podido mirar es peor que no tener banco.
+# Desde hoy se comprueba que cada nombre es un identificador de JavaScript, y si
+# no lo es, preparar.sh se para y lo dice. Los comentarios van aquí fuera.
+import re as _re
+_malos = [x for x in NOMBRES if not _re.match(r'^[A-Za-z_$][A-Za-z0-9_$]*$', x)]
+if _malos:
+    print('ERROR: esto no son nombres de funciones ni de constantes: %s' % ' '.join(_malos))
+    print('       Si querías dejar una nota, ponla fuera de la lista NOMBRES.')
+    sys.exit(1)
 
 lineas = ['\n/* ===== Inyectado por preparar.sh SOLO en la copia de pruebas ===== */',
           'window.__T = {}; window.__T_FALTAN = [];']

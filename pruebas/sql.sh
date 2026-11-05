@@ -47,7 +47,7 @@ ORDEN="componentes.sql centros.sql parte-por-correo.sql obra.sql ficha.sql \
 almacen.sql presupuestos.sql presupuestos2.sql comercial.sql anexos.sql \
 tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos3.sql valoracion.sql \
 parado.sql factura.sql rutas.sql ruta-cliente.sql telegram.sql subtipo.sql urgencia.sql \
-medidas.sql puesta-servicio.sql"
+medidas.sql puesta-servicio.sql alta-puerta.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -255,6 +255,21 @@ if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/puesta-servicio-pruebas.sql" ]; then
     fallos=$((fallos+1))
     echo " FALLA la puesta en servicio:"
     grep -a -m3 -E "ERROR|EXCEPTION" /tmp/ps-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
+# El alta de puerta en todas las visitas. No cambia ningún importe, así que lo
+# que se vigila es que las dos listas de la oficina digan la verdad: la de quien
+# usa la válvula y la de las puertas que nunca se documentaron.
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/alta-puerta-pruebas.sql" ]; then
+  echo ""
+  echo "── El alta de puerta ───────────────────────────"
+  if $PSQL -f "$AQUI/sql/alta-puerta-pruebas.sql" > /tmp/alta-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/alta-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA el alta de puerta:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/alta-pruebas.log | sed 's/^/         /'
   fi
 fi
 

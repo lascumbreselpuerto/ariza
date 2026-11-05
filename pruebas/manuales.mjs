@@ -144,6 +144,16 @@ const psManual = ['Remate de la obra', 'no se factura', 'apunta las horas',
 psManual.forEach(n => paso('el manual explica «'+n+'» de la puesta en servicio',
   M.toLowerCase().includes(n.toLowerCase())));
 
+/* ---- El alta de puerta en todas las visitas (05-11-2026) ----
+   Lo que el técnico tiene que entender es dónde está la raya: qué le impide
+   cerrar, qué no, y qué hacer cuando la visita no es de ninguna puerta. Un
+   manual que se queda corto aquí manda al técnico a llamar a la oficina en
+   mitad de una avería. */
+const altaManual = ['no he trabajado sobre ninguna puerta', 'Sin motivo no vale',
+  'no existe para la empresa', 'contrato de mantenimiento', 'desplazamiento en falso'];
+altaManual.forEach(n => paso('el manual explica «'+n+'» del alta de puerta',
+  M.toLowerCase().includes(n.toLowerCase())));
+
 /* ================================================================
    5. Los campos que nombra, con su etiqueta exacta
    ================================================================ */
@@ -431,9 +441,15 @@ paso('con sus tablas de límites dentro',
    ================================================================ */
 bloque('10. El alta obligatoria en obra, dicha igual en los dos sitios');
 
+/* Cambiado el 05-11-2026: la lista de tipos que piden la ficha dejó de ser una
+   constante de obligados y pasó a ser «todos menos dos». Los tipos se siguen
+   sacando de la aplicación, que es lo que importa de esta comprobación: así un
+   tipo renombrado pone el manual en rojo en vez de dejarlo diciendo otra cosa. */
 const obra = await T(() => {
   const g = window.__T;
-  return { tipos: g.ALTA_OBRA_OBLIGA.map(t => g.tipoAsis(t)), claves: g.ALTA_OBRA_OBLIGA,
+  const todos = Object.keys(g.ASISTENCIAS).filter(t => g.obligaAltaObra({ tipo:t }));
+  return { tipos: g.ALTA_ES_OBRA.map(t => g.tipoAsis(t)), claves: g.ALTA_ES_OBRA,
+           piden: todos, noPide: g.ALTA_NO_PIDE,
            fotos: g.MIN_FOTOS_OBRA,
            puntos: g.minimoObra({ id:'x' }, 0).puntos.map(x => x.clave) };
 });
@@ -445,11 +461,28 @@ obra.tipos.forEach(n => {
   paso('el manual del técnico nombra el tipo «'+corto+'» como lo nombra la aplicación',
     M.includes(corto), corto);
 });
-paso('y dice que en esos cuatro no se cierra la visita sin documentar',
+paso('y dice que la visita no se cierra sin documentar la puerta',
   /no se cierra/.test(M) && /obligatorio/.test(M));
-paso('son los cuatro de la aplicación, ni uno más',
-  obra.claves.length === 4 && /cuatro tipos de asistencia|cuatro/i.test(M),
+paso('siguen siendo cuatro los que avisan ya en la tarjeta', obra.claves.length === 4,
   obra.claves.join(','));
+/* La comprobación nueva del 05-11-2026: el manual tiene que nombrar TODOS los
+   tipos a los que se les pide la ficha, también los tres que entraron hoy, y
+   decir cuáles son los dos que se quedan fuera. Un técnico que lea el manual y
+   no vea su tipo en la lista dará por hecho que a él no le toca. */
+/* La clave de la aplicación no es la palabra del manual: «mantenimiento» se
+   llama «preventiva» para el técnico. La traducción va aquí, a la vista, y lo
+   que se comprueba es que cada tipo al que se le pide la ficha esté nombrado. */
+const COMO_SE_LLAMA = { mantenimiento:'preventiva', puesta_servicio:'puesta en servicio',
+  averia:'avería', urgencia:'urgencia', garantia:'garantía',
+  instalacion:'instalación', normativa:'normativa' };
+obra.piden.forEach(k => {
+  const palabra = COMO_SE_LLAMA[k] || k;
+  paso('el manual nombra «'+palabra+'», que es un tipo al que se le pide la ficha',
+    M.toLowerCase().includes(palabra.toLowerCase()), k);
+});
+paso('y dice cuáles son los dos a los que no se les pide',
+  obra.noPide.length === 2 && /comercial/i.test(M) && /desplazamiento en falso/i.test(M),
+  obra.noPide.join(','));
 paso('el manual pide el mismo número de fotos que exige la aplicación',
   obra.fotos === 2 && /[Dd]os fotos/.test(M), obra.fotos);
 [['etiqueta','Etiqueta con QR'], ['tipo','Tipo de puerta'],

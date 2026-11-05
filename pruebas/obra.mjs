@@ -119,25 +119,37 @@ const cerrarIntento = async (avisoId) => {
    ================================================================ */
 bloque('1. Qué asistencias obligan a documentar la puerta');
 
+/* ---- Cambiado el 05-11-2026, y a propósito ----
+   Hasta hoy esta prueba decía que una avería «no obliga: puede ser un cambio de
+   pila», y lo mismo de la urgencia y de la garantía. David decidió lo contrario:
+   el alta de puerta se pide en todas las visitas menos la comercial y el
+   desplazamiento en falso, porque es en una avería donde se entra por primera
+   vez en casa de un cliente nuevo, y una puerta que no se da de alta ahí no
+   existe para la empresa.
+   La regla se escribió al revés, por excepciones (ALTA_NO_PIDE) en vez de por
+   obligados, para que un tipo nuevo de visita entre pidiendo la ficha. Y lo que
+   antes era «cuatro tipos obligan» es ahora «dos tipos no lo piden». */
 const obliga = await T(() => {
   const g = window.__T, out = {};
   Object.keys(g.ASISTENCIAS).forEach(t => { out[t] = g.obligaAltaObra({ tipo:t }); });
-  return { out, lista: g.ALTA_OBRA_OBLIGA, min: g.MIN_FOTOS_OBRA };
+  return { out, noPide: g.ALTA_NO_PIDE, esObra: g.ALTA_ES_OBRA, min: g.MIN_FOTOS_OBRA };
 });
 paso('instalación obliga', obliga.out.instalacion === true);
 paso('puesta en servicio obliga', obliga.out.puesta_servicio === true);
 paso('normativa y adecuación obliga', obliga.out.normativa === true);
 paso('preventiva obliga', obliga.out.mantenimiento === true);
-paso('una avería no obliga: puede ser un cambio de pila',
-  obliga.out.averia === false);
-paso('una comercial no obliga: se va a ofertar, no a tocar la puerta',
+paso('una avería TAMBIÉN obliga desde el 05-11-2026: es la primera visita a esa puerta',
+  obliga.out.averia === true);
+paso('una urgencia obliga igual', obliga.out.urgencia === true);
+paso('y la garantía también: si no tiene ficha, no está documentada de antes',
+  obliga.out.garantia === true);
+paso('una comercial no obliga: se va a ofertar, y lo que se toma son las medidas',
   obliga.out.comercial === false);
 paso('un desplazamiento en falso no obliga', obliga.out.falso === false);
-paso('una urgencia fuera de horario no obliga', obliga.out.urgencia === false);
-paso('la garantía tampoco: la puerta ya está documentada de antes',
-  obliga.out.garantia === false);
-paso('son exactamente cuatro los tipos que obligan',
-  obliga.lista.length === 4, obliga.lista.join(','));
+paso('son exactamente dos los tipos a los que no se les pide',
+  obliga.noPide.length === 2, obliga.noPide.join(','));
+paso('y siguen siendo cuatro los que lo llevan en la tarjeta antes de salir',
+  obliga.esObra.length === 4, obliga.esObra.join(','));
 paso('el mínimo de fotos son dos', obliga.min === 2, obliga.min);
 paso('sin asistencia no se obliga a nada, y no se rompe',
   await T(() => window.__T.obligaAltaObra(null) === false));
@@ -575,30 +587,56 @@ paso('pero no se pinta ningún aviso de que falte el mínimo',
   /El mínimo de obra está completo/.test(recHtml));
 
 /* ================================================================
-   10. Una avería corriente no pide nada
+   10. Una avería también documenta la puerta
    ================================================================ */
-bloque('10. Una avería corriente se cierra como siempre');
+/* ---- Cambiado el 05-11-2026, y a propósito ----
+   Este bloque se llamaba «Una avería corriente no pide nada» y comprobaba que
+   el parte de una avería NO traía el recuadro de documentar la puerta y que se
+   cerraba sin señalar nada. David decidió lo contrario: el alta de puerta se
+   pide en todas las visitas menos la comercial y el desplazamiento en falso.
+   Lo que se comprueba ahora es lo de siempre con el signo cambiado, más las dos
+   cosas que esa decisión trae de la mano: que una foto sigue siendo lo único que
+   impide cerrar, y que la ficha a medias señala sin frenar. */
+bloque('10. Una avería también documenta la puerta');
 
 await T(async () => {
   const g = window.__T;
   await g.sb.from('puertas').update({ codigo:null, tipo:null, ancho_mm:null, alto_mm:null,
     matricula:null, sin_matricula:null }).eq('id','pt-sin-doc');
+  /* Sin ninguna foto: es lo único que impide cerrar, y aquí se comprueba */
+  await g.sb.from('fotos').delete().eq('puerta_id','pt-sin-doc');
   await g.cargar();
 });
 await abrirParte('av-aver');
-paso('el parte de una avería no trae el recuadro de obra',
-  await pag.locator('#obra-bloque').count() === 0);
+paso('el parte de una avería trae el recuadro de documentar la puerta',
+  await pag.locator('#obra-bloque').count() === 1);
+const sinFoto = await T(async () => {
+  const g = window.__T;
+  await g.guardarCierre(g.S.avisos.find(x => x.id === 'av-aver'), true);
+  await new Promise(r => setTimeout(r, 600));
+  await g.cargar();
+  return { cerrado: !!(g.S.avisos.find(x => x.id === 'av-aver') || {}).cerrado,
+           err: (document.querySelector('#dlg-form .err')||{}).textContent || '' };
+});
+paso('y no se cierra sin ni una foto de la puerta',
+  sinFoto.cerrado === false && /foto/i.test(sinFoto.err), sinFoto.err);
 const rAv = await T(async () => {
   const g = window.__T;
+  await g.sb.from('fotos').insert({ puerta_id:'pt-sin-doc', ruta:'pt-sin-doc/1.jpg',
+    creado:new Date().toISOString() });
   const a = g.S.avisos.find(x => x.id === 'av-aver');
   await g.guardarCierre(a, true);
   await g.cargar();
   const d = g.S.avisos.find(x => x.id === 'av-aver') || {};
-  return { cerrado: !!d.cerrado, pendiente: !!d.pendiente,
+  return { cerrado: !!d.cerrado, pendiente: !!d.pendiente, texto: d.pendiente_texto || '',
            err: (document.querySelector('#dlg-form .err')||{}).textContent || '' };
 });
-paso('y se cierra con la puerta a medio documentar', rAv.cerrado === true, rAv.err);
-paso('sin inventarle pendientes', rAv.pendiente === false);
+paso('con una foto, la avería se cierra aunque la ficha esté a medias',
+  rAv.cerrado === true, rAv.err);
+/* Lo que antes era «sin inventarle pendientes» es ahora lo contrario, y es lo
+   que hace que el dato no se pierda: la oficina ve qué falta de esa ficha. */
+paso('y se cierra señalada, con lo que le falta a la ficha',
+  rAv.pendiente === true && /ficha incompleta/i.test(rAv.texto), rAv.texto);
 
 /* ================================================================
    11. Los campos nuevos de la ficha
