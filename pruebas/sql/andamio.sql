@@ -108,6 +108,11 @@ create table if not exists public.avisos (
   cliente_id   uuid references public.clientes(id) on delete set null,
   puerta_id    uuid references public.puertas(id) on delete set null,
   tecnico_id   uuid,
+  /* El nombre del técnico, escrito en la propia visita. La aplicación lo guarda
+     desde hace tiempo y el andamio no lo tenía: salió a la luz el 05-11-2026, al
+     escribir una vista que lo leía. El andamio tiene que parecerse a la base de
+     verdad, o las pruebas dan por bueno un SQL que en producción falla. */
+  tecnico      text,
   descripcion  text,
   notas_oficina text,
   diagnostico  text,
