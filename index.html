@@ -771,8 +771,43 @@ const TIPOS_SIN_VALOR = ['comercial','garantia'];
 /* Desde el 04-11-2026 la garantía también puede venir como subtipo de la
    correctiva. Mirar solo el tipo facturaría las garantías nuevas; mirar solo el
    subtipo facturaría las viejas. Se miran las dos. */
+/* ---- La puesta en servicio (05-11-2026) ----
+   David: «La puesta en marcha no se hará siempre, es solo cuando no se ha podido
+   terminar por algún motivo. Pero no es algo que siempre va a ocurrir y como tal
+   no es facturable. Es un punto de finalización de un proyecto o instalación que
+   ya se debe de haber terminado y facturado.»
+
+   Así que el remate no se cobra, con una excepción: si la obra se quedó parada
+   por causa del cliente, la oficina puede marcarlo como repercutible y entonces
+   sí se factura. Eso lo decide una persona, nunca la aplicación.
+
+   La lista de causas es cerrada a propósito. En texto libre no se puede contar
+   cuántas obras se retrasan por cada motivo, y lo que no se puede contar no se
+   puede reclamar. La explicación va al lado, en palabras. */
+const PS_CAUSAS = [
+  ['sin_corriente', 'No había corriente definitiva'],
+  ['albanileria',   'Albañilería u obra del cliente sin terminar'],
+  ['remates',       'Remates del cliente: pintura, solado, cerrajería'],
+  ['material_cli',  'Falta material que pone el cliente'],
+  ['nuestra',       'Causa nuestra: material que no llegó, error de medida'],
+  ['otra',          'Otra, lo explico al lado'],
+];
+const PS_CAUSA_TXT = c => (PS_CAUSAS.find(x => x[0] === c) || [null, ''])[1];
+/* Las causas que son del cliente: son las que permiten plantearse repercutir el
+   viaje. «Causa nuestra» no, evidentemente, y «otra» tampoco sin leerla. */
+const PS_CAUSA_CLIENTE = ['sin_corriente','albanileria','remates','material_cli'];
+/* Una puesta en servicio se valora en cero salvo que gestión diga lo contrario.
+   Es la misma regla que el servidor en puesta-servicio.sql. Está aquí para poder
+   avisar ANTES, en pantalla, en vez de que alguien se lo encuentre al facturar. */
+/* Y con el mismo corte de fecha que el servidor: las puestas en servicio que ya
+   estaban cerradas antes de este cambio se facturaron, así que la aplicación no
+   puede decir de ellas que valen cero. Si este corte estuviera solo en el
+   servidor, la pantalla contaría una cosa y la factura otra. */
+const PS_CORTE = '2026-11-05T00:00:00+01:00';
+const esRemateSinCargo = a => !!a && a.tipo === 'puesta_servicio' && !a.repercutible &&
+  (!a.cerrado || new Date(a.cerrado) >= new Date(PS_CORTE));
 const seValoraEnCero = a => !!a &&
-  (TIPOS_SIN_VALOR.includes(a.tipo) || esGarantia(a) || !!a.sin_cargo);
+  (TIPOS_SIN_VALOR.includes(a.tipo) || esGarantia(a) || esRemateSinCargo(a) || !!a.sin_cargo);
 /* Mantenimiento: periodicidades que se ofrecen y estados del contrato */
 const PERIODOS = [[1,'Cada mes'],[2,'Cada 2 meses'],[3,'Cada trimestre'],[4,'Cada 4 meses'],[6,'Cada 6 meses'],[12,'Una vez al año'],[24,'Cada 2 años']];
 const FORMAS_PAGO = ['Transferencia','Domiciliación','Efectivo','Tarjeta'];
@@ -1538,6 +1573,16 @@ async function cargar(){
      antes del 04-11-2026, y la aplicación no propone ningún factor. */
   const ug = await sb.from('avisos').select('urgencia_factor').limit(1);
   S.sinUrgencia = !!ug.error;
+  /* La toma de medidas de la comercial: servidor/medidas.sql. Sin la tabla, el
+     parte de una comercial no enseña el apartado y se sigue escribiendo todo en
+     «qué has hecho», como antes del 05-11-2026. */
+  const md = await sb.from('medidas').select('id').limit(1);
+  S.sinMedidas = !!md.error;
+  /* El remate de una obra: servidor/puesta-servicio.sql. Sin esas columnas la
+     puesta en servicio sigue siendo un tipo de visita cualquiera, que se abre
+     sola y se factura, como antes del 05-11-2026. */
+  const ps = await sb.from('avisos').select('instalacion_id, ps_causa, repercutible').limit(1);
+  S.sinRemates = !!ps.error;
   /* ---- El almacén ----
      Las existencias no se guardan en ninguna columna: se leen de la vista, que
      las suma de los movimientos. Si falta el SQL del almacén, la aplicación
@@ -1701,7 +1746,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.05-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.05-2';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -3611,6 +3656,41 @@ function vistaGestion(){
       });
       h += '</div>'+
         (csr.length > 25 ? '<p class="mini" style="margin:8px 0 0">Y '+(csr.length-25)+' más.</p>' : '')+
+        '</div>';
+    }
+  }
+
+  /* ---- Obras con el remate pendiente (05-11-2026) ----
+     Una instalación cerrada con algo pendiente y sin remate hecho es una puerta
+     entregada a medias. No es dinero perdido hoy, pero es una obra que el
+     cliente no da por terminada, y el día que se acuerda de llamar han pasado
+     tres meses. Hasta hoy esto solo se veía abriendo la obra una por una. */
+  if (!S.sinRemates){
+    const obr = obrasConRematePendiente();
+    if (obr.length){
+      h += '<div class="panel"><div class="panel-h"><h3>Obras con el remate pendiente</h3>'+
+        '<span class="mini">'+obr.length+'</span></div>'+
+        '<p class="mini" style="margin:0 0 10px">Instalaciones cerradas con algo pendiente y sin una '+
+        'puesta en servicio hecha. La más antigua arriba, que es la que más tiempo lleva esperando. '+
+        'El botón abre el remate ya enlazado con su obra, con el cliente y la puerta puestos: solo '+
+        'hay que decir por qué se quedó pendiente. El remate <b>no se factura</b>, porque la obra ya '+
+        'se facturó.</p>'+
+        '<div class="lista-simple">';
+      obr.slice(0, 25).forEach(x => {
+        const pu = x.a.puerta_id ? puertaDe(x.a.puerta_id) : null;
+        h += '<div class="item-plano">'+
+          '<button class="item sp" data-act="aviso-editar" data-id="'+x.a.id+'">'+
+            '<span><span class="tit">'+esc((clienteDe(x.a.cliente_id) || {}).nombre || 'Sin cliente')+'</span>'+
+            '<span class="sub">'+esc([pu ? (pu.codigo || sitioPuerta(pu)) : '',
+              x.a.pendiente_texto || 'pendiente sin detallar'].filter(Boolean).join(' · '))+'</span></span>'+
+            '<span style="text-align:right"><span class="tit'+(x.dias >= 30 ? '' : '')+'" '+
+              (x.dias >= 30 ? 'style="color:var(--mal)"' : '')+'>'+x.dias+'</span>'+
+            '<span class="sub">día'+(x.dias===1?'':'s')+' esperando</span></span>'+
+          '</button>'+
+          '<button class="btn sm pri" data-act="remate-nuevo" data-id="'+x.a.id+'">Abrir el remate</button></div>';
+      });
+      h += '</div>'+
+        (obr.length > 25 ? '<p class="mini" style="margin:8px 0 0">Y '+(obr.length-25)+' más.</p>' : '')+
         '</div>';
     }
   }
@@ -18097,10 +18177,16 @@ dlgForm.addEventListener('change', e => {
   if (t.id === 'a-puerta'){ clienteDeLaPuertaDelAviso(); rutaDelAviso();
     pintarPuertasAviso(dlgForm.dataset.aviso || null); return; }
   /* ---- El tipo manda sobre el subtipo, y los dos sobre lo demás ---- */
-  if (t.id === 'a-tipo'){ pintarSubtipo(); pintarPuertasAviso(dlgForm.dataset.aviso || null); return; }
+  if (t.id === 'a-tipo'){ pintarSubtipo(); pintarPuertasAviso(dlgForm.dataset.aviso || null);
+    pintarRemate(dlgForm.dataset.aviso || null); return; }
   if (t.id === 'a-sub'){ pintarTiposPuerta(); return; }
-  /* Al cambiar el cliente a mano, la ruta propuesta cambia con él */
-  if (t.id === 'a-cliente'){ rutaDelAviso(); pintarPuertasAviso(dlgForm.dataset.aviso || null); return; }
+  /* Al cambiar el cliente a mano, la ruta propuesta cambia con él, y las obras
+     que se ofrecen para el remate también: las instalaciones son de un cliente. */
+  if (t.id === 'a-cliente'){ rutaDelAviso(); pintarPuertasAviso(dlgForm.dataset.aviso || null);
+    pintarRemate(dlgForm.dataset.aviso || null); return; }
+  /* Si eligen la obra a mano, manda lo que eligieron: al repintar no se pisa */
+  if (t.id === 'a-obra'){ t.dataset.tocado = '1'; return; }
+  if (t.id === 'a-pscausa'){ pintarCausaRemate(); return; }
   /* Si la oficina toca la ruta, deja de proponerse: manda lo que eligió */
   if (t.id === 'a-ruta'){ t.dataset.tocado = '1'; return; }
   // Puerta: al elegir centro, su dirección baja a la puerta
@@ -18533,6 +18619,113 @@ function pintarTiposPuerta(){
   if (ps) ps.textContent = AYUDA_SUBTIPO[sub] || 'De esto depende lo que se le pide al técnico';
   if (!caja) return;
   caja.hidden = !pideTiposPuerta(tipo, sub);
+}
+/* ---- Las tres preguntas de la puesta en servicio (05-11-2026) ----
+   Aparecen y desaparecen con el tipo, igual que el subtipo. Y la lista de obras
+   se vuelve a pintar cada vez que cambia el cliente, porque las instalaciones
+   son de un cliente: ofrecer la obra de otro sería enlazar el remate con una
+   obra que no es. */
+function pintarRemate(avisoId){
+  const tipo = (document.getElementById('a-tipo') || {}).value || '';
+  const esPS = tipo === 'puesta_servicio';
+  ['a-caja-ps','a-caja-psc','a-caja-psd'].forEach(id => {
+    const c = document.getElementById(id);
+    if (c) c.hidden = !esPS;
+  });
+  const sel = document.getElementById('a-obra');
+  if (!sel) return;
+  const pista = document.getElementById('a-obrapista');
+  if (!esPS) return;
+  const cli = (document.getElementById('a-cliente') || {}).value || '';
+  const a = avisoId ? S.avisos.find(x => x.id === avisoId) : null;
+  const elegida = sel.dataset.tocado === '1' ? sel.value : ((a && a.instalacion_id) || '');
+  const obras = obrasDelCliente(cli);
+  sel.innerHTML = '<option value="">No está en la aplicación (obra antigua)</option>'+
+    obras.map(o => '<option value="'+o.id+'"'+(elegida === o.id ? ' selected' : '')+'>'+
+      esc(etiquetaObra(o))+'</option>').join('');
+  /* Si la obra enlazada es de otro cliente (porque se acaba de cambiar el
+     cliente), se dice en vez de perderla sin avisar. */
+  if (elegida && !obras.some(o => o.id === elegida)){
+    const vieja = S.avisos.find(x => x.id === elegida);
+    if (vieja) sel.insertAdjacentHTML('beforeend',
+      '<option value="'+vieja.id+'" selected>'+esc(etiquetaObra(vieja))+' (de otro cliente)</option>');
+  }
+  if (pista) pista.textContent = !cli
+    ? 'Elige primero el cliente de abajo y aquí saldrán sus instalaciones'
+    : (obras.length
+        ? 'Instalaciones de ese cliente, la más reciente arriba. Si la obra es de antes de la '+
+          'aplicación, déjalo en «obra antigua»'
+        : 'Ese cliente no tiene ninguna instalación en la aplicación. Déjalo en «obra antigua»');
+}
+/* La pista de la causa dice de quién fue, porque de eso depende si el viaje se
+   le puede cobrar al cliente. El aviso se da al elegirla, no al facturar. */
+function pintarCausaRemate(){
+  const c = (document.getElementById('a-pscausa') || {}).value || '';
+  const p = document.getElementById('a-pscpista');
+  if (!p) return;
+  if (!c) p.textContent = 'De esto sale la cuenta de lo que cuestan los remates, y de quién fue la causa';
+  else if (c === 'nuestra') p.textContent = 'Causa nuestra: este viaje lo paga la empresa. Se apunta '+
+    'igual, con sus horas, para saber lo que cuesta';
+  else if (c === 'otra') p.textContent = 'Explícalo al lado: sin eso, «otra» no dice nada a nadie';
+  else p.textContent = 'Causa del cliente. El remate no se factura por sí solo, pero la oficina puede '+
+    'marcarlo como repercutible al cerrar el parte';
+}
+/* Las instalaciones de un cliente, la más reciente primero. Salen también las
+   que están abiertas: un remate puede programarse antes de cerrar la obra. */
+function obrasDelCliente(clienteId){
+  if (!clienteId) return [];
+  return (S.avisos || [])
+    .filter(x => x.tipo === 'instalacion' && !x.anulada && x.cliente_id === clienteId)
+    .sort((x, y) => String(y.cerrado || y.creado || '').localeCompare(String(x.cerrado || x.creado || '')))
+    .slice(0, 40);
+}
+/* ---- Las obras que esperan su remate (05-11-2026) ----
+   Instalaciones cerradas, con algo pendiente y sin una puesta en servicio
+   CERRADA. Lo que saca una obra de esta lista es el remate hecho, no el remate
+   apuntado: si bastara con abrir el aviso, la obra desaparecería de la lista el
+   día que alguien la programa, sin que nadie haya ido a terminarla.
+   Es la misma regla que la vista obras_con_remate_pendiente del servidor. */
+/* Abre una puesta en servicio para esa obra, con todo lo que se puede heredar
+   ya puesto: cliente, puerta, obra y la causa que la obra dejó escrita como
+   pendiente. Lo que queda por decir es por qué, y eso no se adivina. */
+function rematePara(obraId){
+  const o = S.avisos.find(x => x.id === obraId);
+  if (!o) return toast('No encuentro esa obra.');
+  dlgAviso(o.puerta_id || null, null, o.cliente_id || null);
+  setTimeout(() => {
+    const tipo = document.getElementById('a-tipo');
+    if (tipo){ tipo.value = 'puesta_servicio'; tipo.dispatchEvent(new Event('change', { bubbles:true })); }
+    setTimeout(() => {
+      const sel = document.getElementById('a-obra');
+      if (sel && Array.from(sel.options).some(x => x.value === obraId)){
+        sel.value = obraId; sel.dataset.tocado = '1';
+      }
+      /* Lo que la obra dejó escrito como pendiente se copia a la descripción:
+         es justo lo que hay que ir a hacer, y ya está escrito. */
+      const desc = document.getElementById('a-desc');
+      if (desc && !desc.value.trim() && o.pendiente_texto)
+        desc.value = 'Remate de la obra: '+o.pendiente_texto;
+      const det = document.getElementById('a-psdet');
+      if (det && !det.value.trim() && o.pendiente_texto) det.value = o.pendiente_texto;
+    }, 60);
+  }, 60);
+}
+function obrasConRematePendiente(){
+  const avs = S.avisos || [];
+  return avs
+    .filter(a => a.tipo === 'instalacion' && !a.anulada && a.cerrado && a.pendiente)
+    .filter(a => !avs.some(ps => ps.instalacion_id === a.id && ps.tipo === 'puesta_servicio' &&
+                                 ps.cerrado && !ps.anulada))
+    .map(a => ({ a, dias: -dias(a.cerrado) }))
+    .sort((x, y) => y.dias - x.dias);
+}
+function etiquetaObra(o){
+  const pu = o.puerta_id ? puertaDe(o.puerta_id) : null;
+  return [o.cerrado ? fechaCorta(o.cerrado) : 'abierta',
+          nombreSubtipo('instalacion', o.subtipo) || 'Instalación',
+          pu ? (pu.codigo || sitioPuerta(pu)) : '',
+          o.pendiente && o.pendiente_texto ? ('pendiente: '+o.pendiente_texto) : '',
+         ].filter(Boolean).join(' · ');
 }
 function clienteDeLaPuertaDelAviso(){
   const sel = document.getElementById('a-puerta'), cli = document.getElementById('a-cliente');
@@ -19132,6 +19325,32 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
       '</div>'+
       '<span class="pista">Marca los que entran en este trabajo. Si la puerta ya está dada de '+
       'alta, no hace falta: manda su ficha</span></div>')+
+    /* ---- La puesta en servicio (05-11-2026) ----
+       Un remate es el final de una obra concreta, así que se dice de cuál y por
+       qué se quedó pendiente. Sin esas dos cosas la puesta en servicio es un
+       cajón de sastre: no se sabe qué obra cierra, y no se puede contar cuántas
+       se retrasan por cada motivo, que es lo que permite reclamarlo. */
+    (S.sinRemates ? '' :
+    '<div class="campo full" id="a-caja-ps"'+(d.tipo === 'puesta_servicio' ? '' : ' hidden')+'>'+
+      '<label for="a-obra">De qué instalación viene este remate</label>'+
+      '<select id="a-obra"><option value="">No está en la aplicación (obra antigua)</option></select>'+
+      '<span class="pista" id="a-obrapista">Se eligen las instalaciones de ese cliente. Elige primero el '+
+      'cliente de abajo y se rellenan solas</span></div>')+
+    (S.sinRemates ? '' :
+    '<div class="campo" id="a-caja-psc"'+(d.tipo === 'puesta_servicio' ? '' : ' hidden')+'>'+
+      '<label for="a-pscausa">Por qué se quedó pendiente</label><select id="a-pscausa">'+
+      '<option value="">Sin indicar</option>'+
+      PS_CAUSAS.map(([k, n]) => '<option value="'+k+'"'+((d.ps_causa||'')===k?' selected':'')+'>'+
+        esc(n)+'</option>').join('')+'</select>'+
+      '<span class="pista" id="a-pscpista">De esto sale la cuenta de lo que cuestan los remates, y de '+
+      'quién fue la causa</span></div>')+
+    (S.sinRemates ? '' :
+    '<div class="campo" id="a-caja-psd"'+(d.tipo === 'puesta_servicio' ? '' : ' hidden')+'>'+
+      '<label for="a-psdet">Explícalo</label>'+
+      '<input id="a-psdet" type="text" maxlength="200" value="'+esc(d.ps_causa_detalle||'')+'" '+
+      'placeholder="Ej.: el cuadro general no estaba montado el día del montaje">'+
+      '<span class="pista">Lo que haya que saber para entender por qué se dejó a medias. Si la causa '+
+      'es «otra», hace falta</span></div>')+
     '<div class="campo"><label for="a-origen">Cómo ha entrado</label><select id="a-origen">'+
       opts(lista('origenes', ORIGENES), d.origen==='cliente' ? 'QR' : (d.origen||''))+'</select></div>'+
     '<div class="campo full"><label for="a-puerta">Puerta</label><select id="a-puerta"><option value="">Sin puerta concreta</option>'+
@@ -19201,11 +19420,12 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
   /* Qué asistencia se está editando, para que lo que se repinte al vuelo sepa
      de cuál son las puertas ya guardadas. */
   setTimeout(() => { dlgForm.dataset.aviso = a ? a.id : ''; }, 0);
-  if (!a) setTimeout(() => { clienteDeLaPuertaDelAviso(); rutaDelAviso(); pintarPuertasAviso(null); }, 0);
+  if (!a) setTimeout(() => { clienteDeLaPuertaDelAviso(); rutaDelAviso(); pintarPuertasAviso(null);
+    pintarRemate(null); }, 0);
   /* En una asistencia que ya existe y todavía no tiene ruta, también se propone:
      la mayoría de las que hay ahora mismo se crearon antes de que esto existiera. */
   else if (!String(a.ruta || '').trim()) setTimeout(rutaDelAviso, 0);
-  if (a) setTimeout(() => pintarPuertasAviso(a.id), 0);
+  if (a) setTimeout(() => { pintarPuertasAviso(a.id); pintarRemate(a.id); }, 0);
   abrirDlg(h, async () => {
     const tid = val('a-tec') || null;
     const nom = val('a-cnom'), tel = val('a-ctel'), mail = val('a-cmail');
@@ -19238,6 +19458,37 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
         ? Array.from(document.querySelectorAll('#a-tp .a-tp-c:checked')).map(x => x.value)
         : null;
       if (o.tipos_puerta && !o.tipos_puerta.length) o.tipos_puerta = null;
+    }
+    /* ---- La puesta en servicio (05-11-2026) ----
+       Un remate es el final de una obra concreta. Si no se dice de cuál viene y
+       por qué se quedó pendiente, la puesta en servicio se convierte en un cajón
+       de sastre: nadie sabe qué obra cierra, y la cuenta de cuántas obras se
+       retrasan por cada motivo no se puede hacer.
+
+       Lo que NO se exige es la obra: puede ser de antes de la aplicación. Pero
+       entonces se dice que es antigua eligiéndolo, no dejándolo a medias. */
+    if (!S.sinRemates){
+      const esPS = o.tipo === 'puesta_servicio';
+      o.instalacion_id = esPS ? (val('a-obra') || null) : null;
+      const causa = esPS ? val('a-pscausa') : '';
+      o.ps_causa = PS_CAUSAS.some(x => x[0] === causa) ? causa : null;
+      o.ps_causa_detalle = esPS ? (val('a-psdet') || null) : null;
+      if (esPS && !o.ps_causa)
+        return setErr('Di por qué se quedó pendiente esta obra. De eso sale la cuenta de lo que '+
+          'cuestan los remates y de quién fue la causa, y no se puede reclamar lo que no está '+
+          'apuntado.');
+      if (esPS && o.ps_causa === 'otra' && !o.ps_causa_detalle)
+        return setErr('Has puesto «otra» como causa: explícala al lado. «Otra» sin explicación no '+
+          'dice nada a nadie dentro de seis meses.');
+      /* La obra enlazada tiene que ser del mismo cliente. Si no, el remate
+         cerraría la obra de otro, y en la ficha de esa puerta aparecería un
+         trabajo que no se le hizo. */
+      if (esPS && o.instalacion_id){
+        const ob = S.avisos.find(x => x.id === o.instalacion_id);
+        if (ob && o.cliente_id && ob.cliente_id && ob.cliente_id !== o.cliente_id)
+          return setErr('La instalación que has elegido es de otro cliente. Elige una de este '+
+            'cliente, o déjalo en «obra antigua».');
+      }
     }
     if (!o.puerta_id && !o.cliente_id && !o.direccion_libre && !o.contacto_nombre)
       return setErr('Pon al menos la puerta, el cliente, una dirección o el nombre de quien avisa.');
@@ -21681,9 +21932,15 @@ function dlgValoracion(avisoId){
       h += '<div class="sin-ficha" style="margin-bottom:10px">Este trabajo salió de un presupuesto '+
         'aceptado, pero es de tipo <b>'+esc(tipoAsis(a))+'</b>'+
         (a.sin_cargo ? ' y está marcado como que no se cobra' : '')+
-        ', y eso se valora en <b>cero euros</b>. Si hay que cobrarlo, cambia '+
-        (esGarantia(a) && a.subtipo === 'garantia' ? 'la clase de trabajo' : 'el tipo de la asistencia')+
-        (a.sin_cargo ? ' o quítale la marca de «no se cobra»' : '')+
+        ', y eso se valora en <b>cero euros</b>. Si hay que cobrarlo, '+
+        /* En un remate no hay que cambiarle el tipo: hay una casilla para eso,
+           y decirle a la oficina que cambie el tipo sería decirle que borre de
+           qué obra viene. */
+        (esRemateSinCargo(a)
+          ? 'marca en el parte <b>«Este viaje se le cobra al cliente»</b>'
+          : 'cambia '+(esGarantia(a) && a.subtipo === 'garantia'
+              ? 'la clase de trabajo' : 'el tipo de la asistencia')+
+            (a.sin_cargo ? ' o quítale la marca de «no se cobra»' : ''))+
         ' y vuelve a calcular.</div>';
     if (pre && pac != null){
       const dif = Math.round((pac - (+v.imp_total || 0)) * 100) / 100;
@@ -22841,7 +23098,7 @@ function dlgCierre(avisoId){
      marcó nada, un bloque en blanco. El técnico añade los que haga falta.
      Los bloques van numerados siempre, aunque solo haya uno, porque siempre se
      puede añadir otro y un título sin número se queda viejo en cuanto lo haces. */
-  if (a.tipo === 'comercial'){
+  if (a.tipo === 'comercial' && !S.sinMedidas){
     const tps = (a.tipos_puerta || []).filter(Boolean);
     h += '<div id="med-zona">';
     if (tps.length) tps.forEach((t, i) => { h += bloqueMedidas(a, { tipo_puerta: t }, i); });
@@ -22850,6 +23107,46 @@ function dlgCierre(avisoId){
       '<div class="fila" style="margin:0 0 14px">'+
       '<button type="button" class="btn sm plana" data-act="med-add">Añadir otro hueco</button>'+
       '<span class="sp"></span></div>';
+  }
+
+  /* ---- El remate de una obra (05-11-2026) ----
+     En el parte no se vuelve a preguntar de qué obra viene ni por qué: eso se
+     decidió al abrir la visita y cambiarlo aquí sería cambiar la historia de la
+     obra desde el sitio equivocado. Lo que sí se decide aquí es quién paga el
+     viaje, y eso solo lo toca la oficina. */
+  if (a.tipo === 'puesta_servicio' && !S.sinRemates){
+    const ob = a.instalacion_id ? S.avisos.find(x => x.id === a.instalacion_id) : null;
+    const delCliente = PS_CAUSA_CLIENTE.includes(String(a.ps_causa || ''));
+    h += '<div class="grupo"><h3>Remate de la obra</h3>'+
+      '<p class="mini" style="margin:0 0 10px">Esta visita es el final de una instalación que ya se '+
+      'facturó, así que <b>no se factura por sí sola</b>. Las horas se apuntan igual: es la única '+
+      'manera de saber lo que cuesta volver a una obra.</p>'+
+      '<table class="mini" style="width:100%;border-collapse:collapse">'+
+      '<tr><th style="text-align:left;padding:2px 10px 2px 0;color:var(--muted)">Viene de</th><td>'+
+        esc(ob ? etiquetaObra(ob) : 'Obra antigua, no está en la aplicación')+'</td></tr>'+
+      '<tr><th style="text-align:left;padding:2px 10px 2px 0;color:var(--muted)">Se quedó pendiente por</th><td>'+
+        esc(PS_CAUSA_TXT(a.ps_causa) || 'sin indicar')+'</td></tr>'+
+      (a.ps_causa_detalle ? '<tr><th style="text-align:left;padding:2px 10px 2px 0;color:var(--muted)">Explicación</th><td>'+
+        esc(a.ps_causa_detalle)+'</td></tr>' : '')+
+      '</table>';
+    if (esGestion()){
+      h += '<div class="campos" style="margin-top:10px">'+
+        '<div class="campo full" style="align-content:end"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+        '<input type="checkbox" id="z-reperc"'+(a.repercutible?' checked':'')+
+        ' style="accent-color:var(--amarillo);width:18px;height:18px">Este viaje se le cobra al cliente</label>'+
+        '<span class="pista">'+
+        (delCliente
+          ? 'La obra se quedó parada por causa del cliente, así que este viaje se le puede repercutir. '+
+            'Lo decides tú: si lo marcas, la visita se valora como cualquier otra y queda pendiente de '+
+            'facturar. Si no, se queda en cero y el coste lo paga la empresa'
+          : 'La causa que está apuntada no es del cliente, así que lo normal es dejarlo sin marcar. '+
+            'Márcalo solo si hay un acuerdo con el cliente para cobrarle este viaje')+
+        '</span></div></div>';
+    } else {
+      h += '<p class="mini" style="margin:8px 0 0">Si crees que este viaje había que cobrarlo, dilo en '+
+        'la oficina: lo marcan ellos. Tú apunta las horas de verdad, que es lo que hace falta.</p>';
+    }
+    h += '</div>';
   }
 
   h += '<div class="grupo"><h3>Cómo queda</h3><div class="campos">'+
@@ -23499,7 +23796,7 @@ async function prepararCierre(a){
      avance), se añaden los que falten ANTES de rellenar: si no, la cuarta
      medida de un parte guardado a medias se quedaría sin sitio y se perdería al
      volver a guardar. */
-  if (a.tipo === 'comercial' && document.getElementById('med-zona')){
+  if (a.tipo === 'comercial' && !S.sinMedidas && document.getElementById('med-zona')){
     const { data: meds } = await sb.from('medidas').select('*').eq('aviso_id', a.id).order('orden');
     const lis = meds || [];
     while (lis.length > bloquesMedidaEnForm()) anadirHueco();
@@ -23677,6 +23974,14 @@ async function guardarCierre(a, cerrando){
       if (f) o.urgencia_factor = f.factor;
     }
   }
+  /* ---- Quién paga el remate (05-11-2026) ----
+     Solo lo manda la oficina, y solo si el campo está en pantalla. Un técnico
+     editando el parte no puede poner ni quitar una marca que decide si esa
+     visita se factura; y si la casilla no se pintó, no se manda nada, para que
+     guardar el parte no borre lo que la oficina ya había marcado. */
+  if (!S.sinRemates && a.tipo === 'puesta_servicio' && esGestion() &&
+      document.getElementById('z-reperc'))
+    o.repercutible = chk('z-reperc');
   if (conCobro){
     o.cobrado = chk('z-cobrado');
     o.cobro_importe = val('z-imp') ? +val('z-imp') : null;
@@ -23737,7 +24042,7 @@ async function guardarCierre(a, cerrando){
      medias a propósito. Lo que se comprueba es el cierre, porque una comercial
      cerrada sin medidas es un viaje hecho del que no sale presupuesto. */
   const medidas = [];
-  if (a.tipo === 'comercial'){
+  if (a.tipo === 'comercial' && !S.sinMedidas){
     const bloques = Array.from(document.querySelectorAll('#dlg-form .medida'));
     bloques.forEach((cont, i) => {
       const m = leerMedida(cont);
@@ -23923,7 +24228,7 @@ async function guardarCierre(a, cerrando){
        la lista se ha quedado vacía: si el técnico quitó un hueco que había
        apuntado por error, tiene que desaparecer de verdad. Con un «if
        (medidas.length)» delante, el hueco borrado seguiría en el presupuesto. */
-    if (a.tipo === 'comercial') await rehacer('medidas', medidas.map(x => x.m));
+    if (a.tipo === 'comercial' && !S.sinMedidas) await rehacer('medidas', medidas.map(x => x.m));
     const { error } = await sb.from('avisos').update(o).eq('id', a.id);
     if (error) throw error;
     // estado de la puerta según cómo queda
@@ -24139,6 +24444,18 @@ async function hojaParte(avisoId){
     (a.cobrado ? ('<h2>Cobro</h2><table>'+fila('Importe cobrado', (a.cobro_importe||0) + ' €')+fila('Forma', a.cobro_forma)+fila('Referencia', a.cobro_ref)+'</table>') : '')+
     ((revs || []).map(r => bloqueRevisionHTML(r, fila)).join(''))+
     (meds.length ? bloqueMedidasHTML(meds, fila) : '')+
+    /* ---- El remate, en el papel (05-11-2026) ----
+       El cliente firma un parte que dice que esto es el final de su obra y por
+       qué se quedó pendiente. Eso cierra discusiones: la fecha de la obra está
+       escrita, y el motivo también. */
+    (a.tipo === 'puesta_servicio' && !S.sinRemates
+      ? '<h2>Remate de la instalación</h2><table>'+
+        fila('Obra', (() => { const ob = a.instalacion_id ? S.avisos.find(x => x.id === a.instalacion_id) : null;
+          return ob ? etiquetaObra(ob) : 'Obra anterior a la aplicación'; })())+
+        fila('Se quedó pendiente por', PS_CAUSA_TXT(a.ps_causa))+
+        fila('Explicación', a.ps_causa_detalle)+
+        '</table>'
+      : '')+
     '<h2>Conformidad del cliente</h2>'+
     (firma ? ('<div>'+esc(a.firma_nombre||'')+'</div><img class="firma" src="'+firma+'">')
            : ('<div>Sin firma. '+esc(a.firma_sin||'')+'</div>'))+
@@ -24822,6 +25139,11 @@ raiz.addEventListener('click', async e => {
   else if (a === 'estado') dlgEstado(b.dataset.id);
   else if (a === 'aviso-nuevo') dlgAviso(b.dataset.id, null);
   else if (a === 'aviso-editar') dlgAviso(null, b.dataset.id);
+  /* ---- Abrir el remate de una obra (05-11-2026) ----
+     Se abre la puesta en servicio con la obra, el cliente y la puerta ya
+     puestos. Teclearlo otra vez es la manera de que el remate acabe enlazado
+     con la obra equivocada, o sin enlazar con ninguna. */
+  else if (a === 'remate-nuevo') rematePara(b.dataset.id);
   else if (a === 'foto-ver') dlgFoto(b.dataset.id);
   else if (a === 'ver-qr') dlgQR(b.dataset.cod);
   else if (a === 'etiqueta-imprimir') etiquetaTermica(b.dataset.cod);
