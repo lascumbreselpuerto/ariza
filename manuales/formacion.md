@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.11.04-3**
+> **Versión de la aplicación que describe este manual: 2026.11.05-1**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -460,14 +460,14 @@ Los que más veces se ven, por orden de gravedad:
 
 ---
 
-## 8 bis. Seis maneras de perder dinero sin enterarse
+## 8 bis. Siete maneras de perder dinero sin enterarse
 
 Esto no es técnica de puertas, es oficio de empresa, y se pone aquí porque las
 dos cosas pasan en el mismo sitio donde se documenta el trabajo.
 
-Las tres primeras son cuentas que salen mal. Las tres últimas son distintas y son
-peores, porque no sale mal ninguna cuenta: simplemente hay trabajo que no se hace,
-o que se hace dos veces.
+Las tres primeras son cuentas que salen mal. Las cuatro últimas son distintas y
+son peores, porque no sale mal ninguna cuenta: simplemente hay trabajo que no se
+hace, o que se hace dos veces.
 
 ### El precio pactado y el precio calculado no son el mismo número
 
@@ -740,6 +740,46 @@ papel que luego se firma. De ahí la regla con la que están hechos los atajos: 
 copia lo que es del modelo, no se copia nunca lo que identifica o lo que se mide
 en una puerta concreta, y lo copiado se enseña en pantalla para que se repase.
 
+### La oferta que se hace con la medida de memoria
+
+La séptima pasa antes de que haya trabajo que facturar, y por eso no la ve nadie:
+se pierde en la visita comercial, la de ir a ofertar.
+
+Una visita comercial no se factura. Cuesta el desplazamiento, la hora del técnico
+y la hora de quien redacta la oferta, y se recupera solo si la oferta se vende. De
+ahí sale una cuenta que conviene tener delante: con el coste de una hora de
+técnico y un desplazamiento medio, **cada comercial que no acaba en oferta
+mandada es dinero puesto encima de la mesa**. Y no se pierde porque el cliente
+diga que no: eso es el oficio. Se pierde por tres cosas que no tienen nada que ver
+con el cliente.
+
+**Una: la visita de la que no se trae la medida.** El técnico va, lo ve, lo
+entiende, y lo escribe en dos líneas. En la oficina esas dos líneas no dan para
+redactar nada, así que hay que llamarlo. Si está en otra obra, la oferta espera.
+El viaje ya está pagado y lo que falta es un número que estuvo delante de los ojos
+de alguien.
+
+**Dos: la medida que se apunta de memoria.** Un hueco se mide en el momento o no
+se mide. Una medida recordada al final del día se convierte en una puerta pedida
+mal, y una puerta pedida mal no se devuelve: se paga.
+
+**Tres, y es la que más cuesta: lo que no es la puerta.** La acometida eléctrica
+que hay que llevar, la obra para el carril, el desmontaje y la retirada de la
+puerta vieja, los auxiliares. Todo eso se hace igual aunque no se haya ofertado, y
+entonces lo paga la empresa. Un cuadro y dos fotocélulas no hunden una oferta,
+pero llevar una acometida treinta metros sí.
+
+Por eso la toma de medidas tiene en la aplicación un sitio fijo, con sus casillas,
+y no un campo de texto: el hueco, el dintel, el lateral, qué hay ahora, la
+acometida y los auxiliares. No porque sea más bonito, sino porque **un formulario
+con huecos se nota cuando está vacío, y un párrafo no**. Y hay un detalle que
+cierra el círculo: de esas casillas sale el presupuesto con un capítulo por hueco,
+así que lo que el técnico midió es exactamente lo que la oficina oferta, sin
+teclearlo otra vez y sin interpretar la letra de nadie.
+
+La regla, que es la misma de toda esta lista: **lo que no se apunta donde toca no
+se pierde, se olvida, y lo olvidado se paga igual**.
+
 ---
 
 ## 9. Cómo se registra todo esto en ARIZA SAT
@@ -824,4 +864,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.04-3 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.05-1 de ARIZA SAT*

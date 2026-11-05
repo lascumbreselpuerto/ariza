@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.04-3**
+> **Versión de la aplicación que describe este manual: 2026.11.05-1**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -184,6 +184,58 @@ Lo que escribas en **Recomendaciones y presupuesto a ofertar** no se queda ahí:
 
 - **Todo bien en este bloque** marca de golpe lo que no hayas tocado. No pisa lo que ya hayas marcado.
 - Si un límite sale como **«no cargado»**, mide y anota igual. El dato sirve aunque el límite todavía no esté puesto.
+
+### Toma de medidas
+
+Este apartado sale **solo en las visitas comerciales**, las de ir a ofertar. Es
+nuevo desde el **5 de noviembre de 2026** y sustituye a escribirlo todo seguido
+en «Qué has hecho».
+
+Si la oficina marcó al crear la visita sobre qué tipos de puerta va la oferta,
+te encontrarás **un bloque por tipo**, con el tipo ya elegido. Si no marcó nada,
+un bloque en blanco. Y si hay más huecos de los que te esperabas, le das a
+**«Añadir otro hueco»** las veces que haga falta: una nave con tres portones se
+oferta en una sola visita, no en tres avisos.
+
+De cada hueco se pide esto:
+
+- **Dónde está el hueco.** En tus palabras: «nave trasera, portón izquierdo».
+  Es lo que distingue un hueco de otro en el presupuesto. Con «portón 1» y
+  «portón 2» nadie sabe cuál es cuál dentro de un mes.
+- **Ancho y alto del hueco**, en milímetros. Del **hueco**, no de la hoja.
+- **Dintel libre** por encima y **espacio lateral libre**. El dintel decide si
+  cabe una seccional y con qué guía; el lateral, si cabe una corredera y hacia
+  dónde abre. Si no los apuntas, la oficina oferta a ciegas.
+- **Qué hay ahora en el hueco**: vacío, una puerta manual que se sustituye, una
+  automática que se sustituye, u otra cosa. Quitar lo viejo y llevárselo también
+  se cobra, y es lo que más se olvida ofertar.
+- **Acometida eléctrica**: si la hay, si hay que llevarla o si está por
+  comprobar. Una acometida que hay que llevar y no se ofertó la acaba pagando la
+  empresa.
+- **Auxiliares que hacen falta**, en texto libre: mandos, fotocélulas, lector,
+  semáforo, pulsador, electrocerradura... Escríbelo como se lo dirías a la
+  oficina, porque pasa al presupuesto tal y como lo escribas.
+- **Notas del hueco**: acceso, suelo, pendiente, obra que hace falta. Todo lo
+  que haga falta para ofertarlo y para montarlo.
+
+**Lo que no te deja cerrar.** De cada hueco hacen falta el ancho y el alto. Si
+falta uno, la aplicación te dice **en qué hueco** y te lleva hasta él. Y si
+escribes menos de medio metro te avisa de que las medidas van en milímetros: un
+hueco de cuatro metros son 4000, no 400.
+
+**Si no has podido medir un hueco**, no lo dejes a medias ni te lo inventes:
+marca **«No se ha podido medir»** y escribe por qué. Con eso se cierra la
+visita, y la oficina sabe que hay que volver. Un hueco en blanco sin explicación
+es una oferta que se queda parada sin que nadie sepa por qué.
+
+Mientras mides puedes darle a **Guardar sin cerrar** tantas veces como quieras:
+guardar el avance no comprueba nada, y al volver a abrir el parte te encuentras
+lo que llevabas, en el mismo sitio.
+
+De aquí sale el presupuesto solo: cada hueco se convierte en un capítulo con sus
+medidas y sus auxiliares debajo, y la oficina solo tiene que ponerle precio. Y
+las medidas salen también en la hoja que firma el cliente, con el aviso de que
+las medidas definitivas de fabricación se comprueban antes de pedir la puerta.
 
 ### Materiales
 
@@ -769,4 +821,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.04-3 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.05-1 de ARIZA SAT*
