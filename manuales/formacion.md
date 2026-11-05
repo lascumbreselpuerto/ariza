@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.11.05-2**
+> **Versión de la aplicación que describe este manual: 2026.11.05-4**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -460,12 +460,12 @@ Los que más veces se ven, por orden de gravedad:
 
 ---
 
-## 8 bis. Ocho maneras de perder dinero sin enterarse
+## 8 bis. Nueve maneras de perder dinero sin enterarse
 
 Esto no es técnica de puertas, es oficio de empresa, y se pone aquí porque las
 dos cosas pasan en el mismo sitio donde se documenta el trabajo.
 
-Las tres primeras son cuentas que salen mal. Las cinco últimas son distintas y
+Las tres primeras son cuentas que salen mal. Las seis últimas son distintas y
 son peores, porque no sale mal ninguna cuenta: simplemente hay trabajo que no se
 hace, o que se hace dos veces.
 
@@ -826,6 +826,50 @@ la conversación de antes de empezar, poniendo por escrito qué tiene que estar
 hecho el día del montaje. Pero para tener esa conversación hay que llegar con el
 número delante.
 
+### La puerta que se repara y nunca entra en la empresa
+
+La novena no se pierde en un viaje: se pierde en todos los que vendrán después.
+
+La mayoría de las visitas de un servicio técnico son averías. Y es en una avería
+donde se entra por primera vez en casa de un cliente nuevo: llamó porque algo no
+cerraba, se fue, se arregló, se cobró. Trabajo bien hecho y cobrado.
+
+Pero si en esa visita nadie dio de alta la puerta, **esa puerta no existe para la
+empresa**. Y eso significa, una por una:
+
+- No tiene etiqueta con QR, así que el cliente no puede avisar escaneándola: la
+  próxima vez llamará, y alguien tendrá que preguntarle otra vez dónde es, qué
+  puerta es y qué le pasa.
+- No se le puede ofrecer un contrato de mantenimiento, porque no hay nada que
+  meter en el contrato. Y el mantenimiento es el único ingreso que no depende de
+  que algo se rompa.
+- No tiene historial. La segunda avería de la misma puerta empieza de cero: sin
+  saber qué se cambió, ni qué marca es el cuadro, ni qué repuesto hubo que pedir
+  la vez anterior. Eso son minutos de técnico y, a veces, un viaje.
+- No cuenta en ningún número. Cuántas puertas atiende la empresa, de qué tipos,
+  de qué marcas, cuáles dan más guerra: nada de eso se puede responder si la
+  mitad de las puertas que se tocan no están en ninguna lista.
+
+La cuenta es incómoda de mirar. Una ficha de puerta se crea en dos o tres minutos
+estando delante de ella, con una foto. Si en un año se atienden doscientas
+averías a puertas sin documentar, lo que se ha dejado de hacer son unas diez
+horas de trabajo administrativo, y lo que se ha perdido es la posibilidad de
+ofrecer doscientos mantenimientos. No es que se hayan perdido doscientos
+contratos: es que no se ha podido ni intentar.
+
+Por eso desde el 5 de noviembre de 2026 el alta de puerta se pide en todas las
+visitas menos dos (la comercial, donde la puerta aún no existe, y el
+desplazamiento en falso, donde no se ha trabajado), y en avería, urgencia y
+garantía **no se cierra el parte sin la ficha y una foto**.
+
+Y por eso mismo hay una salida, con nombre y motivo escrito: no todas las averías
+son de una puerta. La regla, que es la de siempre en esta lista: **un bloqueo que
+no se puede cumplir se acaba sorteando**. Si se cierra la salida, lo que se
+consigue no es más datos, es gente buscando la manera de cerrar el parte. Lo que
+se hace es dejar la puerta abierta, pedir el motivo y mirar la lista: una
+excepción que se repite doscientas veces no es una excepción, es la regla que
+nadie se atrevió a cambiar.
+
 ---
 
 ## 9. Cómo se registra todo esto en ARIZA SAT
@@ -910,4 +954,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.05-2 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.05-4 de ARIZA SAT*

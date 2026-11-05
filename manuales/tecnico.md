@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.05-2**
+> **Versión de la aplicación que describe este manual: 2026.11.05-4**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -161,6 +161,18 @@ que cambia.
 ## 3. Cerrar visita, apartado por apartado
 
 Se abre con el botón **Cerrar visita**. Tiene estos apartados, en este orden.
+
+### Documentar la puerta
+
+**Desde el 5 de noviembre de 2026 este es el primer apartado del parte**, y sale
+en casi todas las visitas, no solo en las obras: también en una avería, una
+urgencia o una garantía. Solo se queda fuera la comercial, que tiene su toma de
+medidas, y el desplazamiento en falso.
+
+Aquí se ve de un golpe qué le falta a la ficha de la puerta, y hay un botón para
+darla de alta si todavía no existe. **Lo único que impide cerrar es que la puerta
+tenga ficha y al menos una foto.** El apartado 7 lo explica entero, incluido qué
+hacer cuando la visita no es de ninguna puerta.
 
 ### Qué has encontrado y qué has hecho
 
@@ -610,15 +622,60 @@ el cliente no estuviera, o que quede un remate), pero queda señalada como
 
 ## 7. Si la puerta no está documentada, se documenta allí
 
-En estos cuatro tipos de asistencia:
+**Desde el 5 de noviembre de 2026 esto vale para casi todas las visitas**, no
+solo para las obras. Se pide la ficha de la puerta en:
 
 - Instalación
 - Puesta en servicio
 - Normativa y adecuación
 - Preventiva (mantenimiento)
+- **Correctiva (avería)**
+- **Urgencia**
+- **Garantía**
 
-**la puerta tiene que quedar documentada.** Pero desde el 1 de noviembre de 2026
-eso ya **no te impide cerrar el parte**, y conviene entender bien dónde está la
+Y no se pide en dos: la **comercial**, porque ahí la puerta todavía no existe y
+lo que se toma son las medidas, y el **desplazamiento en falso**, porque no se ha
+trabajado.
+
+El motivo de ampliarlo es sencillo. La mayoría de las visitas son averías, y es
+en una avería donde se entra por primera vez en casa de un cliente nuevo. Una
+puerta que no se da de alta ahí **no existe para la empresa**: no tiene QR, no
+entra en ningún contrato de mantenimiento, no se le puede ofrecer una revisión, y
+la siguiente avería empieza otra vez de cero. El viaje ya estaba pagado y el dato
+estaba delante de ti.
+
+### Si la visita no es de ninguna puerta
+
+Pasa, y está previsto. El cuadro general de un edificio, una barrera que al final
+no era de ese cliente, una visita en la que no llegas a ver la puerta.
+
+En el parte, en la caja de documentar la puerta, tienes la casilla **«En esta
+visita no he trabajado sobre ninguna puerta»**. Márcala y **escribe por qué** en
+una línea. Con eso el parte se cierra sin ficha.
+
+Dos cosas, para que esto siga sirviendo:
+
+- **Sin motivo no vale.** La aplicación no te deja cerrar con la casilla marcada
+  y el motivo en blanco, porque entonces sería un botón para saltarse el alta.
+- **Estas visitas las lee la oficina**, en una lista propia. No es desconfianza:
+  si aparecen muchas con el mismo motivo, lo que hay que cambiar es otra cosa, y
+  para saberlo hay que verlo.
+
+Si la visita **sí** era de una puerta, la casilla no sale: no se puede decir que
+no había puerta teniendo una ficha enganchada.
+
+### Y si la ficha ya existe pero está a medias
+
+También te lo dice el parte, con la puerta delante: el tipo que falta, las
+medidas, la matrícula. **Eso no te impide cerrar.** Es para que aproveches el
+viaje, porque esos datos solo se pueden tomar donde está la puerta.
+
+En las obras ese aviso te llega además en la tarjeta, antes de salir, para que te
+lleves el flexómetro. En una avería no: ahí se te dice en el parte y ya, para no
+llenarte la tarjeta de cosas que no puedes resolver desde la furgoneta.
+
+Lo que viene ahora vale igual para todos los tipos, y desde el 1 de noviembre de
+2026 **no te impide cerrar el parte**. Conviene entender bien dónde está la
 raya.
 
 ### Lo único que te impide cerrar
@@ -845,4 +902,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.05-2 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.05-4 de ARIZA SAT*
