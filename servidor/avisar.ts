@@ -46,6 +46,16 @@ const ELEC_TG: Record<string, string> = {
   llevar: '<b>hay que llevar la acometida</b>',
   por_comprobar: 'acometida por comprobar',
 };
+/* Las causas por las que una obra se queda sin terminar. Los mismos textos que
+   la aplicacion, escritos aqui porque esta funcion no comparte codigo con ella. */
+const PS_CAUSA_TG: Record<string, string> = {
+  sin_corriente: 'no habia corriente definitiva',
+  albanileria: 'albanileria u obra del cliente sin terminar',
+  remates: 'remates del cliente',
+  material_cli: 'faltaba material que pone el cliente',
+  nuestra: 'causa nuestra',
+  otra: 'otra',
+};
 /* Los milímetros, enteros: un hueco no mide 4000,5 mm */
 const mmTg = (n: unknown) => String(Math.round(Number(n) || 0));
 const TIPOS: Record<string, string> = {
@@ -416,6 +426,23 @@ Deno.serve(async (req) => {
         });
         if (!lis.length) medFilas.push('<b>Visita comercial cerrada sin ninguna medida apuntada.</b>');
       }
+      /* ---- El remate de una obra (05-11-2026) ----
+         La oficina tiene que saber, al leer el mensaje, que esa visita cierra
+         una obra y por que se habia quedado a medias: de eso depende si se le
+         puede repercutir el viaje al cliente. */
+      const remate: string[] = [];
+      if (a.tipo === 'puesta_servicio') {
+        if (a.instalacion_id) {
+          const { data: ob } = await admin.from('avisos')
+            .select('cerrado, subtipo').eq('id', a.instalacion_id).maybeSingle();
+          remate.push('Cierra la obra del ' + escTg(ob?.cerrado ? diaES(ob.cerrado) : 'sin fecha de cierre'));
+        } else {
+          remate.push('Obra anterior a la aplicacion: no esta enlazada');
+        }
+        remate.push('Se quedo pendiente por: <b>' +
+          escTg(PS_CAUSA_TG[String(a.ps_causa || '')] || String(a.ps_causa || 'sin indicar')) + '</b>' +
+          (a.ps_causa_detalle ? '. ' + escTg(String(a.ps_causa_detalle)) : ''));
+      }
       const cobro = a.cobrado
         ? 'Cobro: <b>cobrado en obra</b>, ' + escTg(eur(a.cobro_importe)) +
           (a.cobro_forma ? ' en ' + escTg(a.cobro_forma) : '') +
@@ -446,6 +473,7 @@ Deno.serve(async (req) => {
           : nombreRuta)}` : '',
         a.trabajo ? `Trabajo: ${escTg(a.trabajo)}` : '',
         medFilas.length ? medFilas.join('\n') : '',
+        remate.length ? remate.join('\n') : '',
         a.firma_ruta
           ? `Firmado por ${escTg(a.firma_nombre || 'el cliente')}`
           : `<b>Sin firma del cliente.</b> ${escTg(a.firma_sin || '')}`,
