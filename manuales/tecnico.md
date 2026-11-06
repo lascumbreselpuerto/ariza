@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.06-1**
+> **Versión de la aplicación que describe este manual: 2026.11.06-3**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -174,6 +174,29 @@ darla de alta si todavía no existe. **Lo único que impide cerrar es que la pue
 tenga ficha y al menos una foto.** El apartado 7 lo explica entero, incluido qué
 hacer cuando la visita no es de ninguna puerta.
 
+### Qué apartados te salen, y por qué no son los mismos
+
+Desde el **6 de noviembre de 2026** el parte no pregunta lo mismo en todos los
+tipos de visita, porque no en todos tiene sentido:
+
+| | Avería · Urgencia · Garantía | Preventiva | Comercial | Puesta en servicio |
+|---|---|---|---|---|
+| Documentar la puerta | Sí | Sí | No | Sí |
+| Qué has encontrado y qué has hecho | Sí | **No** | **No** | **No** |
+| Guión de revisión | No | Sí | No | No |
+| Toma de medidas | No | No | Sí | No |
+| Materiales | Sí | Sí | **No** | Sí |
+| Tiempo y desplazamiento | Sí | Sí | Sí | Sí |
+| Cómo queda la puerta | Sí | Sí | **No** | Sí |
+| Cobro en obra | Sí | Sí | No | Solo si la oficina marca que se cobra |
+| Firma del cliente | Sí | Sí | Sí | Sí |
+
+Donde dice **No** no es que falte: es que ese apartado lo rellena la propia
+visita. En una preventiva, el trabajo realizado lo escribe el guión. En una
+comercial, los huecos que has medido. En una puesta en servicio, la obra de la
+que viene y lo que quedó pendiente de ella. Si antes escribías eso a mano, ya no
+hace falta.
+
 ### Qué has encontrado y qué has hecho
 
 - **Diagnóstico:** qué pasaba.
@@ -222,6 +245,16 @@ Lo que escribas en **Recomendaciones y presupuesto a ofertar** no se queda ahí:
 - Si un límite sale como **«no cargado»**, mide y anota igual. El dato sirve aunque el límite todavía no esté puesto.
 
 ### Toma de medidas
+
+**Los fijos, desde el 6 de noviembre de 2026.** Cada hueco pregunta si lleva
+fijos y cuánto miden de ancho. La diferencia importa: un **fijo ciego** es un
+panel, y un **fijo practicable** se abre como una hoja más, con sus herrajes, su
+cierre y su mano de obra. Si no se oferta, se monta igual y lo paga la empresa.
+
+**Y el número de huecos sale de la oferta.** Si la oficina apuntó tres
+seccionales y una peatonal, te encuentras cuatro bloques con su tipo ya puesto.
+Si hay más de los que te dijeron, los añades con el botón, como siempre.
+
 
 Este apartado sale **solo en las visitas comerciales**, las de ir a ofertar. Es
 nuevo desde el **5 de noviembre de 2026** y sustituye a escribirlo todo seguido
@@ -914,4 +947,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.06-1 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.06-3 de ARIZA SAT*
