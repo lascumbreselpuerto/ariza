@@ -144,6 +144,19 @@ const psManual = ['Remate de la obra', 'no se factura', 'apunta las horas',
 psManual.forEach(n => paso('el manual explica «'+n+'» de la puesta en servicio',
   M.toLowerCase().includes(n.toLowerCase())));
 
+/* ---- La hora de salida (06-11-2026) ----
+   Es dinero: el tiempo de rellenar el parte se factura. El técnico tiene que
+   saber que la hora se pone sola y que si escribe la suya, manda la suya.
+
+   Se busca sobre el manual con los espacios aplanados, y no sobre el texto tal
+   cual: el markdown parte las frases en varias líneas, así que buscar una frase
+   de más de cinco palabras fallaba por un salto de línea y no porque faltara.
+   El primer intento de esta comprobación salió rojo justo por eso (06-11-2026). */
+const Mllano = M.replace(/\s+/g, ' ').toLowerCase();
+['hora a la que cierras el parte', 'manda la tuya',
+ 'ese tiempo es tuyo y se factura'].forEach(n =>
+  paso('el manual explica «'+n+'» de la hora de salida', Mllano.includes(n)));
+
 /* ---- El alta de puerta en todas las visitas (05-11-2026) ----
    Lo que el técnico tiene que entender es dónde está la raya: qué le impide
    cerrar, qué no, y qué hacer cuando la visita no es de ninguna puerta. Un
