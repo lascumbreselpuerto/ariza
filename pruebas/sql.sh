@@ -47,7 +47,7 @@ ORDEN="componentes.sql centros.sql parte-por-correo.sql obra.sql ficha.sql \
 almacen.sql presupuestos.sql presupuestos2.sql comercial.sql anexos.sql \
 tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos3.sql valoracion.sql \
 parado.sql factura.sql rutas.sql ruta-cliente.sql telegram.sql subtipo.sql urgencia.sql \
-medidas.sql puesta-servicio.sql alta-puerta.sql"
+medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -270,6 +270,21 @@ if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/alta-puerta-pruebas.sql" ]; then
     fallos=$((fallos+1))
     echo " FALLA el alta de puerta:"
     grep -a -m3 -E "ERROR|EXCEPTION" /tmp/alta-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
+# Las unidades por tipo y los fijos de la comercial. Lo que se vigila: que una
+# oferta antigua sin unidades siga significando una de cada tipo, y que un error
+# de dedo en las cantidades no entre.
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/comercial2-pruebas.sql" ]; then
+  echo ""
+  echo "── Unidades y fijos de la comercial ────────────"
+  if $PSQL -f "$AQUI/sql/comercial2-pruebas.sql" > /tmp/com2-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/com2-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA las unidades y los fijos:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/com2-pruebas.log | sed 's/^/         /'
   fi
 fi
 

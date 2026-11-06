@@ -91,6 +91,12 @@ const alta = await T(async () => {
   document.querySelector('#dlg-form button[type="submit"]').click();
   await new Promise(r => setTimeout(r, 2000));
   return { visible: caja && !caja.hidden, cajas, marcadas, texto,
+           /* Desde el 06-11-2026 esa lista va dentro de un desplegable plegado, y
+              innerText no devuelve el texto de lo que no se ve. El texto sigue
+              estando, así que se lee con textContent: lo que se comprueba es que
+              la explicación esté escrita, no que esté desplegada. */
+           textoTodo: document.getElementById('dlg-form').textContent || '',
+           resumen: (document.getElementById('a-pts-cuenta') || {}).textContent || '',
            puertas: g.puertasDeAviso('pv-1').map(p => p.codigo) };
 });
 paso('en una preventiva la oficina elige qué puertas se revisan', alta.visible === true);
@@ -99,7 +105,11 @@ paso('solo salen las del cliente, no las de otro',
 paso('la puerta de la asistencia sale ya marcada',
   alta.marcadas.length === 1, alta.marcadas.join(' · '));
 paso('y se explica que cada una lleva su guión',
-  /cada una lleva el guión de su tipo/i.test(alta.texto) || /guión de su tipo/i.test(alta.texto));
+  /cada una lleva el guión de su tipo/i.test(alta.textoTodo));
+/* Y plegado tiene que decir lo esencial sin abrirlo, que es para lo que se
+   pliega: si el resumen no dijera nada, la oficina no sabría si eligió puertas. */
+paso('el desplegable, plegado, dice qué puertas se van a revisar',
+  /puerta/i.test(alta.resumen), alta.resumen);
 paso('al guardar quedan enganchadas las tres',
   alta.puertas.length === 3, alta.puertas.join(' · '));
 

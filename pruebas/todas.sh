@@ -10,7 +10,7 @@ if ! curl -fsS -o /dev/null "http://127.0.0.1:8899/index.html"; then
   exit 1
 fi
 
-SUITES="${*:-humo version basico componentes centros tipos ayudas fuerzas obra ficha importar almacen presupuestos parado factura rutas campo avisos subtipos urgencia preventiva comercial remate alta reloj regresion fase6 fase7 fase8 copias manuales}"
+SUITES="${*:-humo version basico componentes centros tipos ayudas fuerzas obra ficha importar almacen presupuestos parado factura rutas campo avisos subtipos urgencia preventiva comercial remate alta reloj partes tipos-puerta regresion fase6 fase7 fase8 copias manuales}"
 RESUMEN="$AQUI/resultado.txt"
 : > "$RESUMEN"
 TOTAL=0; FALLOS=0
@@ -36,10 +36,20 @@ for s in $SUITES; do
     # pero con un error de JavaScript sale con código 1, y hasta hoy el resumen
     # solo miraba el «0 mal» y decía «Todo en verde». Un banco que esconde un
     # error de consola es un banco en el que no se mira la consola.
-    echo "  la suite acaba con errores de JavaScript (código $CODIGO)"
+    #
+    # Y afinado el 06-11-2026: el mensaje decía «errores de JavaScript» SIEMPRE
+    # que el código no era cero, también cuando lo que había era una
+    # comprobación en rojo. Mandaba a buscar un error de consola que no existía.
+    # Ahora se distingue mirando si la salida trae líneas de JS o de consola.
+    if echo "$SALIDA" | grep -qaE "^JS:|^consola:"; then
+      echo "  la suite acaba con errores de JavaScript (código $CODIGO)"
+      echo "$SALIDA" | grep -aE "^JS:|^consola:" | head -6
+      echo "$s: ${LINEA} y con errores de JavaScript" >> "$RESUMEN"
+    else
+      echo "  la suite acaba en rojo (código $CODIGO), sin errores de consola"
+      echo "$s: ${LINEA} y acaba en rojo" >> "$RESUMEN"
+    fi
     FALLOS=$((FALLOS + 1))
-    echo "$SALIDA" | grep -aE "^JS:|^consola:" | head -6
-    echo "$s: ${LINEA} pero con errores de JavaScript" >> "$RESUMEN"
   else
     echo "$s: ${LINEA}" >> "$RESUMEN"
   fi

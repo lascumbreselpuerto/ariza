@@ -144,6 +144,20 @@ const psManual = ['Remate de la obra', 'no se factura', 'apunta las horas',
 psManual.forEach(n => paso('el manual explica «'+n+'» de la puesta en servicio',
   M.toLowerCase().includes(n.toLowerCase())));
 
+/* ---- Los fijos y los huecos de la comercial (06-11-2026) ---- */
+['fijo practicable', 'lo paga la empresa', 'con su tipo ya puesto'].forEach(n =>
+  paso('el manual explica «'+n+'» de la toma de medidas',
+    M.replace(/\s+/g,' ').toLowerCase().includes(n.toLowerCase())));
+
+/* ---- Qué apartados lleva cada parte (06-11-2026) ----
+   La aplicación dejó de preguntar lo mismo en todos los tipos. Si el manual no
+   lo dice, un técnico que no vea «qué has hecho» en una preventiva pensará que
+   la aplicación está mal. */
+['lo rellena la propia visita', 'el trabajo realizado lo escribe el guión',
+ 'solo si la oficina marca que se cobra'].forEach(n =>
+  paso('el manual explica «'+n+'» de los apartados del parte',
+    M.replace(/\s+/g,' ').toLowerCase().includes(n.toLowerCase())));
+
 /* ---- La hora de salida (06-11-2026) ----
    Es dinero: el tiempo de rellenar el parte se factura. El técnico tiene que
    saber que la hora se pone sola y que si escribe la suya, manda la suya.
