@@ -1752,7 +1752,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.05-4';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.06-1';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -18128,6 +18128,8 @@ async function arrancarLector(){
   }, 350);
 }
 dlg.addEventListener('close', pararLector);
+/* Y el reloj de la hora de salida, que si no se queda corriendo detrás */
+dlg.addEventListener('close', pararRelojCierre);
 
 function abrirDlg(html, guardar){
   pararLector();   // la cámara no se queda encendida al cambiar de pantalla
@@ -18271,7 +18273,7 @@ dlgForm.addEventListener('change', e => {
   /* Al cambiar el cliente a mano, la ruta propuesta cambia con él, y las obras
      que se ofrecen para el remate también: las instalaciones son de un cliente. */
   if (t.id === 'a-cliente'){ rutaDelAviso(); pintarPuertasAviso(dlgForm.dataset.aviso || null);
-    pintarRemate(dlgForm.dataset.aviso || null); return; }
+    pintarRemate(dlgForm.dataset.aviso || null); pintarPuertasDelCliente(); return; }
   /* Si eligen la obra a mano, manda lo que eligieron: al repintar no se pisa */
   if (t.id === 'a-obra'){ t.dataset.tocado = '1'; return; }
   if (t.id === 'a-pscausa'){ pintarCausaRemate(); return; }
@@ -18815,6 +18817,90 @@ function etiquetaObra(o){
           o.pendiente && o.pendiente_texto ? ('pendiente: '+o.pendiente_texto) : '',
          ].filter(Boolean).join(' · ');
 }
+/* ---- Las puertas que se ofrecen, ordenadas por el cliente (06-11-2026) ----
+   Con el cliente elegido primero, lo lógico es que sus puertas estén arriba y
+   separadas del resto: en una lista de cientos, buscar la del cliente que acabas
+   de elegir es trabajo que la aplicación puede hacer sola. Las demás siguen
+   estando, porque hay avisos de puertas sin ficha de cliente y porque a veces se
+   elige la puerta antes de saber de quién es. */
+function opcionesPuertaAviso(clienteId, elegida){
+  const orden = (a, b) => String(a.codigo||'').localeCompare(String(b.codigo||''), 'es');
+  const op = p => '<option value="'+p.id+'"'+(elegida === p.id ? ' selected' : '')+'>'+
+    esc([p.codigo || 'sin etiqueta', p.cliente || '', sitioPuerta(p)].filter(Boolean).join(' · '))+'</option>';
+  const todas = (S.puertas || []).slice().sort(orden);
+  let h = '<option value="">Sin puerta concreta</option>';
+  if (!clienteId) return h + todas.map(op).join('');
+  const suyas = todas.filter(p => p.cliente_id === clienteId);
+  const resto = todas.filter(p => p.cliente_id !== clienteId);
+  if (suyas.length) h += '<optgroup label="Puertas de este cliente">'+suyas.map(op).join('')+'</optgroup>';
+  if (resto.length) h += '<optgroup label="'+(suyas.length ? 'Las demás puertas' : 'Todas las puertas')+'">'+
+    resto.map(op).join('')+'</optgroup>';
+  return h;
+}
+/* Al cambiar el cliente se vuelve a pintar el desplegable de puertas. Lo que
+   estuviera elegido se conserva si sigue existiendo: cambiar de cliente no tiene
+   por qué borrar la puerta, porque puede ser una puerta sin ficha de cliente. */
+function pintarPuertasDelCliente(){
+  const sel = document.getElementById('a-puerta');
+  const cli = document.getElementById('a-cliente');
+  if (!sel || !cli) return;
+  const antes = sel.value;
+  sel.innerHTML = opcionesPuertaAviso(cli.value || null, antes || null);
+  if (antes && Array.from(sel.querySelectorAll('option')).some(o => o.value === antes)) sel.value = antes;
+  const pista = document.getElementById('a-ptapista');
+  if (!pista) return;
+  const n = cli.value ? (S.puertas || []).filter(p => p.cliente_id === cli.value).length : 0;
+  pista.textContent = !cli.value
+    ? 'Si aún no se sabe, déjalo vacío: el técnico puede darla de alta en obra'
+    : (n ? 'Arriba, las '+n+' puerta'+(n===1?'':'s')+' de ese cliente. Si aún no se sabe, déjalo vacío: '+
+           'el técnico puede darla de alta en obra'
+         : 'Ese cliente no tiene ninguna puerta dada de alta todavía. Déjalo vacío: el técnico la da de '+
+           'alta en obra');
+}
+
+/* ---- Que crear un cliente no borre la asistencia a medias (06-11-2026) ----
+   David: «El crear cliente desde cualquier aviso te lleva al apartado de crear
+   cliente, pero cuando se crea te saca de la asistencia que estabas creando
+   borrando todos los datos que se han escrito.»
+   Era verdad: se abría el alta de cliente y, al volver, el formulario se pintaba
+   de cero. Ahora se guarda lo escrito, se crea el cliente y se vuelve con todo
+   puesto y el cliente nuevo ya elegido. Es el mismo apaño que ya existía para
+   dar de alta una puerta desde un parte. */
+function leerFormAviso(){
+  const f = document.getElementById('dlg-form');
+  if (!f) return null;
+  const campos = {};
+  f.querySelectorAll('[id^="a-"]').forEach(e => {
+    if (!e.id || !('value' in e)) return;
+    if (e.type === 'checkbox'){ campos[e.id] = e.checked; return; }
+    campos[e.id] = e.value;
+  });
+  /* Las casillas de los tipos de puerta y de las puertas de la preventiva no
+     tienen id: se guardan por su valor, que es lo que las identifica. */
+  const marcadas = sel => Array.from(f.querySelectorAll(sel)).map(x => x.value);
+  return { campos, tp: marcadas('#a-tp .a-tp-c:checked'), pts: marcadas('#a-pts .a-pt:checked'),
+           aviso: f.dataset.aviso || '' };
+}
+function aplicarFormAviso(b){
+  if (!b) return;
+  const f = document.getElementById('dlg-form');
+  if (!f) return;
+  Object.keys(b.campos || {}).forEach(id => {
+    const e = document.getElementById(id);
+    if (!e || !('value' in e)) return;
+    /* El cliente no se repone del borrador: lo pone quien llama, que para eso
+       acaba de crearlo. Y la ruta tampoco si venía propuesta. */
+    if (id === 'a-cliente') return;
+    if (e.type === 'checkbox'){ e.checked = !!b.campos[id]; return; }
+    const hay = e.tagName === 'SELECT'
+      ? Array.from(e.querySelectorAll('option')).some(o => o.value === b.campos[id])
+      : true;
+    if (hay) e.value = b.campos[id];
+  });
+  (b.tp || []).forEach(v => { const c = f.querySelector('#a-tp .a-tp-c[value="'+CSS.escape(v)+'"]'); if (c) c.checked = true; });
+  (b.pts || []).forEach(v => { const c = f.querySelector('#a-pts .a-pt[value="'+CSS.escape(v)+'"]'); if (c) c.checked = true; });
+}
+
 function clienteDeLaPuertaDelAviso(){
   const sel = document.getElementById('a-puerta'), cli = document.getElementById('a-cliente');
   const pista = document.getElementById('a-cestado');
@@ -19364,6 +19450,28 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
   const puertasOrd = S.puertas.slice().sort((x,y)=> (x.codigo||'') < (y.codigo||'') ? -1 : 1);
   let h = '<h3>'+(a ? 'Asistencia '+esc(tipoAsis(d)) : 'Nueva asistencia')+'</h3>';
 
+  /* ---- El cliente, primero (06-11-2026) ----
+     David: «Cliente debe aparecer de los primeros datos en cualquier creación,
+     antes de puerta, ya que es uno de los datos que van a mediatizar algunos de
+     los puntos siguientes a rellenar.» Y es exacto: del cliente dependen las
+     puertas que se ofrecen, los centros, las obras a las que puede ir un remate
+     y la ruta que se propone. Estaba el último de su grupo, así que había que
+     bajar, elegirlo y volver a subir. */
+  h += '<div class="grupo"><h3>Para quién y dónde</h3><div class="campos">'+
+    '<div class="campo full"><label for="a-cliente">Cliente</label><select id="a-cliente"><option value="">Sin cliente en la ficha</option>'+
+      S.clientes.slice()
+        .filter(c => !c.archivado || c.id === d.cliente_id)
+        .sort((x,y) => (x.nombre||'').localeCompare(y.nombre||'', 'es'))
+        .map(c => '<option value="'+c.id+'"'+(d.cliente_id===c.id?' selected':'')+'>'+esc(c.nombre+(c.poblacion?(' · '+c.poblacion):''))+'</option>').join('')+
+      '</select><span class="pista" id="a-cestado">De él salen las puertas, la ruta y, en un remate, las obras. '+
+      '<a href="#" data-act="cliente-rapido">Crear cliente nuevo</a></span></div>'+
+    '<div class="campo full"><label for="a-puerta">Puerta</label>'+
+      '<select id="a-puerta">'+opcionesPuertaAviso(d.cliente_id || null, d.puerta_id || null)+'</select>'+
+      '<span class="pista" id="a-ptapista">Si aún no se sabe, déjalo vacío: el técnico puede darla de alta '+
+      'en obra</span></div>'+
+    '<div class="campo full"><label for="a-dir">Dirección, si no hay puerta ni cliente</label><input id="a-dir" type="text" maxlength="200" value="'+esc(d.direccion_libre||'')+'" placeholder="Ej.: C/ Larga 4, El Puerto"></div>'+
+    '</div></div>';
+
   h += '<div class="grupo"><h3>Qué es y a quién</h3><div class="campos">'+
     /* Los tipos que ahora son subtipos (garantía, normativa) ya no se ofrecen,
        pero si la asistencia que se está abriendo es de uno de ellos, se deja en
@@ -19441,17 +19549,6 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
       'es «otra», hace falta</span></div>')+
     '<div class="campo"><label for="a-origen">Cómo ha entrado</label><select id="a-origen">'+
       opts(lista('origenes', ORIGENES), d.origen==='cliente' ? 'QR' : (d.origen||''))+'</select></div>'+
-    '<div class="campo full"><label for="a-puerta">Puerta</label><select id="a-puerta"><option value="">Sin puerta concreta</option>'+
-      puertasOrd.map(p => '<option value="'+p.id+'"'+(d.puerta_id===p.id?' selected':'')+'>'+
-        esc((p.codigo||'')+' · '+(p.cliente||'')+' · '+sitioPuerta(p))+'</option>').join('')+
-      '</select><span class="pista">Si aún no se sabe, déjalo vacío: el técnico puede darla de alta en obra</span></div>'+
-    '<div class="campo full"><label for="a-cliente">Cliente</label><select id="a-cliente"><option value="">Sin cliente en la ficha</option>'+
-      S.clientes.slice()
-        .filter(c => !c.archivado || c.id === d.cliente_id)
-        .sort((x,y) => (x.nombre||'').localeCompare(y.nombre||'', 'es'))
-        .map(c => '<option value="'+c.id+'"'+(d.cliente_id===c.id?' selected':'')+'>'+esc(c.nombre+(c.poblacion?(' · '+c.poblacion):''))+'</option>').join('')+
-      '</select><span class="pista" id="a-cestado">Se rellena solo al elegir puerta. <a href="#" data-act="cliente-rapido">Crear cliente nuevo</a></span></div>'+
-    '<div class="campo full"><label for="a-dir">Dirección, si no hay puerta ni cliente</label><input id="a-dir" type="text" maxlength="200" value="'+esc(d.direccion_libre||'')+'" placeholder="Ej.: C/ Larga 4, El Puerto"></div>'+
     '</div></div>';
 
   h += '<div class="grupo"><h3>Lo que cuenta quien avisa</h3><div class="campos">'+
@@ -23051,7 +23148,31 @@ function dlgCierre(avisoId){
       '<span class="pista">'+(a.hora_inicio
         ? 'La selló el botón «He llegado». Cámbiala si no cuadra'
         : 'A qué hora empezaste la asistencia')+'</span></div>'+
-    '<div class="campo"><label for="z-fin">Hora de salida</label><input id="z-fin" type="time" value="'+esc(hhmm(a.hora_fin) || hhmm(ahora))+'"></div>'+
+    /* ---- La hora de salida es la del cierre REAL (06-11-2026) ----
+       David: «La hora que se marque en el cierre de cualquier parte debe ser la
+       del cierre real, ya que en los cierres se tarda un tiempo, algunos más que
+       otros, que es tiempo que el técnico invierte en ello. Por ejemplo el
+       preventivo: parte de la realización del trabajo se debe hacer con la
+       asistencia abierta, y si la hora es la de darle al botón para comenzar a
+       rellenar, ahí tenemos una pérdida de tiempo no valorada en la factura.»
+       Así que el campo se va poniendo a la hora de ahora mientras el parte está
+       abierto, y al cerrar se pone la del momento de cerrar. En cuanto el
+       técnico escriba una hora a mano, manda la suya y esto deja de tocarla:
+       para eso se guarda el valor con el que nació, en data-ini. */
+    /* Mientras la visita está ABIERTA, la hora de salida es provisional y se
+       mueve con el reloj: da igual que haya quedado una guardada de un «guardar
+       sin cerrar», porque esa era la hora de entonces, no la de terminar. Solo
+       en una visita ya cerrada manda la guardada, que es la que se facturó. */
+    (() => {
+      const puesta = a.cerrado ? hhmm(a.hora_fin) : (hhmm(ahora));
+      return '<div class="campo"><label for="z-fin">Hora de salida</label>'+
+        '<input id="z-fin" type="time" value="'+esc(puesta)+'"'+
+        (a.cerrado ? '' : ' data-ini="'+esc(puesta)+'"')+'>'+
+        '<span class="pista">'+(a.cerrado
+          ? 'La que quedó guardada al cerrar. Cámbiala si hay que corregirla'
+          : 'Se pone sola la hora a la que cierres el parte, porque rellenarlo también es tiempo de '+
+            'trabajo. Si quieres otra, escríbela y manda la tuya')+'</span></div>';
+    })()+
     /* En una obra de varios días lo que se factura NO son las horas de hoy,
        son las de toda la obra. Se rellenan solas con la suma de las jornadas,
        porque depender de que alguien las copie a mano es justo lo que esta
@@ -23965,6 +24086,29 @@ async function prepararCierre(a){
     });
   }
   calcular();
+  /* ---- El reloj del parte (06-11-2026) ----
+     Mientras el parte está abierto, la hora de salida se va poniendo a la de
+     ahora, y las horas a facturar se recalculan con ella. Así lo que el técnico
+     ve en pantalla es lo que se va a guardar, en vez de la hora a la que abrió
+     el parte. Deja de tocarla en cuanto él escriba una hora: se compara con el
+     valor con el que nació el campo (data-ini).
+     Se para al cerrar el diálogo, para no dejar un reloj corriendo detrás. */
+  pararRelojCierre();
+  if (fin && !a.cerrado){
+    RELOJ_CIERRE = setInterval(() => {
+      const f = document.getElementById('z-fin');
+      if (!f || !document.body.contains(f)) return pararRelojCierre();
+      if (f.value !== f.dataset.ini) return pararRelojCierre();   // la ha tocado: manda la suya
+      const ahora = hhmm(new Date());
+      if (ahora === f.value) return;
+      f.value = ahora; f.dataset.ini = ahora;
+      calcular();
+    }, 20000);
+  }
+}
+let RELOJ_CIERRE = null;
+function pararRelojCierre(){
+  if (RELOJ_CIERRE){ clearInterval(RELOJ_CIERRE); RELOJ_CIERRE = null; }
 }
 
 function materialesDelForm(){
@@ -24038,8 +24182,42 @@ async function guardarCierre(a, cerrando){
      las horas de entrada y salida y la fecha de la revisión. */
   const dia = hoy();
   const hora = id => { const v = val(id); return v ? new Date(dia+'T'+v+':00').toISOString() : null; };
+  /* ---- La hora de salida que se guarda (06-11-2026) ----
+     David: «La hora que se marque en el cierre de cualquier parte debe ser la del
+     cierre real, ya que en los cierres se tarda un tiempo, que es tiempo que el
+     técnico invierte en ello.» Si no ha tocado el campo, la hora de salida es la
+     de AHORA, el momento de cerrar, no la de cuando abrió el parte. Si escribió
+     una hora a mano, manda la suya: se compara con el valor con el que nació el
+     campo (data-ini). */
+  const horaFinDelCierre = () => {
+    const f = document.getElementById('z-fin');
+    if (!f) return hora('z-fin');
+    if (f.dataset.ini !== undefined && f.value === f.dataset.ini && !a.cerrado){
+      const ahora = hhmm(new Date());
+      if (ahora !== f.value){ f.value = ahora; f.dataset.ini = ahora; recalcularHoras(); }
+    }
+    return hora('z-fin');
+  };
+  /* Y con la hora nueva, las horas a facturar. Solo si estaban en automático: lo
+     que el técnico haya escrito a mano no se le pisa (decisión de David). */
+  const recalcularHoras = () => {
+    const i = document.getElementById('z-ini'), f = document.getElementById('z-fin'),
+          hs = document.getElementById('z-horas');
+    if (!i || !f || !hs || !i.value || !f.value) return;
+    if (hs.value && hs.dataset.auto !== '1') return;
+    const [h1,m1] = i.value.split(':').map(Number), [h2,m2] = f.value.split(':').map(Number);
+    let mins = (h2*60+m2) - (h1*60+m1);
+    if (mins < 0) mins += 24*60;
+    hs.value = horasFacturables(mins); hs.dataset.auto = '1';
+  };
   const chk = id => !!(document.getElementById(id)||{}).checked;
   const conCobro = !SIN_COBRO.includes(a.tipo);
+  /* La hora de salida se resuelve ANTES de leer el resto del formulario, porque
+     al resolverla se recalculan las horas a facturar. Estaba dentro del objeto,
+     detrás de «horas», y el recálculo llegaba tarde: la hora de salida quedaba
+     bien y las horas se guardaban con el valor viejo. Lo cazó la prueba del
+     reloj el 06-11-2026, y es el fallo que esto venía a arreglar. */
+  const finReal = horaFinDelCierre();
   const o = {
     diagnostico: val('z-diag') || null,
     trabajo: val('z-trab') || null,
@@ -24053,7 +24231,7 @@ async function guardarCierre(a, cerrando){
        llegado», con su día de verdad. Si la han corregido, manda la corregida. */
     hora_inicio: (a.hora_inicio && hhmm(a.hora_inicio) === val('z-ini'))
                    ? a.hora_inicio : hora('z-ini'),
-    hora_fin: hora('z-fin'),
+    hora_fin: finReal,
     horas: val('z-horas') ? +val('z-horas') : null,
     num_tecnicos: val('z-ntec') ? +val('z-ntec') : 1,
     desplazamiento: val('z-km') ? +val('z-km') : null,
@@ -26156,7 +26334,27 @@ dlgForm.addEventListener('click', async e => {
     return;
   }
   if (a === 'cliente-rapido'){
-    dlgCliente(null, async (id) => { if (id) toast('Cliente creado. Vuelve a abrir la asistencia para elegirlo.'); });
+    /* Se guarda lo escrito ANTES de salir del formulario, y al volver se repone
+       con el cliente nuevo ya elegido. Antes se perdía todo. */
+    const borrador = leerFormAviso();
+    dlgCliente(null, async (id) => {
+      if (!id) return;
+      dlgAviso(null, (borrador && borrador.aviso) || null);
+      setTimeout(() => {
+        aplicarFormAviso(borrador);
+        const cli = document.getElementById('a-cliente');
+        if (cli){
+          if (!Array.from(cli.querySelectorAll('option')).some(o => o.value === id)){
+            const c = clienteDe(id);
+            cli.insertAdjacentHTML('beforeend',
+              '<option value="'+id+'">'+esc((c && c.nombre) || 'Cliente nuevo')+'</option>');
+          }
+          cli.value = id;
+          cli.dispatchEvent(new Event('change', { bubbles:true }));
+        }
+        toast('Cliente creado y puesto en la asistencia. No se ha perdido nada de lo que habías escrito.');
+      }, 120);
+    });
     return;
   }
   /* Otra puerta igual que la anterior de esta obra (03-11-2026) */
