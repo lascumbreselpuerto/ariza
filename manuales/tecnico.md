@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.05-4**
+> **Versión de la aplicación que describe este manual: 2026.11.06-1**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -292,12 +292,24 @@ Si la oficina te ha mandado llevar material, te sale arriba del todo con un bot�
 
 | Campo | Qué poner |
 |---|---|
-| Hora de entrada / Hora de salida | Las de verdad |
+| Hora de entrada | La de verdad, cuando empezaste |
+| Hora de salida | Se pone sola la de cerrar el parte. Si quieres otra, escríbela |
 | Horas a facturar | Se calcula solo; puedes corregirlo |
 | Desplazamiento | **La ruta** por la que has ido |
 | Técnicos | Cuántos habéis ido |
 
 Las horas se facturan completas: los 30 minutos exactos suben.
+
+**La hora de salida, desde el 6 de noviembre de 2026.** Es la hora a la que
+cierras el parte, no la de cuando lo abriste. Rellenar un parte lleva su tiempo,
+y en una preventiva de varias puertas parte del trabajo se hace con la
+asistencia abierta: ese tiempo es tuyo y se factura. Mientras el parte está
+abierto verás que la hora va cambiando sola, y las horas a facturar se
+recalculan con ella.
+
+En cuanto escribas tú una hora de salida, manda la tuya y la aplicación no la
+vuelve a tocar. Y si corriges las horas a facturar a mano, tampoco te las
+cambia: lo que pongas tú, se queda.
 
 **El desplazamiento ya no son kilómetros, es una ruta.** Eliges la zona de la
 lista y ya está: lo que cuesta cada ruta lo tiene puesto la oficina. Si la
@@ -902,4 +914,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.05-4 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.06-1 de ARIZA SAT*
