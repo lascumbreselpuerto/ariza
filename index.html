@@ -197,6 +197,23 @@ html{scroll-padding-top:104px}
 .checks{display:flex;flex-wrap:wrap;gap:8px}
 .checks label{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:20px;padding:6px 12px;font-size:14px;cursor:pointer;background:var(--surface)}
 .checks input{accent-color:var(--amarillo);width:16px;height:16px}
+/* ---- Elegir con cantidad, y plegado (06-11-2026) ----
+   Las listas largas de casillas van dentro de un <details> para no hacer densa
+   la pantalla, y las que llevan cantidad reservan su hueco a la derecha. En el
+   móvil cada fila ocupa el ancho entero: con el dedo, dos columnas de casillas
+   redondas pegadas son dos errores por minuto. */
+.checks-uds{flex-direction:column;gap:6px}
+.checks-uds label.tp-fila{display:flex;align-items:center;gap:10px;width:100%;border-radius:8px}
+.checks-uds .tp-nom{flex:1;min-width:0}
+.checks-uds input[type=number]{width:72px;flex:0 0 auto;text-align:center;padding:4px 6px;
+  border:1px solid var(--line);border-radius:6px;font-size:14px;background:var(--surface)}
+.plegable{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface)}
+.plegable>summary{cursor:pointer;font-size:14px;list-style:none}
+.plegable>summary::-webkit-details-marker{display:none}
+.plegable>summary::before{content:'▸';display:inline-block;width:14px;color:var(--muted)}
+.plegable[open]>summary::before{content:'▾'}
+.plegable>summary .mini{color:var(--muted)}
+.plegable>*:not(summary){margin-top:10px}
 /* Buscador de cliente dentro del formulario de puerta */
 .lista-busca{border:1px solid var(--line);border-radius:6px;background:var(--surface);max-height:240px;overflow:auto;box-shadow:0 6px 18px rgba(0,0,0,.08)}
 .lista-busca .busca-fila{display:grid;gap:2px;width:100%;text-align:left;padding:9px 11px;border:0;border-bottom:1px solid var(--line);background:none;cursor:pointer;font:inherit}
@@ -565,11 +582,22 @@ const TIPOS = [
   'Batiente', 'Plegable',
   'Seccional', 'Basculante',
   'Enrollable industrial', 'Cierre enrollable de local',
+  'Enrollable de garaje',
   'Rápida de lona', 'Guillotina o vertical',
   'Cortafuegos',
+  // Batientes automatizadas, que no es lo mismo una hoja que dos
+  'Batiente automática de una hoja', 'Batiente automática de dos hojas',
   // Peatonales automáticas
   'Peatonal automática corredera', 'Peatonal automática batiente',
+  'Peatonal automática telescópica',
   'Peatonal automática giratoria', 'Peatonal automática curva',
+  /* ---- Peatonales SIN automatismo (06-11-2026) ----
+     Pedidas por David para poder ofertarlas y mantenerlas. Van al final y con
+     el nombre bien claro porque no son puertas automáticas: no llevan
+     automatismo, así que no les toca el régimen de la UNE-EN 16005, que es para
+     puertas peatonales motorizadas. Por dentro se clasifican como BATIENTE, que
+     es lo que son mecánicamente: ver FORMAS_PUERTA. */
+  'Peatonal manual', 'Peatonal de chalet',
   // Vehículos
   'Barrera',
   'Otro'];
@@ -695,7 +723,10 @@ const AYUDA_TIPO = {
     'terminar por causas de la obra: sin corriente definitiva, albañilería o remates del cliente.',
   urgencia: 'Avería en servicio de urgencia: abrir, dejar la puerta en seguridad tras un accidente, cerrar '+
     'un comercio, o repararla en el momento. Se cobra con recargo sobre la hora y el desplazamiento.',
-  falso: 'Se fue y no se pudo trabajar. No se factura, pero el coste del viaje sí cuenta.',
+  falso: 'Se fue y no se pudo trabajar: no había nadie, el acceso estaba cerrado, la puerta no era '+
+    'de este cliente. No se factura, pero el viaje sí se apunta con sus horas y su ruta, y de eso '+
+    'sale lo que cuestan al año los viajes en balde. Es la única manera de saberlo: si no se apunta, '+
+    'ese viaje no existe para nadie y se paga igual.',
 };
 const AYUDA_SUBTIPO = {
   garantia: 'NO se factura: ni mano de obra, ni desplazamiento, ni material. El coste sí cuenta y el '+
@@ -748,6 +779,21 @@ const MED_ELEC = [
   ['por_comprobar', 'Por comprobar']];
 const MED_SIT_TXT  = o => (MED_SIT.find(x => x[0] === o)  || [null, ''])[1];
 const MED_ELEC_TXT = o => (MED_ELEC.find(x => x[0] === o) || [null, ''])[1];
+/* ---- Los fijos del hueco (06-11-2026) ----
+   David: «Incluso un punto por si las puertas, sobre todo las peatonales, tienen
+   que llevar fijos, tanto practicables (como si fuera una hoja) o fijos.»
+   En una peatonal, los fijos laterales o el superior son una parte importante
+   del precio y del montaje. Si no se ofertan se montan igual, y los paga la
+   empresa. La diferencia entre ciego y practicable no es un detalle: un fijo
+   practicable lleva herrajes, cierre y mano de obra de una hoja más. */
+const MED_FIJOS = [
+  ['ninguno',     'No lleva fijos'],
+  ['ciego',       'Fijo ciego, a un lado o a los dos'],
+  ['practicable', 'Fijo practicable: se abre como una hoja más'],
+  ['superior',    'Fijo superior, sobre el hueco'],
+  ['varios',      'Varios fijos, lo explico en las notas'],
+];
+const MED_FIJOS_TXT = o => (MED_FIJOS.find(x => x[0] === o) || [null, ''])[1];
 /* Los milímetros se escriben enteros. Un hueco no mide 4000,5 mm, y un decimal
    en el papel del cliente solo hace dudar de la medida. */
 const mm = n => String(Math.round(Number(n) || 0));
@@ -1589,6 +1635,13 @@ async function cargar(){
      se vuelve a lo de antes del 05-11-2026, que solo las obras lo exigían. */
   const ap2 = await sb.from('avisos').select('sin_puerta, sin_puerta_motivo').limit(1);
   S.sinAltaPuerta = !!ap2.error;
+  /* Cuántas puertas de cada tipo y los fijos de cada hueco:
+     servidor/comercial2.sql. Sin esas columnas se sigue trabajando como antes
+     del 06-11-2026: una puerta por tipo marcado y sin preguntar por los fijos. */
+  const tu = await sb.from('avisos').select('tipos_uds').limit(1);
+  S.sinTiposUds = !!tu.error;
+  const fj = await sb.from('medidas').select('fijos, fijos_mm').limit(1);
+  S.sinFijos = !!fj.error;
   /* ---- El almacén ----
      Las existencias no se guardan en ninguna columna: se leen de la vista, que
      las suma de los movimientos. Si falta el SQL del almacén, la aplicación
@@ -1752,7 +1805,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.06-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.06-3';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -6031,6 +6084,9 @@ function detalleMedida(m){
   if (+m.alto_mm > 0)  l.push('Alto del hueco: '+mm(m.alto_mm)+' mm');
   if (m.dintel_mm != null && m.dintel_mm !== '')  l.push('Dintel libre: '+mm(m.dintel_mm)+' mm');
   if (m.lateral_mm != null && m.lateral_mm !== '') l.push('Espacio lateral libre: '+mm(m.lateral_mm)+' mm');
+  if (m.fijos && m.fijos !== 'ninguno')
+    l.push('Fijos: '+MED_FIJOS_TXT(m.fijos)+
+      ((m.fijos_mm != null && m.fijos_mm !== '') ? ', '+mm(m.fijos_mm)+' mm de ancho' : ''));
   if (m.situacion)    l.push('Situación: '+MED_SIT_TXT(m.situacion));
   if (m.electricidad) l.push('Acometida eléctrica: '+MED_ELEC_TXT(m.electricidad));
   if (m.auxiliares)   l.push('Auxiliares que hacen falta: '+m.auxiliares);
@@ -10360,6 +10416,21 @@ const COMPONENTES_POR_NIVEL = {
    una puerta cuyo tipo no se reconoce se queda sin sus peligros propios, y eso
    tiene que verse, no quedarse callado. */
 const FORMAS_PUERTA = [
+  /* ---- Las peatonales SIN automatismo, primero (06-11-2026) ----
+     Esta regla va DELANTE de la de «peatonal» a propósito, porque la lista se
+     recorre en orden y la primera que casa manda. Una «peatonal manual» o una
+     «peatonal de chalet» llevan la palabra peatonal, pero no llevan
+     automatismo: si cayeran en la familia de las peatonales automáticas se les
+     aplicaría el guion de los sensores de apertura y presencia, el modo de baja
+     energía y el régimen de la UNE-EN 16005, que es para puertas peatonales
+     MOTORIZADAS. El técnico estaría comprobando lo que no existe y el papel
+     diría que se revisó.
+     Mecánicamente son una batiente, así que van a batiente. Decisión de David
+     el 06-11-2026, sobre las tres opciones que se le pusieron.
+     Ojo al escribirla: tiene que casar «peatonal manual» y «peatonal de
+     chalet», y NO «peatonal automática telescópica» ni una corredera que
+     alguien describa como «de chalet». */
+  ['batiente',    'Batiente',             /peatonal\s*(manual|de\s*chalet)/i],
   ['peatonal',    'Peatonal automática',  /peatonal|autom[áa]tica de paso|giratoria|curva/i],
   ['barrera',     'Barrera',              /barrera|m[áa]stil|talanquera/i],
   ['cortafuegos', 'Cortafuegos',          /cortafuego|corta ?fuego|resistente al fuego|sectorizaci[óo]n/i],
@@ -10659,7 +10730,12 @@ const ALTA_ES_OBRA = ['instalacion','puesta_servicio','normativa','mantenimiento
    del cuadro general del edificio, una barrera que al final no era del cliente.
    Ahí hay una salida al bloqueo, con motivo escrito. En una instalación o en
    una preventiva no la hay, porque una obra sin puerta no es una obra. */
-const ALTA_ADMITE_SIN = ['averia','urgencia','garantia'];
+/* Cambiado el 06-11-2026: David quita la urgencia de esta lista. «No debería
+   aparecer "en esta visita no he trabajado en ninguna puerta", ya que solo
+   tocamos puertas.» Una urgencia es siempre de una puerta: abrir un comercio,
+   dejar una puerta en seguridad, cerrar una nave. Así que ahí no hay salida: o
+   hay ficha y foto, o no se cierra. */
+const ALTA_ADMITE_SIN = ['averia','garantia'];
 const MIN_FOTOS_OBRA = 2;
 const obligaAltaObra = a => !!a && !ALTA_NO_PIDE.includes(a.tipo);
 const altaEsObra = a => !!a && ALTA_ES_OBRA.includes(a.tipo);
@@ -10667,6 +10743,31 @@ const admiteSinPuerta = a => !!a && !S.sinAltaPuerta && ALTA_ADMITE_SIN.includes
 /* La válvula, usada: marcada y con motivo. Sin motivo no vale, ni guardada ni en
    pantalla, porque entonces sería un botón de saltarse el alta. */
 const visitaSinPuerta = a => !!a && !!a.sin_puerta && !!String(a.sin_puerta_motivo || '').trim();
+
+/* ---- Qué apartados le tocan a cada parte (06-11-2026) ----
+   David, después de revisar los partes en campo uno por uno: hay apartados que
+   en ciertos tipos de visita no aportan nada y encima confunden.
+
+     · PREVENTIVA: «Qué has encontrado y qué has hecho» no entra. El guion ya
+       lleva, por cada puerta, su resultado, sus deficiencias y sus
+       recomendaciones. Preguntarlo otra vez al final es pedir dos veces lo
+       mismo, y el técnico no sabe qué poner en cada sitio.
+     · COMERCIAL: tampoco, ni materiales, ni cómo queda la puerta, ni el alta.
+       Una visita de ir a ofertar no arregla nada, no gasta material y no deja
+       la puerta en otro estado. Lo que se trae son las medidas.
+     · PUESTA EN SERVICIO: tampoco «qué has encontrado». Y «esta visita no se
+       cobra» sobra, porque un remate ya no se cobra por definición: para lo
+       contrario está la casilla de repercutirlo.
+
+   Lo que se rellena solo no se pierde al quitar el apartado: en la preventiva
+   el trabajo y el diagnóstico salen del guion, y en la comercial, de los huecos
+   medidos. */
+const pideDiagnostico = a => !!a && !['mantenimiento','comercial','puesta_servicio'].includes(a.tipo);
+const pideMateriales  = a => !!a && a.tipo !== 'comercial';
+const pideComoQueda   = a => !!a && a.tipo !== 'comercial';
+/* Y «esta visita no se cobra» no se le ofrece a los tipos que ya valen cero por
+   su naturaleza: sería una casilla para no cobrar algo que no se cobra. */
+const pideSinCargo    = a => !!a && !['comercial','puesta_servicio'].includes(a.tipo);
 
 /* Hay matrícula tomada si está escrita en la ficha, o si algún componente de la
    puerta lleva su número de serie o, al menos, marca y modelo: la placa del motor
@@ -18198,6 +18299,10 @@ dlgForm.addEventListener('submit', async e => {
 /* Contrato: el total se recalcula solo y la duración fija el vencimiento */
 dlgForm.addEventListener('input', e => {
   if (e.target.classList && e.target.classList.contains('k-c')) sumarCuotas();
+  /* La cantidad de puertas de un tipo se escribe a mano, así que el resumen del
+     desplegable se repinta mientras se teclea y no solo al salir del campo: si
+     esperara al «change», el título diría una cosa y el campo otra. */
+  if (e.target.classList && e.target.classList.contains('a-tp-u')){ pintarCuentaTipos(); return; }
   /* Buscador de cliente del formulario de puerta: al escribir se busca, y si el
      texto ya no es el de la ficha enlazada se desenlaza, para que no quede una
      puerta diciendo un nombre y apuntando a otra ficha. */
@@ -18276,6 +18381,25 @@ dlgForm.addEventListener('change', e => {
     pintarRemate(dlgForm.dataset.aviso || null); pintarPuertasDelCliente(); return; }
   /* Si eligen la obra a mano, manda lo que eligieron: al repintar no se pisa */
   if (t.id === 'a-obra'){ t.dataset.tocado = '1'; return; }
+  /* Marcar un tipo o cambiarle la cantidad repinta el resumen del desplegable */
+  if (t.classList && t.classList.contains('a-pt')){
+    const caja = document.getElementById('a-caja-pts');
+    if (caja) caja.dataset.tocado = '1';
+    pintarCuentaPuertas();
+    return;
+  }
+  if (t.classList && (t.classList.contains('a-tp-c') || t.classList.contains('a-tp-u'))){
+    const caja = document.getElementById('a-caja-tp');
+    if (caja) caja.dataset.tocado = '1';
+    /* Al marcar un tipo se pone el foco en su cantidad: lo normal es querer
+       cambiarla justo después, y así no hay que buscarla. */
+    if (t.classList.contains('a-tp-c') && t.checked){
+      const u = t.closest('.tp-fila') ? t.closest('.tp-fila').querySelector('.a-tp-u') : null;
+      if (u) u.select();
+    }
+    pintarCuentaTipos();
+    return;
+  }
   if (t.id === 'a-pscausa'){ pintarCausaRemate(); return; }
   /* Si la oficina toca la ruta, deja de proponerse: manda lo que eligió */
   if (t.id === 'a-ruta'){ t.dataset.tocado = '1'; return; }
@@ -18700,6 +18824,23 @@ function pintarPuertasAviso(avisoId){
     ((marcadas.has(p.id) || p.id === pid) ? ' checked' : '')+'>'+
     esc((p.codigo || 'sin código')+' · '+(p.tipo || 'sin tipo')+(sitioPuerta(p) ? ' · '+sitioPuerta(p) : ''))+
     '</label>').join('');
+  pintarCuentaPuertas();
+  /* Plegado se abre solo si no hay ninguna marcada todavía: con la revisión ya
+     preparada por la oficina, el resumen del título basta. */
+  if (!caja.dataset.tocado && !cont.querySelectorAll('.a-pt:checked').length) caja.open = true;
+}
+/* El resumen del desplegable de las puertas de la revisión: cuántas y cuáles.
+   Sin esto, plegado no se sabría si la oficina eligió algo. */
+function pintarCuentaPuertas(){
+  const s = document.getElementById('a-pts-cuenta');
+  if (!s) return;
+  const m = Array.from(document.querySelectorAll('#a-pts .a-pt:checked'));
+  if (!m.length){ s.textContent = 'sin marcar: se revisa solo la puerta de arriba'; return; }
+  const cods = m.map(x => {
+    const p = puertaDe(x.value);
+    return (p && p.codigo) || 'sin código';
+  });
+  s.textContent = m.length + (m.length === 1 ? ' puerta: ' : ' puertas: ') + cods.join(' · ');
 }
 function pintarTiposPuerta(){
   const caja = document.getElementById('a-caja-tp');
@@ -18709,6 +18850,33 @@ function pintarTiposPuerta(){
   if (ps) ps.textContent = AYUDA_SUBTIPO[sub] || 'De esto depende lo que se le pide al técnico';
   if (!caja) return;
   caja.hidden = !pideTiposPuerta(tipo, sub);
+  /* Plegado se abre solo la primera vez que hace falta: si la oficina tiene que
+     marcar algo ahí, lo ve. Después manda lo que haga el usuario. */
+  if (!caja.hidden && !caja.dataset.tocado && !tiposMarcados().length) caja.open = true;
+  pintarCuentaTipos();
+}
+/* Lo que hay marcado, con su cantidad. En un solo sitio, porque lo usan el
+   resumen del desplegable, el guardado y el pintado de los huecos del parte. */
+function tiposMarcados(){
+  return Array.from(document.querySelectorAll('#a-tp .tp-fila'))
+    .map(f => {
+      const c = f.querySelector('.a-tp-c');
+      if (!c || !c.checked) return null;
+      const u = f.querySelector('.a-tp-u');
+      const n = u ? Math.max(1, Math.min(50, Math.round(+u.value || 1))) : 1;
+      return { tipo: c.value, uds: n };
+    }).filter(Boolean);
+}
+function pintarCuentaTipos(){
+  const s = document.getElementById('a-tp-cuenta');
+  if (!s) return;
+  const m = tiposMarcados();
+  if (!m.length){ s.textContent = 'sin marcar'; return; }
+  const puertas = m.reduce((t, x) => t + x.uds, 0);
+  /* Se enseña lo marcado, no solo cuántos: leer «Seccional ×3 · Peatonal» dice
+     más que «2 tipos», y es justo lo que hay que repasar antes de guardar. */
+  const texto = m.map(x => x.tipo + (x.uds > 1 ? ' ×'+x.uds : '')).join(' · ');
+  s.textContent = puertas + (puertas === 1 ? ' puerta: ' : ' puertas: ') + texto;
 }
 /* ---- Las tres preguntas de la puesta en servicio (05-11-2026) ----
    Aparecen y desaparecen con el tipo, igual que el subtipo. Y la lista de obras
@@ -18718,7 +18886,7 @@ function pintarTiposPuerta(){
 function pintarRemate(avisoId){
   const tipo = (document.getElementById('a-tipo') || {}).value || '';
   const esPS = tipo === 'puesta_servicio';
-  ['a-caja-ps','a-caja-psc','a-caja-psd'].forEach(id => {
+  ['a-caja-ps','a-caja-psc','a-caja-psd','a-caja-psr'].forEach(id => {
     const c = document.getElementById(id);
     if (c) c.hidden = !esPS;
   });
@@ -19506,21 +19674,44 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
        Cada una traerá su guion según el tipo de su ficha, y dejará su propia
        revisión. Solo salen las del cliente elegido: una revisión de puertas de
        dos clientes distintos no existe. */
-    (S.sinAvisoPuertas ? '' : '<div class="campo full" id="a-caja-pts"'+
+    /* Plegado igual que los tipos de puerta: un cliente con veinte puertas
+       llenaba la pantalla de casillas antes de llegar a lo demás (06-11-2026). */
+    (S.sinAvisoPuertas ? '' : '<details class="campo full plegable" id="a-caja-pts"'+
       (d.tipo === 'mantenimiento' ? '' : ' hidden')+'>'+
-      '<label>Qué puertas se revisan</label><div id="a-pts"></div>'+
+      '<summary><b>Qué puertas se revisan</b> <span class="mini" id="a-pts-cuenta"></span></summary>'+
+      '<div id="a-pts"></div>'+
       '<span class="pista">Se marcan las del cliente. Cada una lleva el guión de su tipo, y cada una '+
-      'deja su revisión firmada. Si no marcas ninguna, se revisa solo la puerta de arriba</span></div>')+
+      'deja su revisión firmada. Si no marcas ninguna, se revisa solo la puerta de arriba</span></details>')+
+    /* ---- Los tipos de puerta, plegados y con cantidad (06-11-2026) ----
+       David: «Esto lo haría tipo desplegable para que no nos haga muy intensa la
+       vista general del parte. Esto de hacer desplegable lo utilizaría en todas
+       las partes de la app donde hubiera que elegir entre puntos.» Y: «Además,
+       el poder elegir más de una unidad por tipo de puerta.»
+       Plegado, la lista de veinte tipos ocupa una línea; abierto, se marca y se
+       pone cuántas. El resumen del título dice lo que hay marcado sin abrirlo. */
     (S.sinSubtipo ? '' :
-    '<div class="campo full" id="a-caja-tp"'+(pideTiposPuerta(d.tipo, d.subtipo) ? '' : ' hidden')+'>'+
-      '<label>Sobre qué tipos de puerta</label>'+
-      '<div class="checks" id="a-tp">'+
-      lista('tipos', TIPOS).map(t =>
-        '<label><input type="checkbox" class="a-tp-c" value="'+esc(t)+'"'+
-        ((d.tipos_puerta || []).includes(t) ? ' checked' : '')+'>'+esc(t)+'</label>').join('')+
+    '<details class="campo full plegable" id="a-caja-tp"'+(pideTiposPuerta(d.tipo, d.subtipo) ? '' : ' hidden')+'>'+
+      '<summary><b>Sobre qué tipos de puerta</b> <span class="mini" id="a-tp-cuenta"></span></summary>'+
+      '<div class="checks checks-uds" id="a-tp">'+
+      lista('tipos', TIPOS).map(x => {
+        const marcado = (d.tipos_puerta || []).includes(x);
+        const uds = (() => {
+          const l = Array.isArray(d.tipos_uds) ? d.tipos_uds : [];
+          const f = l.find(y => y && y.tipo === x);
+          return f && +f.uds > 0 ? +f.uds : 1;
+        })();
+        return '<label class="tp-fila">'+
+          '<input type="checkbox" class="a-tp-c" value="'+esc(x)+'"'+(marcado ? ' checked' : '')+'>'+
+          '<span class="tp-nom">'+esc(x)+'</span>'+
+          (S.sinTiposUds ? '' :
+            '<input type="number" class="a-tp-u" min="1" max="50" step="1" value="'+uds+'" '+
+            'aria-label="Cuántas puertas de tipo '+esc(x)+'">')+
+          '</label>';
+      }).join('')+
       '</div>'+
-      '<span class="pista">Marca los que entran en este trabajo. Si la puerta ya está dada de '+
-      'alta, no hace falta: manda su ficha</span></div>')+
+      '<span class="pista">Marca los que entran en este trabajo y pon cuántas puertas de cada uno. '+
+      'El técnico se encontrará un hueco que medir por cada una, y podrá añadir más si hay más. Si la '+
+      'puerta ya está dada de alta, no hace falta: manda su ficha</span></details>')+
     /* ---- La puesta en servicio (05-11-2026) ----
        Un remate es el final de una obra concreta, así que se dice de cuál y por
        qué se quedó pendiente. Sin esas dos cosas la puesta en servicio es un
@@ -19540,6 +19731,19 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
         esc(n)+'</option>').join('')+'</select>'+
       '<span class="pista" id="a-pscpista">De esto sale la cuenta de lo que cuestan los remates, y de '+
       'quién fue la causa</span></div>')+
+    /* ---- La oficina decide el cobro al crear el remate (06-11-2026) ----
+       David: «Este viaje se cobra debe poder, desde oficina, dejarlo marcado o
+       no.» Hasta ahora solo se podía al cerrar el parte, y eso llega tarde: lo
+       normal es saberlo al abrir la visita, porque la causa ya se conoce. Se
+       sigue pudiendo cambiar en el parte. */
+    (S.sinRemates || !esGestion() ? '' :
+    '<div class="campo full" id="a-caja-psr"'+(d.tipo === 'puesta_servicio' ? '' : ' hidden')+
+      ' style="align-content:end"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+      '<input type="checkbox" id="a-reperc"'+(d.repercutible?' checked':'')+
+      ' style="accent-color:var(--amarillo);width:18px;height:18px">Este viaje se le cobra al cliente</label>'+
+      '<span class="pista">Un remate no se factura: la obra ya se facturó. Márcalo si la obra se quedó '+
+      'parada por causa del cliente y habéis acordado cobrarle el viaje. Se puede cambiar al cerrar '+
+      'el parte</span></div>')+
     (S.sinRemates ? '' :
     '<div class="campo" id="a-caja-psd"'+(d.tipo === 'puesta_servicio' ? '' : ' hidden')+'>'+
       '<label for="a-psdet">Explícalo</label>'+
@@ -19639,10 +19843,13 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
          cambia el tipo a instalación, la garantía no puede quedarse pegada. */
       const sub = val('a-sub');
       o.subtipo = subtiposDe(o.tipo).some(x => x[0] === sub) ? sub : null;
-      o.tipos_puerta = pideTiposPuerta(o.tipo, o.subtipo)
-        ? Array.from(document.querySelectorAll('#a-tp .a-tp-c:checked')).map(x => x.value)
-        : null;
-      if (o.tipos_puerta && !o.tipos_puerta.length) o.tipos_puerta = null;
+      const marcados = pideTiposPuerta(o.tipo, o.subtipo) ? tiposMarcados() : [];
+      o.tipos_puerta = marcados.length ? marcados.map(x => x.tipo) : null;
+      /* Las unidades van aparte, en su columna, para no cambiarle el sentido a
+         tipos_puerta, que lo lee media aplicación. Sin unidades guardadas, una
+         de cada tipo: eso es lo que significaban las de antes del 06-11-2026. */
+      if (!S.sinTiposUds)
+        o.tipos_uds = marcados.length ? marcados.map(x => ({ tipo: x.tipo, uds: x.uds })) : null;
     }
     /* ---- La puesta en servicio (05-11-2026) ----
        Un remate es el final de una obra concreta. Si no se dice de cuál viene y
@@ -19658,6 +19865,10 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
       const causa = esPS ? val('a-pscausa') : '';
       o.ps_causa = PS_CAUSAS.some(x => x[0] === causa) ? causa : null;
       o.ps_causa_detalle = esPS ? (val('a-psdet') || null) : null;
+      /* La marca de cobro solo la manda gestión, y solo si el campo está en
+         pantalla: así un técnico editando la asistencia no la pone ni la quita. */
+      if (esGestion() && document.getElementById('a-reperc'))
+        o.repercutible = esPS ? !!(document.getElementById('a-reperc') || {}).checked : false;
       if (esPS && !o.ps_causa)
         return setErr('Di por qué se quedó pendiente esta obra. De eso sale la cuenta de lo que '+
           'cuestan los remates y de quién fue la causa, y no se puede reclamar lo que no está '+
@@ -23069,7 +23280,11 @@ function dlgCierre(avisoId){
       (puertas.length-1===1?'':'s')+' más' : '')) : '')+'</h3>';
   if (a.descripcion) h += '<p class="mini" style="margin:0 0 8px"><b>Dijo el cliente:</b> '+esc(a.descripcion)+'</p>';
   if (a.notas_oficina) h += '<p class="nota-oficina">Oficina: '+esc(a.notas_oficina)+'</p>';
-  if (!p && !obligaAltaObra(a)) h += '<p class="mini" style="margin:8px 0 0">Esta asistencia no tiene puerta asignada. '+
+  /* El botón suelto de dar de alta solo queda para el desplazamiento en falso.
+     En la comercial se quitó el 06-11-2026 a petición de David: ahí la puerta
+     todavía no existe y lo que se trae son las medidas, así que ofrecer un alta
+     invita a crear fichas de puertas que no se han vendido. */
+  if (!p && a.tipo === 'falso') h += '<p class="mini" style="margin:8px 0 0">Esta asistencia no tiene puerta asignada. '+
     '<button type="button" class="btn sm" data-act="alta-puerta-asis" data-id="'+a.id+'">Dar de alta la puerta</button></p>';
   h += '</div>';
 
@@ -23091,12 +23306,21 @@ function dlgCierre(avisoId){
      después, al preparar el parte, porque hay que preguntarlo a la base de datos. */
   if (obligaAltaObra(a)) h += bloqueAltaObra(a, puertas, null);
 
-  h += '<div class="grupo"><h3>Qué has encontrado y qué has hecho</h3><div class="campos">'+
-    '<div class="campo full"><label for="z-diag">Diagnóstico</label><textarea id="z-diag" rows="2" placeholder="Ej.: banda de seguridad cortada por roce con el marco">'+esc(a.diagnostico||'')+'</textarea>'+
-      frasesDe('frases_diag', FRASES_DIAG, 'z-diag')+'</div>'+
-    '<div class="campo full"><label for="z-trab">Trabajo realizado</label><textarea id="z-trab" rows="3" placeholder="Ej.: sustituida banda, ajustado final de carrera y engrase general">'+esc(a.trabajo||'')+'</textarea>'+
-      frasesDe('frases_trab', FRASES_TRAB, 'z-trab')+'</div>'+
-    '</div></div>';
+  /* En la preventiva, la comercial y el remate no se pregunta: lo rellena la
+     propia visita (el guion, los huecos medidos, el remate). Los campos van en
+     oculto para que el resto del parte, que los lee, siga funcionando igual y
+     para no perder lo que ya hubiera escrito. */
+  if (pideDiagnostico(a))
+    h += '<div class="grupo"><h3>Qué has encontrado y qué has hecho</h3><div class="campos">'+
+      '<div class="campo full"><label for="z-diag">Diagnóstico</label><textarea id="z-diag" rows="2" placeholder="Ej.: banda de seguridad cortada por roce con el marco">'+esc(a.diagnostico||'')+'</textarea>'+
+        frasesDe('frases_diag', FRASES_DIAG, 'z-diag')+'</div>'+
+      '<div class="campo full"><label for="z-trab">Trabajo realizado</label><textarea id="z-trab" rows="3" placeholder="Ej.: sustituida banda, ajustado final de carrera y engrase general">'+esc(a.trabajo||'')+'</textarea>'+
+        frasesDe('frases_trab', FRASES_TRAB, 'z-trab')+'</div>'+
+      '</div></div>';
+  else
+    h += '<div hidden>'+
+      '<textarea id="z-diag">'+esc(a.diagnostico||'')+'</textarea>'+
+      '<textarea id="z-trab">'+esc(a.trabajo||'')+'</textarea></div>';
 
   /* Lo que la oficina ha mandado llevar, antes de la lista de lo gastado: es lo
      primero que el técnico quiere comprobar al abrir el parte. */
@@ -23111,6 +23335,7 @@ function dlgCierre(avisoId){
       '<p class="mini" style="margin:8px 0 0">Esto es lo previsto, no lo gastado. Pásalo abajo y corrige '+
       'las cantidades con lo que de verdad hayas puesto.</p></div>';
 
+  if (pideMateriales(a))
   h += '<div class="grupo"><h3>Materiales</h3>'+
     '<datalist id="sugeridos">'+
       [...new Map([...S.catalogo.map(x=>[x.descripcion.toLowerCase(), x.descripcion]),
@@ -23312,7 +23537,11 @@ function dlgCierre(avisoId){
      Los bloques van numerados siempre, aunque solo haya uno, porque siempre se
      puede añadir otro y un título sin número se queda viejo en cuanto lo haces. */
   if (a.tipo === 'comercial' && !S.sinMedidas){
-    const tps = (a.tipos_puerta || []).filter(Boolean);
+    /* Un hueco por cada PUERTA ofertada, no por cada tipo (06-11-2026). Si la
+       oficina apuntó tres seccionales, el técnico se encuentra tres bloques ya
+       con su tipo puesto, en vez de uno y tener que añadir dos. Lo que no sabe
+       la oficina lo añade él con el botón, como hasta ahora. */
+    const tps = huecosPrevistos(a);
     h += '<div id="med-zona">';
     if (tps.length) tps.forEach((t, i) => { h += bloqueMedidas(a, { tipo_puerta: t }, i); });
     else h += bloqueMedidas(a, null, 0);
@@ -23362,19 +23591,46 @@ function dlgCierre(avisoId){
     h += '</div>';
   }
 
-  h += '<div class="grupo"><h3>Cómo queda</h3><div class="campos">'+
-    '<div class="campo"><label for="z-estado">Estado de la puerta</label><select id="z-estado">'+
-      opts(lista('estados_final', EST_FINAL), a.estado_final || 'Operativa')+'</select></div>'+
-    '<div class="campo" style="align-content:end"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
-      '<input type="checkbox" id="z-pend"'+(a.pendiente?' checked':'')+' style="accent-color:var(--amarillo);width:18px;height:18px">Queda algo pendiente</label></div>'+
-    '<div class="campo full"><label for="z-pendt">Qué queda pendiente</label><input id="z-pendt" type="text" maxlength="200" value="'+esc(a.pendiente_texto||'')+'" placeholder="Ej.: pedir cuadro de maniobra, volver a montarlo"></div>'+
-    '<div class="campo full" style="align-content:end"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
-      '<input type="checkbox" id="z-sincargo"'+(a.sin_cargo?' checked':'')+' style="accent-color:var(--amarillo);width:18px;height:18px">Esta visita no se cobra</label>'+
-      '<span class="pista">Cortesía, error nuestro o entra en contrato</span></div>'+
-    '<div class="campo full"><label for="z-sincargom">Por qué no se cobra</label><input id="z-sincargom" type="text" maxlength="160" value="'+esc(a.sin_cargo_motivo||'')+'"></div>'+
-    '</div></div>';
+  /* «Cómo queda» habla del estado en que se deja la puerta, así que no pinta nada
+     en una comercial: de ir a ofertar no se sale dejando la puerta de otra
+     manera. Y la casilla de «no se cobra» no se le ofrece a los tipos que ya
+     valen cero por su naturaleza, porque sería no cobrar lo que no se cobra. */
+  if (pideComoQueda(a)){
+    h += '<div class="grupo"><h3>Cómo queda</h3><div class="campos">'+
+      '<div class="campo"><label for="z-estado">Estado de la puerta</label><select id="z-estado">'+
+        opts(lista('estados_final', EST_FINAL), a.estado_final || 'Operativa')+'</select></div>'+
+      '<div class="campo" style="align-content:end"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+        '<input type="checkbox" id="z-pend"'+(a.pendiente?' checked':'')+' style="accent-color:var(--amarillo);width:18px;height:18px">Queda algo pendiente</label></div>'+
+      '<div class="campo full"><label for="z-pendt">Qué queda pendiente</label><input id="z-pendt" type="text" maxlength="200" value="'+esc(a.pendiente_texto||'')+'" placeholder="Ej.: pedir cuadro de maniobra, volver a montarlo"></div>'+
+      (pideSinCargo(a)
+        ? '<div class="campo full" style="align-content:end"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+          '<input type="checkbox" id="z-sincargo"'+(a.sin_cargo?' checked':'')+' style="accent-color:var(--amarillo);width:18px;height:18px">Esta visita no se cobra</label>'+
+          '<span class="pista">Cortesía, error nuestro o entra en contrato</span></div>'+
+          '<div class="campo full"><label for="z-sincargom">Por qué no se cobra</label><input id="z-sincargom" type="text" maxlength="160" value="'+esc(a.sin_cargo_motivo||'')+'"></div>'
+        : '<div hidden><input type="checkbox" id="z-sincargo"'+(a.sin_cargo?' checked':'')+'>'+
+          '<input id="z-sincargom" value="'+esc(a.sin_cargo_motivo||'')+'"></div>')+
+      '</div></div>';
+  } else {
+    h += '<div hidden><select id="z-estado">'+
+      opts(lista('estados_final', EST_FINAL), a.estado_final || 'Operativa')+'</select>'+
+      '<input type="checkbox" id="z-pend"'+(a.pendiente?' checked':'')+'>'+
+      '<input id="z-pendt" value="'+esc(a.pendiente_texto||'')+'">'+
+      '<input type="checkbox" id="z-sincargo"'+(a.sin_cargo?' checked':'')+'>'+
+      '<input id="z-sincargom" value="'+esc(a.sin_cargo_motivo||'')+'"></div>';
+  }
 
-  if (conCobro){
+  /* ---- Cobro en obra (06-11-2026) ----
+     David: «Cobro en obra debería salir cuando se marque si se cobra.» En un
+     remate que no se repercute no hay nada que cobrar, así que el apartado sobra
+     y encima invita a cobrar algo que no se factura. Los campos quedan ocultos
+     para no perder lo que hubiera guardado. */
+  const puedeCobrar = conCobro && (a.tipo !== 'puesta_servicio' || !!a.repercutible);
+  if (!puedeCobrar && conCobro)
+    h += '<div hidden><input type="checkbox" id="z-cobrado"'+(a.cobrado?' checked':'')+'>'+
+      '<input id="z-imp" value="'+esc(a.cobro_importe!=null?a.cobro_importe:'')+'">'+
+      '<input id="z-forma" value="'+esc(a.cobro_forma||'')+'">'+
+      '<input id="z-ref" value="'+esc(a.cobro_ref||'')+'"></div>';
+  if (puedeCobrar){
     h += '<div class="grupo"><h3>Cobro en obra</h3><div class="campos">'+
       '<div class="campo" style="align-content:end"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
         '<input type="checkbox" id="z-cobrado"'+(a.cobrado?' checked':'')+' style="accent-color:var(--amarillo);width:18px;height:18px">He cobrado en el momento</label></div>'+
@@ -23896,6 +24152,18 @@ function bloqueMedidas(a, m, n){
       '<input class="m-lateral" type="number" step="1" min="0" inputmode="numeric" value="'+v(m.lateral_mm)+'">'+
       '<span class="pista">Lo que hay a un lado para que corra la hoja. Decide si cabe una corredera '+
       'y hacia dónde abre</span></div>'+
+    (S.sinFijos ? '' :
+    '<div class="campo"><label>Fijos</label><select class="m-fijos">'+
+      '<option value="">Sin indicar</option>'+
+      MED_FIJOS.map(([k, x]) => '<option value="'+k+'"'+(m.fijos === k ? ' selected' : '')+'>'+
+        esc(x)+'</option>').join('')+'</select>'+
+      '<span class="pista">Un fijo practicable lleva herrajes y cierre, como una hoja más. Si no se '+
+      'oferta, se monta igual y lo paga la empresa</span></div>'+
+    '<div class="campo"><label>Ancho total de los fijos (mm)</label>'+
+      '<input class="m-fijosmm" type="number" step="1" min="0" inputmode="numeric" value="'+
+      ((m.fijos_mm == null || m.fijos_mm === '') ? '' : esc(String(m.fijos_mm)))+'">'+
+      '<span class="pista">Los fijos se ofertan aparte de la puerta, así que hace falta su medida, '+
+      'no solo saber que los lleva</span></div>')+
     '<div class="campo full"><label>Acometida eléctrica</label><select class="m-elec">'+
       '<option value="">Sin indicar</option>'+
       MED_ELEC.map(([k, t]) => '<option value="'+k+'"'+(m.electricidad === k ? ' selected' : '')+'>'+
@@ -23939,6 +24207,8 @@ function leerMedida(cont){
     dintel_mm: num('.m-dintel'), lateral_mm: num('.m-lateral'),
     situacion: v('.m-sit') || null,
     electricidad: v('.m-elec') || null,
+    fijos: v('.m-fijos') || null,
+    fijos_mm: num('.m-fijosmm'),
     auxiliares: v('.m-aux') || null,
     notas: v('.m-notas') || null,
     sin_medir: ch('.m-sinmed'),
@@ -23946,11 +24216,30 @@ function leerMedida(cont){
   };
   const algo = o.ubicacion || o.tipo_puerta || o.ancho_mm != null || o.alto_mm != null ||
     o.dintel_mm != null || o.lateral_mm != null || o.situacion || o.electricidad ||
+    o.fijos || o.fijos_mm != null ||
     o.auxiliares || o.notas || o.sin_medir;
   return algo ? o : null;
 }
 function medidasDelForm(){
   return Array.from(document.querySelectorAll('#dlg-form .medida')).map(leerMedida).filter(Boolean);
+}
+/* ---- Los huecos que el parte pide medir (06-11-2026) ----
+   Sale de las unidades por tipo que apuntó la oficina: «Seccional ×3» son tres
+   huecos de seccional. Una comercial de antes del 06-11-2026 no tiene unidades,
+   y entonces es una por tipo, que es lo que significaba. Y el total se limita,
+   porque un error de dedo en las unidades no puede pintar cien bloques y dejar
+   el parte inservible: lo que pase de veinte se añade a mano. */
+function huecosPrevistos(a){
+  if (!a) return [];
+  const tipos = (a.tipos_puerta || []).filter(Boolean);
+  const uds = Array.isArray(a.tipos_uds) ? a.tipos_uds : [];
+  const out = [];
+  tipos.forEach(t => {
+    const f = uds.find(x => x && x.tipo === t);
+    const n = Math.max(1, Math.min(50, Math.round(+(f ? f.uds : 1) || 1)));
+    for (let i = 0; i < n && out.length < 20; i++) out.push(t);
+  });
+  return out;
 }
 /* Cuántos bloques hay en pantalla, vacíos incluidos: lo necesita el botón de
    añadir para numerar el siguiente. */
@@ -24058,6 +24347,7 @@ async function prepararCierre(a){
       pon('.m-sit', m.situacion || ''); pon('.m-elec', m.electricidad || '');
       pon('.m-ancho', m.ancho_mm); pon('.m-alto', m.alto_mm);
       pon('.m-dintel', m.dintel_mm); pon('.m-lateral', m.lateral_mm);
+      pon('.m-fijos', m.fijos || ''); pon('.m-fijosmm', m.fijos_mm);
       pon('.m-aux', m.auxiliares); pon('.m-notas', m.notas);
       pon('.m-sinmedm', m.sin_medir_motivo);
       const c = cont.querySelector('.m-sinmed'); if (c) c.checked = !!m.sin_medir;
@@ -24434,6 +24724,20 @@ async function guardarCierre(a, cerrando){
         : 'Revisión periódica según guión de ' + tiposRev[0] + '.';
   }
   if (cerrando){
+    /* ---- El trabajo del remate, escrito solo (06-11-2026) ----
+       Al quitar «qué has encontrado y qué has hecho» de la puesta en servicio,
+       el técnico se quedó sin sitio donde escribir el trabajo, y el cierre lo
+       seguía exigiendo: el parte no se podía cerrar de ninguna manera. Lo cazó
+       la prueba de obra el mismo día.
+       Así que se rellena con lo que de verdad es: el remate de su obra y lo que
+       quedó pendiente de ella, que ya está escrito y no hay que teclear. */
+    if (!o.trabajo && a.tipo === 'puesta_servicio'){
+      const ob = a.instalacion_id ? S.avisos.find(x => x.id === a.instalacion_id) : null;
+      const pend = (ob && ob.pendiente_texto) || a.descripcion || '';
+      o.trabajo = 'Remate de la instalación'+
+        (ob && ob.cerrado ? ' del '+fechaCorta(ob.cerrado) : '')+
+        (pend ? ': '+pend : '')+'.';
+    }
     if (!o.trabajo) return setErr('Escribe al menos qué has hecho.');
     /* ---- El alta en obra, antes de la firma ----
        En instalación, puesta en servicio, adecuación a normativa y preventiva, la
@@ -24546,7 +24850,10 @@ async function guardarCierre(a, cerrando){
       throw error;
     };
     const mats = materialesDelForm();
-    await rehacer('materiales', mats.map(m => ({ ...m, aviso_id: a.id })));
+    /* Si el apartado de materiales no se ha pintado (una comercial), no se
+       rehacen: rehacer con la lista vacía borraría lo que hubiera guardado de
+       antes sin que nadie lo haya quitado. */
+    if (pideMateriales(a)) await rehacer('materiales', mats.map(m => ({ ...m, aviso_id: a.id })));
     // lo gastado sale del almacén, y solo al cerrar
     let almacen = null;
     if (cerrando) almacen = await descontarMaterialDelParte(a, mats);
@@ -24668,6 +24975,9 @@ function bloqueMedidasHTML(meds, fila){
       fila('Dintel libre',    (m.dintel_mm != null && m.dintel_mm !== '') ? mm(m.dintel_mm)+' mm' : '')+
       fila('Espacio lateral libre', (m.lateral_mm != null && m.lateral_mm !== '') ? mm(m.lateral_mm)+' mm' : '')+
       fila('Tipo de puerta previsto', m.tipo_puerta)+
+      fila('Fijos', (m.fijos && m.fijos !== 'ninguno')
+        ? MED_FIJOS_TXT(m.fijos)+((m.fijos_mm != null && m.fijos_mm !== '')
+            ? ' · '+mm(m.fijos_mm)+' mm' : '') : '')+
       fila('Qué hay ahora en el hueco', MED_SIT_TXT(m.situacion))+
       fila('Acometida eléctrica', MED_ELEC_TXT(m.electricidad))+
       fila('Auxiliares que hacen falta', m.auxiliares)+
