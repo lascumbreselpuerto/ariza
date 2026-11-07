@@ -165,6 +165,13 @@ html{scroll-padding-top:104px}
 .g-bloque>summary::before{content:"▸";color:var(--muted)}
 .g-bloque[open]>summary::before{content:"▾"}
 .g-bloque .g-cuenta{margin-left:auto;font:600 12px var(--sans);color:var(--muted)}
+/* El bloque crítico de seguridad no se pliega (07-11-2026). Lleva su cabecera
+   igual que los demás, pero sin flecha y sin poder cerrarse, y se distingue por
+   el borde: son los puntos por los que responde la empresa. */
+.g-bloque.g-fijo{border-color:var(--amarillo)}
+.g-bloque>.g-cab{padding:10px 12px;font-weight:600;display:flex;gap:10px;align-items:center}
+.g-bloque>.g-cab::before{content:"●";color:var(--amarillo)}
+.g-bloque .g-fijo-nota{font:500 11px var(--sans);color:var(--muted);letter-spacing:.02em}
 .g-punto{display:grid;gap:6px;padding:10px 12px;border-top:1px solid var(--line)}
 .g-punto .g-txt{font-size:14px;line-height:1.4}
 .g-punto .g-norma{font:600 11px var(--sans);color:var(--muted);letter-spacing:.02em}
@@ -1909,7 +1916,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.06-4';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.07-1';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -24238,6 +24245,35 @@ async function pintarAltaObra(a){
    deja su propia revisión firmada. Todo lo del guion vive DENTRO de su
    contenedor y se busca por clase, no por identificador: con cuatro guiones en
    la misma pantalla, un id repetido devuelve siempre el primero. */
+/* ---- Qué bloque del guion no se pliega nunca (07-11-2026) ----
+   El que lleva los puntos que firman la seguridad de la puerta: fuerzas,
+   fotocélulas, banda, desbloqueo. En los guiones de fábrica se llama «Seguridad
+   (bloque crítico)». Se mira el título y no la posición porque el administrador
+   puede reordenar los bloques desde Equipo. */
+const bloqueCritico = t => /seguridad|cr[ií]tic/i.test(String(t == null ? '' : t));
+/* ---- Dónde se abre el guion al entrar en el parte (07-11-2026) ----
+   David: que se abra el primer bloque que tenga algo sin marcar y los que ya
+   estén completos salgan plegados. Así el técnico sigue el orden sin tocar
+   nada, y al volver a un parte guardado a medias cae donde lo dejó.
+
+   Se hace UNA sola vez por guion, al abrir el parte, y no en cada repintado:
+   si se repitiera, el bloque se cerraría solo en cuanto el técnico marcara el
+   último punto, con él dentro y a media pantalla. */
+function colocarBloques(cont){
+  if (!cont){ document.querySelectorAll('#dlg-form .guion').forEach(colocarBloques); return; }
+  if (cont.dataset.colocado === '1') return;
+  cont.dataset.colocado = '1';
+  let yaHayUno = false;
+  cont.querySelectorAll('details.g-bloque').forEach(det => {
+    const falta = Array.from(det.querySelectorAll('.g-punto'))
+      .some(d => !d.querySelector('.g-resp button[aria-pressed="true"]'));
+    /* Lo completo se pliega: su cuenta en verde ya dice que está hecho. Y solo
+       se abre el PRIMERO que falte, para que haya un sitio por donde seguir y
+       no siete. */
+    if (falta && !yaHayUno){ det.open = true; yaHayUno = true; }
+    else det.open = false;
+  });
+}
 function bloqueGuion(a, p, n){
   const tipo = (p && p.tipo) || 'Otro';
   const g = guionDe(tipo);
@@ -24257,10 +24293,29 @@ function bloqueGuion(a, p, n){
   let abierto = false, nb = -1, cuerpo = '', titulo = '', ini = 0;
   const cerrarBloque = () => {
     if (!abierto) return '';
-    return '<details class="g-bloque"'+(nb <= 1 ? ' open' : '')+'>'+
-      '<summary>'+esc(titulo)+'<span class="g-cuenta" data-b="'+nb+'"></span></summary>'+
+    const dentro =
       '<div class="fila" style="padding:8px 12px 0"><button type="button" class="btn sm plana" data-act="g-todo" data-ini="'+ini+'">Todo bien en este bloque</button></div>'+
-      cuerpo + '</details>';
+      cuerpo;
+    /* ---- El bloque crítico de seguridad no se pliega (07-11-2026) ----
+       Decisión de David. Los demás bloques se pliegan y se abren solos según lo
+       que falte; este se queda siempre a la vista, porque son los puntos por los
+       que responde la empresa si pasa algo, y un bloque plegado es un bloque que
+       se puede dejar sin abrir y firmar el parte igual. Ocupa más pantalla a
+       propósito.
+
+       Se reconoce por el título, no por su posición: los guiones los puede
+       cambiar el administrador desde Equipo, y un bloque que cambie de sitio
+       seguiría siendo el crítico. Si un guion propio no tiene ningún bloque que
+       se llame así, no pasa nada: todos se pliegan, como antes. */
+    if (bloqueCritico(titulo))
+      return '<section class="g-bloque g-fijo" data-b="'+nb+'">'+
+        '<div class="g-cab">'+esc(titulo)+
+          '<span class="g-fijo-nota">siempre a la vista</span>'+
+          '<span class="g-cuenta" data-b="'+nb+'"></span></div>'+
+        dentro + '</section>';
+    return '<details class="g-bloque" data-b="'+nb+'"'+(nb === 0 ? ' open' : '')+'>'+
+      '<summary>'+esc(titulo)+'<span class="g-cuenta" data-b="'+nb+'"></span></summary>'+
+      dentro + '</details>';
   };
   g.forEach((x, i) => {
     if (x.h){ h += cerrarBloque(); abierto = true; nb++; titulo = x.h; cuerpo = ''; ini = i; return; }
@@ -24545,6 +24600,10 @@ async function prepararCierre(a){
       const re = cont.querySelector('.g-reco'); if (re) re.value = rev.recomendaciones || '';
     });
     repintarCuentas();
+    /* Y después de volcar lo ya hecho, cada guion se abre por donde falta
+       (07-11-2026). Va aquí y no en el pintado porque hasta este momento no se
+       sabe qué está marcado. */
+    colocarBloques();
   }
   /* ---- Las medidas ya apuntadas (05-11-2026) ----
      La pantalla se pinta con los bloques que se saben de antemano (uno por tipo
