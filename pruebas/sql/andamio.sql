@@ -129,6 +129,12 @@ create table if not exists public.avisos (
   sin_cargo_motivo text,
   cerrado      timestamptz,
   anulada      boolean not null default false,
+  /* El motivo de la anulación existe en producción desde que se puede anular
+     una visita sin parte, y faltaba aquí: una prueba que anulaba una visita
+     fallaba por el andamio, no por lo que estaba probando. (06-11-2026) */
+  anulada_motivo text,
+  anulada_en   timestamptz,
+  anulada_por  text,
   contacto_nombre   text,
   contacto_telefono text,
   contacto_email    text,
