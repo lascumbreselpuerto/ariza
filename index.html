@@ -1289,6 +1289,14 @@ function bloqueSitio(p){
 /* Dónde hay que ir. Cada paso cae al siguiente si no tiene dirección: una puerta
    sin dirección o un cliente sin dirección dejaban la asistencia sin sitio al que
    ir, y la dirección escrita a mano no se usaba ni para «Cómo llegar». */
+/* ---- El año y quién la instaló, cuando no se saben (07-11-2026) ----
+   En blanco significaba dos cosas distintas: «no lo he rellenado» y «he
+   preguntado y nadie lo sabe». Lo segundo es un dato tomado, y en la ficha y en
+   los papeles se escribe, no se deja el hueco: así nadie vuelve a preguntarlo en
+   la siguiente visita. */
+const anioPuerta = p => !p ? '' : (p.anio_desconocido ? 'No se sabe' : (p.anio || ''));
+const instaladorPuerta = p => !p ? ''
+  : (p.instalador_desconocido ? 'No se sabe' : (p.instalador || ''));
 const dondeAsistencia = a => {
   const p = a.puerta_id ? puertaDe(a.puerta_id) : null;
   const dp = p ? [p.direccion, p.ubicacion].filter(Boolean).join(' · ') : '';
@@ -1753,6 +1761,11 @@ async function cargar(){
      no se pregunta cuál ni se guarda: se trabaja como antes del 06-11-2026. */
   const pf = await sb.from('avisos').select('perifericos, perifericos_otro, subtipo_detalle').limit(1);
   S.sinPerifericos = !!pf.error;
+  /* El «no se sabe» del año y del instalador: servidor/ficha4.sql. Sin esas
+     columnas la ficha no enseña las casillas y los dos campos se quedan como
+     antes del 07-11-2026: en blanco cuando no se sabe. */
+  const ns = await sb.from('puertas').select('anio_desconocido, instalador_desconocido').limit(1);
+  S.sinNoSeSabe = !!ns.error;
   /* ---- El almacén ----
      Las existencias no se guardan en ninguna columna: se leen de la vista, que
      las suma de los movimientos. Si falta el SQL del almacén, la aplicación
@@ -1916,7 +1929,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.07-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.07-2';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -2261,7 +2274,8 @@ function vistaFicha(id){
 
   h += '<div class="panel"><div class="panel-h"><h3>Ficha técnica</h3></div><dl class="datos">';
   const d = [['Tipo',p.tipo],['Uso',p.uso],['Tipo de cliente',p.tipo_cliente],['Marca',p.marca],['Modelo',p.modelo],
-    ['Cuadro de maniobra',p.cuadro],['Motor',p.motor],['Año',p.anio],['Instalador',p.instalador],
+    ['Cuadro de maniobra',p.cuadro],['Motor',p.motor],
+    ['Año',anioPuerta(p)],['Instalador',instaladorPuerta(p)],
     ['Medidas',(p.ancho_mm||p.alto_mm)?((p.ancho_mm||'?')+' x '+(p.alto_mm||'?')+' mm'):''],
     ['Dintel',p.dintel_mm?(p.dintel_mm+' mm'):''],
     ['Arrastre del motor',p.arrastre_kg?(p.arrastre_kg+' kg'):''],
@@ -18534,7 +18548,20 @@ dlgForm.addEventListener('change', e => {
   /* Si la oficina toca la ruta, deja de proponerse: manda lo que eligió */
   if (t.id === 'a-ruta'){ t.dataset.tocado = '1'; return; }
   // Puerta: al elegir centro, su dirección baja a la puerta
-  if (t.id === 'f-centro'){ centroElegido(); return; }
+  /* Elegir el centro a mano manda sobre la dirección que hubiera (07-11-2026) */
+  if (t.id === 'f-centro'){ centroElegido(true); return; }
+  /* «No se sabe»: apaga su campo y lo deja vacío, para que no queden las dos
+     cosas dichas a la vez. Al desmarcarla, el campo vuelve a estar escribible
+     y el foco va allí, que es lo que se quiere hacer después. (07-11-2026) */
+  if (t.classList && t.classList.contains('f-nose')){
+    const campo = document.getElementById(t.dataset.campo || '');
+    if (campo){
+      campo.disabled = !!t.checked;
+      if (t.checked) campo.value = '';
+      else campo.focus();
+    }
+    return;
+  }
   /* El dintel y las vueltas de muelle aparecen o desaparecen según el tipo de
      puerta que se elija: el dintel en todo lo que sube, las vueltas solo en las
      seccionales. Un campo que no decide nada solo sirve para dejarlo en blanco. */
@@ -19310,10 +19337,16 @@ function pistaCentro(){
     pista.textContent = 'Elige primero el cliente: los centros son suyos.';
   } else if (c){
     const n = datosCentro(c).length;
+    const dir = document.getElementById('f-dir');
+    const pisada = dir ? (dir.dataset.pisada || '') : '';
     pista.innerHTML = 'La puerta hereda la dirección de <b>'+esc(c.nombre||'')+'</b>'+
       (n ? ', y el técnico verá sus datos de acceso antes de ir.'
          : '. A este centro todavía no se le han puesto los datos de acceso: '+
-           'ponlos una vez y valen para todas sus puertas.');
+           'ponlos una vez y valen para todas sus puertas.')+
+      /* Lo que había escrito antes no desaparece en silencio: se dice cuál era,
+         por si era la buena y hay que volver a ponerla. (07-11-2026) */
+      (pisada ? '<br>Antes ponía «'+esc(pisada)+'». Si esa era la buena, '+
+                'cámbiala a mano aquí debajo.' : '');
   } else if (!lista.length){
     pista.textContent = 'Este cliente no tiene centros. Si solo tiene esta puerta, no le hace falta ninguno; '+
       'si tiene varios portales o varias naves, créalo y escribe el sitio una sola vez.';
@@ -19325,13 +19358,29 @@ function pistaCentro(){
 /* Al elegir centro, la dirección del centro baja a la puerta. Lo escrito a mano
    NO se toca; lo que puso antes este mismo autorrelleno sí, para que la dirección
    de un centro equivocado no se quede pegada al corregirlo. */
-function centroElegido(){
+/* ---- Al elegir un centro, su dirección manda (07-11-2026) ----
+   David, probando en campo: «En nueva puerta, si tenemos varios centros y
+   elegimos uno de ellos, la dirección que debe salir es la del centro elegido.
+   Ahora sale la que ya estaba.»
+
+   Era verdad: la dirección solo se rellenaba sola si estaba vacía o si la había
+   puesto este mismo autorrelleno. Una puerta que venía con la dirección del
+   cliente se quedaba con ella aunque se eligiera un centro, y entonces la ficha
+   decía que la puerta estaba en el centro A con la dirección del B.
+
+   Ahora elegir un centro a mano pone SU dirección, y se dice en la pista qué
+   dirección había antes, para que nadie pierda un dato sin enterarse. Lo que no
+   hace es tocar nada si se quita el centro: eso dejaría la puerta sin
+   dirección. */
+function centroElegido(cambiadoAMano){
   const c = centroDe(val('f-centro'));
   const dir = document.getElementById('f-dir');
   if (c && dir){
     const dirC = [c.direccion, c.poblacion].filter(Boolean).join(', ');
-    if (dirC && (!dir.value.trim() || dir.dataset.auto === '1')){
+    const antes = dir.value.trim();
+    if (dirC && (cambiadoAMano || !antes || dir.dataset.auto === '1')){
       dir.value = dirC; dir.dataset.auto = '1';
+      dir.dataset.pisada = (cambiadoAMano && antes && antes !== dirC) ? antes : '';
     }
   }
   pistaCentro();
@@ -19393,7 +19442,7 @@ function moldeDePuerta(pu){
      pantalla en vez de que lo descubra campo por campo. */
   o.__copiado = [
     ['Tipo', pu.tipo], ['Uso', pu.uso], ['Marca', pu.marca], ['Modelo', pu.modelo],
-    ['Año', pu.anio], ['Instalada por', pu.instalador],
+    ['Año', anioPuerta(pu)], ['Instalada por', instaladorPuerta(pu)],
     ['Ancho', pu.ancho_mm ? pu.ancho_mm+' mm' : ''], ['Alto', pu.alto_mm ? pu.alto_mm+' mm' : ''],
     ['Dintel', pu.dintel_mm ? pu.dintel_mm+' mm' : ''],
     ['Arrastre del motor', pu.arrastre_kg ? pu.arrastre_kg+' kg' : ''],
@@ -19403,6 +19452,75 @@ function moldeDePuerta(pu){
   ].filter(x => x[1] !== null && x[1] !== undefined && String(x[1]).trim() !== '');
   return o;
 }
+/* ---- Alta rápida de puerta, desde la oficina (07-11-2026) ----
+   David, probando en campo: «En la creación de asistencia desde la oficina se
+   debe poder crear puertas. No obligatoria, pero sí conveniente. Y con una
+   creación básica, con el tipo de puerta sería suficiente, con la posibilidad
+   de cambiar el tipo el técnico por si la oficina, con la información que le da
+   el cliente, no da con la puerta correcta.»
+
+   El formulario completo de la puerta tiene cuarenta campos y está pensado para
+   rellenarlo delante de la puerta. Quien coge el teléfono no tiene delante nada
+   de eso: tiene a un cliente contando lo que le pasa. Pedirle el formulario
+   entero significa que no se crea la puerta, y entonces la visita sale sin
+   ficha y el técnico la crea en obra desde cero.
+
+   Así que aquí se pide UNA cosa: el tipo. El cliente y la dirección salen de la
+   asistencia, y todo lo demás lo termina el técnico, que es quien la tiene
+   delante. Y el tipo lo puede cambiar él: la oficina lo pone con lo que le
+   cuenta el cliente por teléfono, que no siempre acierta.
+
+   No sustituye al alta completa: la de siempre sigue estando entera. */
+function dlgPuertaRapida(clienteId, direccion, alGuardar){
+  const c = clienteId ? clienteDe(clienteId) : null;
+  const dir = String(direccion || '').trim();
+  let h = '<h3>Puerta nueva, lo mínimo</h3>'+
+    '<p class="mini" style="margin:0 0 12px">Con el <b>tipo</b> basta para crearla. El resto lo '+
+    'rellena el técnico en obra, delante de la puerta, que es donde se ve. Si te equivocas de '+
+    'tipo con lo que te cuenta el cliente, él lo cambia allí.</p>'+
+    '<div class="campos">'+
+    '<div class="campo full"><label>Cliente</label>'+
+      '<input type="text" value="'+esc(c ? (c.nombre || '') : '')+'" disabled>'+
+      '<span class="pista">'+(c
+        ? 'El de la asistencia. La puerta queda colgada de su ficha.'
+        : '<b>Esta asistencia todavía no tiene cliente.</b> La puerta se creará solo con la '+
+          'dirección, y habrá que enlazarla con el cliente más adelante.')+'</span></div>'+
+    '<div class="campo full"><label for="pr-tipo">Tipo de puerta</label>'+
+      '<select id="pr-tipo"><option value="">Elige el tipo</option>'+
+      lista('tipos', TIPOS).map(x => '<option value="'+esc(x)+'">'+esc(x)+'</option>').join('')+
+      '</select>'+
+      '<span class="pista">De aquí salen el guión de revisión del técnico, los peligros propios '+
+      'de esa puerta y los límites de fuerza que se le aplican. Por eso es lo único que se pide: '+
+      'es lo que más cambia el trabajo</span></div>'+
+    '<div class="campo full"><label for="pr-ubi">Dónde está, si lo sabes</label>'+
+      '<input id="pr-ubi" type="text" maxlength="120" placeholder="Ej.: portón del muelle, '+
+      'entrada de oficinas, rampa del garaje">'+
+      '<span class="pista">Opcional, pero si el cliente tiene varias puertas es lo que evita que '+
+      'el técnico tenga que llamar para saber a cuál va</span></div>'+
+    (dir ? '<div class="campo full"><label>Dirección</label>'+
+      '<input type="text" value="'+esc(dir)+'" disabled>'+
+      '<span class="pista">La de la asistencia</span></div>' : '')+
+    '</div><p class="err"></p><div class="pie">'+
+    '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Crear la puerta</button></div>';
+  abrirDlg(h, async () => {
+    const tipo = val('pr-tipo');
+    if (!tipo) return setErr('Elige el tipo de puerta. Es lo único que hace falta, y es lo que '+
+      'decide el guión de revisión y los límites que se le aplican.');
+    if (!clienteId && !dir) return setErr('Esta asistencia no tiene ni cliente ni dirección, así '+
+      'que la puerta nacería sin saber dónde está. Pon antes el cliente o la dirección en la '+
+      'asistencia.');
+    const o = { tipo, ubicacion: val('pr-ubi') || '', direccion: dir,
+                cliente_id: clienteId || null, cliente: c ? (c.nombre || '') : '',
+                estado: 'operativa', seguridad: [], creado_por: yo() };
+    try {
+      const { data, error } = await sb.from('puertas').insert(o).select().maybeSingle();
+      if (error) throw error;
+      cerrarDlg(); await cargar();
+      if (typeof alGuardar === 'function') await alGuardar(data ? data.id : null);
+    } catch(e){ setErr(e.message || 'No se pudo crear la puerta.'); }
+  });
+}
 function dlgPuerta(id, avisoId, molde){
   /* Si se viene con molde, cualquier borrador que quedara suelto es de un alta
      anterior que se abandonó: aplicarlo machacaría lo copiado sin avisar. */
@@ -19411,6 +19529,35 @@ function dlgPuerta(id, avisoId, molde){
   const usadas = new Set(S.puertas.filter(x => !p || x.id !== p.id).map(x => x.codigo));
   const libres = S.etiquetas.filter(e => !usadas.has(e.codigo)).map(e => e.codigo);
   const d = p || molde || { estado:'operativa', seguridad:[] };
+  /* ---- El cliente sale de la asistencia (07-11-2026) ----
+     David, probando en campo: «Al dar de alta la puerta desde una asistencia, el
+     cliente que debe salir marcado es el de la asistencia. El técnico no debe
+     tener que elegir el cliente.»
+
+     Tenía razón y además era peligroso: el técnico, en obra y con prisa, tenía
+     que buscar el cliente a mano en una lista de cientos, y el que se equivoca
+     cuelga la puerta del cliente de al lado. La asistencia ya sabe de quién es.
+     Solo se rellena lo que esté vacío: una puerta que ya tiene ficha manda ella,
+     y un molde copiado de otra puerta también. */
+  if (!p && avisoId){
+    const av = S.avisos.find(x => x.id === avisoId);
+    if (av){
+      if (!d.cliente_id && av.cliente_id){
+        d.cliente_id = av.cliente_id;
+        const c = clienteDe(av.cliente_id);
+        if (c && !d.cliente) d.cliente = c.nombre;
+      }
+      /* Y la dirección, si la puerta no trae otra. Se coge la de la visita o la
+         de la ficha del cliente, NO la de otra puerta de la misma obra: esa
+         lleva pegada su ubicación («muelle 2») y acabaría dentro del campo
+         dirección de una puerta que está en otro sitio del mismo edificio. */
+      if (!d.direccion){
+        const c = av.cliente_id ? clienteDe(av.cliente_id) : null;
+        d.direccion = String(av.direccion_libre || '').trim() ||
+          (c ? [c.direccion, c.poblacion].filter(Boolean).join(', ') : '') || '';
+      }
+    }
+  }
 
   /* ---- Ficha de un parte ya firmado (01-11-2026) ----
      Desde que el parte se cierra sin exigir la ficha completa, hay fichas que se
@@ -19530,8 +19677,31 @@ function dlgPuerta(id, avisoId, molde){
     '<div class="campo"><label for="f-uso">Uso</label><select id="f-uso">'+opts(lista('usos', USOS), d.uso)+'</select></div>'+
     '<div class="campo"><label for="f-marca">Marca</label><input id="f-marca" type="text" value="'+esc(d.marca||'')+'"></div>'+
     '<div class="campo"><label for="f-modelo">Modelo</label><input id="f-modelo" type="text" value="'+esc(d.modelo||'')+'"></div>'+
-    '<div class="campo"><label for="f-anio">Año</label><input id="f-anio" type="number" min="1950" max="2100" value="'+esc(d.anio||'')+'"></div>'+
-    '<div class="campo"><label for="f-instalador">Instalada por</label><input id="f-instalador" type="text" value="'+esc(d.instalador||'')+'"></div>'+
+    /* ---- El año y el instalador, con «no se sabe» (07-11-2026) ----
+       David: «Deberíamos poder escribir el nombre del instalador si lo
+       desconocemos, o poder elegir desconocido. Lo mismo valoramos en el año.»
+       En blanco significaban dos cosas distintas: «no lo he rellenado» y «he
+       preguntado y nadie lo sabe». La primera es trabajo pendiente; la segunda
+       es un dato tomado, y hay que poder escribirlo para no volver a preguntar
+       lo mismo en cada visita. */
+    '<div class="campo"><label for="f-anio">Año</label>'+
+      '<input id="f-anio" type="number" min="1950" max="2100" value="'+esc(d.anio||'')+'"'+
+      (d.anio_desconocido ? ' disabled' : '')+'>'+
+      (S.sinNoSeSabe ? '' :
+        '<label class="mini" style="display:inline-flex;align-items:center;gap:8px;margin-top:6px">'+
+        '<input type="checkbox" id="f-anio-nose" class="f-nose" data-campo="f-anio"'+
+        (d.anio_desconocido ? ' checked' : '')+
+        ' style="accent-color:var(--amarillo);width:18px;height:18px">No se sabe</label>')+
+      '</div>'+
+    '<div class="campo"><label for="f-instalador">Instalada por</label>'+
+      '<input id="f-instalador" type="text" value="'+esc(d.instalador||'')+'"'+
+      (d.instalador_desconocido ? ' disabled' : '')+'>'+
+      (S.sinNoSeSabe ? '' :
+        '<label class="mini" style="display:inline-flex;align-items:center;gap:8px;margin-top:6px">'+
+        '<input type="checkbox" id="f-inst-nose" class="f-nose" data-campo="f-instalador"'+
+        (d.instalador_desconocido ? ' checked' : '')+
+        ' style="accent-color:var(--amarillo);width:18px;height:18px">No se sabe</label>')+
+      '</div>'+
     '<div class="campo"><label for="f-ancho">Ancho (mm)</label><input id="f-ancho" type="number" value="'+esc(d.ancho_mm||'')+'"></div>'+
     '<div class="campo"><label for="f-alto">Alto (mm)</label><input id="f-alto" type="number" value="'+esc(d.alto_mm||'')+'"></div>'+
     /* El dintel es lo que decide si la puerta entra. Se pide solo en lo que
@@ -19678,6 +19848,18 @@ function dlgPuerta(id, avisoId, molde){
        aplicación nueva contra una base de datos sin centros.sql no rompe el alta
        de puertas. Y si el centro elegido no es del cliente que queda enlazado, no
        se guarda: una puerta no puede estar en el sitio de otro cliente. */
+    /* ---- «No se sabe» (07-11-2026) ----
+       Marcado y con valor a la vez no puede ser: una de las dos cosas es
+       mentira. Manda la marca, y el valor se borra. La base de datos lo exige
+       igual, con un check: lo que se guarda desde otro sitio tampoco puede
+       decir las dos cosas. */
+    if (!S.sinNoSeSabe){
+      const marcada = id2 => { const e = document.getElementById(id2); return !!(e && e.checked); };
+      o.anio_desconocido = marcada('f-anio-nose');
+      o.instalador_desconocido = marcada('f-inst-nose');
+      if (o.anio_desconocido) o.anio = null;
+      if (o.instalador_desconocido) o.instalador = '';
+    }
     if (!S.sinCentros) o.centro_id = val('f-centro') || null;
     if (!S.sinObra){ o.matricula = val('f-matricula') || null; o.sin_matricula = val('f-sinmat') || null; }
     if (!S.sinModo){ o.modo = val('f-modo') || null; o.usuarios = val('f-usuarios') || null; }
@@ -19808,7 +19990,14 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
     '<div class="campo full"><label for="a-puerta">Puerta</label>'+
       '<select id="a-puerta">'+opcionesPuertaAviso(d.cliente_id || null, d.puerta_id || null)+'</select>'+
       '<span class="pista" id="a-ptapista">Si aún no se sabe, déjalo vacío: el técnico puede darla de alta '+
-      'en obra</span></div>'+
+      'en obra</span>'+
+      /* ---- Crear la puerta desde aquí (07-11-2026) ----
+         David: «En la creación de asistencia desde la oficina se debe poder
+         crear puertas. No obligatoria, pero sí conveniente.» Con el tipo basta;
+         lo escrito en la asistencia no se pierde al salir y volver. */
+      '<div class="fila" style="gap:8px;margin-top:6px">'+
+      '<button type="button" class="btn sm" data-act="puerta-rapida">Crear la puerta</button>'+
+      '</div></div>'+
     '<div class="campo full"><label for="a-dir">Dirección, si no hay puerta ni cliente</label><input id="a-dir" type="text" maxlength="200" value="'+esc(d.direccion_libre||'')+'" placeholder="Ej.: C/ Larga 4, El Puerto"></div>'+
     '</div></div>';
 
@@ -19853,7 +20042,16 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
       '<summary><b>Qué puertas se revisan</b> <span class="mini" id="a-pts-cuenta"></span></summary>'+
       '<div id="a-pts"></div>'+
       '<span class="pista">Se marcan las del cliente. Cada una lleva el guión de su tipo, y cada una '+
-      'deja su revisión firmada. Si no marcas ninguna, se revisa solo la puerta de arriba</span></details>')+
+      'deja su revisión firmada. Si no marcas ninguna, se revisa solo la puerta de arriba</span>'+
+      /* ---- Crear aquí la puerta que falta (07-11-2026) ----
+         David: «En la creación de asistencia preventiva, en qué puertas se
+         revisan, la oficina debe poder crear de manera básica la puerta, al
+         menos el tipo, y que el técnico la pueda terminar de rellenar.»
+         En un contrato de cinco puertas es normal que una no esté dada de alta,
+         y sin esto esa puerta se quedaba fuera de la revisión entera. */
+      '<div class="fila" style="gap:8px;margin-top:8px">'+
+      '<button type="button" class="btn sm" data-act="puerta-rapida">Crear una puerta que falte</button>'+
+      '</div></details>')+
     /* ---- Los tipos de puerta, plegados y con cantidad (06-11-2026) ----
        David: «Esto lo haría tipo desplegable para que no nos haga muy intensa la
        vista general del parte. Esto de hacer desplegable lo utilizaría en todas
@@ -20086,6 +20284,25 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
 
        Lo que NO se exige es la obra: puede ser de antes de la aplicación. Pero
        entonces se dice que es antigua eligiéndolo, no dejándolo a medias. */
+    /* ---- La puesta en servicio necesita su puerta (07-11-2026) ----
+       David, probando en campo: «En puesta en servicio, ya que debe ser
+       obligatorio elegir la puerta, que ya se debió documentar en la primera
+       actuación de dicha instalación.»
+
+       Tiene razón: un remate es el final de una obra que ya se hizo, así que esa
+       puerta existe y está documentada desde el primer día. Una puesta en
+       servicio sin puerta es una visita que no se puede colgar de ninguna ficha,
+       y el trabajo de rematar la obra desaparece del historial de la puerta, que
+       es justo donde hace falta leerlo.
+
+       No se exige en las que ya están CERRADAS: esas son historia, y bloquear la
+       edición de una visita de hace un mes para corregir un teléfono no
+       documenta nada, solo estorba. */
+    if (o.tipo === 'puesta_servicio' && !o.puerta_id && !(a && a.cerrado))
+      return setErr('Elige la puerta de esta puesta en servicio. Es el remate de una instalación '+
+        'que ya se hizo, así que esa puerta ya se documentó en su día: sin elegirla, el trabajo '+
+        'no queda en su historial. Si no está en la aplicación, créala aquí mismo con «Crear la '+
+        'puerta»: con el tipo basta y el técnico la termina en obra.');
     if (!S.sinRemates){
       const esPS = o.tipo === 'puesta_servicio';
       o.instalacion_id = esPS ? (val('a-obra') || null) : null;
@@ -24162,7 +24379,18 @@ function bloqueAltaObra(a, puertas, fotos){
     h += '<div class="sin-ficha" style="margin-top:10px;background:var(--aviso-bg);color:var(--aviso)">'+
       'Puedes cerrar. Lo que falta ('+pendientes+(pendientes === 1 ? ' dato' : ' datos')+
       ') lo remata la oficina: la visita queda señalada como <b>ficha incompleta</b> y le sale en '+
-      'su lista. Si lo tienes a mano ahora, mejor hacerlo aquí: en la oficina no está la puerta.</div>';
+      'su lista. Si lo tienes a mano ahora, mejor hacerlo aquí: en la oficina no está la puerta.'+
+      /* ---- Por qué conviene terminarla aquí (07-11-2026) ----
+         David: «Recordar que si no se termina de manera completa, se avisa al
+         técnico de la importancia de la recopilación de la información y los
+         datos, y que es más operativo para todos que si se termina en obra.»
+         Esto sale cuando la puerta está a medias, que es cuando la oficina la ha
+         creado con lo mínimo o cuando se ha empezado y se ha dejado. */
+      '<div class="mini" style="margin-top:8px">Lo que se queda sin tomar hoy no se queda sin '+
+      'hacer: se hace otro día y cuesta un viaje. Y mientras tanto, esa puerta no tiene medidas '+
+      'para pedir un repuesto, ni placa para saber de qué modelo es, ni foto que enseñarle al '+
+      'cliente si discute lo que había. Terminarla delante de ella son unos minutos; terminarla '+
+      'desde la oficina no se puede.</div></div>';
 
   return h + '</div>';
 }
@@ -26950,6 +27178,51 @@ dlgForm.addEventListener('click', async e => {
           cli.dispatchEvent(new Event('change', { bubbles:true }));
         }
         toast('Cliente creado y puesto en la asistencia. No se ha perdido nada de lo que habías escrito.');
+      }, 120);
+    });
+    return;
+  }
+  /* ---- Crear la puerta desde el alta de la asistencia (07-11-2026) ----
+     El mismo apaño que el cliente: se guarda lo escrito, se crea la puerta con
+     lo mínimo y se vuelve con todo puesto y la puerta nueva ya elegida. */
+  if (a === 'puerta-rapida'){
+    const borrador = leerFormAviso();
+    const cid = (document.getElementById('a-cliente') || {}).value || null;
+    const dir = (document.getElementById('a-dir') || {}).value || '';
+    dlgPuertaRapida(cid, dir, async (nuevaId) => {
+      dlgAviso(null, (borrador && borrador.aviso) || null);
+      setTimeout(() => {
+        aplicarFormAviso(borrador);
+        const sel = document.getElementById('a-puerta');
+        const esPreventiva = ((document.getElementById('a-tipo') || {}).value || '') === 'mantenimiento';
+        if (sel && nuevaId){
+          /* La lista se pintó antes de que existiera esta puerta, así que se
+             vuelve a pintar; si aun así no estuviera, se añade a mano. */
+          if (typeof pintarPuertasDelCliente === 'function') pintarPuertasDelCliente();
+          if (!Array.from(sel.querySelectorAll('option')).some(o => o.value === nuevaId)){
+            const p = puertaDe(nuevaId);
+            sel.insertAdjacentHTML('beforeend', '<option value="'+nuevaId+'">'+
+              esc([(p && p.codigo) || 'sin etiqueta', (p && p.tipo) || '',
+                   p ? sitioPuerta(p) : ''].filter(Boolean).join(' · '))+'</option>');
+          }
+          /* En una preventiva la puerta principal no se toca si ya había una:
+             ahí lo que se está montando es la LISTA de puertas que se revisan, y
+             cambiar la de arriba movería la revisión a otra puerta. */
+          if (!esPreventiva || !sel.value){
+            sel.value = nuevaId;
+            sel.dispatchEvent(new Event('change', { bubbles:true }));
+          }
+        }
+        /* Y en la preventiva, además, queda marcada en la lista de las que se
+           revisan: es justo lo que se iba a hacer al crearla. */
+        if (esPreventiva && nuevaId){
+          pintarPuertasAviso((borrador && borrador.aviso) || null);
+          setTimeout(() => {
+            const c = document.querySelector('#a-pts .a-pt[value="'+CSS.escape(nuevaId)+'"]');
+            if (c){ c.checked = true; pintarCuentaPuertas(); }
+          }, 60);
+        }
+        toast('Puerta creada con lo mínimo y puesta en la asistencia. El técnico la termina en obra.');
       }, 120);
     });
     return;
