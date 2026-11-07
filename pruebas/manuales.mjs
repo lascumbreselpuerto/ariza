@@ -211,6 +211,21 @@ altaManual.forEach(n => paso('el manual explica «'+n+'» del alta de puerta',
   paso('el manual explica «'+n+'» de la puerta creada por la oficina',
     Mllano.includes(n.toLowerCase())));
 
+/* ---- El recargo lo pone la oficina (07-11-2026) ----
+   Esto el manual lo tenía MAL desde hoy: decía que el recargo lo decidía la
+   hora de «He llegado», y ya no es verdad. Un manual que miente sobre dinero es
+   peor que uno que no lo cuenta, así que aquí se vigila que diga lo nuevo y que
+   siga diciendo que «He llegado» hay que darlo igual. */
+['la oficina al abrir la visita', 'a ti no se te pregunta nada de esto',
+ 'ya no decide el precio', 'urgencia / fuera de horario'].forEach(n =>
+  paso('el manual explica «'+n+'» del recargo', Mllano.includes(n.toLowerCase())));
+paso('y el manual da los mismos multiplicadores que la aplicación',
+  await T(() => {
+    const g = window.__T;
+    return g.factorDeModo('fuera') === 2 && g.factorDeModo('urgente') === 2 &&
+           g.factorDeModo('ambas') === 3;
+  }) && /\*\*×2\*\*/.test(M) && /\*\*×3\*\*/.test(M));
+
 /* ================================================================
    5. Los campos que nombra, con su etiqueta exacta
    ================================================================ */

@@ -47,7 +47,7 @@ ORDEN="componentes.sql centros.sql parte-por-correo.sql obra.sql ficha.sql \
 almacen.sql presupuestos.sql presupuestos2.sql comercial.sql anexos.sql \
 tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos3.sql valoracion.sql \
 parado.sql factura.sql rutas.sql ruta-cliente.sql telegram.sql subtipo.sql urgencia.sql \
-medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql perifericos.sql ficha4.sql"
+medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql perifericos.sql ficha4.sql urgencia2.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -316,6 +316,22 @@ if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/ficha4-pruebas.sql" ]; then
     fallos=$((fallos+1))
     echo " FALLA el «no se sabe»:"
     grep -a -m3 -E "ERROR|EXCEPTION" /tmp/ficha4-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
+# El recargo que elige la oficina. Lo que se vigila: que el factor multiplique
+# la mano de obra y el desplazamiento (precio y coste), que el material no lleve
+# recargo, y que una urgencia cerrada antes del 07-11-2026 valga exactamente lo
+# mismo al recalcularla.
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/urgencia2-pruebas.sql" ]; then
+  echo ""
+  echo "── El recargo de la oficina ────────────────────"
+  if $PSQL -f "$AQUI/sql/urgencia2-pruebas.sql" > /tmp/urg2-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/urg2-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA el recargo de la oficina:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/urg2-pruebas.log | sed 's/^/         /'
   fi
 fi
 
