@@ -95,6 +95,11 @@ create table if not exists public.puertas (
   direccion  text,
   ubicacion  text,
   seguridad  text[],
+  /* El año y quién la instaló existen en producción desde el principio y
+     faltaban aquí: el SQL del «no se sabe» añade un check sobre ellos y no
+     podía ejecutarse contra el andamio. (07-11-2026) */
+  anio       integer,
+  instalador text,
   creado     timestamptz not null default now(),
   creado_por text default ''
 );
