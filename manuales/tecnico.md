@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.07-2**
+> **Versión de la aplicación que describe este manual: 2026.11.07-3**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -150,32 +150,38 @@ Si crees que el viaje había que cobrarlo porque la culpa fue del cliente,
 **dilo en la oficina**: hay una casilla para eso y la marcan ellos. Tú no la
 verás, y es a propósito: quién paga una visita no se decide en la furgoneta.
 
-### En una urgencia, «He llegado» decide el precio (4 de noviembre de 2026)
+### El recargo de una urgencia lo pone la oficina (7 de noviembre de 2026)
 
-Una urgencia no se cobra igual a las once de la mañana que a las tres de la
-madrugada de un domingo. Desde hoy:
+El tipo se llama ahora **Urgencia / fuera de horario**, porque pueden ser dos
+cosas distintas o las dos a la vez. Y el recargo lo elige **la oficina al abrir
+la visita**, no el reloj:
 
-| Cuándo llegas | Hora y desplazamiento |
+| Lo que elige la oficina | Hora y desplazamiento |
 |---|---|
-| De lunes a viernes, de 8:00 a 18:00 | **×2** |
-| Fuera de esa franja, fines de semana y festivos | **×3** |
+| Fuera de horario | **×2** |
+| Urgencia | **×2** |
+| Urgencia y fuera de horario | **×3** |
 
-**Y el factor lo decide la hora que selló tu botón «He llegado».** No es una
-estimación de nadie: es el dato que tú diste al llegar. Por eso en las urgencias
-ese botón importa más que en ninguna otra visita.
+El material se cobra a su precio de siempre: una banda de seguridad no vale el
+doble por ser domingo.
 
-Al cerrar el parte lo verás escrito, con el motivo: «Puesto solo: llegó en
-sábado», o «llegó a las 23:40, fuera del horario de 8:00 a 18:00». Tú **no lo
-cambias**: eso es precio y lo lleva la oficina. Lo que sí puedes hacer, y debes,
-es decirlo si no cuadra con lo que pasó.
+**A ti no se te pregunta nada de esto, ni en la tarjeta ni al cerrar.** Lo que
+se le cobra al cliente lo pacta quien habla con él, y eso pasa antes de que tú
+salgas. Si al llegar ves que la cosa no era lo que te dijeron, díselo a la
+oficina: lo cambian ellos.
 
-Dos cosas prácticas:
+Hasta el 6 de noviembre esto lo decidía la hora en que sellabas **He llegado**,
+y eso se quedaba corto: un comercio que no puede cerrar la persiana a las once
+de la mañana paga una urgencia, y el reloj decía que era horario laboral.
 
-- Si se te olvidó dar a **He llegado**, la aplicación no sabe la hora y te lo
-  dice: propone el de horario laboral y avisa de que no está segura. Si fuiste
-  de noche, avisa a la oficina o lo cobráis de menos.
-- La hora que sellaste **no se pierde aunque cierres el parte otro día**. Una
-  urgencia del sábado que cierras el lunes sigue siendo del sábado.
+En las urgencias **anteriores a esa fecha** verás todavía el recargo en el
+parte, con su motivo escrito, porque esas no llevan elegido nada y alguien tiene
+que poder ajustarlas.
+
+Y lo de siempre: **dale a «He llegado»**. Ya no decide el precio, pero sigue
+siendo la hora de verdad de la que salen tus horas, y esa hora **no se pierde
+aunque cierres el parte otro día**. Una urgencia del sábado que cierras el lunes
+sigue siendo del sábado.
 
 Botones de la tarjeta:
 
@@ -1040,4 +1046,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.07-2 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.07-3 de ARIZA SAT*
