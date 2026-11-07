@@ -154,6 +154,17 @@ bloque('2. Lo que no deja guardarlo');
 
 const sinCausa = await T(async () => {
   const g = window.__T;
+  /* ---- La puerta, desde el 07-11-2026 ----
+     David pidió que una puesta en servicio no se pueda guardar sin puerta: el
+     remate es el final de una obra que ya se documentó. Esa comprobación va
+     ANTES que la de la causa, así que sin elegir puerta estas pruebas veían el
+     mensaje de la puerta en vez del de la causa y salían en rojo. El cambio es
+     deliberado: se elige una puerta y se sigue probando lo de la causa, que es
+     lo que mira esta suite. */
+  const selP = document.getElementById('a-puerta');
+  const opP = [...selP.querySelectorAll('option')].find(o => o.value);
+  if (opP){ selP.value = opP.value; selP.dispatchEvent(new Event('change', { bubbles:true })); }
+  await new Promise(r => setTimeout(r, 200));
   document.getElementById('a-pscausa').value = '';
   document.getElementById('a-desc').value = 'Remate del cuadro';
   document.querySelector('#dlg-form button[type="submit"]').click();

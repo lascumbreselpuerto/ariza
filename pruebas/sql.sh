@@ -47,7 +47,7 @@ ORDEN="componentes.sql centros.sql parte-por-correo.sql obra.sql ficha.sql \
 almacen.sql presupuestos.sql presupuestos2.sql comercial.sql anexos.sql \
 tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos3.sql valoracion.sql \
 parado.sql factura.sql rutas.sql ruta-cliente.sql telegram.sql subtipo.sql urgencia.sql \
-medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql perifericos.sql"
+medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql perifericos.sql ficha4.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -301,6 +301,21 @@ if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/perifericos-pruebas.sql" ]; then
     fallos=$((fallos+1))
     echo " FALLA los periféricos:"
     grep -a -m3 -E "ERROR|EXCEPTION" /tmp/perif-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
+# El «no se sabe» del año y del instalador. Lo que se vigila: que no se puedan
+# decir las dos cosas a la vez, en ningún orden, y que se pueda volver atrás el
+# día que aparezca el dato.
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/ficha4-pruebas.sql" ]; then
+  echo ""
+  echo "── El «no se sabe» de la ficha ─────────────────"
+  if $PSQL -f "$AQUI/sql/ficha4-pruebas.sql" > /tmp/ficha4-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/ficha4-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA el «no se sabe»:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/ficha4-pruebas.log | sed 's/^/         /'
   fi
 fi
 

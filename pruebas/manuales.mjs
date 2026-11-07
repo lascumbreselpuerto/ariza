@@ -200,6 +200,17 @@ altaManual.forEach(n => paso('el manual explica «'+n+'» del alta de puerta',
  'no se pliega nunca', 'firmar el parte igual'].forEach(n =>
   paso('el manual explica «'+n+'» del guion plegado', Mllano.includes(n.toLowerCase())));
 
+/* ---- La puerta creada por la oficina (07-11-2026) ----
+   Lo que el técnico tiene que saber son dos cosas, y las dos cuestan dinero si
+   no se saben: que esa ficha está a medias a propósito y la termina él, y que
+   el tipo que puso la oficina lo puede cambiar, porque del tipo sale su guion
+   de revisión entero. */
+['el tipo lo puso la oficina', 'cámbialo en la ficha',
+ 'revisas la puerta con la lista de otra', 'el cliente ya viene puesto',
+ 'no se sabe', 'el centro manda sobre la dirección'].forEach(n =>
+  paso('el manual explica «'+n+'» de la puerta creada por la oficina',
+    Mllano.includes(n.toLowerCase())));
+
 /* ================================================================
    5. Los campos que nombra, con su etiqueta exacta
    ================================================================ */
