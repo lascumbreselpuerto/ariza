@@ -95,11 +95,26 @@ const cat = await T(() => {
     nombreCruzado: g.nombreSubtipo('instalacion', 'garantia'),
   };
 });
-paso('la correctiva tiene avería y garantía',
-  cat.averia.join(',') === 'averia,garantia', cat.averia.join(' · '));
-paso('la instalación tiene sus cinco',
-  cat.instalacion.join(',') === 'puerta_automatica,puerta_manual,puerta_peatonal,automatismo,normativa',
+/* ---- Las dos listas crecieron el 06-11-2026 ----
+   Antes se comprobaba la lista EXACTA, y esto salió en rojo al añadir los cuatro
+   trabajos que no son una puerta entera (periféricos, sustitución de motor,
+   sustitución de central y otros), que David pidió en los DOS tipos. El cambio
+   es deliberado, así que se cambia la comprobación y se deja escrito por qué.
+
+   Lo que se vigila ahora es lo que de verdad importa: que lo de siempre siga
+   estando Y EN SU ORDEN. Si al añadir los nuevos se hubiera perdido «garantía»,
+   las visitas de garantía dejarían de poder crearse y se facturarían como
+   averías: eso es dinero. Los cuatro nuevos tienen su propia suite entera en
+   perifericos.mjs. */
+paso('la correctiva sigue empezando por avería y garantía',
+  cat.averia.slice(0, 2).join(',') === 'averia,garantia', cat.averia.join(' · '));
+paso('la instalación sigue teniendo sus cinco de siempre, en orden',
+  cat.instalacion.slice(0, 5).join(',') ===
+    'puerta_automatica,puerta_manual,puerta_peatonal,automatismo,normativa',
   cat.instalacion.join(' · '));
+paso('y los cuatro trabajos nuevos están en los dos tipos (06-11-2026)',
+  ['perifericos','sust_motor','sust_central','otros']
+    .every(k => cat.averia.includes(k) && cat.instalacion.includes(k)));
 paso('la preventiva no tiene subtipos todavía', cat.mantenimiento.length === 0);
 paso('garantía y normativa quedan como tipos viejos',
   cat.viejos.join(',') === 'garantia,normativa', cat.viejos.join(' · '));
@@ -225,12 +240,20 @@ const alta = await T(async () => {
 paso('garantía y normativa YA NO se ofrecen como tipo',
   !alta.ofrecidos.includes('garantia') && !alta.ofrecidos.includes('normativa'),
   alta.ofrecidos.join(' · '));
-paso('en una correctiva el subtipo sale, con avería y garantía',
-  alta.visibleEnAveria === true && alta.subEnAveria.join(',') === ',averia,garantia',
+/* Las dos listas crecieron el 06-11-2026 con los cuatro trabajos que no son una
+   puerta entera, así que ya no se compara la lista entera (ver el motivo escrito
+   arriba, en el bloque 1). Lo que se comprueba es que el desplegable sigue
+   empezando por el hueco vacío y por lo de siempre, y que al cambiar el tipo se
+   repinta ENTERO: si no se repintara, «garantía» seguiría ofreciéndose dentro de
+   una instalación y se guardaría un subtipo imposible. */
+paso('en una correctiva el subtipo sale, con avería y garantía delante',
+  alta.visibleEnAveria === true && alta.subEnAveria.slice(0, 3).join(',') === ',averia,garantia',
   alta.subEnAveria.join(' · '));
 paso('y no pide tipos de puerta: para eso está la ficha', alta.tpEnAveria === false);
 paso('al cambiar a instalación, el subtipo cambia entero',
-  alta.subEnInstalacion.join(',') === ',puerta_automatica,puerta_manual,puerta_peatonal,automatismo,normativa',
+  alta.subEnInstalacion.slice(0, 6).join(',') ===
+    ',puerta_automatica,puerta_manual,puerta_peatonal,automatismo,normativa' &&
+  !alta.subEnInstalacion.includes('garantia'),
   alta.subEnInstalacion.join(' · '));
 paso('el automatismo SÍ pide sobre qué tipos de puerta', alta.tpEnAutomatismo === true);
 paso('y una puerta completa no, porque la puerta se da de alta entera',

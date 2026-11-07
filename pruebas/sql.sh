@@ -47,7 +47,7 @@ ORDEN="componentes.sql centros.sql parte-por-correo.sql obra.sql ficha.sql \
 almacen.sql presupuestos.sql presupuestos2.sql comercial.sql anexos.sql \
 tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos3.sql valoracion.sql \
 parado.sql factura.sql rutas.sql ruta-cliente.sql telegram.sql subtipo.sql urgencia.sql \
-medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql"
+medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql perifericos.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -285,6 +285,22 @@ if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/comercial2-pruebas.sql" ]; then
     fallos=$((fallos+1))
     echo " FALLA las unidades y los fijos:"
     grep -a -m3 -E "ERROR|EXCEPTION" /tmp/com2-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
+# Los periféricos y «otros trabajos». Lo que se vigila: que quepan varios en la
+# misma visita, que una clave inventada no entre, que «otro» y «otros trabajos»
+# sin explicar no pasen por ninguna puerta, y que las asistencias de antes del
+# 06-11-2026 se sigan pudiendo guardar con las columnas nuevas vacías.
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/perifericos-pruebas.sql" ]; then
+  echo ""
+  echo "── Periféricos y otros trabajos ────────────────"
+  if $PSQL -f "$AQUI/sql/perifericos-pruebas.sql" > /tmp/perif-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/perif-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA los periféricos:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/perif-pruebas.log | sed 's/^/         /'
   fi
 fi
 

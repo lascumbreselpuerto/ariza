@@ -181,6 +181,16 @@ const altaManual = ['no he trabajado sobre ninguna puerta', 'Sin motivo no vale'
 altaManual.forEach(n => paso('el manual explica «'+n+'» del alta de puerta',
   M.toLowerCase().includes(n.toLowerCase())));
 
+/* ---- Los trabajos que no son una puerta entera (06-11-2026) ----
+   Dos cosas tiene que llevarse el técnico de aquí, y las dos cuestan dinero si
+   faltan: que lea en la tarjeta QUÉ periférico se monta antes de cargar la
+   furgoneta, y que al cambiar una central hay que volver a medir las fuerzas,
+   porque el cuadro nuevo viene con sus propios ajustes. */
+['no son la misma pieza', 'dos viajes cobrados como uno',
+ 'volver a comprobar las fuerzas y la detección',
+ 'tiene que escribir'].forEach(n =>
+  paso('el manual explica «'+n+'» de los trabajos nuevos', Mllano.includes(n.toLowerCase())));
+
 /* ================================================================
    5. Los campos que nombra, con su etiqueta exacta
    ================================================================ */
@@ -763,6 +773,19 @@ paso('cuenta también el fichero para el programa de facturación',
   /fila por línea/.test(F) && /CSV/.test(F));
 paso('y que el material sin precio se queda fuera y se avisa',
   /se queda fuera de la cuenta/.test(F));
+
+/* ---- El viaje de vuelta por la pieza que no se dijo (06-11-2026) ----
+   La décima manera de perder dinero. Lo que el manual tiene que dejar claro es
+   de quién es el dato y quién paga el error: el dato lo tiene quien coge el
+   teléfono, y el coste lo paga quien va. */
+const Fllano = F.replace(/\s+/g, ' ');
+paso('el de formación cuenta la décima: el viaje por la pieza que no se dijo',
+  /viaje de vuelta por la pieza/i.test(Fllano));
+paso('y que son diez, no nueve', /Diez maneras de perder dinero/i.test(Fllano));
+paso('dice quién paga el segundo viaje',
+  /La segunda la paga la empresa/i.test(Fllano));
+paso('y para qué sirve apuntar qué periférico se monta',
+  /qu[ée] merece la pena tener en el almac[ée]n/i.test(Fllano));
 
 /* ================================================================
    El índice del manual
