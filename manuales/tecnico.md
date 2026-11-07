@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.07-1**
+> **Versión de la aplicación que describe este manual: 2026.11.07-2**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -774,6 +774,28 @@ También te lo dice el parte, con la puerta delante: el tipo que falta, las
 medidas, la matrícula. **Eso no te impide cerrar.** Es para que aproveches el
 viaje, porque esos datos solo se pueden tomar donde está la puerta.
 
+#### Puertas creadas por la oficina (7 de noviembre de 2026)
+
+Desde hoy, la oficina puede crear la puerta **al coger el aviso por teléfono**,
+con un solo dato: el tipo. Así la visita te llega ya con su puerta y con su
+ficha empezada, en vez de que la tengas que crear tú desde cero en obra.
+
+Dos cosas que te interesan de eso:
+
+- **Esa ficha está a medias a propósito**, y lo que falta lo tomas tú: medidas,
+  matrícula, fotos, marca, modelo, el cuadro y el motor. El parte te lo lista.
+- **El tipo lo puso la oficina con lo que le contó el cliente por teléfono**, y
+  el cliente no siempre acierta. Si llegas y es una seccional donde pone
+  basculante, **cámbialo en la ficha**. No es un dato menor: del tipo salen tu
+  guión de revisión, los peligros propios de esa puerta, los puntos donde se
+  miden las fuerzas y el límite que se les aplica. Con el tipo equivocado,
+  revisas la puerta con la lista de otra.
+
+Y una cosa más que te ahorra tiempo: cuando das de alta una puerta **desde una
+asistencia**, el cliente ya viene puesto, el de esa visita. No tienes que
+buscarlo en la lista. Antes había que elegirlo a mano, y el que se equivocaba
+colgaba la puerta del cliente de al lado.
+
 En las obras ese aviso te llega además en la tarjeta, antes de salir, para que te
 lleves el flexómetro. En una avería no: ahí se te dice en el parte y ya, para no
 llenarte la tarjeta de cosas que no puedes resolver desde la furgoneta.
@@ -833,6 +855,18 @@ historial, ni expediente, y no se le puede sacar una hoja de campo.
 **Las listas largas tienen buscador.** En el tipo de puerta, el cliente, la puerta de una asistencia o el catálogo de componentes, encima del desplegable hay una casilla: escribes tres letras y la lista se queda en lo que casa. Si queda una sola, se elige sola. No hace falta tilde ni mayúscula. Las listas cortas, de tres o cuatro opciones, no la llevan porque no hace falta.
 
 **El cuadro y el motor se escriben una vez.** En la ficha pones marca y modelo de cada uno, y con eso quedan dados de alta en **Componentes**. Allí ya solo tienes que ponerles el número de serie, la foto de la placa y el papel, que es lo que la ficha no guarda. Si los cambias en el componente, la ficha cambia también: es el mismo dato.
+
+**Cuando un dato no se sabe, se dice (7 de noviembre de 2026).** El **año** y
+**quién la instaló** llevan al lado una casilla **«No se sabe»**. Márcala cuando
+hayas preguntado y nadie lo sepa, que en puertas viejas es lo normal. No es lo
+mismo que dejarlo en blanco: en blanco significa «falta por rellenar», y esa
+ficha sale en la lista de pendientes para siempre y alguien te lo volverá a
+preguntar en la siguiente visita. Marcado, es un dato tomado y la ficha deja de
+pedirlo. Si algún día aparece el dato, se desmarca y se escribe.
+
+**El centro manda sobre la dirección.** Si eliges un centro, la dirección de la
+ficha pasa a ser la de ese centro. Si lo que había escrito era lo correcto, te
+lo dice debajo para que lo vuelvas a poner a mano.
 
 **Cómo se acciona y quién la usa.** Son dos desplegables de la ficha: el modo de accionamiento (Hombre presente, Impulso con el hueco a la vista, Impulso sin ver el hueco, Funcionamiento automático) y el tipo de usuario. De ellos sale qué protección le toca a la puerta y, con ella, qué elementos de seguridad debería llevar. No hace falta esperar a ningún expediente: se ven mirando la puerta. No son obligatorios para cerrar la visita, pero sin ellos el inventario solo puede enseñarte los elementos genéricos del tipo de puerta.
 
@@ -1006,4 +1040,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.07-1 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.07-2 de ARIZA SAT*
