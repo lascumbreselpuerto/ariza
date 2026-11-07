@@ -219,6 +219,15 @@ altaManual.forEach(n => paso('el manual explica «'+n+'» del alta de puerta',
 ['la oficina al abrir la visita', 'a ti no se te pregunta nada de esto',
  'ya no decide el precio', 'urgencia / fuera de horario'].forEach(n =>
   paso('el manual explica «'+n+'» del recargo', Mllano.includes(n.toLowerCase())));
+/* ---- El viaje en balde lo marca el técnico (07-11-2026) ----
+   Esto el manual también lo tenía mal: decía que era un tipo de visita que
+   elegía la oficina. Lo que el técnico tiene que saber es que ahora lo marca él,
+   que no se le pedirá nada más, y que hay que escribirlo con detalle, porque de
+   eso vive la llamada que hará la oficina para volver a quedar. */
+['no, ha sido un desplazamiento en falso', 'no se te pide nada más',
+ 'hay que volver a quedar', 'nadie sabe que un viaje va a ser en balde'].forEach(n =>
+  paso('el manual explica «'+n+'» del viaje en balde', Mllano.includes(n.toLowerCase())));
+
 paso('y el manual da los mismos multiplicadores que la aplicación',
   await T(() => {
     const g = window.__T;

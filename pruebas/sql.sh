@@ -47,7 +47,7 @@ ORDEN="componentes.sql centros.sql parte-por-correo.sql obra.sql ficha.sql \
 almacen.sql presupuestos.sql presupuestos2.sql comercial.sql anexos.sql \
 tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos3.sql valoracion.sql \
 parado.sql factura.sql rutas.sql ruta-cliente.sql telegram.sql subtipo.sql urgencia.sql \
-medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql perifericos.sql ficha4.sql urgencia2.sql"
+medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql perifericos.sql ficha4.sql urgencia2.sql falso.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -332,6 +332,21 @@ if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/urgencia2-pruebas.sql" ]; then
     fallos=$((fallos+1))
     echo " FALLA el recargo de la oficina:"
     grep -a -m3 -E "ERROR|EXCEPTION" /tmp/urg2-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
+# El desplazamiento en falso. Lo que se vigila: que cobre el viaje y nada más,
+# que su coste siga contando entero (si no, un viaje en balde parecería gratis),
+# y que un falso cerrado antes del 07-11-2026 valga exactamente lo que valía.
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/falso-pruebas.sql" ]; then
+  echo ""
+  echo "── El desplazamiento en falso ──────────────────"
+  if $PSQL -f "$AQUI/sql/falso-pruebas.sql" > /tmp/falso-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/falso-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA el desplazamiento en falso:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/falso-pruebas.log | sed 's/^/         /'
   fi
 fi
 
