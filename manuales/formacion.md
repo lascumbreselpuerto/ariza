@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.11.06-3**
+> **Versión de la aplicación que describe este manual: 2026.11.06-4**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -460,12 +460,12 @@ Los que más veces se ven, por orden de gravedad:
 
 ---
 
-## 8 bis. Nueve maneras de perder dinero sin enterarse
+## 8 bis. Diez maneras de perder dinero sin enterarse
 
 Esto no es técnica de puertas, es oficio de empresa, y se pone aquí porque las
 dos cosas pasan en el mismo sitio donde se documenta el trabajo.
 
-Las tres primeras son cuentas que salen mal. Las seis últimas son distintas y
+Las tres primeras son cuentas que salen mal. Las siete últimas son distintas y
 son peores, porque no sale mal ninguna cuenta: simplemente hay trabajo que no se
 hace, o que se hace dos veces.
 
@@ -870,6 +870,43 @@ se hace es dejar la puerta abierta, pedir el motivo y mirar la lista: una
 excepción que se repite doscientas veces no es una excepción, es la regla que
 nadie se atrevió a cambiar.
 
+### El viaje de vuelta por la pieza que no se dijo
+
+La décima es la más barata de arreglar y la que más se repite.
+
+Un cliente llama porque la fotocélula no corta. Quien coge el teléfono sabe cuál
+es, porque ya se estuvo allí: es una sincronizada de las que van en el hueco
+grande. Pero en el aviso escribe «poner fotocélula», y el técnico carga la
+compacta, que es la que lleva siempre en la furgoneta. Llega, la saca, y no
+sirve.
+
+Lo que ha pasado en términos de empresa: dos desplazamientos y dos tiempos de
+montaje donde había uno, y una visita que se le factura al cliente como una. La
+segunda la paga la empresa, porque cobrar dos veces el mismo trabajo no se puede
+explicar. Y si el cliente es de contrato, ni se factura la primera.
+
+La cuenta de esto es fácil de hacer y desagradable de ver. Con un viaje perdido
+al mes, en un año son doce desplazamientos y doce medias horas de montaje: más
+de una semana de trabajo de un técnico, regalada por no escribir una palabra en
+el aviso.
+
+Por eso desde el 6 de noviembre de 2026 la visita de **periféricos y seguridad**
+se crea marcando **qué** se monta, de una lista cerrada en la que la fotocélula
+sincronizada y la compacta son dos cosas distintas, y se pueden marcar varias a
+la vez porque en un viaje se montan dos fotocélulas y una banda. El técnico lo
+lee en la tarjeta, antes de cargar la furgoneta.
+
+Y hay una segunda cuenta, que se ve al año siguiente: cada visita deja apuntado
+qué periférico se puso. Con eso se sabe qué se monta de verdad y en qué cantidad,
+y eso es lo que decide qué merece la pena tener en el almacén. Un periférico que
+se monta veinte veces al año y se pide al proveedor veinte veces, de una en una,
+se paga veinte veces a precio de unidad y se espera veinte veces. Lo que no se
+cuenta no se puede negociar.
+
+La regla de siempre en esta lista, otra vez: **el dato lo tiene quien coge el
+teléfono, y el coste lo paga quien va**. Si no viajan juntos, el viaje se paga
+dos veces.
+
 ---
 
 ## 9. Cómo se registra todo esto en ARIZA SAT
@@ -954,4 +991,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.06-3 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.06-4 de ARIZA SAT*

@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.06-3**
+> **Versión de la aplicación que describe este manual: 2026.11.06-4**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -87,6 +87,44 @@ Lo que te interesa de eso:
 
 Si la etiqueta no cuadra con lo que te encuentras, díselo a la oficina antes de
 ponerte: el tipo decide lo que se cobra.
+
+### Los trabajos que no son una puerta entera (6 de noviembre de 2026)
+
+No todo lo que se monta es una puerta completa ni un automatismo. Desde hoy hay
+cuatro clases de trabajo más, y están tanto en **avería** como en
+**instalación**, porque el mismo trabajo puede llegar de las dos maneras: un
+motor que se quema es una avería, y uno que se cambia por mejora es una
+instalación. El **tipo** sigue decidiendo cómo se cobra; esto solo dice **qué se
+hace**.
+
+- **Periféricos y seguridad.** Fotocélula sincronizada, fotocélula compacta,
+  barrera o cortina, radar o detector de presencia, banda de seguridad con su
+  cuadro de control, limitador de fuerza, bucle magnético, lector o teclado,
+  mandos y receptor, columna o pulsador, semáforo, destellante o baliza,
+  señalización de puerta automática y pulsador de emergencia. La oficina marca
+  **todos** los que entran en esa visita: si van dos fotocélulas y una banda,
+  marca las tres cosas.
+- **Sustitución de motor.** Se cambia el motor o el operador, no la puerta.
+- **Sustitución de central.** Se cambia el cuadro de maniobra o la central.
+- **Otros trabajos.** Lo que no entra en ninguna de las anteriores. La oficina
+  **tiene que escribir** qué trabajo es: no puede quedarse en «otros».
+
+Lo que te interesa de eso, en la furgoneta:
+
+- En la tarjeta de **Mi trabajo** aparece la línea **Se monta:** con la lista, o
+  **Trabajo:** con lo que escribió la oficina. Léela antes de cargar. Una
+  fotocélula sincronizada y una compacta **no son la misma pieza**, y volver al
+  día siguiente por la que falta son dos viajes cobrados como uno.
+- Si al llegar resulta que hace falta otra cosa, **móntala y apúntala en el
+  parte** en materiales y en «qué has hecho». Lo que no se escribe no se
+  factura.
+
+Y una cosa que no es burocracia: **al cambiar una central hay que volver a
+comprobar las fuerzas y la detección**. El cuadro nuevo viene con los ajustes de
+fábrica, y la puerta que paraba e invertía con el cuadro viejo puede no parar
+ahora. Si la puerta está documentada, deja la medición en su revisión; si no lo
+está, apunta los valores en «qué has hecho». Una puerta que se queda con una
+central nueva sin medir es una puerta que firmamos nosotros.
 
 ### El remate de una obra: la puesta en servicio (5 de noviembre de 2026)
 
@@ -947,4 +985,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.06-3 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.06-4 de ARIZA SAT*
