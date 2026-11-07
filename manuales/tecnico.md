@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.07-3**
+> **Versión de la aplicación que describe este manual: 2026.11.07-4**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -206,12 +206,33 @@ que cambia.
 
 Se abre con el botón **Cerrar visita**. Tiene estos apartados, en este orden.
 
+### ¿Se ha podido trabajar? (7 de noviembre de 2026)
+
+Es lo primero del parte, y está en **todas** las visitas. Si llegaste y no se
+pudo trabajar (no había nadie, el acceso cerrado, la puerta no era de ese
+cliente), marca **«No, ha sido un desplazamiento en falso»**, escribe qué te
+encontraste y cierra. **No se te pide nada más**: ni horas, ni ficha de la
+puerta, ni firma. No has trabajado, no la has visto y no había nadie que firmara.
+
+Escríbelo con detalle: la hora a la que llegaste, a quién llamaste, qué te
+dijeron. Eso es lo que la oficina necesita para volver a quedar con el cliente y
+para cobrarle el viaje. Un «no había nadie» a secas no sirve de nada dentro de
+una semana.
+
+En cuanto cierres, esa visita le aparece a la oficina en una lista de **viajes
+en balde con los que hay que volver a quedar**, y se queda ahí hasta que alguien
+dice que ya está. El trabajo sigue pendiente: lo que ha terminado es el viaje.
+
+**Antes esto era un tipo de visita que elegía la oficina**, y no tenía sentido:
+nadie sabe que un viaje va a ser en balde hasta que llega. Ahora lo marcas tú,
+que eres el que está allí.
+
 ### Documentar la puerta
 
 **Desde el 5 de noviembre de 2026 este es el primer apartado del parte**, y sale
 en casi todas las visitas, no solo en las obras: también en una avería, una
 urgencia o una garantía. Solo se queda fuera la comercial, que tiene su toma de
-medidas, y el desplazamiento en falso.
+medidas, y las visitas que marcas como desplazamiento en falso.
 
 Aquí se ve de un golpe qué le falta a la ficha de la puerta, y hay un botón para
 darla de alta si todavía no existe. **Lo único que impide cerrar es que la puerta
@@ -744,8 +765,8 @@ solo para las obras. Se pide la ficha de la puerta en:
 - **Garantía**
 
 Y no se pide en dos: la **comercial**, porque ahí la puerta todavía no existe y
-lo que se toma son las medidas, y el **desplazamiento en falso**, porque no se ha
-trabajado.
+lo que se toma son las medidas, y cualquier visita que marques como
+**desplazamiento en falso**, porque entonces no has llegado a ver la puerta.
 
 El motivo de ampliarlo es sencillo. La mayoría de las visitas son averías, y es
 en una avería donde se entra por primera vez en casa de un cliente nuevo. Una
@@ -1046,4 +1067,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.07-3 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.07-4 de ARIZA SAT*
