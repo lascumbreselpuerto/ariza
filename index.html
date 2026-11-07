@@ -693,19 +693,107 @@ const ASISTENCIAS = {
    tipos viejos NO se tocan (decisión de David, 04-11-2026), así que siguen en
    ASISTENCIAS para que el histórico se lea igual; lo que pasa es que ya no se
    ofrecen al crear una asistencia nueva. */
+/* ---- Los trabajos que no son una puerta entera (06-11-2026) ----
+   David, revisando el alta en campo: «Periféricos tipo fotocélula sincronizada,
+   fotocélula compacta, banda de seguridad, etc. Sustitución de motor.
+   Sustitución de central. Otros, dejando abierto un lugar donde oficina
+   escriba.»
+
+   Hasta hoy, la visita que iba a poner una fotocélula tenía que elegir «puerta
+   completa» o «automatismo», y ninguna de las dos era verdad. Eso ensucia el
+   histórico y hace imposible contar cuántas de esas visitas se hacen al año.
+
+   Los mismos cuatro están en avería y en instalación (decisión de David el
+   06-11-2026): un motor quemado se atiende como avería y uno que se cambia por
+   mejora como instalación, y el trabajo es el mismo. El TIPO sigue decidiendo
+   cómo se factura; el subtipo solo dice qué se hizo. */
+const SUBTIPOS_TRABAJO = [
+  ['perifericos',  'Periféricos y seguridad'],
+  ['sust_motor',   'Sustitución de motor'],
+  ['sust_central', 'Sustitución de central'],
+  ['otros',        'Otros trabajos'],
+];
 const SUBTIPOS = {
   averia: [
     ['averia',   'Avería'],
     ['garantia', 'Garantía'],
-  ],
+  ].concat(SUBTIPOS_TRABAJO),
   instalacion: [
     ['puerta_automatica', 'Puerta completa automática'],
     ['puerta_manual',     'Puerta completa manual'],
     ['puerta_peatonal',   'Puerta completa peatonal'],
     ['automatismo',       'Automatismo sobre puerta existente'],
     ['normativa',         'Normativa y adecuación'],
-  ],
+  ].concat(SUBTIPOS_TRABAJO),
 };
+/* ---- Qué periférico se monta (06-11-2026) ----
+   Agrupados como los dictó David. Se pueden marcar varios a la vez porque en
+   una visita se montan a menudo dos fotocélulas y una banda, y con un solo
+   hueco la mitad del trabajo se quedaría sin apuntar.
+
+   «Otro periférico» lleva su texto al lado y es obligatorio escribirlo: una
+   lista cerrada sin salida acaba con todo metido en el cajón que menos molesta,
+   y «otro» sin explicación no le dice nada a nadie dentro de seis meses. */
+const PERIFERICOS = [
+  ['Detección', [
+    ['foto_sinc',  'Fotocélula sincronizada'],
+    ['foto_comp',  'Fotocélula compacta'],
+    ['barrera',    'Barrera o cortina fotoeléctrica'],
+    ['radar',      'Radar o detector de presencia'],
+  ]],
+  ['Contacto y fuerza', [
+    ['banda',        'Banda de seguridad'],
+    ['banda_cuadro', 'Cuadro de control de banda'],
+    ['limitador',    'Limitador de fuerza'],
+  ]],
+  ['Accesos y mandos', [
+    ['bucle',    'Bucle magnético'],
+    ['lector',   'Lector o teclado'],
+    ['mandos',   'Mandos y receptor'],
+    ['columna',  'Columna o pulsador'],
+  ]],
+  ['Avisos y señalización', [
+    ['semaforo',    'Semáforo'],
+    ['destellante', 'Destellante o baliza'],
+    ['senal',       'Señalización de puerta automática'],
+    ['paro',        'Pulsador de emergencia'],
+  ]],
+  ['Lo que no esté en la lista', [
+    ['otro', 'Otro periférico'],
+  ]],
+];
+const PERIF_TODOS = PERIFERICOS.reduce((t, g) => t.concat(g[1]), []);
+const nombrePeriferico = k => {
+  const f = PERIF_TODOS.find(x => x[0] === String(k == null ? '' : k).trim());
+  return f ? f[1] : String(k == null ? '' : k);
+};
+const esPerifericoValido = k => PERIF_TODOS.some(x => x[0] === k);
+/* La lista de periféricos solo se pregunta en su subtipo, y el texto libre solo
+   en «otros trabajos». Funciones puras, como las demás reglas: lo que decide si
+   se enseña o no es el subtipo, no en qué pantalla estemos. */
+const pidePerifericos = (tipo, sub) => String(sub || '') === 'perifericos';
+const pideDetalleSubtipo = (tipo, sub) => String(sub || '') === 'otros';
+/* Lo que se escribe en el parte y en el aviso: «Periféricos: fotocélula
+   sincronizada · banda de seguridad · otro (bucle de masa de la rampa)». Sin
+   esto, en la lista de asistencias los cuatro subtipos nuevos se verían todos
+   igual y habría que abrir cada uno para saber qué se hizo. */
+function detallePerifericos(a){
+  if (!a) return '';
+  const ks = Array.isArray(a.perifericos) ? a.perifericos.filter(esPerifericoValido) : [];
+  if (!ks.length) return '';
+  return ks.map(k => k === 'otro'
+    ? 'otro'+(String(a.perifericos_otro || '').trim() ? ' ('+String(a.perifericos_otro).trim()+')' : '')
+    : nombrePeriferico(k).toLowerCase()).join(' · ');
+}
+/* Lo que hay que leer debajo del subtipo, sea la lista de periféricos o lo que
+   la oficina escribió en «otros trabajos». En un solo sitio, porque lo usan la
+   ficha de la asistencia, el parte impreso y el aviso de Telegram. */
+function detalleSubtipo(a){
+  if (!a) return '';
+  if (pidePerifericos(a.tipo, a.subtipo)) return detallePerifericos(a);
+  if (pideDetalleSubtipo(a.tipo, a.subtipo)) return String(a.subtipo_detalle || '').trim();
+  return '';
+}
 /* Los tipos que ya no se crean, porque ahora son subtipos. Se siguen pintando
    en lo que ya existe: una garantía de octubre sigue diciendo que es garantía. */
 const ASIST_VIEJOS = ['garantia', 'normativa'];
@@ -734,6 +822,16 @@ const AYUDA_SUBTIPO = {
   automatismo: 'La puerta ya está; lo que se monta es el automatismo. Marca abajo sobre qué tipo de puerta.',
   normativa: 'Adecuar una puerta que ya existe a lo que exige la norma. Marca abajo de qué tipo de puerta es.',
   puerta_peatonal: 'Peatonal automática: va por la UNE-EN 16005, no por la 12453.',
+  perifericos: 'Marca abajo qué se monta. Se puede marcar más de uno: en una visita se ponen a '+
+    'menudo dos fotocélulas y una banda.',
+  sust_motor: 'Se cambia el motor o el operador, no la puerta. Si la puerta está dada de alta, '+
+    'apunta en el parte la marca, el modelo y el número de serie del que se pone: eso es lo que '+
+    'queda en su ficha y lo que hace falta el día que haya que pedir un repuesto.',
+  sust_central: 'Se cambia el cuadro de maniobra o la central. Al cambiarla hay que volver a '+
+    'comprobar las fuerzas y la detección: el cuadro nuevo viene con sus propios ajustes y la '+
+    'puerta que paraba antes puede no parar ahora.',
+  otros: 'Explica al lado qué trabajo es. Esto es la salida para lo que no entra en ninguna de '+
+    'las de arriba, no un cajón de sastre: si se repite, dímelo y le hacemos su sitio.',
 };
 const subtiposDe = t => SUBTIPOS[t] || [];
 const nombreSubtipo = (t, s) => {
@@ -1642,6 +1740,12 @@ async function cargar(){
   S.sinTiposUds = !!tu.error;
   const fj = await sb.from('medidas').select('fijos, fijos_mm').limit(1);
   S.sinFijos = !!fj.error;
+  /* Qué periféricos se montan y el detalle de «otros trabajos»:
+     servidor/perifericos.sql. Sin esas columnas los cuatro subtipos nuevos se
+     siguen pudiendo elegir (son solo texto en una columna que ya existe), pero
+     no se pregunta cuál ni se guarda: se trabaja como antes del 06-11-2026. */
+  const pf = await sb.from('avisos').select('perifericos, perifericos_otro, subtipo_detalle').limit(1);
+  S.sinPerifericos = !!pf.error;
   /* ---- El almacén ----
      Las existencias no se guardan en ninguna columna: se leen de la vista, que
      las suma de los movimientos. Si falta el SQL del almacén, la aplicación
@@ -1805,7 +1909,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.06-3';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.06-4';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -2384,6 +2488,11 @@ function tarjetaAviso(a){
       : '<button class="btn sm pri" data-act="cerrar-asistencia" data-id="'+a.id+'">Cerrar visita</button>')+
     '</div>'+
     (a.descripcion?'<p style="margin:0">'+esc(a.descripcion)+'</p>':'')+
+    /* Qué se monta o qué trabajo pidió la oficina: en la tarjeta, no escondido
+       dentro del formulario de edición (06-11-2026) */
+    (detalleSubtipo(a) ? '<p class="mini" style="margin:0"><b>'+
+      (pidePerifericos(a.tipo, a.subtipo) ? 'Se monta' : 'Trabajo')+':</b> '+
+      esc(detalleSubtipo(a))+'</p>' : '')+
     (a.notas_oficina?'<p class="nota-oficina">Oficina: '+esc(a.notas_oficina)+'</p>':'')+
     (a.anulada ? '<p class="mini" style="margin:0"><b>Anulada</b> el '+fechaHora(a.anulada_en)+
        (a.anulada_por?(' por '+esc(a.anulada_por)):'')+': '+esc(a.anulada_motivo||'')+'</p>' : '')+
@@ -2482,6 +2591,12 @@ function tarjetaTrabajo(a){
       (nPuertasDeAviso(a.id) > 1 ? ' · y '+(nPuertasDeAviso(a.id)-1)+' puerta'+
         (nPuertasDeAviso(a.id)-1===1?'':'s')+' más en esta obra' : '')+'</div>' : '')+
     (a.descripcion ? '<p class="trab-desc">'+esc(a.descripcion)+'</p>' : '')+
+    /* Lo que hay que llevar en la furgoneta se lee aquí, antes de salir de casa:
+       una fotocélula sincronizada y una compacta no son la misma pieza, y volver
+       por la que falta son dos viajes cobrados como uno. (06-11-2026) */
+    (detalleSubtipo(a) ? '<p class="mini" style="margin:0"><b>'+
+      (pidePerifericos(a.tipo, a.subtipo) ? 'Se monta' : 'Trabajo')+':</b> '+
+      esc(detalleSubtipo(a))+'</p>' : '')+
     (a.notas_oficina ? '<p class="nota-oficina">Oficina: '+esc(a.notas_oficina)+'</p>' : '')+
     /* Lo que el técnico dejó dicho el último día. Va arriba del todo porque
        es lo que hay que leer ANTES de ponerse, no después. */
@@ -18374,7 +18489,15 @@ dlgForm.addEventListener('change', e => {
   /* ---- El tipo manda sobre el subtipo, y los dos sobre lo demás ---- */
   if (t.id === 'a-tipo'){ pintarSubtipo(); pintarPuertasAviso(dlgForm.dataset.aviso || null);
     pintarRemate(dlgForm.dataset.aviso || null); return; }
-  if (t.id === 'a-sub'){ pintarTiposPuerta(); return; }
+  if (t.id === 'a-sub'){ pintarTiposPuerta(); pintarPerifericos(); return; }
+  /* Marcar un periférico repinta el resumen del desplegable, y «otro» abre su
+     casilla de texto en el momento, no al guardar. */
+  if (t.classList && t.classList.contains('a-pf-c')){
+    const caja = document.getElementById('a-caja-pf');
+    if (caja) caja.dataset.tocado = '1';
+    pintarPerifericos();
+    return;
+  }
   /* Al cambiar el cliente a mano, la ruta propuesta cambia con él, y las obras
      que se ofrecen para el remate también: las instalaciones son de un cliente. */
   if (t.id === 'a-cliente'){ rutaDelAviso(); pintarPuertasAviso(dlgForm.dataset.aviso || null);
@@ -18793,6 +18916,7 @@ function pintarSubtipo(){
   const pt = document.getElementById('a-tipopista');
   if (pt) pt.textContent = AYUDA_TIPO[tipo] || '';
   pintarTiposPuerta();
+  pintarPerifericos();
 }
 /* Las puertas que se pueden revisar en esta preventiva: las del cliente
    elegido. Se repinta al cambiar el tipo o el cliente, porque las dos cosas
@@ -18877,6 +19001,39 @@ function pintarCuentaTipos(){
      más que «2 tipos», y es justo lo que hay que repasar antes de guardar. */
   const texto = m.map(x => x.tipo + (x.uds > 1 ? ' ×'+x.uds : '')).join(' · ');
   s.textContent = puertas + (puertas === 1 ? ' puerta: ' : ' puertas: ') + texto;
+}
+/* ---- Los periféricos y el detalle del subtipo (06-11-2026) ----
+   Aparecen y desaparecen con el subtipo, igual que los tipos de puerta. Lo que
+   estuviera marcado se conserva: cambiar de «periféricos» a «sustitución de
+   motor» y volver no debe borrar lo que ya se había marcado, porque lo normal
+   es que el cambio haya sido un resbalón con el dedo. */
+function perifMarcados(){
+  return Array.from(document.querySelectorAll('#a-pf .a-pf-c:checked')).map(x => x.value)
+    .filter(esPerifericoValido);
+}
+function pintarPerifericos(){
+  const tipo = (document.getElementById('a-tipo') || {}).value || '';
+  const sub = (document.getElementById('a-sub') || {}).value || '';
+  const caja = document.getElementById('a-caja-pf');
+  if (caja){
+    caja.hidden = !pidePerifericos(tipo, sub);
+    /* Plegado se abre solo la primera vez que hace falta: si hay que marcar
+       algo ahí, se ve. Después manda lo que haga quien lo esté rellenando. */
+    if (!caja.hidden && !caja.dataset.tocado && !perifMarcados().length) caja.open = true;
+  }
+  const otro = document.getElementById('a-caja-pfo');
+  if (otro) otro.hidden = !perifMarcados().includes('otro');
+  const sd = document.getElementById('a-caja-sd');
+  if (sd) sd.hidden = !pideDetalleSubtipo(tipo, sub);
+  pintarCuentaPerifericos();
+}
+function pintarCuentaPerifericos(){
+  const s = document.getElementById('a-pf-cuenta');
+  if (!s) return;
+  const m = perifMarcados();
+  if (!m.length){ s.textContent = 'sin marcar'; return; }
+  s.textContent = m.length + (m.length === 1 ? ' elemento: ' : ' elementos: ') +
+    m.map(k => nombrePeriferico(k)).join(' · ');
 }
 /* ---- Las tres preguntas de la puesta en servicio (05-11-2026) ----
    Aparecen y desaparecen con el tipo, igual que el subtipo. Y la lista de obras
@@ -19047,6 +19204,7 @@ function leerFormAviso(){
      tienen id: se guardan por su valor, que es lo que las identifica. */
   const marcadas = sel => Array.from(f.querySelectorAll(sel)).map(x => x.value);
   return { campos, tp: marcadas('#a-tp .a-tp-c:checked'), pts: marcadas('#a-pts .a-pt:checked'),
+           pf: marcadas('#a-pf .a-pf-c:checked'),
            aviso: f.dataset.aviso || '' };
 }
 function aplicarFormAviso(b){
@@ -19067,6 +19225,13 @@ function aplicarFormAviso(b){
   });
   (b.tp || []).forEach(v => { const c = f.querySelector('#a-tp .a-tp-c[value="'+CSS.escape(v)+'"]'); if (c) c.checked = true; });
   (b.pts || []).forEach(v => { const c = f.querySelector('#a-pts .a-pt[value="'+CSS.escape(v)+'"]'); if (c) c.checked = true; });
+  (b.pf || []).forEach(v => { const c = f.querySelector('#a-pf .a-pf-c[value="'+CSS.escape(v)+'"]'); if (c) c.checked = true; });
+  /* Los resúmenes y las casillas que dependen de lo marcado se vuelven a pintar:
+     si no, al volver de crear el cliente el título diría «sin marcar» con tres
+     cosas marcadas debajo, y la casilla de «otro» aparecería cerrada. */
+  if (typeof pintarPerifericos === 'function') pintarPerifericos();
+  if (typeof pintarCuentaTipos === 'function') pintarCuentaTipos();
+  if (typeof pintarCuentaPuertas === 'function') pintarCuentaPuertas();
 }
 
 function clienteDeLaPuertaDelAviso(){
@@ -19712,6 +19877,40 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
       '<span class="pista">Marca los que entran en este trabajo y pon cuántas puertas de cada uno. '+
       'El técnico se encontrará un hueco que medir por cada una, y podrá añadir más si hay más. Si la '+
       'puerta ya está dada de alta, no hace falta: manda su ficha</span></details>')+
+    /* ---- Qué periféricos se montan (06-11-2026) ----
+       Plegado, como los tipos de puerta: son dieciséis casillas y plegadas
+       ocupan una línea. El resumen del título dice lo que hay marcado. */
+    (S.sinSubtipo || S.sinPerifericos ? '' :
+    '<details class="campo full plegable" id="a-caja-pf"'+
+      (pidePerifericos(d.tipo, d.subtipo) ? '' : ' hidden')+'>'+
+      '<summary><b>Qué se monta</b> <span class="mini" id="a-pf-cuenta"></span></summary>'+
+      '<div id="a-pf">'+
+      PERIFERICOS.map(([grupo, xs]) =>
+        '<p class="mini" style="margin:8px 0 2px"><b>'+esc(grupo)+'</b></p>'+
+        '<div class="checks">'+
+        xs.map(([k, n]) => '<label><input type="checkbox" class="a-pf-c" value="'+esc(k)+'"'+
+          (((d.perifericos || []).includes(k)) ? ' checked' : '')+'>'+esc(n)+'</label>').join('')+
+        '</div>').join('')+
+      '</div>'+
+      '<div class="campo full" id="a-caja-pfo"'+
+        (((d.perifericos || []).includes('otro')) ? '' : ' hidden')+'>'+
+        '<label for="a-pfotro">Qué es ese otro periférico</label>'+
+        '<input id="a-pfotro" type="text" maxlength="200" value="'+esc(d.perifericos_otro||'')+'" '+
+        'placeholder="Ej.: bucle de masa en la rampa de bajada">'+
+        '<span class="pista">Hace falta si has marcado «otro periférico»</span></div>'+
+      '<span class="pista">Marca todo lo que se monta en esta visita. De aquí sale la cuenta de qué '+
+      'periférico se pone más, que es la que dice qué merece la pena tener en el almacén</span>'+
+      '</details>')+
+    /* ---- El detalle de «otros trabajos» (06-11-2026) ----
+       David: «Otros, dejando abierto un lugar donde oficina escriba.» */
+    (S.sinSubtipo || S.sinPerifericos ? '' :
+    '<div class="campo full" id="a-caja-sd"'+
+      (pideDetalleSubtipo(d.tipo, d.subtipo) ? '' : ' hidden')+'>'+
+      '<label for="a-subdet">Qué trabajo es</label>'+
+      '<input id="a-subdet" type="text" maxlength="300" value="'+esc(d.subtipo_detalle||'')+'" '+
+      'placeholder="Ej.: montar tope mecánico nuevo y reponer la señalización de la nave 3">'+
+      '<span class="pista">Lo escribe la oficina y lo lee el técnico antes de ir. Hace falta: una '+
+      'visita que solo dice «otros» no se puede preparar ni valorar</span></div>')+
     /* ---- La puesta en servicio (05-11-2026) ----
        Un remate es el final de una obra concreta, así que se dice de cuál y por
        qué se quedó pendiente. Sin esas dos cosas la puesta en servicio es un
@@ -19810,11 +20009,11 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
      de cuál son las puertas ya guardadas. */
   setTimeout(() => { dlgForm.dataset.aviso = a ? a.id : ''; }, 0);
   if (!a) setTimeout(() => { clienteDeLaPuertaDelAviso(); rutaDelAviso(); pintarPuertasAviso(null);
-    pintarRemate(null); }, 0);
+    pintarRemate(null); pintarPerifericos(); }, 0);
   /* En una asistencia que ya existe y todavía no tiene ruta, también se propone:
      la mayoría de las que hay ahora mismo se crearon antes de que esto existiera. */
   else if (!String(a.ruta || '').trim()) setTimeout(rutaDelAviso, 0);
-  if (a) setTimeout(() => { pintarPuertasAviso(a.id); pintarRemate(a.id); }, 0);
+  if (a) setTimeout(() => { pintarPuertasAviso(a.id); pintarRemate(a.id); pintarPerifericos(); }, 0);
   abrirDlg(h, async () => {
     const tid = val('a-tec') || null;
     const nom = val('a-cnom'), tel = val('a-ctel'), mail = val('a-cmail');
@@ -19850,6 +20049,27 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
          de cada tipo: eso es lo que significaban las de antes del 06-11-2026. */
       if (!S.sinTiposUds)
         o.tipos_uds = marcados.length ? marcados.map(x => ({ tipo: x.tipo, uds: x.uds })) : null;
+      /* ---- Los periféricos y el detalle del subtipo (06-11-2026) ----
+         Se guardan solo si son de este subtipo: si estaba puesto «periféricos»
+         con tres marcados y se cambia a «sustitución de motor», esos tres no
+         pueden quedarse pegados al aviso diciendo que se montaron. */
+      if (!S.sinPerifericos){
+        const esPf = pidePerifericos(o.tipo, o.subtipo);
+        const ks = esPf ? perifMarcados() : [];
+        o.perifericos = ks.length ? ks : null;
+        o.perifericos_otro = (esPf && ks.includes('otro')) ? (val('a-pfotro') || null) : null;
+        o.subtipo_detalle = pideDetalleSubtipo(o.tipo, o.subtipo) ? (val('a-subdet') || null) : null;
+        if (esPf && !ks.length)
+          return setErr('Marca qué se monta en esta visita. «Periféricos y seguridad» sin decir cuál '+
+            'no le dice al técnico qué tiene que llevar en la furgoneta, y en la cuenta del año no se '+
+            'sabrá qué periférico se pone más.');
+        if (esPf && ks.includes('otro') && !o.perifericos_otro)
+          return setErr('Has marcado «otro periférico»: escribe al lado qué es. «Otro» sin explicación '+
+            'no dice nada a nadie dentro de seis meses.');
+        if (pideDetalleSubtipo(o.tipo, o.subtipo) && !o.subtipo_detalle)
+          return setErr('Has elegido «otros trabajos»: explica qué trabajo es. Una visita que solo '+
+            'dice «otros» no se puede preparar antes de ir ni valorar después.');
+      }
     }
     /* ---- La puesta en servicio (05-11-2026) ----
        Un remate es el final de una obra concreta. Si no se dice de cuál viene y
@@ -22203,7 +22423,8 @@ async function documentoPropuestaFactura(avisoId){
       (cli && cli.nif ? 'NIF/CIF: '+esc(cli.nif)+'<br>' : '<span class="g">Sin NIF en la ficha</span><br>')+
       esc([cli && cli.direccion, cli && cli.poblacion].filter(Boolean).join(', '))+
     '</div><div><h2>De dónde sale</h2>'+
-      '<span class="g">Visita:</span> '+esc(tipoAsis(a))+'<br>'+
+      '<span class="g">Visita:</span> '+esc(tipoAsis(a))+
+        (detalleSubtipo(a) ? ' <span class="g">('+esc(detalleSubtipo(a))+')</span>' : '')+'<br>'+
       '<span class="g">Fecha:</span> '+esc(fechaCorta(a.cerrado))+'<br>'+
       (pu ? '<span class="g">Puerta:</span> '+esc([pu.codigo, pu.tipo].filter(Boolean).join(' · '))+'<br>' : '')+
       '<span class="g">Dirección:</span> '+esc(dondeAsistencia(a))+
@@ -25056,6 +25277,13 @@ async function hojaParte(avisoId){
     '</table>'+
     '<h2>Asistencia</h2><table>'+
       fila('Aviso', a.descripcion)+
+      /* Lo que se montó o el trabajo que pidió la oficina, en el papel que firma
+         el cliente: un parte que solo dice «instalación» no demuestra qué se
+         dejó puesto, y eso es justo lo que se discute meses después.
+         (06-11-2026) */
+      fila('Qué se monta', pidePerifericos(a.tipo, a.subtipo) ? detallePerifericos(a) : '')+
+      fila('Trabajo pedido', pideDetalleSubtipo(a.tipo, a.subtipo)
+        ? String(a.subtipo_detalle || '').trim() : '')+
       fila('Diagnóstico', a.diagnostico)+
       fila('Trabajo realizado', a.trabajo)+
       fila('Estado en que queda', a.estado_final)+
