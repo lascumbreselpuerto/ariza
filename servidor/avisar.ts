@@ -24,6 +24,46 @@ const SUBTIPOS: Record<string, string> = {
   puerta_peatonal: 'Puerta completa peatonal',
   automatismo: 'Automatismo sobre puerta existente',
   normativa: 'Normativa y adecuación',
+  /* Los trabajos que no son una puerta entera, desde el 06-11-2026. Están en
+     avería y en instalación: el tipo dice cómo se factura, el subtipo qué se
+     hizo. */
+  perifericos: 'Periféricos y seguridad',
+  sust_motor: 'Sustitución de motor',
+  sust_central: 'Sustitución de central',
+  otros: 'Otros trabajos',
+};
+/* Los periféricos, con los mismos nombres que la aplicación. Escritos aquí
+   porque esta función no comparte código con ella: si un día se añade uno en un
+   sitio y no en el otro, el grupo recibirá la clave en crudo, que es fea pero
+   no engaña a nadie. (06-11-2026) */
+const PERIF_TG: Record<string, string> = {
+  foto_sinc: 'fotocélula sincronizada',
+  foto_comp: 'fotocélula compacta',
+  barrera: 'barrera o cortina fotoeléctrica',
+  radar: 'radar o detector de presencia',
+  banda: 'banda de seguridad',
+  banda_cuadro: 'cuadro de control de banda',
+  limitador: 'limitador de fuerza',
+  bucle: 'bucle magnético',
+  lector: 'lector o teclado',
+  mandos: 'mandos y receptor',
+  columna: 'columna o pulsador',
+  semaforo: 'semáforo',
+  destellante: 'destellante o baliza',
+  senal: 'señalización de puerta automática',
+  paro: 'pulsador de emergencia',
+  otro: 'otro',
+};
+/* Qué se montó o qué trabajo pidió la oficina, en una línea. El grupo lo lee
+   desde el móvil: si solo pone «Instalación · Periféricos y seguridad», nadie
+   sabe si fue una fotocélula o cuatro. */
+const loQueSeMonta = (a: Record<string, unknown>) => {
+  const ks = Array.isArray(a.perifericos) ? (a.perifericos as string[]) : [];
+  if (!ks.length) return '';
+  const otro = String(a.perifericos_otro || '').trim();
+  return ks.map(k => k === 'otro'
+    ? (otro ? 'otro (' + otro + ')' : 'otro')
+    : (PERIF_TG[k] || k)).join(' · ');
 };
 const laVisita = (a: Record<string, unknown>) => {
   const base = TIPOS[String(a.tipo)] || String(a.tipo);
@@ -471,6 +511,12 @@ Deno.serve(async (req) => {
         ruta ? `Desplazamiento: ${escTg(ruta === 'km'
           ? (a.desplazamiento != null ? num(a.desplazamiento) + ' km' : 'por kilómetros')
           : nombreRuta)}` : '',
+        /* Lo que se montó, antes del trabajo escrito: en el grupo se lee desde
+           el móvil, y «Periféricos y seguridad» sin más no dice si fue una
+           fotocélula o cuatro. (06-11-2026) */
+        loQueSeMonta(a) ? `Se monta: ${escTg(loQueSeMonta(a))}` : '',
+        a.subtipo === 'otros' && a.subtipo_detalle
+          ? `Trabajo pedido: ${escTg(String(a.subtipo_detalle))}` : '',
         a.trabajo ? `Trabajo: ${escTg(a.trabajo)}` : '',
         medFilas.length ? medFilas.join('\n') : '',
         remate.length ? remate.join('\n') : '',
@@ -494,6 +540,12 @@ Deno.serve(async (req) => {
       ['Cliente', p?.cliente || ''],
       ['Dirección', [p?.direccion, p?.ubicacion].filter(Boolean).join(' · ')],
       ['Tipo', laVisita(a)],
+      /* Qué se monta o qué trabajo pidió la oficina, en el aviso de la visita
+         nueva: es lo que el técnico necesita para cargar la furgoneta antes de
+         salir, y volver por la pieza que falta son dos viajes cobrados como
+         uno. (06-11-2026) */
+      ['Se monta', loQueSeMonta(a)],
+      ['Trabajo pedido', a.subtipo === 'otros' ? String(a.subtipo_detalle || '') : ''],
       ['Lo que dice', a.descripcion || ''],
       ['Contacto', tel ? `${a.contacto_nombre || ''} · <a href="tel:${tel}" style="color:#1C1817">${a.contacto_telefono}</a>${a.contacto_email ? ' · ' + a.contacto_email : ''}` : contacto],
       ['Visita prevista', a.fecha_prevista || ''],
