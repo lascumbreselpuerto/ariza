@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.06-4**
+> **Versión de la aplicación que describe este manual: 2026.11.07-1**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -281,6 +281,27 @@ Lo que escribas en **Recomendaciones y presupuesto a ofertar** no se queda ahí:
 
 - **Todo bien en este bloque** marca de golpe lo que no hayas tocado. No pisa lo que ya hayas marcado.
 - Si un límite sale como **«no cargado»**, mide y anota igual. El dato sirve aunque el límite todavía no esté puesto.
+
+#### Los bloques se pliegan, menos uno (7 de noviembre de 2026)
+
+El guión viene partido en bloques: documentación, estructura, accionamiento, lo
+propio de ese tipo de puerta, seguridad, instalación eléctrica y pruebas. Cada
+uno se abre y se cierra tocando su título, y al lado lleva **cuántos puntos
+llevas hechos de cuántos**: «4/8». Cuando están todos, la cuenta se pone en
+verde.
+
+Al abrir el parte, la aplicación te deja **abierto el primer bloque que tenga
+algo sin marcar** y pliega los que ya estén completos. Si te quedaste a medias y
+vuelves al día siguiente, caes justo donde lo dejaste, sin buscar.
+
+Un bloque que se completa **no se cierra solo**. Lo cierras tú cuando quieras,
+o lo dejas abierto: mientras estás dentro, la aplicación no te mueve la pantalla.
+
+**El bloque de seguridad no se pliega nunca.** Es el que lleva las fuerzas, las
+fotocélulas, la banda, el desbloqueo y la parada de emergencia, y está siempre a
+la vista, con el borde amarillo. Ocupa más pantalla a propósito: son los puntos
+por los que responde la empresa si pasa algo, y un bloque cerrado es un bloque
+que se puede dejar sin abrir y firmar el parte igual.
 
 ### Toma de medidas
 
@@ -985,4 +1006,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.06-4 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.07-1 de ARIZA SAT*
