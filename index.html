@@ -688,7 +688,14 @@ const ASISTENCIAS = {
   normativa:       'Normativa y adecuación',
   garantia:        'Garantía',
   falso:           'Desplazamiento en falso',
-  urgencia:        'Urgencia fuera de horario',
+  /* ---- El nombre, cambiado el 07-11-2026 ----
+     David: «Urgencia fuera de horario: no lo valoro correcto. Debería ser
+     urgencia / fuera de horario, ya que puede ser una cosa o las dos.»
+     Tiene razón: una avería que hay que atender hoy mismo a las once de la
+     mañana es urgente y no es fuera de horario, y una que se atiende el sábado
+     tranquilamente es fuera de horario y no urgente. Son dos cosas, y se cobran
+     distinto. */
+  urgencia:        'Urgencia / fuera de horario',
 };
 /* ---- Los subtipos (04-11-2026) ----
    David: «Al crear aviso deberíamos diferenciar cada tipo de avisos en función
@@ -1766,6 +1773,11 @@ async function cargar(){
      antes del 07-11-2026: en blanco cuando no se sabe. */
   const ns = await sb.from('puertas').select('anio_desconocido, instalador_desconocido').limit(1);
   S.sinNoSeSabe = !!ns.error;
+  /* El recargo que elige la oficina al crear: servidor/urgencia2.sql. Sin esa
+     columna, el recargo se sigue proponiendo por la hora de llegada al cerrar,
+     como antes del 07-11-2026. */
+  const um = await sb.from('avisos').select('urgencia_modo').limit(1);
+  S.sinUrgModo = !!um.error;
   /* ---- El almacén ----
      Las existencias no se guardan en ninguna columna: se leen de la vista, que
      las suma de los movimientos. Si falta el SQL del almacén, la aplicación
@@ -1929,7 +1941,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.07-2';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.07-3';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -5117,6 +5129,61 @@ function factorUrgencia(a){
 /* Mientras no haya festivos cargados del año que toca, un festivo entre semana
    se cobraría como un día normal y nadie lo vería. */
 const faltanFestivos = (ano) => !festivosDe(ano || new Date().getFullYear()).length;
+/* ================================================================
+   EL RECARGO LO ELIGE LA OFICINA, AL CREAR LA VISITA (07-11-2026)
+   ================================================================
+   David, probando en campo: «El recargo de urgencia debe aparecer en la
+   creación de la asistencia de urgencia, no en el cierre. La oficina elige:
+   primero, fuera de horario; segundo, urgencia; tercero, fuera de horario más
+   urgencia. Siendo un por dos en fuera de horario, un por dos en urgencia y un
+   por tres en fuera de horario más urgencia. Esta info no es relevante para el
+   técnico.»
+
+   Lo que había hasta hoy lo decidía el RELOJ: el factor salía de la hora a la
+   que el técnico sellaba «He llegado». Eso deja fuera la mitad del caso real,
+   porque una visita puede ser urgente sin ser de noche: el comercio que no
+   puede cerrar la persiana a las once de la mañana paga una urgencia, y el
+   reloj decía que era horario laboral.
+
+   Quien sabe lo que se le ha dicho al cliente es quien habla con él, no el
+   reloj. Así que lo elige la oficina al abrir la visita y queda cerrado desde
+   el principio. El técnico no lo ve, y es a propósito: lo que se cobra no se
+   decide en la furgoneta.
+
+   Los multiplicadores se pueden cambiar en Tarifas; si no, valen 2 y 3. */
+const URG_X_UNO = 2, URG_X_DOS = 3;
+const urgModoCfg = () => {
+  const t = S.tarifas || {};
+  const n = (v, d) => (v == null || v === '' ? d : Number(v));
+  return { uno: n(t.urgencia_x_uno, URG_X_UNO), dos: n(t.urgencia_x_dos, URG_X_DOS) };
+};
+const URGENCIA_MODOS = [
+  ['fuera',   'Fuera de horario',          'uno'],
+  ['urgente', 'Urgencia',                  'uno'],
+  ['ambas',   'Urgencia y fuera de horario','dos'],
+];
+const nombreUrgModo = k => {
+  const f = URGENCIA_MODOS.find(x => x[0] === String(k == null ? '' : k).trim());
+  return f ? f[1] : '';
+};
+/* El multiplicador que le toca a un modo. Fuera de la lista no hay modo, y
+   entonces no hay factor: la visita se valora como siempre. */
+function factorDeModo(k){
+  const f = URGENCIA_MODOS.find(x => x[0] === String(k == null ? '' : k).trim());
+  if (!f) return null;
+  const c = urgModoCfg();
+  const v = Number(c[f[2]]);
+  return (v > 0 && v <= 10) ? v : (f[2] === 'dos' ? URG_X_DOS : URG_X_UNO);
+}
+/* Lo que se le enseña a la oficina al elegir, con el dinero dicho en claro: un
+   recargo que no se ve en el momento de ponerlo se pone mal. */
+const explicaUrgModo = k => {
+  const f = factorDeModo(k);
+  if (!f) return 'Elígelo al crear la visita: de esto sale lo que se le cobra al cliente.';
+  return 'Se multiplican por '+f+' la mano de obra y el desplazamiento. El material se cobra a '+
+    'su precio de siempre. Al técnico se le paga ese mismo recargo, así que el margen no cambia '+
+    'por salir de noche: lo que cambia es el importe.';
+};
 /* ---- La ruta habitual del cliente y del centro (03-11-2026) ----
    «Desde oficina se puede dejar ya marcada la ruta. En la oficina saben de
    primera mano dónde es la instalación.» David. La ruta no cambia de una visita
@@ -18511,6 +18578,12 @@ dlgForm.addEventListener('change', e => {
   if (t.id === 'a-tipo'){ pintarSubtipo(); pintarPuertasAviso(dlgForm.dataset.aviso || null);
     pintarRemate(dlgForm.dataset.aviso || null); return; }
   if (t.id === 'a-sub'){ pintarTiposPuerta(); pintarPerifericos(); return; }
+  /* Al elegir el motivo del recargo se dice en claro lo que supone (07-11-2026) */
+  if (t.id === 'a-urgmodo'){
+    const p = document.getElementById('a-urgpista');
+    if (p) p.textContent = explicaUrgModo(t.value);
+    return;
+  }
   /* Marcar un periférico repinta el resumen del desplegable, y «otro» abre su
      casilla de texto en el momento, no al guardar. */
   if (t.classList && t.classList.contains('a-pf-c')){
@@ -18949,6 +19022,9 @@ function pintarSubtipo(){
   if (!subs.some(x => x[0] === antes)) sel.value = '';
   const pt = document.getElementById('a-tipopista');
   if (pt) pt.textContent = AYUDA_TIPO[tipo] || '';
+  /* El recargo aparece y desaparece con el tipo, como lo demás (07-11-2026) */
+  const cu = document.getElementById('a-caja-urg');
+  if (cu) cu.hidden = tipo !== 'urgencia';
   pintarTiposPuerta();
   pintarPerifericos();
 }
@@ -20106,6 +20182,18 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
       '<span class="pista">Marca todo lo que se monta en esta visita. De aquí sale la cuenta de qué '+
       'periférico se pone más, que es la que dice qué merece la pena tener en el almacén</span>'+
       '</details>')+
+    /* ---- El recargo, elegido por la oficina (07-11-2026) ----
+       Solo lo ve gestión, igual que el cobro del remate: lo que se le cobra al
+       cliente no se decide en la furgoneta. Y se pide al crear la visita, que
+       es cuando se está hablando con él y se sabe lo que se le ha dicho. */
+    (S.sinUrgModo || !esGestion() ? '' :
+    '<div class="campo full" id="a-caja-urg"'+(d.tipo === 'urgencia' ? '' : ' hidden')+'>'+
+      '<label for="a-urgmodo">Por qué se cobra con recargo</label><select id="a-urgmodo">'+
+      '<option value="">Elígelo</option>'+
+      URGENCIA_MODOS.map(([k, n]) => '<option value="'+k+'"'+((d.urgencia_modo||'')===k?' selected':'')+
+        '>'+esc(n)+' (×'+factorDeModo(k)+')</option>').join('')+
+      '</select><span class="pista" id="a-urgpista">'+esc(explicaUrgModo(d.urgencia_modo))+
+      '</span></div>')+
     /* ---- El detalle de «otros trabajos» (06-11-2026) ----
        David: «Otros, dejando abierto un lugar donde oficina escriba.» */
     (S.sinSubtipo || S.sinPerifericos ? '' :
@@ -20298,6 +20386,22 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
        No se exige en las que ya están CERRADAS: esas son historia, y bloquear la
        edición de una visita de hace un mes para corregir un teléfono no
        documenta nada, solo estorba. */
+    /* ---- El recargo que eligió la oficina (07-11-2026) ----
+       De aquí sale el factor que multiplica la mano de obra y el
+       desplazamiento, así que se guardan los dos juntos: el modo para poder
+       leer después POR QUÉ se cobró así, y el número para valorar. Si la visita
+       deja de ser urgencia, los dos se borran: un recargo pegado a una
+       preventiva sería dinero cobrado sin motivo. */
+    if (!S.sinUrgModo && esGestion() && document.getElementById('a-urgmodo')){
+      const esUrg = o.tipo === 'urgencia';
+      const modo = esUrg ? val('a-urgmodo') : '';
+      o.urgencia_modo = factorDeModo(modo) ? modo : null;
+      if (!S.sinUrgencia) o.urgencia_factor = o.urgencia_modo ? factorDeModo(modo) : null;
+      if (esUrg && !o.urgencia_modo)
+        return setErr('Di por qué esta visita lleva recargo: fuera de horario, urgencia, o las '+
+          'dos. De eso sale lo que se le cobra al cliente, y es lo que hay que poder explicarle '+
+          'si lo pregunta. Lo eliges tú ahora, que estás hablando con él.');
+    }
     if (o.tipo === 'puesta_servicio' && !o.puerta_id && !(a && a.cerrado))
       return setErr('Elige la puerta de esta puesta en servicio. Es el remate de una instalación '+
         'que ya se hizo, así que esa puerta ya se documentó en su día: sin elegirla, el trabajo '+
@@ -22869,9 +22973,16 @@ function dlgValoracion(avisoId){
           '</p>'
         : '<p class="mini" style="margin:0 0 8px">Se está cobrando <b>×'+esc(String(puesto).replace('.', ','))+
           '</b> sobre la hora y el desplazamiento'+
-          (f && f.factor !== puesto
-            ? '. La aplicación propondría ×'+esc(String(f.factor).replace('.', ','))+': '+esc(f.motivo)
-            : (f ? '. '+esc(f.motivo.charAt(0).toUpperCase()+f.motivo.slice(1)) : ''))+'.</p>')+
+          /* Desde el 07-11-2026 el motivo lo eligió la oficina al crear la
+             visita, y eso es lo que hay que poder decirle al cliente que llama
+             preguntando. La propuesta por la hora de llegada solo se enseña en
+             las urgencias de antes, que no tienen motivo elegido. */
+          ((!S.sinUrgModo && a.urgencia_modo)
+            ? '. Lo eligió la oficina al abrir la visita: <b>'+esc(nombreUrgModo(a.urgencia_modo))+
+              '</b>. Si hay que cambiarlo, se cambia aquí y la visita se vuelve a valorar'
+            : (f && f.factor !== puesto
+              ? '. La aplicación propondría ×'+esc(String(f.factor).replace('.', ','))+': '+esc(f.motivo)
+              : (f ? '. '+esc(f.motivo.charAt(0).toUpperCase()+f.motivo.slice(1)) : '')))+'.</p>')+
       '<div class="fila" style="gap:8px;flex-wrap:wrap">'+
       '<select id="v-urg" style="max-width:260px">'+
       (puesto == null ? '<option value="">Dejarlo como está (porcentaje antiguo)</option>' : '')+
@@ -23926,6 +24037,16 @@ function dlgCierre(avisoId){
        enterarse, es darle el dato: la hora de llegada. */
     (() => {
       if (S.sinUrgencia || a.tipo !== 'urgencia') return '';
+      /* ---- Desde el 07-11-2026 esto no está en el cierre ----
+         David: «El recargo de urgencia debe aparecer en la creación de la
+         asistencia, no en el cierre. Esta info no es relevante para el
+         técnico.» Si la oficina ya eligió el motivo al crear la visita, aquí no
+         se pregunta nada: el recargo está decidido y se cambia donde se decidió,
+         editando la asistencia.
+         Las urgencias de antes del 07-11-2026 no tienen modo elegido, y para
+         esas se sigue enseñando lo de siempre: si no, se quedarían sin poder
+         ajustar el factor que la aplicación propuso por la hora de llegada. */
+      if (!S.sinUrgModo && a.urgencia_modo) return '';
       const f = factorUrgencia(a);
       if (!f) return '';
       const puesto = a.urgencia_factor != null ? Number(a.urgencia_factor) : null;
@@ -25063,7 +25184,12 @@ async function guardarCierre(a, cerrando){
      a proponer con la hora nueva, que es de donde sale. */
   if (!S.sinUrgencia && a.tipo === 'urgencia'){
     const puesto = val('z-urg');
-    if (puesto) o.urgencia_factor = +puesto;
+    /* ---- Desde el 07-11-2026 manda lo que eligió la oficina ----
+       Si la visita tiene modo elegido, el factor ya está puesto y el cierre no
+       lo toca: ni lo pregunta ni lo recalcula con la hora de llegada. Esa cuenta
+       sigue viva solo para las urgencias de antes, que no tienen modo. */
+    if (!S.sinUrgModo && a.urgencia_modo){ /* no se toca */ }
+    else if (puesto) o.urgencia_factor = +puesto;
     else {
       /* Qué hora se mira: la sellada por «He llegado» si nadie la ha tocado,
          porque esa lleva el DÍA de verdad. La del campo se reconstruye con el
