@@ -811,6 +811,24 @@ function detalleSubtipo(a){
 /* Los tipos que ya no se crean, porque ahora son subtipos. Se siguen pintando
    en lo que ya existe: una garantía de octubre sigue diciendo que es garantía. */
 const ASIST_VIEJOS = ['garantia', 'normativa'];
+/* ---- El desplazamiento en falso ya no se crea (07-11-2026) ----
+   David: «Es un punto que me parece importante, pero no está donde debe. Este
+   punto lo deben activar los técnicos, no en oficina, ni como parte de la
+   creación de ninguna asistencia.»
+
+   Tiene razón en lo de fondo: nadie sabe que un viaje ha sido en balde hasta
+   que llega. La oficina crea una avería y es el técnico, allí, quien descubre
+   que no hay nadie o que el acceso está cerrado. Pedirle a la oficina que lo
+   adivine al crear la visita es pedirle que adivine.
+
+   Así que deja de ofrecerse como tipo, y pasa a ser una casilla del cierre que
+   vale para CUALQUIER visita. Lo que ya esté guardado como tipo «falso» se
+   sigue leyendo igual: ese histórico no se toca. */
+const ASIST_NO_SE_CREAN = ['falso'];
+/* Si la visita fue un viaje en balde: por la marca nueva o por el tipo viejo.
+   Las dos se miran, porque mirar solo una dejaría fuera la mitad. */
+const esFalso = a => !!a && (!!a.falso || a.tipo === 'falso');
+const falsoExplicado = a => !!a && !!String(a.falso_motivo || '').trim();
 /* ---- Para qué es cada tipo, dicho en el propio alta (04-11-2026) ----
    Esto son las definiciones de David, puestas donde se crea la asistencia. Una
    definición que solo vive en la cabeza de quien la dictó se pierde con el
@@ -825,10 +843,17 @@ const AYUDA_TIPO = {
     'terminar por causas de la obra: sin corriente definitiva, albañilería o remates del cliente.',
   urgencia: 'Avería en servicio de urgencia: abrir, dejar la puerta en seguridad tras un accidente, cerrar '+
     'un comercio, o repararla en el momento. Se cobra con recargo sobre la hora y el desplazamiento.',
+  /* ---- Corregido el 07-11-2026 ----
+     Este texto decía «No se factura, pero el viaje sí se apunta». Era mentira, y
+     se comprobó con números: un desplazamiento en falso se facturaba entero, con
+     la mano de obra incluida. Ahora se cobra el desplazamiento y nada más, y el
+     tipo ya no se crea desde aquí: lo marca el técnico al cerrar. El texto se
+     queda para las visitas antiguas, que siguen teniendo este tipo. */
   falso: 'Se fue y no se pudo trabajar: no había nadie, el acceso estaba cerrado, la puerta no era '+
-    'de este cliente. No se factura, pero el viaje sí se apunta con sus horas y su ruta, y de eso '+
-    'sale lo que cuestan al año los viajes en balde. Es la única manera de saberlo: si no se apunta, '+
-    'ese viaje no existe para nadie y se paga igual.',
+    'de este cliente. Desde el 07-11-2026 esto no se crea desde aquí: lo marca el técnico al cerrar '+
+    'la visita que sea, y entonces se le cobra al cliente el desplazamiento y nada más. El coste del '+
+    'viaje se apunta entero, y de eso sale lo que cuestan al año los viajes en balde: si no se '+
+    'apunta, ese viaje no existe para nadie y se paga igual.',
 };
 const AYUDA_SUBTIPO = {
   garantia: 'NO se factura: ni mano de obra, ni desplazamiento, ni material. El coste sí cuenta y el '+
@@ -1778,6 +1803,11 @@ async function cargar(){
      como antes del 07-11-2026. */
   const um = await sb.from('avisos').select('urgencia_modo').limit(1);
   S.sinUrgModo = !!um.error;
+  /* El desplazamiento en falso que marca el técnico: servidor/falso.sql. Sin
+     esas columnas, el falso sigue siendo un tipo que crea la oficina, como
+     antes del 07-11-2026. */
+  const fa = await sb.from('avisos').select('falso, falso_motivo, falso_resuelto').limit(1);
+  S.sinFalso = !!fa.error;
   /* ---- El almacén ----
      Las existencias no se guardan en ninguna columna: se leen de la vista, que
      las suma de los movimientos. Si falta el SQL del almacén, la aplicación
@@ -1941,7 +1971,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.07-3';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.07-4';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -3914,6 +3944,47 @@ function vistaGestion(){
       });
       h += '</div>'+
         (obr.length > 25 ? '<p class="mini" style="margin:8px 0 0">Y '+(obr.length-25)+' más.</p>' : '')+
+        '</div>';
+    }
+  }
+
+  /* ---- Viajes en balde con los que hay que volver a quedar (07-11-2026) ----
+     David: «Cerrando el parte para que desde oficina se vuelva a gestionar la
+     asistencia con el cliente, pero cobrándole al cliente el desplazamiento en
+     falso.»
+
+     Sin esta lista, el técnico cierra el parte y la visita desaparece: el
+     trabajo sigue sin hacerse y nadie se acuerda hasta que el cliente vuelve a
+     llamar enfadado. Aquí se queda hasta que alguien dice que ya se ha vuelto a
+     quedar, no sola. */
+  if (!S.sinFalso){
+    const fals = falsosPendientes();
+    if (fals.length){
+      h += '<div class="panel"><div class="panel-h"><h3>Viajes en balde: hay que volver a quedar</h3>'+
+        '<span class="mini">'+fals.length+'</span></div>'+
+        '<p class="mini" style="margin:0 0 10px">El técnico fue y no se pudo trabajar. El trabajo '+
+        '<b>sigue sin hacerse</b>: hay que hablar con el cliente y poner fecha nueva. Al cliente se '+
+        'le cobra el desplazamiento, y nada más. «Crear la visita nueva» abre un aviso con su '+
+        'cliente y su puerta ya puestos, y al guardarlo esta sale de la lista.</p>'+
+        '<div class="lista-simple">';
+      fals.slice(0, 25).forEach(a => {
+        const pu = a.puerta_id ? puertaDe(a.puerta_id) : null;
+        const d = a.cerrado ? Math.max(0, -dias(a.cerrado)) : 0;
+        h += '<div class="item-plano">'+
+          '<button class="item sp" data-act="aviso-editar" data-id="'+a.id+'">'+
+            '<span><span class="tit">'+esc(nombreCliente(a))+'</span>'+
+            '<span class="sub">'+esc([pu ? (pu.codigo || sitioPuerta(pu)) : '',
+              a.falso_motivo || 'sin explicar'].filter(Boolean).join(' · '))+'</span></span>'+
+            '<span style="text-align:right"><span class="tit"'+
+              (d >= 7 ? ' style="color:var(--mal)"' : '')+'>'+d+'</span>'+
+            '<span class="sub">día'+(d===1?'':'s')+' esperando</span></span>'+
+          '</button>'+
+          '<button class="btn sm pri" data-act="falso-nueva" data-id="'+a.id+'">Crear la visita nueva</button>'+
+          '<button class="btn sm plana" data-act="falso-ok" data-id="'+a.id+'">Ya está gestionada</button>'+
+          '</div>';
+      });
+      h += '</div>'+
+        (fals.length > 25 ? '<p class="mini" style="margin:8px 0 0">Y '+(fals.length-25)+' más.</p>' : '')+
         '</div>';
     }
   }
@@ -18623,6 +18694,19 @@ dlgForm.addEventListener('change', e => {
   // Puerta: al elegir centro, su dirección baja a la puerta
   /* Elegir el centro a mano manda sobre la dirección que hubiera (07-11-2026) */
   if (t.id === 'f-centro'){ centroElegido(true); return; }
+  /* El viaje en balde: al marcarlo se abre el hueco de la explicación y el foco
+     va allí, que es lo único que queda por hacer. (07-11-2026) */
+  if (t.id === 'z-falso'){
+    const caja = document.getElementById('z-caja-falso');
+    if (caja){
+      caja.hidden = !t.checked;
+      if (t.checked){
+        const campo = document.getElementById('z-falsomot');
+        if (campo) campo.focus();
+      }
+    }
+    return;
+  }
   /* «No se sabe»: apaga su campo y lo deja vacío, para que no queden las dos
      cosas dichas a la vez. Al desmarcarla, el campo vuelve a estar escribible
      y el foco va allí, que es lo que se quiere hacer después. (07-11-2026) */
@@ -19234,6 +19318,19 @@ function rematePara(obraId){
       if (det && !det.value.trim() && o.pendiente_texto) det.value = o.pendiente_texto;
     }, 60);
   }, 60);
+}
+/* ---- Los viajes en balde con los que hay que volver a quedar (07-11-2026) ----
+   Los cerrados como falso y todavía sin gestionar. El más antiguo arriba, que es
+   el que más tiempo lleva esperando: un trabajo que sigue sin hacerse y un
+   cliente que todavía no sabe cuándo se le vuelve. */
+function falsosPendientes(){
+  /* Solo las que llevan la MARCA nueva, no las del tipo viejo. Las de antes del
+     07-11-2026 están cerradas desde hace semanas y ya se gestionaron, o no, en
+     su día: meterlas aquí llenaría la lista de historia que nadie va a llamar.
+     Para valorar sí cuentan las dos, que es otra cosa y está en el SQL. */
+  return (S.avisos || [])
+    .filter(a => a && !a.anulada && !!a.cerrado && !!a.falso && !a.falso_resuelto)
+    .sort((x, y) => String(x.cerrado || '').localeCompare(String(y.cerrado || '')));
 }
 function obrasConRematePendiente(){
   const avs = S.avisos || [];
@@ -20083,7 +20180,11 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
        la lista: si no, al abrir una garantía de octubre para corregir un
        teléfono se le cambiaría el tipo sin querer. */
     '<div class="campo"><label for="a-tipo">Tipo de asistencia</label><select id="a-tipo">'+
-      tipos.filter(t => !ASIST_VIEJOS.includes(t) || d.tipo === t)
+      /* El desplazamiento en falso ya no se crea desde aquí: lo marca el
+         técnico al cerrar, en la visita que sea. Las que ya existen con ese
+         tipo se siguen pudiendo abrir y editar. (07-11-2026) */
+      tipos.filter(t => (!S.sinFalso && ASIST_NO_SE_CREAN.includes(t)) ? d.tipo === t : true)
+        .filter(t => !ASIST_VIEJOS.includes(t) || d.tipo === t)
         .map(t => '<option value="'+esc(t)+'"'+(d.tipo===t?' selected':'')+'>'+esc(ASISTENCIAS[t]||t)+'</option>').join('')+
       '</select>'+
       (ASIST_VIEJOS.includes(d.tipo)
@@ -20465,6 +20566,19 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
       }
       if (o.puerta_id && !SIN_COBRO.includes(o.tipo) && mapa[o.estado])
         await sb.from('puertas').update({ estado: mapa[o.estado], estado_desde: new Date().toISOString() }).eq('id', o.puerta_id);
+      /* ---- La visita que sustituye a un viaje en balde (07-11-2026) ----
+         Si esta asistencia se abrió desde el panel de los viajes en balde, el de
+         origen queda gestionado y con el rastro de cuál lo sustituye. Va dentro
+         del try porque es parte de guardar: si falla, se ve el error en vez de
+         dejar la lista con una visita que ya está resuelta. */
+      if (!a && avisoId && S.falsoOrigen && !S.sinFalso){
+        const origen = S.falsoOrigen;
+        S.falsoOrigen = null;
+        try {
+          await sb.from('avisos')
+            .update({ falso_resuelto: true, falso_nueva_id: avisoId }).eq('id', origen);
+        } catch(_){ /* sin esas columnas la visita nueva se guarda igual */ }
+      }
       cerrarDlg(); await cargar(); toast('Asistencia guardada.');
     } catch(e){ setErr(e.message); }
   });
@@ -23794,6 +23908,34 @@ function dlgCierre(avisoId){
   const varias = puertas.length > 1;
   let h = '<h3>'+(larga ? 'Cerrar la obra' : 'Cerrar visita')+' · '+esc(tipoAsis(a))+'</h3>';
 
+  /* ---- El viaje en balde, lo marca el técnico (07-11-2026) ----
+     David: «Este punto lo deben activar los técnicos. Debe aparecer en
+     cualquiera de las diferentes asistencias que crea oficina. Y cuando el
+     técnico valore que es una asistencia en falso, explicándolo en la app,
+     pueda activarla, cerrando el parte.»
+
+     Va ARRIBA DEL TODO y no al final a propósito: si el viaje fue en balde, lo
+     primero que hace el técnico es decirlo, y entonces no tiene que rellenar
+     nada más. Puesto abajo, habría que recorrer el parte entero para llegar. */
+  if (!S.sinFalso && !larga)
+    h += '<div class="grupo"><h3>¿Se ha podido trabajar?</h3><div class="campos">'+
+      '<div class="campo full" style="align-content:end">'+
+      '<label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
+      '<input type="checkbox" id="z-falso"'+(a.falso?' checked':'')+
+      ' style="accent-color:var(--amarillo);width:18px;height:18px">'+
+      'No, ha sido un <b>desplazamiento en falso</b></label>'+
+      '<span class="pista">Márcalo si llegaste y no se pudo trabajar: no había nadie, el acceso '+
+      'estaba cerrado, la puerta no era de este cliente. El parte se cierra con eso, sin pedirte '+
+      'nada más</span></div>'+
+      '<div class="campo full" id="z-caja-falso"'+(a.falso?'':' hidden')+'>'+
+      '<label for="z-falsomot">Qué te has encontrado</label>'+
+      '<input id="z-falsomot" type="text" maxlength="300" value="'+esc(a.falso_motivo||'')+'" '+
+      'placeholder="Ej.: nave cerrada a las 9:15, nadie contesta al teléfono del contacto">'+
+      '<span class="pista">Hace falta. Un viaje en balde sin explicación no se le puede reclamar a '+
+      'nadie ni se puede evitar la próxima vez. Con esto, la oficina vuelve a quedar con el '+
+      'cliente y se le cobra el desplazamiento</span></div>'+
+      '</div></div>';
+
   /* Marcada como obra larga pero todavía sin ningún parte: o se apunta el de
      hoy, o se deshace. Cerrar así perdería las horas de los días anteriores,
      que es justo lo que esto venía a evitar. */
@@ -25208,6 +25350,17 @@ async function guardarCierre(a, cerrando){
      medias y al volver se la encontraría sin marcar.
      El motivo es obligatorio: sin él, la casilla sería un botón de saltarse el
      alta de puerta, y eso es justo lo que no se quiere. */
+  /* ---- El viaje en balde (07-11-2026) ----
+     Se lee siempre que el campo esté en pantalla, igual que la casilla de la
+     puerta y por el mismo motivo: si solo se leyera al cerrar, el técnico
+     marcaría la casilla, guardaría el avance y al volver se la encontraría sin
+     marcar. */
+  let esBalde = false;
+  if (!S.sinFalso && document.getElementById('z-falso')){
+    esBalde = chk('z-falso');
+    o.falso = esBalde;
+    o.falso_motivo = esBalde ? (val('z-falsomot') || null) : null;
+  } else if (!S.sinFalso) esBalde = !!a.falso;
   if (!S.sinAltaPuerta && document.getElementById('z-sinpta')){
     o.sin_puerta = chk('z-sinpta');
     o.sin_puerta_motivo = val('z-sinptam') || null;
@@ -25365,6 +25518,22 @@ async function guardarCierre(a, cerrando){
        la prueba de obra el mismo día.
        Así que se rellena con lo que de verdad es: el remate de su obra y lo que
        quedó pendiente de ella, que ya está escrito y no hay que teclear. */
+    /* ---- El viaje en balde (07-11-2026) ----
+       Si el técnico ha marcado que no se pudo trabajar, el parte se cierra con
+       eso y no se le pide nada más: ni qué ha hecho (no ha hecho nada), ni la
+       ficha de la puerta (no la ha visto), ni las horas (no son trabajo), ni la
+       firma (no había nadie a quien pedírsela, que es justo el problema).
+
+       Lo único obligatorio es la explicación, y se vuelca en «qué has hecho»
+       para que el parte y la factura digan lo que pasó. */
+    if (!S.sinFalso && esBalde){
+      if (!o.falso_motivo)
+        return setErr('Has marcado que fue un desplazamiento en falso: escribe qué te has '+
+          'encontrado. Sin eso no se le puede reclamar a nadie ni se puede evitar la próxima vez.');
+      if (!o.trabajo) o.trabajo = 'Desplazamiento en falso: '+o.falso_motivo;
+      if (!o.firma_sin && !FIRMA.pintado && !a.firma_ruta)
+        o.firma_sin = 'Desplazamiento en falso: '+o.falso_motivo;
+    }
     if (!o.trabajo && a.tipo === 'puesta_servicio'){
       const ob = a.instalacion_id ? S.avisos.find(x => x.id === a.instalacion_id) : null;
       const pend = (ob && ob.pendiente_texto) || a.descripcion || '';
@@ -25379,7 +25548,10 @@ async function guardarCierre(a, cerrando){
        pantalla sino con lo que hay guardado, y las fotos se cuentan otra vez contra
        la base de datos: un parte abierto hace media hora puede traer un número de
        fotos que ya no es el bueno. */
-    if (obligaAltaObra(a) && !(o.sin_puerta && o.sin_puerta_motivo)){
+    /* Un viaje en balde no documenta ninguna puerta, porque el técnico no ha
+       llegado a verla. Exigir la ficha ahí sería un bloqueo imposible de
+       cumplir, y los bloqueos imposibles se acaban sorteando. (07-11-2026) */
+    if (obligaAltaObra(a) && !esBalde && !(o.sin_puerta && o.sin_puerta_motivo)){
       /* Se comprueban TODAS las puertas de la obra, no solo la principal: en una
          instalación de tres puertas, dar por documentada la obra porque la
          primera esté bien sería cerrar dos puertas sin medidas ni fotos. */
@@ -25447,12 +25619,17 @@ async function guardarCierre(a, cerrando){
     /* Sin horas, la visita se valora en 0 € y desaparece de «pendiente de facturar»:
        queda cerrada, firmada y sin cobrar, y nada lo señala. Así que o se ponen las
        horas, o se dice expresamente que esta visita no se cobra. */
-    if (conCobro && !o.sin_cargo && !(+o.horas > 0))
+    /* En un viaje en balde no se exigen horas: no se ha trabajado. El viaje sí
+       se cobra, con el desplazamiento, y las horas que el técnico quiera apuntar
+       cuentan en el COSTE, que es donde se ve lo que cuesta ir para nada. */
+    if (conCobro && !o.sin_cargo && !esBalde && !(+o.horas > 0))
       return setErr('Pon las horas a facturar. Si esta visita no se cobra, marca «Esta visita no se cobra» y di por qué.');
     if (o.sin_cargo && !o.sin_cargo_motivo)
       return setErr('Has marcado que la visita no se cobra: escribe por qué.');
     if (!FIRMA.pintado && !a.firma_ruta && !o.firma_sin)
       return setErr('Falta la firma del cliente. Si no hay nadie, escribe el motivo abajo.');
+    /* El viaje en balde se cierra ahí mismo, sin más preguntas: el parte dice lo
+       que pasó y la oficina lo verá en su lista para volver a quedar. */
     if (FIRMA.pintado && !o.firma_nombre) return setErr('Pon el nombre de quien firma.');
     o.estado = 'cerrado';
     // si nadie la tenía asignada, la cierra quien la cierra: el parte no puede salir sin técnico
@@ -26422,6 +26599,41 @@ raiz.addEventListener('click', async e => {
      puestos. Teclearlo otra vez es la manera de que el remate acabe enlazado
      con la obra equivocada, o sin enlazar con ninguna. */
   else if (a === 'remate-nuevo') rematePara(b.dataset.id);
+  /* ---- Los dos botones de los viajes en balde (07-11-2026) ----
+     Van en la cadena de «else if» de este manejador, que es el de la pantalla
+     entera. La primera vez quedaron en el del diálogo, y allí no llegan nunca
+     los clics del panel de Gestión: los botones no hacían nada. Lo cazó la
+     suite del falso. */
+  else if (a === 'falso-ok'){
+    const av = S.avisos.find(x => x.id === b.dataset.id);
+    if (!av) return;
+    try {
+      const { error } = await sb.from('avisos').update({ falso_resuelto: true }).eq('id', av.id);
+      if (error) throw error;
+      await cargar();
+      toast('Apuntado: ya se ha vuelto a quedar con el cliente.');
+    } catch(e){ toast('No se ha podido guardar: '+e.message); }
+    return;
+  }
+  else if (a === 'falso-nueva'){
+    /* Se abre un aviso nuevo con el cliente y la puerta del viaje perdido, para
+       no volver a teclear lo mismo. Al guardarlo, el de origen queda marcado
+       como gestionado y con el rastro de cuál lo sustituye: así se puede ver
+       cuántos viajes costó de verdad ese trabajo. */
+    const av = S.avisos.find(x => x.id === b.dataset.id);
+    if (!av) return;
+    S.falsoOrigen = av.id;
+    dlgAviso(av.puerta_id || null, null, av.cliente_id || null);
+    setTimeout(() => {
+      const d = document.getElementById('a-desc');
+      if (d && !d.value.trim()) d.value = String(av.descripcion || '').trim();
+      const n = document.getElementById('a-notas');
+      if (n && !n.value.trim())
+        n.value = 'Se volvió en balde el '+fechaCorta(av.cerrado)+': '+
+          String(av.falso_motivo || '').trim();
+    }, 150);
+    return;
+  }
   else if (a === 'foto-ver') dlgFoto(b.dataset.id);
   else if (a === 'ver-qr') dlgQR(b.dataset.cod);
   else if (a === 'etiqueta-imprimir') etiquetaTermica(b.dataset.cod);
