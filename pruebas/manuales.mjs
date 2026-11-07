@@ -191,6 +191,15 @@ altaManual.forEach(n => paso('el manual explica «'+n+'» del alta de puerta',
  'tiene que escribir'].forEach(n =>
   paso('el manual explica «'+n+'» de los trabajos nuevos', Mllano.includes(n.toLowerCase())));
 
+/* ---- El guion plegado por bloques (07-11-2026) ----
+   Lo que el técnico tiene que entender es dónde queda cada cosa: que lo
+   completo se pliega y por qué el de seguridad no. Si el manual no lo dice, el
+   primero que vea un bloque cerrado pensará que la aplicación le ha borrado
+   puntos. */
+['el primer bloque que tenga algo sin marcar', 'no se cierra solo',
+ 'no se pliega nunca', 'firmar el parte igual'].forEach(n =>
+  paso('el manual explica «'+n+'» del guion plegado', Mllano.includes(n.toLowerCase())));
+
 /* ================================================================
    5. Los campos que nombra, con su etiqueta exacta
    ================================================================ */
