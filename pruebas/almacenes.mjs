@@ -57,6 +57,9 @@ await ctx.addInitScript(() => {
         creado_por:'Oficina' },
       { id:'mv-ent2', articulo_id:'art-foto', cantidad:5, hasta:'ubi-nave',
         motivo:'compra', creado:new Date().toISOString(), creado_por:'Oficina' });
+    /* Un segundo del equipo, para poder comprobar el aviso de nombre repetido */
+    db.perfiles.push({ id:'perfil-dani', nombre:'Dani', rol:'tecnico', activo:true,
+                       creado:new Date().toISOString() });
     db.avisos.push({ id:'al-1', tipo:'averia', subtipo:'averia', estado:'asignado',
       prioridad:'normal', tecnico_id:'usuario-admin',
       cliente_id: db.puertas[0].cliente_id, puerta_id: db.puertas[0].id,
@@ -350,6 +353,85 @@ paso('y enseña qué material es', retirar.listaMaterial === true);
 paso('uno vacío dice que se puede retirar sin más', retirar.vacioDice === true);
 paso('al retirarlo queda retirado', retirar.retirado === true);
 paso('pero no se borra: su histórico se queda', retirar.sigueExistiendo === true);
+
+/* ================================================================
+   6. Cambiar el nombre de alguien del equipo        08-11-2026
+
+   David: «dime como miro y cambio el usuario arizapuertasautomaticas». Había
+   que entrar en la base de datos. Ese nombre sale en el parte que firma el
+   cliente y en la columna «Quién» de cada movimiento de almacén, así que un
+   apellido que falta el día del alta no puede quedarse para siempre.
+   ================================================================ */
+bloque('6. Cambiar el nombre de alguien del equipo');
+
+const equipo = await T(async () => {
+  const g = window.__T;
+  g.cerrarDlg();
+  await new Promise(r => setTimeout(r, 300));
+  g.S.tab = 'equipo'; g.pintar();
+  await new Promise(r => setTimeout(r, 500));
+  const btn = document.querySelector('[data-act="equipo-nombre"]');
+  return { hayBoton: !!btn, cuantos: document.querySelectorAll('[data-act="equipo-nombre"]').length,
+           enEquipo: (g.S.equipo || []).length };
+});
+paso('en Equipo hay un botón para cambiar el nombre', equipo.hayBoton === true);
+paso('uno por cada persona del equipo, incluido el administrador',
+  equipo.cuantos === equipo.enEquipo, equipo.cuantos + ' de ' + equipo.enEquipo);
+
+const cambio = await T(async () => {
+  const g = window.__T;
+  const quien = (g.S.equipo || [])[0];
+  const antes = quien.nombre;
+  document.querySelector('[data-act="equipo-nombre"][data-id="'+quien.id+'"]').click();
+  await new Promise(r => setTimeout(r, 400));
+  const campo = document.getElementById('eq-nombre');
+  const traeElSuyo = campo ? campo.value === antes : false;
+  const dice = (document.getElementById('dlg-form') || {}).textContent || '';
+  /* un nombre de una letra no vale */
+  campo.value = 'a';
+  document.querySelector('#dlg-form [type=submit]').click();
+  await new Promise(r => setTimeout(r, 300));
+  const err1 = (document.querySelector('#dlg-form .err') || {}).textContent || '';
+  campo.value = 'Juan Pérez Martínez';
+  document.querySelector('#dlg-form [type=submit]').click();
+  await new Promise(r => setTimeout(r, 1400));
+  const ya = (g.S.equipo || []).find(x => x.id === quien.id);
+  return { traeElSuyo, err1, antes, ahora: ya ? ya.nombre : null,
+           avisaDelHistorico: /no se reescribe|Lo ya guardado no cambia/i.test(dice),
+           cerrado: !document.getElementById('dlg').open };
+});
+paso('el diálogo viene con el nombre que tiene ahora', cambio.traeElSuyo === true);
+paso('y avisa de que lo ya guardado no cambia', cambio.avisaDelHistorico === true);
+paso('un nombre de una letra no vale', /Escribe el nombre/i.test(cambio.err1), cambio.err1);
+paso('el nombre nuevo se guarda', cambio.ahora === 'Juan Pérez Martínez',
+  cambio.antes + ' → ' + cambio.ahora);
+paso('y el diálogo se cierra', cambio.cerrado === true);
+
+const repetido = await T(async () => {
+  const g = window.__T;
+  const otro = (g.S.equipo || []).find(x => x.nombre !== 'Juan Pérez Martínez');
+  if (!otro) return { sinOtro: true };
+  const antes = otro.nombre;
+  document.querySelector('[data-act="equipo-nombre"][data-id="'+otro.id+'"]').click();
+  await new Promise(r => setTimeout(r, 400));
+  document.getElementById('eq-nombre').value = 'Juan Pérez Martínez';
+  document.querySelector('#dlg-form [type=submit]').click();
+  await new Promise(r => setTimeout(r, 400));
+  const err = (document.querySelector('#dlg-form .err') || {}).textContent || '';
+  const sigue = (g.S.equipo || []).find(x => x.id === otro.id);
+  /* insistiendo sí entra: puede haber dos personas que se llamen igual */
+  document.querySelector('#dlg-form [type=submit]').click();
+  await new Promise(r => setTimeout(r, 1400));
+  const luego = (g.S.equipo || []).find(x => x.id === otro.id);
+  return { err, noALaPrimera: sigue ? sigue.nombre === antes : false,
+           siInsistiendo: luego ? luego.nombre === 'Juan Pérez Martínez' : false };
+});
+if (!repetido.sinOtro){
+  paso('si ya hay alguien que se llama igual, avisa', /ya hay alguien/i.test(repetido.err), repetido.err);
+  paso('y no lo cambia a la primera', repetido.noALaPrimera === true);
+  paso('pero insistiendo sí: puede haber dos personas que se llamen igual',
+    repetido.siInsistiendo === true);
+}
 
 console.log('\n'+ok+' bien, '+mal+' mal.');
 if (errores.length){ console.log('Errores de JavaScript:'); errores.forEach(e => console.log('   '+e)); }

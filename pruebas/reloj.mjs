@@ -212,7 +212,25 @@ const nace = await T(async () => {
     horas: (document.getElementById('z-horas') || {}).value,
     auto: (document.getElementById('z-horas') || {}).dataset.auto };
 });
-paso('la hora de salida nace en la de ahora', nace.valor === nace.ahora, nace.valor+' / '+nace.ahora);
+/* Cambiada el 08-11-2026. Antes se exigía que la hora de la aplicación y la
+   de la prueba fueran EXACTAMENTE la misma, y eso falla sin que nada esté mal
+   cuando el minuto cambia justo entre que la aplicación pone la hora y la
+   prueba la lee: salió una vez «15:16 / 15:17» y la misma suite pasó sola al
+   repetirla. Lo que de verdad hay que comprobar es que nace en la hora de
+   ahora, no en una hora inventada ni vacía, así que se admite un minuto de
+   diferencia. Más de un minuto seguiría siendo un fallo de verdad. */
+const minutos = s => { const m = /^(\d{2}):(\d{2})$/.exec(String(s || '')); 
+                       return m ? (+m[1]) * 60 + (+m[2]) : null; };
+const distanciaEnMinutos = (a, b) => {
+  const x = minutos(a), y = minutos(b);
+  if (x === null || y === null) return null;
+  const d = Math.abs(x - y);
+  return Math.min(d, 1440 - d);          // por si se cruza la medianoche
+};
+paso('la hora de salida nace en la de ahora',
+  distanciaEnMinutos(nace.valor, nace.ahora) !== null &&
+  distanciaEnMinutos(nace.valor, nace.ahora) <= 1,
+  nace.valor+' / '+nace.ahora);
 paso('y se guarda con qué valor nació, para saber si la tocan', nace.ini === nace.valor, nace.ini);
 paso('se explica que se pondrá la hora de cerrar, porque rellenar también es trabajo',
   /tiempo de trabajo/i.test(nace.texto));
