@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.08-10**
+> **Versión de la aplicación que describe este manual: 2026.11.08-11**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -1162,6 +1162,8 @@ señalada y la etiqueta se pega en la siguiente.
 
 Pestaña **Almacén**. Lo que ves de cada material es cuánto hay y **dónde**: en la nave, en tu furgoneta o en la de otro. Esa es la pregunta de todos los días.
 
+Cada material lleva **su foto delante del nombre**, para que lo reconozcas por la caja y no por la descripción. Los que todavía no tienen foto dejan un cuadrado gris que pone «Sin foto»: ahí se ve de un vistazo lo que falta por fotografiar. Si abres uno de esos y le haces la foto con el móvil, esa misma foto es la que verá el cliente en el presupuesto.
+
 Cada material lleva su etiqueta QR pegada en la caja o en la balda. **La escaneas con la cámara y se abre directamente** con tres botones:
 
 | Botón | Cuándo |
@@ -1308,4 +1310,4 @@ que mire ahí antes de nada. Puede ser eso.
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.08-10 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.08-11 de ARIZA SAT*
