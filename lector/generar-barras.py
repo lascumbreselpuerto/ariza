@@ -151,6 +151,27 @@ for idx, (dato, juego) in enumerate(C128):
     meter('c128_%d-sombra' % idx, txt, 'Code 128', sombra(base, 0.5),
           'Code 128 «%s» con sombra' % txt, False)
 
+# ---- Code 39: SIN juez de fuera (OpenCV no lo lee). Añadido el 08-11-2026
+# después de ver que la caja de la fotocélula Geba de David lleva Code 39 y el
+# lector no sabía ni que existía. Los datos son del estilo de los que ponen de
+# verdad los fabricantes: la referencia del artículo, con puntos y guiones.
+C39 = ['505.LS6A.RP', 'MYNOX-025P24', 'FA-24', 'ONE2WBMS', '12345678',
+       'LS-6P', 'AS05.0043', 'BFT-P111']
+for idx, dato in enumerate(C39):
+    bits, txt = barras.code39(dato)
+    base = barras.imagen(bits, modulo=3, alto=140)
+    meter('c39_%d-limpio' % idx, txt, 'Code 39', base,
+          'Code 39 «%s» tal cual' % txt, False)
+    meter('c39_%d-giro5' % idx, txt, 'Code 39', girar(base, 5),
+          'Code 39 «%s» girado 5º' % txt, False)
+    meter('c39_%d-borroso' % idx, txt, 'Code 39', desenfocar(base, 5),
+          'Code 39 «%s» desenfocado' % txt, False)
+    meter('c39_%d-encaja' % idx, txt, 'Code 39', en_caja(base),
+          'Code 39 «%s» pegado en una caja' % txt, False)
+    meter('c39_%d-real' % idx, txt, 'Code 39',
+          ruido(desenfocar(girar(en_caja(base), 4), 3), 12),
+          'Code 39 «%s» en una caja, torcido, desenfocado y con ruido' % txt, False)
+
 # ---- y lo que NO debe leer
 rng = np.random.default_rng(4)
 for n in range(10):

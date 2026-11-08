@@ -8,9 +8,9 @@ import os, json, barras
 AQUI = os.path.dirname(os.path.abspath(__file__))
 
 def main():
-    fallos = barras.comprobar_tabla_c128()
+    fallos = barras.comprobar_tabla_c128() + barras.comprobar_tabla_c39()
     if fallos:
-        raise SystemExit('la tabla de Code 128 no cumple la norma: %s' % fallos)
+        raise SystemExit('las tablas no cumplen la norma: %s' % fallos)
     js = open(os.path.join(AQUI, 'barras.js')).read()
     rep = {
         '__TABLA_L__': json.dumps(barras.L),
@@ -18,6 +18,7 @@ def main():
         '__TABLA_R__': json.dumps(barras.R),
         '__PARIDAD__': json.dumps(barras.PARIDAD),
         '__C128__': json.dumps(barras.C128_ANCHOS),
+        '__C39__': json.dumps(barras.C39),
     }
     for k, v in rep.items():
         js = js.replace(k, v)

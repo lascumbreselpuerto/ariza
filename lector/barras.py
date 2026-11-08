@@ -179,3 +179,104 @@ if __name__ == '__main__':
         img = imagen(bits, modulo=3)
         ok, leido = comprueba_con_opencv(img, num)
         print('%-7s %-14s OpenCV lee: %-14s %s' % (nombre, num, leido or '(nada)', 'OK' if ok else 'NO'))
+
+# ---------------------------------------------------------------------------
+# Code 39 · añadido el 08-11-2026
+#
+# POR QUÉ ESTABA FALTANDO
+# David mandó ocho fotos de cajas reales. La caja de la fotocélula Geba lleva
+# un código que no es EAN ni Code 128: es Code 39. Sin esto, el lector no
+# podía leerla por bien que funcionase todo lo demás. Es un formato muy usado
+# por los fabricantes para la referencia interna del artículo, y en este
+# sector se lo vamos a encontrar a menudo.
+#
+# LA TABLA NO SE COPIA: SE DEDUCE
+# Cada carácter son nueve elementos (cinco barras y cuatro espacios,
+# alternando) de los que EXACTAMENTE tres son anchos. De ahí el nombre «3 de
+# 9». La familia normal lleva dos barras anchas y un espacio ancho; eso son
+# C(5,2) x C(4,1) = 40 combinaciones. Los cuatro caracteres especiales
+# ($ / + %) llevan tres espacios anchos y ninguna barra ancha: 4 más. Total
+# 44, que son justo los 44 caracteres de Code 39.
+#
+# El sitio de cada carácter dentro de su bloque de diez sale del viejo esquema
+# «1-2-4-7»: las cuatro primeras barras pesan 1, 2, 4 y 7, la quinta solo está
+# para que siempre haya dos barras anchas, y la suma de los pesos de las
+# barras anchas da el sitio (el 11, que es 4+7, hace de décimo). Cuál de los
+# cuatro espacios es el ancho dice de qué bloque se trata.
+#
+# QUIÉN LO DA POR BUENO
+# OpenCV no lee Code 39, así que aquí tampoco hay juez de fuera. Lo que da por
+# buena esta tabla es la foto de David: aplicada a las barras de la caja Geba
+# sale «505.LS6A.RP», que es exactamente lo que lleva impreso la etiqueta en
+# «Art.Nr.». Eso lo comprueba pruebas/barras.mjs con las rachas medidas en la
+# foto, que están guardadas ahí para que la comprobación no dependa de tener
+# la foto delante.
+# ---------------------------------------------------------------------------
+from itertools import combinations as _comb
+
+C39_PESOS = [1, 2, 4, 7]
+C39_BLOQUES = ['1234567890', 'ABCDEFGHIJ', 'KLMNOPQRST', 'UVWXYZ-. *']
+C39_ESPACIO_ANCHO = [1, 2, 3, 0]        # qué espacio es el ancho en cada bloque
+C39_ESPECIALES = '$/+%'
+
+def _c39_tabla():
+    t = {}
+    for nb, letras in enumerate(C39_BLOQUES):
+        for i, j in _comb(range(5), 2):
+            v = sum(C39_PESOS[k] for k in (i, j) if k < 4)
+            sitio = 10 if v == 11 else v
+            if sitio < 1 or sitio > 10:
+                continue
+            p = [0] * 9
+            p[i*2] = 1
+            p[j*2] = 1
+            p[C39_ESPACIO_ANCHO[nb]*2 + 1] = 1
+            t[''.join(map(str, p))] = letras[sitio-1]
+    # los cuatro especiales: tres espacios anchos, ninguna barra ancha
+    for n, ss in enumerate(_comb(range(4), 3)):
+        p = [0] * 9
+        for s in ss:
+            p[s*2 + 1] = 1
+        t[''.join(map(str, p))] = C39_ESPECIALES[n]
+    return t
+
+C39 = _c39_tabla()                       # patrón (9 ceros y unos) -> carácter
+C39_POR_CARACTER = {v: k for k, v in C39.items()}
+
+def code39(texto):
+    """Dibuja un Code 39 con sus asteriscos de arranque y cierre.
+
+    Ancho estrecho 1, ancho 3 (lo que manda la norma para lectura a distancia),
+    y un módulo de separación entre carácter y carácter.
+    """
+    t = str(texto).upper()
+    for ch in t:
+        if ch not in C39_POR_CARACTER or ch == '*':
+            raise ValueError('Code 39 no lleva el carácter «%s»' % ch)
+    bits = ''
+    for ch in '*' + t + '*':
+        p = C39_POR_CARACTER[ch]
+        for i, ancho in enumerate(p):
+            bits += ('1' if i % 2 == 0 else '0') * (3 if ancho == '1' else 1)
+        bits += '0'                      # el espacio que separa caracteres
+    return bits[:-1], t
+
+def comprobar_tabla_c39():
+    """Las reglas de la norma, que se pueden comprobar sin juez de fuera."""
+    fallos = []
+    if len(C39) != 44:
+        fallos.append('la tabla tiene %d patrones y Code 39 son 44' % len(C39))
+    for p, c in C39.items():
+        if len(p) != 9:
+            fallos.append('el patrón de «%s» no tiene nueve elementos' % c)
+        if p.count('1') != 3:
+            fallos.append('el patrón de «%s» no tiene tres anchos: %s' % (c, p))
+        barras_anchas = sum(1 for i in range(0, 9, 2) if p[i] == '1')
+        if c in C39_ESPECIALES:
+            if barras_anchas != 0:
+                fallos.append('«%s» es especial y tiene barras anchas' % c)
+        elif barras_anchas != 2:
+            fallos.append('«%s» no tiene dos barras anchas: %s' % (c, p))
+    if len(set(C39.values())) != 44:
+        fallos.append('hay caracteres repetidos en la tabla')
+    return fallos
