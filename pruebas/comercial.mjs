@@ -304,6 +304,14 @@ const sinMedir = await T(async () => {
   await new Promise(r => setTimeout(r, 700));
   const err1 = (document.querySelector('#dlg-form .err') || {}).textContent || '';
   t.querySelector('.m-sinmedm').value = 'Había mercancía delante y no se podía acceder';
+  /* La foto de la visita, obligatoria para cerrar desde el 07-11-2026. Aquí se
+     prueban las medidas, no la foto, así que se deja hecha igual que la haría el
+     técnico antes de ponerse con el parte. */
+  if (!g.S.sinFotoAviso) {
+    await g.sb.from('fotos').insert({ aviso_id: 'co-1', ruta: 'visita/co-1.jpg',
+      autor: 'prueba', etapa: 'hecho' });
+    await g.cargarFotosAviso('co-1');
+  }
   await g.guardarCierre(g.S.avisos.find(x => x.id === 'co-1'), true);
   await new Promise(r => setTimeout(r, 1500));
   const av = g.S.avisos.find(x => x.id === 'co-1');

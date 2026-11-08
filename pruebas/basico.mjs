@@ -514,9 +514,14 @@ paso('una avería no se cierra si la puerta no tiene ni una foto',
   await T(() => (document.querySelector('#dlg-form .err') || {}).textContent || ''));
 await T(async () => {
   const g = window.__T;
-  const pid = g.S.avisos[0].puerta_id;
-  await g.sb.from('fotos').insert({ puerta_id: pid, ruta: pid+'/1.jpg',
-    creado: new Date().toISOString() });
+  const av = g.S.avisos[0];
+  const pid = av.puerta_id;
+  /* La foto se hace desde el parte, así que cuenta para la ficha de la puerta y
+     para la visita: desde el 07-11-2026 hacen falta las dos cosas y es la misma
+     foto, que es lo que decidió David. */
+  await g.sb.from('fotos').insert({ puerta_id: pid, aviso_id: av.id, etapa: 'hecho',
+    ruta: pid+'/1.jpg', creado: new Date().toISOString() });
+  await g.cargarFotosAviso(av.id);
 });
 await esperar(400);
 await pag.click('#dlg button[type="submit"]'); await esperar(2200);
@@ -756,6 +761,16 @@ await pag.evaluate(id => {
 }, avOrig.id);
 await esperar(900);
 await pag.fill('#z-trab', 'Ajustada la fotocélula.');
+/* La foto de la visita, que desde el 07-11-2026 hace falta para cerrar. Aquí lo
+   que se prueba son las horas y el «no se cobra», así que la foto se da por
+   hecha igual que la haría el técnico antes de ponerse con el parte. */
+await T(async id => {
+  const g = window.__T;
+  if (g.S.sinFotoAviso) return;
+  await g.sb.from('fotos').insert({ aviso_id: id, ruta: 'visita/'+id+'.jpg',
+    autor: 'prueba', etapa: 'hecho' });
+  await g.cargarFotosAviso(id);
+}, avOrig.id);
 await T(() => { const h = document.getElementById('z-horas'); if (h) h.value = ''; });
 await pag.fill('#z-fnom', 'Quien sea');
 const cajaF = await pag.locator('#z-firma').boundingBox();
@@ -792,7 +807,12 @@ await pag.evaluate(id => {
   if (b) b.click();
 }, prevId);
 await esperar(1100);
-await pag.fill('#z-trab', 'Revisión periódica completa.');
+/* ---- Cambiado el 06-11-2026, y a propósito ----
+   Aquí se escribía «Revisión periódica completa» en el campo de trabajo. David
+   quitó ese apartado de la preventiva: «el qué has encontrado y qué has hecho
+   aquí no entra, es innecesario y crea confusión al técnico». El campo sigue
+   existiendo, pero oculto, porque lo rellena el guion. Así que ya no se escribe
+   a mano, y más abajo se comprueba que lo rellena la aplicación. */
 await pag.fill('#z-ini', '08:00'); await pag.fill('#z-fin', '09:30'); await esperar(400);
 /* el guión, si lo hay, se marca todo en «Bien». Los bloques son <details> y
    nacen cerrados, así que primero se abren. */
@@ -820,9 +840,13 @@ await T(async pid => {
   const g = window.__T;
   await g.sb.from('puertas').update({ ancho_mm:3200, alto_mm:2250,
     matricula:'Erreka Rino 4, nº 2019-0481' }).eq('id', pid);
+  /* Las dos fotos se hacen desde el parte, así que llevan también la visita:
+     desde el 07-11-2026 la misma foto vale para la ficha y para la visita. */
+  const av = g.S.avisos.find(x => x.puerta_id === pid && !x.cerrado) || {};
   await g.sb.from('fotos').insert([
-    { puerta_id:pid, ruta:pid+'/conjunto.jpg', autor:'prueba' },
-    { puerta_id:pid, ruta:pid+'/placa.jpg',    autor:'prueba' }]);
+    { puerta_id:pid, aviso_id:av.id || null, etapa:'otra', ruta:pid+'/conjunto.jpg', autor:'prueba' },
+    { puerta_id:pid, aviso_id:av.id || null, etapa:'hecho', ruta:pid+'/placa.jpg',    autor:'prueba' }]);
+  if (av.id) await g.cargarFotosAviso(av.id);
   await g.cargar();
 }, puertaPrev.id);
 await esperar(500);
@@ -844,6 +868,14 @@ const hoyLocal = await T(() => {
 });
 paso('al cerrar la preventiva se anota la fecha de la revisión',
   trasPrev.ultima === hoyLocal, trasPrev.ultima+' (hoy '+hoyLocal+')');
+/* Y lo que importa al haber quitado ese apartado de la preventiva: el parte no
+   se queda sin decir qué se hizo. Lo escribe el guion (06-11-2026). */
+paso('y el trabajo realizado lo rellena el guión, sin escribirlo a mano',
+  /Revisión periódica/i.test(await T(pid => {
+    const g = window.__T;
+    const a = (g.S.avisos || []).find(x => x.puerta_id === pid && x.tipo === 'mantenimiento' && x.cerrado);
+    return (a && a.trabajo) || '';
+  }, puertaPrev.id)));
 paso('y se programa la siguiente, aunque el disparador del servidor no esté puesto',
   !!trasPrev.prox && trasPrev.prox !== puertaPrev.prox, trasPrev.prox);
 paso('a la distancia que marca su periodicidad',

@@ -228,6 +228,16 @@ altaManual.forEach(n => paso('el manual explica «'+n+'» del alta de puerta',
  'hay que volver a quedar', 'nadie sabe que un viaje va a ser en balde'].forEach(n =>
   paso('el manual explica «'+n+'» del viaje en balde', Mllano.includes(n.toLowerCase())));
 
+/* ---- Las fotos de la visita (07-11-2026) ----
+   Lo que el técnico tiene que saber: que hace falta una para cerrar, que la del
+   alta en obra cuenta, y que en un viaje en balde no se le pide. Y por qué, que
+   es lo que hace que se hagan de verdad. */
+['hace falta al menos una para cerrar', 'cuenta también como foto de la visita',
+ 'no se te pide ninguna', 'esto es lo único que lo cuenta'].forEach(n =>
+  paso('el manual explica «'+n+'» de las fotos', Mllano.includes(n.toLowerCase())));
+paso('y el manual dice el mismo tope que la aplicación',
+  await T(() => window.__T.MAX_FOTOS_AVISO) === 10 && /hasta diez/i.test(Mllano));
+
 paso('y el manual da los mismos multiplicadores que la aplicación',
   await T(() => {
     const g = window.__T;

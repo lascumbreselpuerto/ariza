@@ -172,7 +172,7 @@ const DATOS = {
       d.puerta = { tipo:'Seccional', denominacion:'Puerta seccional de garaje',
         marca:'Ariza', modelo:'AR-SEC 3500', serie:'AR-2026-0184',
         ancho:3500, alto:2400, peso:185, hojas:1, motorizada:'si',
-        modo:'automatico', usuarios:'informados', fecha_fabricacion:'2026-09-02' };
+        modo:'automatico', usuarios:'informados_privado', fecha_fabricacion:'2026-09-02' };
       /* Elementos de la instalación */
       d.comp = {};
       (T.EXP_COMPONENTES.industrial||[]).forEach(([k]) => {
@@ -247,7 +247,7 @@ const DATOS = {
       d.puerta = { tipo:'Corredera', denominacion:'Puerta corredera industrial',
         marca:'Sin identificar', modelo:'Sin identificar', serie:'',
         ancho:4200, alto:3800, hojas:1, motorizada:'si',
-        modo:'automatico', usuarios:'informados' };
+        modo:'automatico', usuarios:'informados_privado' };
       d.orig = { fabricante:'', modelo:'', serie:'', marcado:'ausente',
         ddp:'desconocido', declaracion:'desconocido' };
       d.comp = {};
@@ -312,7 +312,7 @@ const DATOS = {
       d.puerta = { tipo:'Peatonal automática', denominacion:'Puerta corredera automática de dos hojas',
         marca:'Erreka', modelo:'Vento', serie:'VN-2026-1187',
         ancho:1800, alto:2200, hojas:2, motorizada:'si',
-        modo:'automatico', usuarios:'publico' };
+        modo:'automatico', usuarios:'no_informados' };
       d.comp = {};
       (T.EXP_COMPONENTES.peatonal||[]).forEach(([k]) => { d.comp[k] = { estado:'si' }; });
       d.cumple = {};
@@ -360,7 +360,7 @@ const DATOS = {
       d.puerta = { tipo:'Corredera', denominacion:'Puerta corredera resistente al fuego',
         marca:'Andreu', modelo:'CF-60 Metálica', serie:'AND-2019-55120',
         ancho:3000, alto:3000, hojas:1, motorizada:'si',
-        modo:'automatico', usuarios:'informados' };
+        modo:'automatico', usuarios:'informados_privado' };
       d.cf = { fabricante:'Andreu Barberá S.L.', modelo:'CF-60 Metálica corredera',
         clasificacion:'EI2 60-C5', dop:'DoP 2019/CF60/014',
         certificado:'0370-CPR-2211', organismo:'AFITI-LICOF, organismo notificado 0370',
@@ -403,7 +403,7 @@ const DATOS = {
       d.puerta = { tipo:'Batiente', denominacion:'Portón batiente de dos hojas motorizado',
         marca:'Ariza', modelo:'Motorización sobre hoja existente', serie:'AR-2026-0211',
         ancho:3200, alto:2000, hojas:2, motorizada:'si',
-        modo:'automatico', usuarios:'informados', fecha_fabricacion:'2026-10-01' };
+        modo:'impulso_sin_vista', usuarios:'no_informados', fecha_fabricacion:'2026-10-01' };
       d.orig = { fabricante:'Cerrajería local, sin identificar', modelo:'', serie:'',
         marcado:'ausente', ddp:'no', declaracion:'no' };
       d.comp = {};

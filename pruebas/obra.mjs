@@ -64,7 +64,15 @@ await ctx.addInitScript(() => {
                      descripcion:'Puesta en servicio de un kit, puerta sin dar de alta' });
     db.avisos.push({ ...base, id:'av-aver',  tipo:'averia',          puerta_id:'pt-sin-doc',
                      descripcion:'No cierra del todo' });
-  };
+      /* ---- Una foto por visita (07-11-2026) ----
+       Desde hoy no se cierra un parte sin al menos una foto DE LA VISITA, así
+       que el recorrido de prueba hace lo que haría el técnico: dejarla hecha.
+       Sin esto, todas las comprobaciones de este fichero se quedaban en el
+       aviso de la foto y no probaban lo suyo. */
+    db.avisos.forEach(a => db.fotos.push({ id:'foto-'+a.id, aviso_id:a.id,
+      puerta_id:a.puerta_id || null, ruta:'prueba/'+a.id+'.jpg', autor:'prueba',
+      etapa:'hecho', creado:new Date().toISOString() }));
+};
 });
 const pag = await ctx.newPage();
 pag.on('pageerror', e => errores.push('JS: '+e.message));
@@ -97,9 +105,30 @@ const limpiarPuerta = () => T(async () => {
 const abrirParte = async (avisoId) => {
   await T(id => { window.__T.dlgCierre(id); }, avisoId);
   await esperar(900);
-  await pag.fill('#z-trab', 'Trabajo hecho.');
-  await pag.fill('#z-horas', '2');
-  await pag.fill('#z-sin', 'No había nadie para firmar.');
+  /* Se escriben por JavaScript y no con fill porque desde el 06-11-2026 el
+     campo de trabajo está oculto en la preventiva, la comercial y la puesta en
+     servicio: lo rellena la propia visita. fill exige que el campo se vea y
+     esta ayuda se usa con todos los tipos. */
+  await T(() => {
+    const v = (id, x) => { const e = document.getElementById(id); if (e) e.value = x; };
+    v('z-trab', 'Trabajo hecho.');
+    v('z-horas', '2');
+    v('z-sin', 'No había nadie para firmar.');
+  });
+  /* ---- La foto de la visita (07-11-2026) ----
+     Desde hoy no se cierra un parte sin al menos una foto DE LA VISITA. Esta
+     ayuda deja todo listo menos lo del alta en obra, así que la foto de la
+     visita también se da por hecha: lo que esta suite mira es la documentación
+     de la PUERTA, y la foto de la puerta se sigue sin poner a propósito. Son
+     dos cosas distintas y aquí se prueba la segunda. */
+  await T(async id => {
+    const g = window.__T;
+    if (g.S.sinFotoAviso) return;
+    const ya = (g.S.fotosAviso || []).some(f => f.aviso_id === id);
+    if (!ya) await g.sb.from('fotos').insert({ aviso_id: id, ruta: 'visita/'+id+'.jpg',
+      autor: 'prueba', etapa: 'hecho' });
+    await g.cargarFotosAviso(id);
+  }, avisoId);
   await esperar(200);
 };
 const cerrarIntento = async (avisoId) => {
@@ -622,8 +651,11 @@ paso('y no se cierra sin ni una foto de la puerta',
   sinFoto.cerrado === false && /foto/i.test(sinFoto.err), sinFoto.err);
 const rAv = await T(async () => {
   const g = window.__T;
+  /* La foto de la PUERTA, que es lo que esta prueba mira, y la de la VISITA,
+     que desde el 07-11-2026 también hace falta para cerrar. */
   await g.sb.from('fotos').insert({ puerta_id:'pt-sin-doc', ruta:'pt-sin-doc/1.jpg',
-    creado:new Date().toISOString() });
+    aviso_id:'av-aver', etapa:'hecho', creado:new Date().toISOString() });
+  await g.cargarFotosAviso('av-aver');
   const a = g.S.avisos.find(x => x.id === 'av-aver');
   await g.guardarCierre(a, true);
   await g.cargar();
@@ -1388,8 +1420,12 @@ const aMedias = await T(async () => {
   const cerradoSinFoto = !!(g.S.avisos.find(x => x.id === 'av-rematar') || {}).cerrado;
 
   /* Ahora con una foto, y con la ficha igual de incompleta */
+  /* Una foto que vale para las dos cosas: la ficha de la puerta y la visita.
+     Es lo que hace la aplicación desde el 07-11-2026 cuando el técnico la hace
+     desde «Documentar la puerta». */
   await g.sb.from('fotos').insert({ puerta_id:'pt-rematar', ruta:'fotos/pt-rematar-1.jpg',
-    autor:'usuario-admin', creado:new Date().toISOString() });
+    aviso_id:'av-rematar', etapa:'otra', autor:'usuario-admin', creado:new Date().toISOString() });
+  await g.cargarFotosAviso('av-rematar');
   await g.cargar();
   await g.guardarCierre(g.S.avisos.find(x => x.id === 'av-rematar'), true);
   await new Promise(r => setTimeout(r, 900));

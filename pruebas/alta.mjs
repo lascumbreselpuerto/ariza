@@ -73,7 +73,15 @@ await ctx.addInitScript(() => {
     /* Una instalación sin puerta: aquí NO puede haber válvula */
     db.avisos.push(Object.assign({}, base, { id:'al-inst', tipo:'instalacion',
       subtipo:'puerta_automatica', descripcion:'Montar puerta nueva' }));
-  };
+      /* ---- Una foto por visita (07-11-2026) ----
+       Desde hoy no se cierra un parte sin al menos una foto DE LA VISITA, así
+       que el recorrido de prueba hace lo que haría el técnico: dejarla hecha.
+       Sin esto, todas las comprobaciones de este fichero se quedaban en el
+       aviso de la foto y no probaban lo suyo. */
+    db.avisos.forEach(a => db.fotos.push({ id:'foto-'+a.id, aviso_id:a.id,
+      puerta_id:a.puerta_id || null, ruta:'prueba/'+a.id+'.jpg', autor:'prueba',
+      etapa:'hecho', creado:new Date().toISOString() }));
+};
 });
 const pag = await ctx.newPage();
 pag.on('pageerror', e => errores.push('JS: '+e.message));
