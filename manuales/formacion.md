@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.11.08-4**
+> **Versión de la aplicación que describe este manual: 2026.11.08-6**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -541,7 +541,8 @@ QR. Y de ahí sale una pregunta que conviene entender antes de usarlo, porque se
 responde mal muy fácilmente.
 
 **El código de barras no trae el nombre del producto.** Son trece cifras y nada
-más. No dice «fotocélula de espejo Erreka FT-20»: dice `8412345678905`. La
+más, o unas cuantas letras y cifras. No dice «fotocélula de espejo Erreka
+FT-20»: dice `8412345678905`. La
 traducción de ese número a un producto está en bases de datos comerciales que
 cubren bien el gran consumo (alimentación, droguería, libros) y que no tienen
 material de puertas automáticas industriales. Nuestros proveedores no publican
@@ -555,6 +556,58 @@ Así que leer la caja sirve para dos cosas, que son las dos que hacen falta:
 
 La descripción la escribe una persona **la primera vez**. A partir de ahí, esa
 caja se reconoce sola para siempre.
+
+### Lo que enseñaron ocho cajas de verdad
+
+Vale la pena contarlo entero, porque es la lección más útil que ha dado este
+proyecto sobre cómo se prueban las cosas.
+
+El lector de códigos se escribió, se probó contra doscientos códigos y los leyó
+todos. Parecía terminado. Entonces David lo usó con una caja de verdad y la
+cámara se abría y no hacía nada. Mandó ocho fotos de cajas de cuatro
+proveedores (Fullwat, ABM, Geba y Beninca), hechas con su móvil como las haría
+en el almacén. El lector leyó **cero de ocho**.
+
+Los doscientos códigos de la prueba los había dibujado el propio programa: se
+dibujaban limpios, derechos, grandes y centrados en la imagen. Una prueba así
+comprueba que sabes descifrar, y no comprueba nada de lo que de verdad falla en
+la calle. Lo que apareció al probar con fotos de verdad fueron **cuatro fallos
+distintos**, ninguno de ellos en el descifrador:
+
+1. **El tamaño.** Cada fotograma de la cámara se reducía a 480 puntos de ancho
+   «porque con más no se lee mejor». Estaba escrito así en el código y era
+   falso, y nadie lo había medido. A 480 puntos, la barra fina de un código que
+   ocupa un tercio de la pantalla mide **medio punto**. No existe.
+2. **Dónde se busca.** Se barría la foto entera a rayas. En la foto de una caja,
+   esa raya cruza madera, letras y sombras además de las barras, y el cálculo de
+   qué es barra y qué es papel se hace mirando el entorno de cada punto: con
+   tanta cosa alrededor, el entorno no dice nada útil y las barras se pierden.
+   Recortando el código a mano, el **mismo** descifrador lo leía a la primera.
+3. **El ángulo.** Las etiquetas vienen pegadas torcidas. La de la caja Beninca
+   hay que leerla entrándole a treinta y cinco grados; a treinta y a cuarenta y
+   cinco no sale. Probar a ciegas en diagonal no vale: hay que medir el ángulo
+   al que están las barras, o probarlos todos.
+4. **Un formato entero que faltaba.** La caja de la fotocélula Geba no lleva ni
+   EAN ni Code 128: lleva **Code 39**, que es lo que usan muchos fabricantes
+   para su referencia de artículo. El lector ni sabía que existía. Ese fallo no
+   lo habría encontrado jamás una prueba hecha con códigos propios, porque los
+   códigos propios se dibujan en los formatos que uno ya conoce.
+
+Y una cosa más, que es la que vale para cualquier oficio. Para dar por bueno el
+Code 39 hubo que descifrar a mano las barras de la foto de la Geba y comprobar
+que salía `505.LS6A.RP`, que es lo que lleva impreso la etiqueta en «Art.Nr.».
+En esa misma foto, OpenCV (que es un lector profesional, de los que usa medio
+mundo) devolvió **cuatro números distintos, los cuatro inventados**, uno por
+cada trozo de la foto que se le daba. Un lector que se inventa números es peor
+que uno que no lee: el que no lee te obliga a teclear, y el que se inventa mete
+en el almacén un material que no existe y nadie se entera. Por eso el nuestro
+exige que **dos líneas distintas de la imagen digan exactamente lo mismo** antes
+de dar un código por leído.
+
+La conclusión práctica, que sirve igual para una puerta que para un programa:
+**una prueba que haces tú con tus propios materiales te dice que sabes hacer tu
+trabajo; solo la prueba en el sitio del cliente te dice si funciona.** Las ocho
+fotos de David están ahora dentro del banco de pruebas, y ahí se quedan.
 
 Y la segunda decisión, que es de gobierno y no técnica: **el catálogo lo
 gobierna la oficina**. El técnico no crea artículos; manda una petición con la
@@ -577,6 +630,41 @@ aplicación hace las dos cosas a la vez: manda la petición **y apunta el materi
 en el parte** escrito a mano. Lo gastado se apunta el día que se gasta; el
 catálogo se arregla cuando la oficina pueda. Lo que no se puede permitir es que
 se pierda ninguna de las dos.
+
+### El nombre con el que alguien está dado de alta no es un detalle
+
+Parece un campo administrativo más, y no lo es. El nombre con el que alguien
+figura en Equipo es el que sale en tres sitios que importan:
+
+- en el **parte que firma el cliente**, como el técnico que hizo la visita;
+- en el **reparto del calendario**, que es por donde se organiza la semana;
+- y en la columna **«Quién»** de cada movimiento de almacén y de cada baja de
+  material.
+
+Hasta el 8 de noviembre de 2026 ese nombre se fijaba al dar de alta a la
+persona y no se podía cambiar desde la aplicación: había que entrar en la base
+de datos. Un apellido que faltaba, un nombre mal escrito con prisa el día del
+alta o un usuario creado con el correo de la empresa en vez de con el nombre de
+una persona se quedaban así para siempre. Desde esa fecha se cambia en
+**Oficina → Equipo**, con el botón «Cambiar el nombre».
+
+Dos cosas que hay que entender al cambiarlo:
+
+**Lo ya guardado no cambia, y está bien que sea así.** Los partes firmados y
+los movimientos de almacén anteriores siguen con el nombre que tenían el día
+que se hicieron, porque allí quedó escrito. Un parte que firmó un cliente dice
+lo que decía cuando lo firmó: reescribirlo hacia atrás sería falsearlo.
+
+**Por eso el nombre no puede ser lo único que identifique a alguien.** Desde
+esa misma fecha, cada movimiento de almacén guarda además **quién es** de
+verdad, no solo cómo se llama. Con eso, aunque el nombre cambie o haya dos
+personas que se llamen parecido, se sabe siempre quién hizo cada cosa. Es la
+diferencia entre un dato que se lee bien y un dato en el que se puede confiar:
+hacen falta los dos, y no son el mismo.
+
+Y de ahí una recomendación práctica: **pon el apellido**. «Dani» y «Danielo»
+leídos con prisa en un listado de bajas son la misma persona para quien está
+mirando otra cosa.
 
 ### El dinero que se rompe no aparece en ninguna cuenta
 
@@ -1090,4 +1178,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.08-4 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.08-6 de ARIZA SAT*

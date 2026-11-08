@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.08-4**
+> **Versión de la aplicación que describe este manual: 2026.11.08-6**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -543,23 +543,43 @@ significa que un traspaso no se apuntó.
 Botón **Leer la etiqueta**, dentro del propio apartado de Materiales. Se abre ahí
 mismo, sin salir del parte.
 
-1. Se abre la cámara y puedes acercarle **dos cosas distintas**:
+1. Se abre la cámara con un **recuadro verde** en medio. Dentro de ese recuadro
+   puedes meter **dos cosas distintas**:
    - el **QR de nuestra etiqueta**, el que pegamos nosotros;
    - o el **código de barras de la caja del fabricante**, el que viene impreso
      de serie. Si ese material ya está dado de alta con su código de barras,
      entra en el parte igual que con nuestro QR.
    Funciona en cualquier teléfono, **también en iPhone**, y sin cobertura.
-2. Si el código está roto, sucio, muy pequeño o no hay luz, escribes el
-   **código que va impreso debajo del QR**: `MAT-0012`, o solo `12`. Intro, y
-   listo.
+2. Si en dos o tres segundos no lo coge solo, dale al botón **Leer ahora**.
+   Tarda un segundo o dos y mira mucho más a fondo que el automático: prueba el
+   código en todas las posiciones, para etiquetas pegadas torcidas.
+3. Si aun así no sale, escribes el **código que va impreso debajo del QR**:
+   `MAT-0012`, o solo `12`. Intro, y listo.
 
 Escanea tres cajas de lo mismo y quedan **tres unidades en una línea**, no tres
 líneas de una. La cantidad siempre se puede corregir a mano.
 
-Para que lo coja a la primera: acerca el móvil hasta que el QR ocupe más o menos
-la mitad de la pantalla, sin tapar las esquinas de la etiqueta. Da igual que
-esté torcido o un poco de lado. Lo que no perdona es que el QR salga muy
-pequeño en la pantalla o que falte un trozo de etiqueta.
+**LO QUE MÁS IMPORTA, Y ES UNA SOLA COSA: ACERCA EL MÓVIL.**
+
+El código tiene que **llenar el recuadro verde de lado a lado**. Si cabe dentro
+con sitio de sobra, está demasiado lejos y no hay manera de leerlo, ni con este
+lector ni con el de una tienda. La razón es de aritmética: las barras finas de
+un código de barras miden tres décimas de milímetro, y si el código sale
+pequeño en la pantalla esas barras no llegan ni a un punto de la foto. No es
+que el lector no las entienda, es que no están.
+
+Lo demás perdona bastante:
+
+- **torcido**: da igual, aunque esté a cuarenta y cinco grados;
+- **de lado**: hasta un ángulo razonable, sí;
+- **el cartón arrugado**: no suele molestar;
+- **el brillo del sol o de un fluorescente encima del código**: eso sí molesta,
+  y la solución es moverte un paso, no acercar más;
+- **desenfocado**: separa un palmo y vuelve a acercar despacio, para que la
+  cámara enfoque.
+
+Mientras mira, arriba a la derecha pone **«mirando…»**. Si eso no aparece, es
+que la cámara no está dando imagen y hay que cerrar y volver a abrir.
 
 > **Por qué este botón existe.** La etiqueta del material se podía escanear desde
 > antes, pero con la cámara del teléfono: eso abre la aplicación otra vez por la
@@ -571,6 +591,25 @@ pequeño en la pantalla o que falte un trozo de etiqueta.
 > trae: en iPhone salía el cartel de «este teléfono no sabe leer códigos» y
 > había que teclear el código. Desde esa fecha la aplicación lleva su propio
 > lector dentro, así que el iPhone lee igual que los Android.
+>
+> **Y por qué el recuadro verde y el botón.** El mismo 8 de noviembre, con el
+> lector propio ya puesto, David probó a escanear cajas de verdad y la cámara
+> se abría y no hacía nada. Mandó ocho fotos de cajas de cuatro proveedores
+> distintos y se midió: el lector no leía **ninguna**. Dos motivos, los dos
+> comprobados:
+>
+> 1. De cada fotograma de la cámara se tiraba el noventa y tantos por ciento:
+>    se reducía a 480 puntos de ancho. A ese tamaño una barra fina mide medio
+>    punto. Ahora se mira solo el recuadro, y a más del doble de tamaño.
+> 2. Se buscaba el código por toda la pantalla a la vez, con la mesa, el suelo
+>    y las letras de la caja por medio. Ahora primero se busca DÓNDE hay rayas
+>    juntas, que es una huella que no deja ninguna otra cosa, y se lee solo
+>    ahí.
+>
+> De paso apareció un tercer fallo que nadie había visto: faltaba un formato
+> entero. La caja de la fotocélula Geba no lleva ni EAN ni Code 128, lleva
+> **Code 39**, que es el que usan muchos fabricantes para su referencia de
+> artículo. Ahora también se lee.
 
 Y un aviso: si al leer una etiqueta te dice que **no cuadra con el material**,
 no insistas ni lo metas a mano. Significa que ese QR no es el de ese código, y
@@ -1192,4 +1231,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.08-4 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.08-6 de ARIZA SAT*
