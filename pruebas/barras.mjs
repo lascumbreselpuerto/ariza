@@ -413,6 +413,62 @@ const tecnico = await T(async () => {
 });
 paso('el panel de peticiones es solo de la oficina', tecnico.vacio === true);
 
+bloque('9. Code 39, el formato que faltaba');
+/* El 08-11-2026 se vio que la caja de la fotocélula Geba de David no lleva ni
+   EAN ni Code 128, sino Code 39, y el lector ni lo conocía. La tabla no se
+   copió de ningún sitio: se deduce de la regla de la norma (nueve elementos,
+   tres de ellos anchos; pesos 1-2-4-7 en las barras; el espacio ancho dice el
+   bloque). Lo que la da por buena es la foto de la caja. */
+const c39 = await T(async () => {
+  const B = window.ARIZA_BARRAS, I = window.__barrasInterno;
+  const tabla = I.C39;
+  const letras = Object.values(tabla).sort().join('');
+  const patronesMal = Object.keys(tabla).filter(p =>
+    p.length !== 9 || (p.match(/1/g) || []).length !== 3);
+  /* Las rachas que se midieron DE VERDAD en la foto de David (IMG_2226, la
+     etiqueta Geba), línea 367 del recorte. Guardadas aquí para que la comprobación no
+     dependa de tener la foto delante. */
+  const medidas = [66,3,3,28,38,47,6,72,3,11,4,4,10,4,10,5,3,4,10,5,3,11,10,4,4,4,4,4,4,5,2,11,10,4,10,4,5,3,10,5,2,12,10,4,4,3,4,4,10,11,4,3,4,5,10,4,3,4,5,3,11,3,3,5,4,11,10,3,4,5,10,3,4,5,10,11,2,5,4,4,10,12,9,3,4,5,3,4,11,4,3,6,2,12,3,4,11,4,10,11,3,5,3,5,10,4,3,7,9,4,3,5,3,5,10,11,3,5,3,5,10,4,10,5,3,12,2,5,3,12,3,4,11,4,10,4,3,69,15,60,62,53];
+  /* y el mismo código dibujado por nosotros, que tiene que leerse igual */
+  return { nLetras: Object.keys(tabla).length, letras, patronesMal,
+           hayAsterisco: Object.values(tabla).indexOf('*') >= 0,
+           medidas: medidas.length };
+});
+paso('la tabla de Code 39 tiene los 44 caracteres', c39.nLetras === 44, c39.nLetras);
+paso('todos los patrones son de nueve elementos con tres anchos',
+     c39.patronesMal.length === 0, c39.patronesMal.join(' '));
+paso('están los 44 de la norma y ninguno más',
+     c39.letras === ' $%*+-./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ', c39.letras);
+paso('y el asterisco de arranque y cierre', c39.hayAsterisco === true);
+
+/* Lo de verdad: el código de la caja Geba, descifrado desde las rachas que se
+   midieron en la foto. Si la tabla estuviera mal puesta, aquí saldría otra
+   cosa o no saldría nada, y lo que sale es lo que lleva impreso la etiqueta. */
+const geba = await T(async () => {
+  const I = window.__barrasInterno;
+  const r = [66,3,3,28,38,47,6,72,3,11,4,4,10,4,10,5,3,4,10,5,3,11,10,4,4,4,4,4,4,5,2,11,10,4,10,4,5,3,10,5,2,12,10,4,4,3,4,4,10,11,4,3,4,5,10,4,3,4,5,3,11,3,3,5,4,11,10,3,4,5,10,3,4,5,10,11,2,5,4,4,10,12,9,3,4,5,3,4,11,4,3,6,2,12,3,4,11,4,10,11,3,5,3,5,10,4,3,7,9,4,3,5,3,5,10,11,3,5,3,5,10,4,10,5,3,12,2,5,3,12,3,4,11,4,10,4,3,69,15,60,62,53];
+  const salidas = [];
+  const primero = 1;   /* la primera racha de esa línea es oscura */
+  for (let i = 0; i + 9 < r.length; i += 1) {
+    const esBarra = ((i % 2) === 0) === (primero === 1);
+    const x = I.leerC39Desde(r, i, esBarra);
+    if (x) salidas.push(x.texto);
+  }
+  return salidas;
+});
+paso('de las rachas de la foto de la caja Geba sale lo que lleva impreso',
+     geba.indexOf('505.LS6A.RP') >= 0, geba.join(' / ') || '(nada)');
+
+const falso39 = await T(async () => {
+  const I = window.__barrasInterno;
+  /* rachas de mentira: todas iguales, que no son ni anchas ni estrechas */
+  const r = new Array(60).fill(7);
+  let n = 0;
+  for (let i = 0; i + 9 < r.length; i++) if (I.leerC39Desde(r, i, true)) n++;
+  return n;
+});
+paso('con barras todas iguales no se inventa un Code 39', falso39 === 0, falso39);
+
 console.log('\n'+ok+' bien, '+mal+' mal.');
 if (errores.length){ console.log('Errores de JavaScript:'); errores.forEach(e => console.log('   '+e)); }
 else console.log('Sin errores de JavaScript.');

@@ -10,7 +10,7 @@ if ! curl -fsS -o /dev/null "http://127.0.0.1:8899/index.html"; then
   exit 1
 fi
 
-SUITES="${*:-humo version basico componentes centros tipos ayudas fuerzas obra ficha importar almacen presupuestos parado factura rutas campo avisos subtipos urgencia preventiva comercial remate alta reloj partes tipos-puerta perifericos plegado puerta-oficina urgencia2 falso fotos codigos barras almacenes regresion fase6 fase7 fase8 copias manuales}"
+SUITES="${*:-humo version basico componentes centros tipos ayudas fuerzas obra ficha importar almacen presupuestos parado factura rutas campo avisos subtipos urgencia preventiva comercial remate alta reloj partes tipos-puerta perifericos plegado puerta-oficina urgencia2 falso fotos codigos barras cajas almacenes regresion fase6 fase7 fase8 copias manuales}"
 RESUMEN="$AQUI/resultado.txt"
 : > "$RESUMEN"
 TOTAL=0; FALLOS=0
