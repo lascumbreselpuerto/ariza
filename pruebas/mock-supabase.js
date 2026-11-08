@@ -94,6 +94,7 @@ function semilla(){
     entregas_obra: [],
     aviso_puertas: [],
     movimientos_material: [],
+    __bajas: [],          /* la vista bajas_material, recalculada al leerla */
     materiales_previstos: [],
   };
 }
@@ -326,7 +327,58 @@ function almacen(bucket){
 }
 
 /* ---- Procedimientos ---- */
+/* ---- Las bajas de material con su coste (08-11-2026) ----
+   Es una VISTA en la base de datos, así que aquí se calcula al leerla, igual
+   que la calcula Postgres: de los movimientos con motivo de baja, con el coste
+   del artículo. La regla de que solo la ve gestión la pone el servidor con
+   es_gestion(); aquí el usuario del simulador es administrador, así que la ve. */
+function bajasMaterial(){
+  const nombreMotivo = { baja_roto:'Roto', baja_perdido:'Perdido', baja_otro:'Otro' };
+  return (DB.movimientos_material || [])
+    .filter(m => ['baja_roto','baja_perdido','baja_otro','baja'].includes(String(m.motivo||'')))
+    .map(m => {
+      const a = (DB.articulos || []).find(x => String(x.id) === String(m.articulo_id)) || {};
+      const u = (DB.ubicaciones || []).find(x => String(x.id) === String(m.desde)) || null;
+      const p = (DB.perfiles || []).find(x => String(x.id) === String(m.creado_por_id)) || null;
+      const coste = Number(a.coste || 0) * Number(m.cantidad || 0);
+      return { id: m.id, creado: m.creado, motivo: m.motivo,
+               motivo_nombre: nombreMotivo[m.motivo] || 'Baja (antes del 08-11-2026)',
+               cantidad: m.cantidad, nota: m.nota,
+               articulo_id: m.articulo_id, articulo: a.descripcion,
+               articulo_codigo: a.codigo, unidad: a.unidad, familia: a.familia,
+               coste_unidad: a.coste == null ? null : Number(a.coste),
+               coste_total: Math.round(coste * 100) / 100,
+               ubicacion_id: m.desde, almacen: u ? u.nombre : null,
+               almacen_tipo: u ? u.tipo : null,
+               creado_por: m.creado_por, creado_por_id: m.creado_por_id,
+               quien: p ? p.nombre : null,
+               aviso_id: m.aviso_id, puerta_id: m.puerta_id };
+    });
+}
+
 const RPC = {
+  /* El resumen de bajas por mes, almacén y motivo, igual que la función de la
+     base de datos. */
+  resumen_bajas({ p_desde, p_hasta } = {}){
+    const filas = bajasMaterial().filter(b => {
+      if (p_desde && String(b.creado || '') < String(p_desde)) return false;
+      if (p_hasta && String(b.creado || '').slice(0,10) > String(p_hasta)) return false;
+      return true;
+    });
+    const mapa = new Map();
+    filas.forEach(b => {
+      const clave = [String(b.creado||'').slice(0,7), b.almacen || 'Sin almacén', b.motivo_nombre].join('|');
+      const ya = mapa.get(clave) || { mes: String(b.creado||'').slice(0,7),
+        almacen: b.almacen || 'Sin almacén', motivo_nombre: b.motivo_nombre,
+        cuantas: 0, coste_total: 0 };
+      ya.cuantas++; ya.coste_total += Number(b.coste_total || 0);
+      mapa.set(clave, ya);
+    });
+    return [...mapa.values()]
+      .map(x => ({ ...x, coste_total: Math.round(x.coste_total * 100) / 100 }))
+      .sort((a, b) => (b.mes || '').localeCompare(a.mes || '') ||
+                      Number(b.coste_total) - Number(a.coste_total));
+  },
   /* Enviar el parte al cliente. En la aplicación de verdad esto encola un correo
      en el servidor; aquí se apunta la llamada en DB.__partes para que el banco
      pueda comprobar que se ha pedido, a qué visita y a qué correo. */
@@ -496,7 +548,12 @@ export function createClient(){
     access_token: 'prueba',
   };
   return {
-    from: t => new Consulta(t),
+    from: t => {
+      /* «bajas_material» es una vista: se calcula al leerla, igual que la
+         calcula Postgres, y no se guarda como tabla. */
+      if (t === 'bajas_material'){ DB.__bajas = bajasMaterial(); return new Consulta('__bajas'); }
+      return new Consulta(t);
+    },
     rpc: async (nombre, args) => {
       const fn = RPC[nombre];
       if (!fn) return { data:null, error:{ message:'Procedimiento no simulado: '+nombre } };

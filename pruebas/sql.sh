@@ -47,7 +47,7 @@ ORDEN="componentes.sql centros.sql parte-por-correo.sql obra.sql ficha.sql \
 almacen.sql presupuestos.sql presupuestos2.sql comercial.sql anexos.sql \
 tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos3.sql valoracion.sql \
 parado.sql factura.sql rutas.sql ruta-cliente.sql telegram.sql subtipo.sql urgencia.sql \
-medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql perifericos.sql ficha4.sql urgencia2.sql falso.sql fotos-aviso.sql barras.sql"
+medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql perifericos.sql ficha4.sql urgencia2.sql falso.sql fotos-aviso.sql barras.sql almacenes.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -362,6 +362,21 @@ if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/barras-pruebas.sql" ]; then
     fallos=$((fallos+1))
     echo " FALLA el código de barras del fabricante:"
     grep -a -m3 -E "ERROR|EXCEPTION" /tmp/barras-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
+# Los almacenes de la oficina y el rastro de las bajas: que una baja no exista
+# sin motivo escrito ni sin almacén, que roto y perdido sean cosas distintas, y
+# que el coste salga calculado, que es la cifra que hoy no se ve.
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/almacenes-pruebas.sql" ]; then
+  echo ""
+  echo "── Los almacenes y las bajas ───────────────────"
+  if $PSQL -f "$AQUI/sql/almacenes-pruebas.sql" > /tmp/almacenes-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/almacenes-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA los almacenes y las bajas:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/almacenes-pruebas.log | sed 's/^/         /'
   fi
 fi
 
