@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.11.08-7**
+> **Versión de la aplicación que describe este manual: 2026.11.08-8**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -626,6 +626,46 @@ cuatro puntos donde se escanea algo, y el banco de pruebas comprueba que la
 cámara solo se abre dentro de él. Si alguien vuelve a copiar uno, se pone en
 rojo.
 
+### El banco que no castigaba lo que la realidad castiga
+
+Y una tercera, la misma noche, que es la más fina de las tres.
+
+David: «Cuando la oficina da de alta un producto que los técnicos han
+solicitado, sigue apareciendo en material que piden los técnicos.»
+
+La causa era pequeña y exacta. La base de datos guarda **quién** resolvió la
+petición con su identificador interno, un código largo. La aplicación le estaba
+mandando su **nombre**, «David Ariza». La base rechazaba el cambio entero por el
+tipo, la petición se quedaba en «pendiente» y volvía a salir en la lista. El
+material sí se daba de alta, porque esa es otra orden distinta: de ahí que
+pareciera que todo había ido bien.
+
+Lo importante no es el fallo. Es que **el banco de pruebas lo daba por bueno**.
+
+Para probar la aplicación sin tocar los datos de verdad, el banco usa un
+simulador de la base de datos. Y ese simulador guardaba lo que le echaran sin
+mirar el tipo. Así que en el banco todo iba perfecto, y en el Supabase de verdad
+no iba. Un banco que no castiga lo que la realidad castiga **da tranquilidad en
+vez de información**, y eso es peor que no tener banco: con banco en verde uno
+deja de mirar.
+
+Es lo mismo que probar una puerta con el cuadro en modo de ajuste, donde las
+seguridades están puenteadas para poder mover la hoja. Se mueve preciosa. Y
+luego, en automático con todo conectado, no arranca. La prueba no era mentira:
+es que no estaba probando lo que había que probar.
+
+Las dos cosas que se arreglaron:
+
+1. La aplicación manda el identificador, no el nombre.
+2. **El simulador rechaza ahora un identificador que no lo es**, igual que la
+   base de datos de verdad.
+
+Y la comprobación que hace que esto valga algo: se volvió a poner el código
+antiguo a propósito y se pasó la prueba nueva. Se puso en rojo diciendo
+exactamente lo que David veía en su pantalla. Luego se devolvió el arreglo y
+pasó. **Una prueba que no se pone en rojo con el fallo delante no prueba nada**,
+y escribirla sin comprobar eso es engañarse con más trabajo.
+
 La conclusión práctica, que sirve igual para una puerta que para un programa:
 **una prueba que haces tú con tus propios materiales te dice que sabes hacer tu
 trabajo; solo la prueba en el sitio del cliente te dice si funciona.** Las ocho
@@ -1200,4 +1240,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.08-7 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.08-8 de ARIZA SAT*
