@@ -2023,7 +2023,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.08-6';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.08-7';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -4429,9 +4429,16 @@ function vistaAlmacen(){
   h += '<div class="fila"><div class="buscador sp"><input id="busca-mat" type="search" '+
        'placeholder="Buscar material por nombre, código, referencia, marca o familia" '+
        'value="'+esc(S.buscaMat)+'" data-act="busca-mat"></div>'+
+       /* Leer la caja en vez de buscarla en la lista. David, 08-11-2026: «una
+          vez cargada en almacén no es posible la entrada, salida ni traspaso
+          con el lector de código de barras». Aquí empieza ese camino. */
+       (S.sinBarras ? '' : '<button class="btn" data-act="alm-leer">Leer código</button>')+
        (esGestion() ? '<button class="btn" data-act="importar" data-tipo="materiales">Cargar desde Excel</button>'+
                       '<button class="btn" data-act="mat-etiquetas">Etiquetas QR</button>' : '')+
-       (esGestion() ? '<button class="btn pri" data-act="mat-nuevo">Nuevo material</button>' : '')+'</div>';
+       (esGestion() ? '<button class="btn pri" data-act="mat-nuevo">Nuevo material</button>' : '')+'</div>'+
+       (S.sinBarras ? '' :
+         '<div id="alm-lector" hidden style="margin:8px 0;border:1px solid var(--line);'+
+         'border-radius:8px;padding:10px"></div>');
 
   /* Lo que no es material suelto: a quién se le compra y las recetas de venta */
   if (esGestion())
@@ -4687,7 +4694,18 @@ function dlgMover(articuloId, modo, avisoId){
   let h = '<h3>'+titulos[modo]+'</h3>'+
     '<p class="mini" style="margin:0 0 10px"><b>'+esc(a.descripcion)+'</b>'+
     (a.codigo ? ' · '+esc(a.codigo) : '')+' · hay '+e.total+' '+esc(a.unidad||'ud')+
-    (e.porSitio.length ? ' ('+esc(e.porSitio.map(s => s.nombre+': '+s.cantidad).join(' · '))+')' : '')+'</p>';
+    (e.porSitio.length ? ' ('+esc(e.porSitio.map(s => s.nombre+': '+s.cantidad).join(' · '))+')' : '')+'</p>'+
+    /* Comprobar con la cámara que la caja que tienes en la mano es esta y no
+       la de al lado. Decisión de David el 08-11-2026. No obliga a nada: es un
+       botón, y sirve justo cuando dos cajas se parecen y la salida se apunta
+       con prisa. */
+    (S.sinBarras ? '' :
+      '<div class="fila" style="gap:8px;margin:0 0 10px">'+
+        '<button type="button" class="btn sm" data-act="mv-comprobar" data-id="'+a.id+'">'+
+        'Comprobar la caja con la cámara</button><span class="sp"></span></div>'+
+      '<div id="mv-lector" hidden style="margin:0 0 10px;border:1px solid var(--line);'+
+      'border-radius:8px;padding:10px"></div>'+
+      '<p id="mv-comprob" class="mini" hidden style="margin:0 0 10px"></p>');
 
   h += '<div class="campos">'+
     '<div class="campo"><label for="mv-cant">Cantidad ('+esc(a.unidad||'ud')+')</label>'+
@@ -20324,6 +20342,7 @@ const puedeLeerCamara = () =>
 function pararLector(){
   if (LECTOR.timer){ clearInterval(LECTOR.timer); LECTOR.timer = null; }
   if (LECTOR.stream){ LECTOR.stream.getTracks().forEach(t => t.stop()); LECTOR.stream = null; }
+  pararLectorEn('mat-lector-camara');
 }
 /* Del texto del QR, o del código escrito a mano, al material del almacén.
    El QR lleva la dirección entera (…#M-MAT0001-A3K9) y ahí el código de
@@ -20775,78 +20794,130 @@ function panelBajas(){
    La oficina da de alta con la caja en la mano, así que lo normal es leer el
    código, no teclear trece cifras. Es su propio lector, pequeño y aparte del
    del parte: aquí no se añade nada a ningún sitio, solo se rellena el campo. */
-const LECTOR_EAN = { stream:null, timer:null, lienzo:null };
-function pararLectorEan(){
-  if (LECTOR_EAN.timer){ clearInterval(LECTOR_EAN.timer); LECTOR_EAN.timer = null; }
-  if (LECTOR_EAN.stream){ LECTOR_EAN.stream.getTracks().forEach(t => t.stop()); LECTOR_EAN.stream = null; }
-  const c = document.getElementById('x-ean-lector');
-  if (c) c.hidden = true;
-}
-async function arrancarLectorEan(){
-  const caja = document.getElementById('x-ean-lector');
-  const video = document.getElementById('x-ean-video');
-  const aviso = document.getElementById('x-ean-aviso');
-  const campo = document.getElementById('x-ean');
-  if (!caja || !video) return;
-  caja.hidden = false;
-  if (!puedeLeerCamara()){
-    if (aviso) aviso.textContent = 'Este ordenador no tiene cámara disponible. '+
-      'Escribe el código a mano, el de debajo de las barras.';
-    video.hidden = true;
-    return;
-  }
-  try {
-    LECTOR_EAN.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-  } catch(e){
-    video.hidden = true;
-    if (aviso) aviso.textContent = 'No se ha podido abrir la cámara ('+(e && e.name ? e.name : 'sin permiso')+'). '+
-      'Escribe el código a mano.';
-    return;
-  }
-  video.hidden = false;
-  video.srcObject = LECTOR_EAN.stream;
-  try { await video.play(); } catch(_){}
-  const formatos = ['ean_13','ean_8','upc_a','upc_e','code_128'];
-  const nativo = (typeof BarcodeDetector !== 'undefined' && !S.sinQRnativo)
-    ? new BarcodeDetector({ formats: formatos }) : null;
-  const propio = (!nativo && window.ARIZA_BARRAS) ? window.ARIZA_BARRAS : null;
-  if (!nativo && !propio){
-    if (aviso) aviso.textContent = 'Este navegador no sabe leer códigos de barras. '+
-      'Escribe el código a mano.';
-    return;
-  }
-  LECTOR_EAN.timer = setInterval(async () => {
-    if (!video.videoWidth || !LECTOR_EAN.stream) return;
-    try {
-      let cod = null;
-      if (nativo){
-        const c = await nativo.detect(video);
-        if (c && c.length) cod = c[0].rawValue;
+/* El lector del campo del código de barras, en la ficha del artículo.
+   Desde el 08-11-2026 NO tiene lector propio: usa el único que hay. Antes sí
+   lo tenía, copiado, y por eso cuando se arregló el del parte este se quedó
+   como estaba y David se encontró con que «desde cargar material nuevo desde
+   almacén no funciona». */
+function pararLectorEan(){ pararLectorEn('x-ean-lector'); }
+
+/* ===========================================================================
+   LEER UNA CAJA EN ALMACÉN Y DECIDIR QUÉ HACER CON ELLA           08-11-2026
+
+   David: «una vez cargada en almacén no es posible la entrada, salida ni
+   traspaso con el lector de código de barras.» Y eligió que, al leer, salgan
+   los tres botones: es el camino más corto cuando lo que estás haciendo es
+   mover material, que es casi siempre.
+
+   Vale tanto el código de barras del fabricante como el QR de nuestra propia
+   etiqueta, porque la caja que tienes en la mano puede llevar cualquiera de
+   los dos y el técnico no tiene por qué saber cuál.
+   =========================================================================== */
+async function arrancarLectorAlmacen(){
+  const caja = document.getElementById('alm-lector');
+  if (!caja) return;
+  await abrirLector({
+    caja: 'alm-lector',
+    queBusco: 'ambos',
+    aviso: 'Pon el código de la caja dentro del recuadro verde y acerca hasta que lo llene. '+
+           'Vale el código del fabricante y también el QR de nuestra etiqueta.',
+    alLeer: (txt, tipo) => {
+      const art = tipo === 'QR'
+        ? (articuloDeEtiqueta(txt) || {}).art
+        : articuloDeBarras(txt);
+      if (art){ dlgQueHagoCon(art.id); return; }
+      /* No está en el catálogo. A la oficina se le ofrece darlo de alta con el
+         código ya puesto; al técnico se le dice a quién avisar, porque el
+         catálogo no lo gobierna él. */
+      const cod = tipo === 'QR' ? String(txt||'') : soloCodigo(txt);
+      if (esGestion()){
+        toast('El código '+cod+' no está en el catálogo. Se abre el alta con él puesto.');
+        dlgArticulo(null, { ean: tipo === 'QR' ? '' : cod });
       } else {
-        const an = video.videoWidth, al = video.videoHeight;
-        const esc = Math.min(1, 640 / Math.max(an, al));
-        if (!LECTOR_EAN.lienzo) LECTOR_EAN.lienzo = document.createElement('canvas');
-        const cv = LECTOR_EAN.lienzo;
-        const w = Math.round(an * esc), hh = Math.round(al * esc);
-        if (cv.width !== w || cv.height !== hh){ cv.width = w; cv.height = hh; }
-        const cx = cv.getContext('2d', { willReadFrequently: true });
-        cx.drawImage(video, 0, 0, w, hh);
-        const d = cx.getImageData(0, 0, w, hh).data;
-        const lum = new Uint8Array(w * hh);
-        for (let i = 0, j = 0; i < lum.length; i++, j += 4)
-          lum[i] = (d[j]*77 + d[j+1]*151 + d[j+2]*28) >> 8;
-        const r = propio.leer(lum, w, hh);
-        if (r) cod = r.texto;
+        toast('El código '+cod+' no está en el catálogo. Pídeselo a la oficina desde un parte, '+
+              'con la foto de la caja.');
       }
-      if (cod){
-        if (campo) campo.value = soloCodigo(cod);
-        pararLectorEan();
-        const otro = articuloDeBarras(cod);
-        toast(otro ? 'Leído '+soloCodigo(cod)+'. OJO: ese código ya lo tiene «'+otro.descripcion+'».'
-                   : 'Leído '+soloCodigo(cod)+'.');
+    }
+  });
+}
+
+/* Comprobar que la caja de la mano es la del movimiento que se está haciendo.
+   No bloquea nada: avisa. Un aviso que se puede leer sirve más que un candado
+   que obliga a salir y volver a entrar. (08-11-2026) */
+async function comprobarCajaMovimiento(articuloId){
+  const a = articuloDe(articuloId);
+  const sal = document.getElementById('mv-comprob');
+  if (!a) return;
+  await abrirLector({
+    caja: 'mv-lector',
+    queBusco: 'ambos',
+    aviso: 'Pon el código de la caja en el recuadro. Te diré si es «'+a.descripcion+'» o no.',
+    alLeer: (txt, tipo) => {
+      const leido = tipo === 'QR'
+        ? (articuloDeEtiqueta(txt) || {}).art
+        : articuloDeBarras(txt);
+      if (!sal) return;
+      sal.hidden = false;
+      if (leido && leido.id === articuloId){
+        sal.style.color = 'var(--ok, #16a34a)';
+        sal.textContent = 'Correcto: la caja es «'+a.descripcion+'».';
+      } else if (leido){
+        sal.style.color = 'var(--mal, #dc2626)';
+        sal.textContent = 'OJO: esa caja NO es «'+a.descripcion+'», es «'+leido.descripcion+'». '+
+          'Si de verdad quieres mover esa otra, sal de aquí y empieza por ella.';
+      } else {
+        sal.style.color = '';
+        sal.textContent = 'Ese código ('+(tipo === 'QR' ? String(txt||'') : soloCodigo(txt))+
+          ') no está en el catálogo, así que no puedo decirte si es este material o no.';
       }
-    } catch(_){ /* un fotograma ilegible no es un error */ }
-  }, 350);
+    }
+  });
+}
+
+/* Los tres botones, con lo que hay ahora mismo delante para no mover a ciegas */
+function dlgQueHagoCon(articuloId){
+  const a = articuloDe(articuloId);
+  if (!a) return;
+  const e = existenciasDe(articuloId);
+  const fur = miFurgoneta();
+  const h = '<h3>'+esc(a.descripcion)+'</h3>'+
+    '<p class="mini" style="margin:0 0 4px">'+(a.codigo ? esc(a.codigo)+' · ' : '')+
+      (a.ean ? 'código de caja '+esc(a.ean)+' · ' : '')+
+      'hay <b>'+e.total+'</b> '+esc(a.unidad||'ud')+'</p>'+
+    (e.porSitio.length
+      ? '<p class="mini" style="margin:0 0 12px">'+esc(e.porSitio.map(s => s.nombre+': '+s.cantidad).join(' · '))+'</p>'
+      : '<p class="mini" style="margin:0 0 12px">Todavía no hay existencias de este material en ningún sitio.</p>')+
+    '<div class="fila" style="gap:8px;flex-wrap:wrap">'+
+      '<button type="button" class="btn pri" style="flex:1;min-width:120px" '+
+        'data-act="mat-mover" data-id="'+a.id+'" data-modo="entrada">Entrada</button>'+
+      '<button type="button" class="btn" style="flex:1;min-width:120px" '+
+        'data-act="mat-mover" data-id="'+a.id+'" data-modo="salida">Salida</button>'+
+      '<button type="button" class="btn" style="flex:1;min-width:120px" '+
+        'data-act="mat-mover" data-id="'+a.id+'" data-modo="traspaso">Traspaso</button>'+
+    '</div>'+
+    '<div class="fila" style="gap:8px;margin-top:10px">'+
+      '<button type="button" class="btn sm plana" data-act="mat-ficha" data-id="'+a.id+'">Ver la ficha entera</button>'+
+      '<span class="sp"></span>'+
+      (S.sinBarras ? '' : '<button type="button" class="btn sm plana" data-act="alm-leer-otra">Leer otra caja</button>')+
+    '</div>'+
+    (fur ? '' : '<p class="pista" style="margin-top:10px">Todavía no tienes furgoneta asignada: '+
+       'hasta que la oficina te la ponga, lo que saques saldrá del almacén general.</p>');
+  abrirDlg(h, null);
+}
+
+async function arrancarLectorEan(){
+  await abrirLector({
+    caja: 'x-ean-lector',
+    queBusco: 'barras',
+    alLeer: (txt) => {
+      const cod = soloCodigo(txt);
+      const campo = document.getElementById('x-ean');
+      if (campo) campo.value = cod;
+      const otro = articuloDeBarras(cod);
+      toast(otro ? 'Leído '+cod+'. OJO: ese código ya lo tiene «'+otro.descripcion+'».'
+                 : 'Leído '+cod+'.');
+    }
+  });
 }
 
 /* ---- Las peticiones de material, para la oficina (08-11-2026) ----
@@ -20915,6 +20986,41 @@ function resolverPeticionCreando(id){
 }
 let PETICION_EN_CURSO = null;
 
+/* La foto de la petición pasa a ser la foto del material           08-11-2026
+   ---------------------------------------------------------------------------
+   David: «las fotos que se exigen al dar de alta no aparecen en el producto
+   una vez aceptada desde oficina».
+
+   Y no aparecían por una razón tonta y real: la foto de la petición se guarda
+   en el almacén de fotos de los partes (fotos/peticiones/...), y la ficha del
+   material busca la suya en otro sitio distinto (ofertas/catalogo/...). Nadie
+   las juntaba, así que la foto que se le EXIGE al técnico se quedaba colgada
+   en la petición y el material nacía sin foto. Justo lo contrario de para lo
+   que se pedía.
+
+   Ahora, al dar de alta desde una petición, la foto se copia a la ficha. Se
+   copia, no se mueve: la petición conserva la suya, porque es el justificante
+   de lo que se pidió y ese histórico no se toca.
+
+   Si la copia falla (permisos del almacén de ficheros, o que la foto ya no
+   esté), el material se da de alta IGUAL y se avisa. Un material sin foto es
+   un inconveniente; un alta que no se puede completar es un técnico parado. */
+async function copiarFotoDePeticion(peticionId, articuloId){
+  const p = (S.peticiones || []).find(x => x.id === peticionId);
+  if (!p || !p.foto_ruta) return false;
+  const a = articuloDe(articuloId);
+  if (a && a.foto_ruta) return false;        /* ya tiene una suya: no se pisa */
+  const baj = await sb.storage.from('fotos').download(p.foto_ruta);
+  if (baj.error) throw baj.error;
+  const ruta = 'catalogo/' + articuloId + '-' + Date.now() + '.jpg';
+  const sub = await sb.storage.from('ofertas')
+    .upload(ruta, baj.data, { contentType: baj.data.type || 'image/jpeg' });
+  if (sub.error) throw sub.error;
+  const { error } = await sb.from('articulos').update({ foto_ruta: ruta }).eq('id', articuloId);
+  if (error){ try { await sb.storage.from('ofertas').remove([ruta]); } catch(_){} throw error; }
+  return true;
+}
+
 async function cerrarPeticion(id, articuloId, estado, nota){
   const o = { estado: estado, resuelto: new Date().toISOString(), resuelto_por: yo() };
   if (articuloId) o.articulo_id = articuloId;
@@ -20935,6 +21041,209 @@ function usarEtiqueta(txt){
   else toast('Eso no parece el código de una etiqueta de material.');
   return false;
 }
+/* ===========================================================================
+   UN SOLO LECTOR PARA TODA LA APLICACIÓN                          08-11-2026
+
+   POR QUÉ SE HIZO ESTO, QUE ES LO IMPORTANTE
+   David, el mismo día que se arregló el lector del parte: «Desde una asistencia
+   funciona. Desde cargar material nuevo desde almacén no funciona.»
+
+   Y tenía que pasar. Había TRES lectores copiados por la aplicación: el del
+   parte, el del campo del código de barras en la ficha del artículo, y lo que
+   hiciera falta cada vez. Se arregló uno y los otros se quedaron como estaban,
+   con el fotograma reducido a 640 puntos, sin recuadro y sin botón. Un fallo
+   arreglado en un sitio y vivo en otros dos.
+
+   Así que ahora hay UNO. Lo usan todos, y arreglar el lector vuelve a ser
+   arreglar el lector, no acordarse de tres sitios.
+
+   Cómo se usa: se le da el id de un div vacío y qué hacer con lo que lea.
+     abrirLector({ caja:'mi-div', queBusco:'ambos', alLeer:(txt, tipo) => {...} })
+   =========================================================================== */
+const LECTORES = {};              /* los que están abiertos, por id de caja */
+
+function pararLectorEn(id){
+  const L = LECTORES[id];
+  if (!L) return;
+  if (L.timer){ clearInterval(L.timer); L.timer = null; }
+  if (L.stream){ L.stream.getTracks().forEach(t => t.stop()); L.stream = null; }
+  const c = document.getElementById(id);
+  if (c){ c.hidden = true; c.innerHTML = ''; }
+  delete LECTORES[id];
+}
+function pararTodosLosLectores(){ Object.keys(LECTORES).forEach(pararLectorEn); }
+
+/* queBusco: 'qr' solo nuestra etiqueta, 'barras' solo la caja del fabricante,
+   'ambos' las dos. alLeer(texto, tipo): tipo es 'QR' o el nombre del formato.
+   seguir: si es cierto, la cámara NO se cierra al leer (para ir en cadena). */
+async function abrirLector(op){
+  const caja = document.getElementById(op.caja);
+  if (!caja) return false;
+  pararLectorEn(op.caja);
+  const L = LECTORES[op.caja] = { stream:null, timer:null, lienzo:null, ocupado:false };
+  caja.hidden = false;
+  caja.innerHTML =
+    '<div style="position:relative;line-height:0">'+
+      '<video id="'+op.caja+'-video" playsinline muted '+
+        'style="width:100%;max-height:300px;border-radius:6px;background:#000;object-fit:cover"></video>'+
+      '<div id="'+op.caja+'-guia" hidden style="position:absolute;left:10%;top:20%;width:80%;height:60%;'+
+        'border:2px solid #22c55e;border-radius:6px;box-shadow:0 0 0 2000px rgba(0,0,0,.28);'+
+        'pointer-events:none"></div>'+
+      '<div id="'+op.caja+'-mirando" hidden style="position:absolute;right:8px;top:8px;'+
+        'background:rgba(0,0,0,.6);color:#fff;font-size:11px;padding:3px 8px;border-radius:10px;'+
+        'pointer-events:none">mirando…</div>'+
+    '</div>'+
+    '<p class="mini" id="'+op.caja+'-aviso" style="margin:8px 0">Abriendo la cámara…</p>'+
+    '<div class="fila" style="gap:8px">'+
+      '<button type="button" class="btn sm pri" id="'+op.caja+'-disparo" hidden style="flex:1">Leer ahora</button>'+
+      (op.cerrar === false ? '' :
+        '<button type="button" class="btn sm plana" id="'+op.caja+'-cerrar">Cerrar</button>')+
+    '</div>';
+
+  const video = document.getElementById(op.caja+'-video');
+  const aviso = document.getElementById(op.caja+'-aviso');
+  const guia = document.getElementById(op.caja+'-guia');
+  const senal = document.getElementById(op.caja+'-mirando');
+  const boton = document.getElementById(op.caja+'-disparo');
+  const cerrar = document.getElementById(op.caja+'-cerrar');
+  if (cerrar) cerrar.onclick = () => { pararLectorEn(op.caja); if (op.alCerrar) op.alCerrar(); };
+
+  if (!puedeLeerCamara()){
+    video.hidden = true;
+    aviso.textContent = 'Este aparato no deja abrir la cámara desde la aplicación. '+
+      'Escribe el código a mano.';
+    return false;
+  }
+  /* La mayor resolución que dé la cámara: leer un código es cuestión de
+     píxeles por barra. «ideal» y no «exact», para que un teléfono que no pueda
+     dé lo que tenga en vez de fallar. */
+  try {
+    L.stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' },
+               width: { ideal: 1920 }, height: { ideal: 1080 } } });
+  } catch(e){
+    try {
+      L.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    } catch(e2){
+      video.hidden = true;
+      aviso.textContent = 'No se ha podido abrir la cámara ('+(e2 && e2.name ? e2.name : 'sin permiso')+'). '+
+        'Escribe el código a mano.';
+      return false;
+    }
+  }
+  /* Enfoque continuo: sin él la cámara se queda enfocando el fondo y el código
+     sale borroso por mucho que se acerque. No todas lo admiten. */
+  try {
+    const pista = L.stream.getVideoTracks()[0];
+    const puede = pista.getCapabilities ? pista.getCapabilities() : {};
+    if (puede.focusMode && puede.focusMode.indexOf('continuous') >= 0)
+      await pista.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+  } catch(e){ /* sin enfoque automático se lee igual, hace falta más pulso */ }
+
+  video.srcObject = L.stream;
+  try { await video.play(); } catch(_){}
+  if (guia) guia.hidden = false;
+
+  const quiereQR = op.queBusco !== 'barras';
+  const quiereBarras = op.queBusco !== 'qr';
+  const formatos = [];
+  if (quiereQR) formatos.push('qr_code');
+  if (quiereBarras && !S.sinBarras) formatos.push('ean_13','ean_8','upc_a','upc_e','code_128');
+  const nativo = (typeof BarcodeDetector !== 'undefined' && !S.sinQRnativo && formatos.length)
+    ? new BarcodeDetector({ formats: formatos }) : null;
+  const propioQR = (!nativo && quiereQR && window.ARIZA_QR && !S.sinQRpropio) ? window.ARIZA_QR : null;
+  const propioBar = (!nativo && quiereBarras && window.ARIZA_BARRAS && !S.sinBarras && !S.sinQRbarras)
+    ? window.ARIZA_BARRAS : null;
+  if (!nativo && !propioQR && !propioBar){
+    aviso.textContent = 'Este aparato no sabe leer códigos desde la aplicación. Escribe el código a mano.';
+    return false;
+  }
+  aviso.textContent = op.aviso ||
+    (quiereBarras
+      ? 'Pon el código dentro del recuadro verde y ACERCA hasta que lo llene de lado a lado: '+
+        'si queda pequeño no hay manera de leerlo. Si no lo coge solo, dale a «Leer ahora».'
+      : 'Pon el QR dentro del recuadro verde y acerca hasta que lo llene. '+
+        'Si no lo coge solo, dale a «Leer ahora».');
+  if (boton) boton.hidden = false;
+
+  function entregar(txt, tipo){
+    if (!op.seguir) pararLectorEn(op.caja);
+    try { op.alLeer(txt, tipo); } catch(e){ fallo(e); }
+  }
+
+  /* El botón: una foto quieta, y entonces sí se puede gastar. Mira el
+     fotograma entero además del recuadro y prueba todos los ángulos. */
+  if (boton) boton.onclick = async () => {
+    if (!video.videoWidth){ toast('La cámara todavía no da imagen.'); return; }
+    boton.disabled = true; boton.textContent = 'Leyendo…';
+    const antes = aviso.textContent;
+    aviso.textContent = 'Leyendo… no muevas el móvil.';
+    await new Promise(r => setTimeout(r, 60));
+    let leido = null;
+    try {
+      if (nativo){
+        const cods = await nativo.detect(video);
+        if (cods && cods.length) leido = { nat: cods[0] };
+      }
+      if (!leido){
+        for (const soloGuia of [true, false]){
+          const f = fotogramaEnGrises(video, soloGuia, L);
+          if (!f) continue;
+          if (propioQR){
+            const txt = propioQR.leerQR(f.lum, f.an, f.al);
+            if (txt){ leido = { qr: txt }; break; }
+          }
+          if (propioBar){
+            const r = propioBar.leer(f.lum, f.an, f.al, true);
+            if (r){ leido = { bar: r }; break; }
+          }
+          await new Promise(r => setTimeout(r, 20));
+        }
+      }
+    } catch(e){ /* se dirá abajo que no se ha leído */ }
+    boton.disabled = false; boton.textContent = 'Leer ahora';
+    aviso.textContent = antes;
+    if (leido && leido.nat){
+      entregar(leido.nat.rawValue, leido.nat.format === 'qr_code' ? 'QR' : leido.nat.format);
+    } else if (leido && leido.qr){ entregar(leido.qr, 'QR');
+    } else if (leido && leido.bar){ entregar(leido.bar.texto, leido.bar.tipo);
+    } else {
+      toast('No se ha podido leer. Casi siempre es una de tres: el código no llena el '+
+            'recuadro (acerca más), hay un brillo encima (mueve el móvil de sitio), o está '+
+            'desenfocado (separa un palmo y vuelve a acercar). Si no, escríbelo a mano.');
+    }
+  };
+
+  L.timer = setInterval(async () => {
+    if (!video.videoWidth || !L.stream) return;
+    if (L.ocupado) return;              /* el fotograma de antes aún se mira */
+    L.ocupado = true;
+    if (senal) senal.hidden = false;
+    try {
+      if (nativo){
+        const cods = await nativo.detect(video);
+        if (cods && cods.length){
+          const c = cods[0];
+          entregar(c.rawValue, c.format === 'qr_code' ? 'QR' : c.format);
+        }
+        return;
+      }
+      const f = fotogramaEnGrises(video, true, L);
+      if (!f) return;
+      if (propioQR){
+        const txt = propioQR.leerQR(f.lum, f.an, f.al);
+        if (txt){ entregar(txt, 'QR'); return; }
+      }
+      if (propioBar){
+        const r = propioBar.leer(f.lum, f.an, f.al, false);
+        if (r) entregar(r.texto, r.tipo);
+      }
+    } catch(e){ /* un fotograma ilegible no es un error: viene otro */ }
+    finally { L.ocupado = false; if (senal) senal.hidden = true; }
+  }, 400);
+  return true;
+}
+
 /* Un fotograma del vídeo, en blanco y negro, para el descifrador propio.
    ---------------------------------------------------------------------------
    AQUÍ ESTABA EL FALLO QUE CONTÓ DAVID EL 08-11-2026: «abre la cámara pero no
@@ -20951,9 +21260,10 @@ function usarEtiqueta(txt){
        suelo de fondo;
      · y ese trozo se saca a 1100 píxeles, no a 480. Como es un trozo y no la
        pantalla entera, sale a la vez más grande y más barato de mirar. */
-function fotogramaEnGrises(video, soloGuia){
+function fotogramaEnGrises(video, soloGuia, donde){
   const anV = video.videoWidth, alV = video.videoHeight;
   if (!anV || !alV) return null;
+  const guarda = donde || LECTOR;
   /* El mismo recuadro que se ve en pantalla: 80% de ancho, 60% de alto,
      centrado. Si se cambia ahí, hay que cambiarlo aquí. El alto es generoso
      porque por el recuadro pasa también el QR de nuestra etiqueta, que es
@@ -20963,8 +21273,8 @@ function fotogramaEnGrises(video, soloGuia){
                  rx = Math.round((anV - ran) / 2); ry = Math.round((alV - ral) / 2); }
   const escala = Math.min(1, 1100 / Math.max(ran, ral));
   const an = Math.max(21, Math.round(ran * escala)), al = Math.max(21, Math.round(ral * escala));
-  if (!LECTOR.lienzo){ LECTOR.lienzo = document.createElement('canvas'); }
-  const c = LECTOR.lienzo;
+  if (!guarda.lienzo){ guarda.lienzo = document.createElement('canvas'); }
+  const c = guarda.lienzo;
   if (c.width !== an || c.height !== al){ c.width = an; c.height = al; }
   const ctx = c.getContext('2d', { willReadFrequently: true });
   ctx.drawImage(video, rx, ry, ran, ral, 0, 0, an, al);
@@ -20980,186 +21290,25 @@ async function arrancarLector(){
   if (!caja) return;
   caja.hidden = false;
   const campo = document.getElementById('mat-cod');
-  const video = document.getElementById('mat-video');
-  const aviso = document.getElementById('mat-lector-aviso');
   if (campo) campo.focus();
-  if (!puedeLeerCamara()){
-    if (video) video.hidden = true;
-    if (aviso) aviso.textContent = 'Este teléfono no deja abrir la cámara desde la aplicación. '+
-      'Escribe el código que va impreso debajo del QR de la etiqueta: MAT-0012, o solo 12.';
-    return;
-  }
-  /* Se le pide a la cámara la mayor resolución que dé, porque leer un código de
-     barras es cuestión de píxeles por barra. «ideal» y no «exact»: si el
-     teléfono no puede, da lo que tenga en vez de fallar. (08-11-2026) */
-  const pidiendo = { facingMode: { ideal: 'environment' },
-                     width: { ideal: 1920 }, height: { ideal: 1080 } };
-  try {
-    LECTOR.stream = await navigator.mediaDevices.getUserMedia({ video: pidiendo });
-  } catch (e){
-    try {                              /* algún teléfono no traga con la medida */
-      LECTOR.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-    } catch (e2){
-      if (video) video.hidden = true;
-      if (aviso) aviso.textContent = 'No se ha podido abrir la cámara ('+(e2 && e2.name ? e2.name : 'sin permiso')+'). '+
-        'Escribe el código impreso debajo del QR.';
-      return;
-    }
-  }
-  /* Y el enfoque continuo, que sin él la cámara se queda enfocando el fondo y
-     el código sale borroso por mucho que se acerque. No todos lo admiten, así
-     que si falla no pasa nada. */
-  try {
-    const pista = LECTOR.stream.getVideoTracks()[0];
-    const puede = pista.getCapabilities ? pista.getCapabilities() : {};
-    if (puede.focusMode && puede.focusMode.indexOf('continuous') >= 0)
-      await pista.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
-  } catch (e){ /* sin enfoque automático se lee igual, solo hace falta más pulso */ }
-  if (video){ video.hidden = false; video.srcObject = LECTOR.stream; try { await video.play(); } catch(e){} }
-  if (aviso) aviso.textContent = 'Acerca el QR de la etiqueta. Si no lo coge, escribe el código de debajo.';
-  /* Dos maneras de descifrar lo que ve la cámara:
-     1. El lector que trae el navegador, cuando lo trae. Es el más rápido.
-     2. El nuestro, escrito a mano, que es el que hace que funcione en iPhone:
-        Safari no trae lector de códigos y por eso en el iPhone de David no se
-        podía escanear y había que teclear el código. (08-11-2026) */
-  const formatos = ['qr_code'];
-  /* Desde el 08-11-2026 también se lee el código de barras de la caja del
-     fabricante, no solo nuestra etiqueta. Al lector del navegador se le piden
-     los dos; al nuestro se le pregunta primero por el QR, que es más rápido, y
-     si no hay QR se le pasa el fotograma al de barras. */
-  if (!S.sinBarras) formatos.push('ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128');
-  const nativo = (typeof BarcodeDetector !== 'undefined' && !S.sinQRnativo)
-    ? new BarcodeDetector({ formats: formatos }) : null;
-  const propio = (!nativo && window.ARIZA_QR && !S.sinQRpropio) ? window.ARIZA_QR : null;
-  const propioBarras = (!nativo && window.ARIZA_BARRAS && !S.sinBarras && !S.sinQRbarras)
-    ? window.ARIZA_BARRAS : null;
-  if (!nativo && !propio && !propioBarras){
-    if (aviso) aviso.textContent = 'Este teléfono no sabe leer códigos desde la aplicación. '+
-      'Escribe el código que va impreso debajo del QR de la etiqueta: MAT-0012, o solo 12.';
-    return;
-  }
-  if (aviso)
-    aviso.textContent = S.sinBarras
-      ? 'Pon el QR de la etiqueta dentro del recuadro verde y acerca hasta que lo llene. '+
-        'Si no lo coge, dale a «Leer ahora», y si tampoco, escribe el código de debajo.'
-      : 'Pon el código dentro del recuadro verde y ACERCA hasta que lo llene de lado a lado: '+
-        'si queda pequeño no hay manera de leerlo. Vale el QR de nuestra etiqueta y el código '+
-        'de barras de la caja del fabricante. Si no lo coge solo, dale a «Leer ahora».';
-  /* El recuadro y el aviso de «mirando» solo cuando hay imagen de verdad: si la
-     cámara no abre, un recuadro verde flotando sobre nada despista. */
-  const guia = document.getElementById('mat-guia');
-  const senal = document.getElementById('mat-mirando');
-  const boton = document.getElementById('mat-disparo');
-  if (guia) guia.hidden = false;
-  if (boton) boton.hidden = false;
-
-  /* Quién descifra, y con eso cómo se mira el fotograma:
-       · el lector del navegador, cuando lo trae, mira el vídeo entero y es el
-         más rápido;
-       · el nuestro mira SOLO el recuadro, que es lo que hace que lea. */
-  LECTOR.descifra = { nativo, propio, propioBarras };
-  LECTOR.ocupado = false;
-  LECTOR.timer = setInterval(async () => {
-    if (!video || !video.videoWidth || !LECTOR.stream) return;
-    if (LECTOR.ocupado) return;         /* el fotograma de antes aún se está mirando */
-    LECTOR.ocupado = true;
-    if (senal) senal.hidden = false;
-    try {
-      if (nativo){
-        const cods = await nativo.detect(video);
-        if (cods && cods.length){
-          const c = cods[0];
-          /* Un QR es nuestra etiqueta; cualquier otro formato es la caja del
-             fabricante, y eso va por otro camino. */
-          if (c.format === 'qr_code') usarEtiqueta(c.rawValue);
-          else usarCodigoBarras(c.rawValue, c.format);
-        }
-        return;
-      }
-      const f = fotogramaEnGrises(video, true);
-      if (!f) return;
-      if (propio){
-        const txt = propio.leerQR(f.lum, f.an, f.al);
-        if (txt){ usarEtiqueta(txt); return; }
-      }
-      if (propioBarras){
-        const r = propioBarras.leer(f.lum, f.an, f.al, false);
-        if (r) usarCodigoBarras(r.texto, r.tipo);
-      }
-    } catch (e){ /* un fotograma que no se puede leer no es un error: el siguiente */ }
-    finally { LECTOR.ocupado = false; if (senal) senal.hidden = true; }
-  }, 400);
-}
-
-/* El botón «Leer ahora»                                            08-11-2026
-   ---------------------------------------------------------------------------
-   Lo pidió David: «creo q falta un boton de hacer la foto o activar el lector
-   para leer el codigo de barra». Y tiene razón por una razón de fondo: el bucle
-   de la cámara no puede gastar mucho en cada fotograma, porque tiene que seguir
-   el vídeo. Apretando el botón sí se puede, porque lo que se mira es una foto
-   quieta y nadie espera que vaya a treinta por segundo.
-
-   Lo que hace de más: mira el fotograma entero además del recuadro, y prueba el
-   código en todos los ángulos, de cinco en cinco grados, en vez de solo en el
-   que ha medido. Tarda uno o dos segundos y lee cajas que el bucle no coge:
-   la etiqueta de la caja Beninca de las fotos de David está pegada torcida y
-   hay que entrarle a treinta y cinco grados. */
-async function leerAhora(){
-  const video = document.getElementById('mat-video');
-  const aviso = document.getElementById('mat-lector-aviso');
-  const boton = document.getElementById('mat-disparo');
-  if (!video || !video.videoWidth){ toast('La cámara todavía no da imagen.'); return; }
-  const propio = (window.ARIZA_QR && !S.sinQRpropio) ? window.ARIZA_QR : null;
-  const barras = (window.ARIZA_BARRAS && !S.sinBarras && !S.sinQRbarras) ? window.ARIZA_BARRAS : null;
-  const nativo = (typeof BarcodeDetector !== 'undefined' && !S.sinQRnativo) ? true : false;
-  if (boton){ boton.disabled = true; boton.textContent = 'Leyendo…'; }
-  const antes = aviso ? aviso.textContent : '';
-  if (aviso) aviso.textContent = 'Leyendo… no muevas el móvil.';
-  /* Un respiro para que la pantalla se entere de que está leyendo: si no, el
-     navegador se pone a descifrar y no repinta hasta que acaba. */
-  await new Promise(r => setTimeout(r, 60));
-  let leido = null;
-  try {
-    if (nativo){
-      const formatos = ['qr_code'];
-      if (!S.sinBarras) formatos.push('ean_13','ean_8','upc_a','upc_e','code_128');
-      const det = new BarcodeDetector({ formats: formatos });
-      const cods = await det.detect(video);
-      if (cods && cods.length) leido = { nat: cods[0] };
-    }
-    if (!leido){
-      /* primero el recuadro, que es donde debería estar; después todo */
-      for (const soloGuia of [true, false]){
-        const f = fotogramaEnGrises(video, soloGuia);
-        if (!f) continue;
-        if (propio){
-          const txt = propio.leerQR(f.lum, f.an, f.al);
-          if (txt){ leido = { qr: txt }; break; }
-        }
-        if (barras){
-          const r = barras.leer(f.lum, f.an, f.al, true);
-          if (r){ leido = { bar: r }; break; }
-        }
-        await new Promise(r => setTimeout(r, 20));
-      }
-    }
-  } catch (e){ /* se dirá abajo que no se ha leído */ }
-  if (boton){ boton.disabled = false; boton.textContent = 'Leer ahora'; }
-  if (aviso) aviso.textContent = antes;
-  if (leido && leido.nat){
-    if (leido.nat.format === 'qr_code') usarEtiqueta(leido.nat.rawValue);
-    else usarCodigoBarras(leido.nat.rawValue, leido.nat.format);
-    return;
-  }
-  if (leido && leido.qr){ usarEtiqueta(leido.qr); return; }
-  if (leido && leido.bar){ usarCodigoBarras(leido.bar.texto, leido.bar.tipo); return; }
-  /* Y cuando no se lee, decir por qué suele ser, que es lo que sirve de algo. */
-  toast('No se ha podido leer. Casi siempre es una de tres: el código no llena el '+
-        'recuadro (acerca más), hay un brillo encima (mueve el móvil de sitio), o está '+
-        'desenfocado (separa un palmo y vuelve a acercar). Si no, escribe el código a mano.');
+  /* Desde el 08-11-2026 este tampoco tiene lector propio: usa el único que
+     hay. Antes era el ÚNICO arreglado, y por eso el de la ficha del artículo
+     se quedó roto sin que se notara. */
+  await abrirLector({
+    caja: 'mat-lector-camara',
+    queBusco: 'ambos',
+    alLeer: (txt, tipo) => {
+      if (tipo === 'QR') usarEtiqueta(txt);
+      else usarCodigoBarras(txt, tipo);
+    },
+    alCerrar: () => { const c = document.getElementById('mat-lector'); if (c) c.hidden = true; }
+  });
 }
 dlg.addEventListener('close', pararLector);
-dlg.addEventListener('close', pararLectorEan);   // la cámara de la ficha, igual
+/* Y cualquier otra cámara que quedara abierta: la de la ficha del artículo, la
+   de comprobar la caja en un movimiento... Con un solo lector esto es una sola
+   línea, que es justo lo que se buscaba. (08-11-2026) */
+dlg.addEventListener('close', pararTodosLosLectores);
 /* Y el reloj de la hora de salida, que si no se queda corriendo detrás */
 dlg.addEventListener('close', pararRelojCierre);
 
@@ -24291,11 +24440,9 @@ function dlgArticulo(id, inicial){
       '<button type="button" class="btn sm" data-act="ean-leer">Leer</button></div>'+
       '<span class="pista">El de la caja del fabricante, no el nuestro. Con esto puesto, '+
       'el técnico escanea la caja y el material entra solo en el parte.</span></div>'+
-      '<div id="x-ean-lector" hidden class="campo full" style="border:1px solid var(--line);border-radius:8px;padding:10px">'+
-      '<video id="x-ean-video" playsinline muted style="width:100%;max-height:220px;border-radius:6px;background:#000"></video>'+
-      '<p class="mini" id="x-ean-aviso" style="margin:8px 0 0">Acerca el código de barras de la caja.</p>'+
-      '<div class="fila" style="gap:8px;margin-top:6px"><span class="sp"></span>'+
-      '<button type="button" class="btn sm plana" data-act="ean-cerrar">Cerrar la cámara</button></div></div>')+
+      /* El lector se pinta solo al abrirlo: este div va vacío a propósito,
+         porque lo rellena abrirLector, que es el único lector que hay. */
+      '<div id="x-ean-lector" hidden class="campo full" style="border:1px solid var(--line);border-radius:8px;padding:10px"></div>')+
     (esGestion()
       ? '<div class="campo"><label for="x-coste">Precio de compra (€)</label><input id="x-coste" type="number" step="0.01" min="0" placeholder="Sin IVA"></div>'+
         '<div class="campo"><label for="x-rec">Recargo propio (%)</label><input id="x-rec" type="number" step="1" min="0" placeholder="Si lo dejas vacío, el general"></div>'
@@ -24374,6 +24521,15 @@ function dlgArticulo(id, inicial){
         /* Si el alta viene de lo que pidió un técnico, su petición se cierra
            aquí y queda apuntado qué artículo salió de ella. */
         if (PETICION_EN_CURSO && nuevo && nuevo.id){
+          /* Y la foto de la caja, que es lo que se le exigió al técnico, pasa a
+             ser la foto del material. Antes se quedaba en la petición y el
+             material nacía sin foto: lo cazó David el 08-11-2026. */
+          try {
+            await copiarFotoDePeticion(PETICION_EN_CURSO, nuevo.id);
+          } catch(err){
+            toast('El material se ha dado de alta, pero la foto de la caja no se ha podido '+
+                  'pasar a su ficha ('+err.message+'). Ponla a mano desde la ficha del material.');
+          }
           try {
             await cerrarPeticion(PETICION_EN_CURSO, nuevo.id, 'resuelta', 'Dado de alta en el catálogo');
           } catch(err){
@@ -26852,26 +27008,12 @@ function dlgCierre(avisoId){
        medio rellenar se iría con él. */
     (S.sinAlmacen ? '' :
       '<div id="mat-lector" hidden style="margin-top:10px;border:1px solid var(--line);border-radius:8px;padding:10px">'+
-        /* El vídeo y el recuadro guía van uno encima de otro. El recuadro no es
-           un adorno: marca la única zona que se mira, y es lo que le dice al
-           técnico hasta dónde tiene que acercar. Un código que no llena ese
-           recuadro a lo ancho no se lee, por bueno que sea el descifrador, y sin
-           el recuadro no hay manera de saberlo. (08-11-2026) */
-        '<div style="position:relative;line-height:0">'+
-          '<video id="mat-video" playsinline muted hidden '+
-            'style="width:100%;max-height:300px;border-radius:6px;background:#000;object-fit:cover"></video>'+
-          '<div id="mat-guia" hidden style="position:absolute;left:10%;top:20%;width:80%;height:60%;'+
-            'border:2px solid #22c55e;border-radius:6px;box-shadow:0 0 0 2000px rgba(0,0,0,.28);'+
-            'pointer-events:none"></div>'+
-          '<div id="mat-mirando" hidden style="position:absolute;right:8px;top:8px;background:rgba(0,0,0,.6);'+
-            'color:#fff;font-size:11px;padding:3px 8px;border-radius:10px;pointer-events:none">mirando…</div>'+
-        '</div>'+
-        '<p class="mini" id="mat-lector-aviso" style="margin:8px 0">Abriendo la cámara…</p>'+
-        '<div class="fila" style="gap:8px;margin-bottom:8px">'+
-          '<button type="button" class="btn sm pri" id="mat-disparo" data-act="mat-leer-ahora" hidden '+
-            'style="flex:1">Leer ahora</button>'+
-        '</div>'+
-        '<div class="fila" style="gap:8px">'+
+        /* La cámara, el recuadro verde y el botón los pinta abrirLector, que es
+           el ÚNICO lector de la aplicación. Este div va vacío a propósito: el
+           día que había tres lectores copiados, se arregló uno y los otros dos
+           se quedaron rotos sin que nadie lo viera. (08-11-2026) */
+        '<div id="mat-lector-camara"></div>'+
+        '<div class="fila" style="gap:8px;margin-top:8px">'+
           '<input id="mat-cod" type="text" inputmode="text" autocomplete="off" maxlength="20" '+
             'placeholder="Código de la etiqueta: MAT-0012" style="flex:1">'+
           '<button type="button" class="btn sm pri" data-act="mat-cod-buscar">Buscar</button>'+
@@ -29472,6 +29614,7 @@ raiz.addEventListener('click', async e => {
   }
   else if (a === 'prev-abrir') dlgPrevistos(b.dataset.id);
   else if (a === 'mat-ficha') dlgMaterial(b.dataset.id);
+  else if (a === 'alm-leer') arrancarLectorAlmacen();
   else if (a === 'mat-mover') dlgMover(b.dataset.id, b.dataset.modo || 'entrada', b.dataset.aviso || null);
   else if (a === 'mat-qr') dlgQrMaterial(b.dataset.id);
   else if (a === 'mat-etiquetas') hojaEtiquetasMaterial();
@@ -30324,7 +30467,6 @@ dlgForm.addEventListener('click', async e => {
   if (a === 'mat-pedir-cerrar'){ cerrarPeticionCaja(); return; }
   if (a === 'mat-pedir-enviar'){ await mandarPeticionMaterial(); return; }
   if (a === 'ean-leer'){ await arrancarLectorEan(); return; }
-  if (a === 'ean-cerrar'){ pararLectorEan(); return; }
   if (a === 'mat-pedir'){
     const id = e.target.closest('[data-act]').dataset.id || null;
     /* Si el técnico ya ha escrito algo en una línea de material sin enlazar, se
@@ -30351,7 +30493,6 @@ dlgForm.addEventListener('click', async e => {
     const c = document.getElementById('mat-lector'); if (c) c.hidden = true;
     return;
   }
-  if (a === 'mat-leer-ahora'){ await leerAhora(); return; }
   if (a === 'mat-cod-buscar'){
     const campo = document.getElementById('mat-cod');
     if (!campo) return;
@@ -30863,6 +31004,8 @@ dlgForm.addEventListener('click', async e => {
   }
   if (a === 'mat-mover'){ cerrarDlg(); dlgMover(b.dataset.id, b.dataset.modo || 'entrada', b.dataset.aviso || null); return; }
   if (a === 'mat-ficha'){ cerrarDlg(); dlgMaterial(b.dataset.id); return; }
+  if (a === 'alm-leer-otra'){ cerrarDlg(); await arrancarLectorAlmacen(); return; }
+  if (a === 'mv-comprobar'){ await comprobarCajaMovimiento(b.dataset.id); return; }
   if (a === 'prev-anadir'){
     const avisoId = b.dataset.aviso;
     const art = val('pv-art') || null;
