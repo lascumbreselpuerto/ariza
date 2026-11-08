@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.07-4**
+> **Versión de la aplicación que describe este manual: 2026.11.08-1**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -250,11 +250,16 @@ tipos de visita, porque no en todos tiene sentido:
 | Qué has encontrado y qué has hecho | Sí | **No** | **No** | **No** |
 | Guión de revisión | No | Sí | No | No |
 | Toma de medidas | No | No | Sí | No |
+| Fotos de esta visita | Sí | Sí | Sí | Sí |
 | Materiales | Sí | Sí | **No** | Sí |
 | Tiempo y desplazamiento | Sí | Sí | Sí | Sí |
 | Cómo queda la puerta | Sí | Sí | **No** | Sí |
 | Cobro en obra | Sí | Sí | No | Solo si la oficina marca que se cobra |
 | Firma del cliente | Sí | Sí | Sí | Sí |
+
+Y desde el **7 de noviembre de 2026**, en todas sale lo primero **¿Se ha podido
+trabajar?**: si marcas ahí el desplazamiento en falso, el parte se cierra con
+eso y no se te pide nada más de la tabla.
 
 Donde dice **No** no es que falte: es que ese apartado lo rellena la propia
 visita. En una preventiva, el trabajo realizado lo escribe el guión. En una
@@ -391,6 +396,27 @@ De aquí sale el presupuesto solo: cada hueco se convierte en un capítulo con s
 medidas y sus auxiliares debajo, y la oficina solo tiene que ponerle precio. Y
 las medidas salen también en la hoja que firma el cliente, con el aviso de que
 las medidas definitivas de fabricación se comprueban antes de pedir la puerta.
+
+### Fotos de esta visita (7 de noviembre de 2026)
+
+Lo que te encontraste, cómo queda y la pieza que has cambiado. Cuatro botones,
+uno por cada cosa, y se hacen con la cámara sin salir del parte.
+
+**Hace falta al menos una para cerrar.** Caben hasta diez.
+
+No es burocracia: es la prueba de lo que había y de lo que hiciste. Dentro de
+tres meses, cuando el cliente diga que la puerta ya estaba así o que eso no se
+cambió, esto es lo único que lo cuenta. Y si pide las fotos, se le mandan.
+
+Dos cosas prácticas:
+
+- **La foto que haces en «Documentar la puerta» cuenta también como foto de la
+  visita.** No tienes que hacerla dos veces.
+- **En un desplazamiento en falso no se te pide ninguna**, porque no has podido
+  ver nada. Si puedes hacer una de la nave cerrada, mejor, pero no te lo exige.
+
+Las fotos llegan al grupo de Telegram con el aviso del cierre, así que en la
+oficina las ven al momento, sin entrar en la aplicación.
 
 ### Materiales
 
@@ -1067,4 +1093,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.07-4 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.08-1 de ARIZA SAT*
