@@ -2023,7 +2023,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.08-8';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.08-9';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -3769,6 +3769,174 @@ function vistaEtiquetas(){
   return h;
 }
 
+/* ===========================================================================
+   QUÉ FALTA POR INSTALAR EN EL SERVIDOR                           08-11-2026
+
+   DE DÓNDE SALE ESTO
+   El 08-11-2026 se fueron cinco mensajes de ida y vuelta averiguando si David
+   había ejecutado un fichero SQL. Yo le mandé a mirar un panel al sitio
+   equivocado, él dedujo que faltaba, y acabó ejecutando un SQL que ya estaba
+   puesto. Nadie hizo nada mal: es que la información no se veía por ninguna
+   parte.
+
+   Y lo gracioso es que la aplicación ya la tenía. Al arrancar hace treinta y
+   seis comprobaciones contra la base de datos para saber qué sabe hacer el
+   servidor y qué no, y con eso enciende o apaga funciones enteras. Esa
+   información existía, servía, y no se enseñaba a nadie.
+
+   Aquí se enseña: qué falta, qué te pierdes mientras falte, y qué fichero hay
+   que ejecutar. Nada más. Este apartado NO toca la base de datos, no ejecuta
+   nada y no cambia el funcionamiento: solo lee lo que la aplicación ya sabe.
+
+   POR QUÉ SE QUEDA CUANDO LA APLICACIÓN ESTÉ TERMINADA
+   Porque entonces hará más falta, no menos. El día que la use otra empresa,
+   alguien tendrá que ejecutar estos ficheros en SU servidor, y esto es la
+   lista de comprobación de esa instalación. Y cuando un cliente llame diciendo
+   «no me funciona tal cosa», la respuesta pasa a ser «ábreme esta pantalla y
+   léeme lo que hay en rojo», en vez de empezar a adivinar. No es un andamio
+   que se quita al acabar la obra: es el cuadro de maniobra.
+
+   CÓMO SE MANTIENE
+   Cada entrega que traiga un SQL nuevo tiene que añadir su línea aquí. Si se
+   olvida, esta pantalla MIENTE: dice que está todo bien cuando falta algo. Por
+   eso el banco de pruebas comprueba que toda comprobación que haga la
+   aplicación esté en esta lista, y se pone en rojo si alguien se despista.
+   =========================================================================== */
+const QUE_HACE_FALTA = [
+  /* El orden es el de la instalación: lo de abajo necesita lo de arriba. */
+  { marca:'sinPresupuestos', fichero:'presupuestos.sql', que:'Presupuestos',
+    pierdes:'No se pueden hacer presupuestos ni ofertas.' },
+  { marca:'sinTextos', fichero:'presupuestos2.sql', que:'Textos guardados de los presupuestos',
+    pierdes:'Las condiciones y la garantía hay que escribirlas a mano en cada oferta.' },
+  { marca:'sinPresuAviso', fichero:'presupuestos3.sql', que:'Unir el presupuesto con la visita',
+    pierdes:'Un presupuesto aceptado no se convierte solo en trabajo.' },
+  { marca:'sinAdjuntos', fichero:'anexos.sql', que:'Adjuntos en los presupuestos',
+    pierdes:'No se pueden colgar planos ni fichas de producto en una oferta.' },
+  { marca:'sinSeguimiento', fichero:'comercial.sql', que:'Saber si el cliente abrió la oferta',
+    pierdes:'No se sabe si el cliente llegó a verla ni cuándo.' },
+  { marca:'sinContactos', fichero:'comercial.sql', que:'Contactos de cada cliente',
+    pierdes:'Solo hay un teléfono por cliente, el de la ficha.' },
+  { marca:'sinTiposUds', fichero:'comercial2.sql', que:'Unidades en las líneas de oferta',
+    pierdes:'Todo se cuenta por unidades: no hay metros, ni horas, ni partidas.' },
+  { marca:'sinFijos', fichero:'comercial2.sql', que:'Fijos y medidas en las ofertas',
+    pierdes:'Las medidas de una puerta no entran en el presupuesto.' },
+
+  { marca:'sinAlmacen', fichero:'almacen.sql', que:'El almacén: existencias y movimientos',
+    pierdes:'El material se escribe a mano en el parte y nadie lleva cuenta de lo que hay.' },
+  { marca:'sinBarras', fichero:'almacen.sql', que:'El código de barras del fabricante',
+    pierdes:'Leer la caja de un proveedor no reconoce el material: solo vale nuestro QR.' },
+  { marca:'sinPeticiones', fichero:'barras.sql', que:'Peticiones de material a la oficina',
+    pierdes:'El técnico que encuentra material que no está en el catálogo lo escribe a '+
+            'mano y la oficina no se entera.' },
+  { marca:'sinAlmacenesOfi', fichero:'almacenes.sql', que:'Almacenes que gobierna la oficina',
+    pierdes:'Las furgonetas nacen solas, no se pueden crear almacenes, y la baja de '+
+            'material no obliga a explicar qué pasó.' },
+  { marca:'sinProveedores', fichero:'catalogo.sql', que:'Fichas de proveedor',
+    pierdes:'El proveedor es solo un nombre escrito, sin teléfono ni plazo de entrega.' },
+  { marca:'sinConjuntos', fichero:'catalogo.sql', que:'Conjuntos de material',
+    pierdes:'Hay que meter pieza a pieza lo que lleva una instalación completa.' },
+
+  { marca:'sinCentros', fichero:'centros.sql', que:'Centros de un mismo cliente',
+    pierdes:'Un cliente con varias naves o comunidades no se puede separar por centros.' },
+  { marca:'sinComponentes', fichero:'componentes.sql', que:'Componentes de cada puerta',
+    pierdes:'No se apunta qué cuadro, qué motor ni qué fotocélulas lleva cada puerta.' },
+  { marca:'sinModo', fichero:'ficha.sql', que:'Modo de funcionamiento de la puerta',
+    pierdes:'La ficha no dice si la puerta es automática, semiautomática o manual.' },
+  { marca:'sinFicha3', fichero:'ficha3.sql', que:'Datos de arrastre y peso',
+    pierdes:'La ficha no guarda el peso de la hoja ni el arrastre del motor.' },
+  { marca:'sinNoSeSabe', fichero:'ficha4.sql', que:'Poder decir «no se sabe»',
+    pierdes:'Hay que inventarse el año o el instalador de una puerta que no se conoce.' },
+  { marca:'sinMedidas', fichero:'medidas.sql', que:'Medidas de la puerta',
+    pierdes:'Las medidas se escriben en el texto libre, y no sirven para presupuestar.' },
+  { marca:'sinPerifericos', fichero:'perifericos.sql', que:'Periféricos y accesorios',
+    pierdes:'No se apunta qué mandos, lectores o pulsadores lleva la instalación.' },
+  { marca:'sinAltaPuerta', fichero:'alta-puerta.sql', que:'Visitas sin puerta',
+    pierdes:'Toda visita tiene que estar atada a una puerta, aunque no lo esté.' },
+
+  { marca:'sinObra', fichero:'obra.sql', que:'Obras de varios días',
+    pierdes:'Un trabajo largo se apunta como visitas sueltas sin relación.' },
+  { marca:'sinJornadas', fichero:'obra2.sql', que:'Jornadas de una obra',
+    pierdes:'No se lleva el parte por día de una obra larga.' },
+  { marca:'sinEntregas', fichero:'obra2.sql', que:'Actas de entrega',
+    pierdes:'No se puede firmar la entrega de una puerta al cliente.' },
+  { marca:'sinAvisoPuertas', fichero:'obra3.sql', que:'Varias puertas en una obra',
+    pierdes:'Una obra con cinco puertas se lleva como si fuera de una sola.' },
+  { marca:'sinRemates', fichero:'puesta-servicio.sql', que:'Remates pendientes y puesta en servicio',
+    pierdes:'Lo que queda por rematar al cerrar una obra no queda apuntado en ningún sitio.' },
+
+  { marca:'sinSubtipo', fichero:'subtipo.sql', que:'Tipos de visita',
+    pierdes:'Todas las visitas son iguales: no se separa avería de mantenimiento.' },
+  { marca:'sinUrgencia', fichero:'urgencia.sql', que:'Recargo de urgencia',
+    pierdes:'Una urgencia nocturna se cobra igual que una visita normal.' },
+  { marca:'sinUrgModo', fichero:'urgencia2.sql', que:'Urgencia por franja horaria',
+    pierdes:'El recargo de urgencia no distingue el horario laboral del de fuera.' },
+  { marca:'sinFalso', fichero:'falso.sql', que:'Avisos en falso',
+    pierdes:'Un aviso que resultó no ser avería se cierra como si lo fuera.' },
+  { marca:'sinRutas', fichero:'ruta-cliente.sql', que:'Rutas de las visitas',
+    pierdes:'No se agrupan las visitas por zona ni se cobra el desplazamiento por ruta.' },
+  { marca:'sinRutaCliente', fichero:'ruta-cliente.sql', que:'Ruta habitual del cliente',
+    pierdes:'Hay que elegir la ruta a mano en cada visita.' },
+  { marca:'sinFactura', fichero:'factura.sql', que:'Facturación y vencimientos',
+    pierdes:'No se lleva lo pendiente de facturar ni los impagados.' },
+  { marca:'sinFotoAviso', fichero:'fotos-aviso.sql', que:'Fotos de antes y después',
+    pierdes:'Las fotos de la visita no se separan en antes y después.' },
+];
+
+/* Lo que la aplicación sabe AHORA MISMO de su servidor. */
+function faltaPorInstalar(){
+  return QUE_HACE_FALTA.filter(c => S[c.marca]);
+}
+
+function panelInstalacion(){
+  if (!esGestion()) return '';
+  const faltan = faltaPorInstalar();
+  const total = QUE_HACE_FALTA.length;
+  const puestos = total - faltan.length;
+
+  /* Cuando no falta nada se dice en una línea y no se ocupa media pantalla:
+     una lista de treinta y seis verdes no se lee, se hojea. */
+  if (!faltan.length)
+    return '<div class="panel"><div class="panel-h"><h3>Lo que hace falta en el servidor</h3>'+
+      '<span class="chip ok">'+total+' de '+total+'</span></div>'+
+      '<p class="mini" style="margin:0">Está todo instalado. Las '+total+' comprobaciones que '+
+      'hace la aplicación al arrancar salen bien, así que no hay ninguna función apagada por '+
+      'falta de un script.</p></div>';
+
+  /* Los ficheros, sin repetir y en el orden en que hay que ejecutarlos. */
+  const ficheros = [];
+  faltan.forEach(c => { if (ficheros.indexOf(c.fichero) < 0) ficheros.push(c.fichero); });
+
+  let h = '<div class="panel"><div class="panel-h"><h3>Lo que hace falta en el servidor</h3>'+
+    '<span class="chip aviso">'+faltan.length+' sin instalar</span></div>'+
+    '<p class="mini" style="margin:0 0 10px">La aplicación hace '+total+' comprobaciones al '+
+    'arrancar para saber qué sabe hacer el servidor. '+puestos+' salen bien y '+faltan.length+
+    ' no. Mientras falten, esas funciones están APAGADAS: la aplicación sigue trabajando sin '+
+    'ellas, pero no están.</p>'+
+    '<p class="mini" style="margin:0 0 10px"><b>Qué hacer:</b> en Supabase, SQL Editor, pegar y '+
+    'ejecutar estos ficheros de la carpeta <code>servidor/</code> del repositorio, en este orden. '+
+    'Se pueden ejecutar aunque ya estén puestos: están escritos para eso.</p>'+
+    /* Los nombres de fichero, legibles: con los colores del tema y no con un
+       gris inventado. La primera versión los pintó oscuros sobre oscuro y no se
+       leían, que es de lo que sirve mirar una foto de la pantalla antes de
+       entregar. (08-11-2026) */
+    '<p style="margin:0 0 12px">'+ficheros.map(f =>
+      '<code style="display:inline-block;margin:2px 6px 2px 0;padding:4px 9px;'+
+      'background:var(--surface);color:var(--ink);border:1px solid var(--line);'+
+      'border-radius:5px;font-size:13px">'+esc(f)+'</code>').join('')+'</p>';
+
+  faltan.forEach(c => {
+    /* El fichero va DEBAJO y no al lado: en un móvil, al lado se corta y se
+       queda en «almacene…», que no sirve para nada. (08-11-2026) */
+    h += '<div class="item" style="display:block">'+
+      '<strong>'+esc(c.que)+'</strong>'+
+      '<p class="mini" style="margin:2px 0 0">'+esc(c.pierdes)+'</p>'+
+      '<p class="mini" style="margin:4px 0 0">Se arregla con <code style="padding:2px 6px;'+
+      'background:var(--surface);color:var(--ink);border:1px solid var(--line);'+
+      'border-radius:4px">'+esc(c.fichero)+'</code></p></div>';
+  });
+  return h + '</div>';
+}
+
 /* ---- Gestión (solo administrador) ---- */
 function vistaGestion(){
   const mes = S.mesGestion || mesActual();
@@ -3805,6 +3973,11 @@ function vistaGestion(){
   const sinValorar = cerradas.filter(a => !con(a));
 
   let h = '<div class="stack">';
+  /* Lo que falta por instalar va ARRIBA DEL TODO cuando falta algo, porque es
+     lo único de esta pantalla que explica por qué una función que existe no
+     aparece. Cuando no falta nada se queda abajo, en una línea. (08-11-2026) */
+  const faltanCosas = faltaPorInstalar().length > 0;
+  if (faltanCosas) h += panelInstalacion();
   h += '<div class="fila"><div><h2 style="font-size:20px">Gestión</h2>'+
        '<p class="mini" style="margin:2px 0 0">Lo que ves aquí no lo ven los técnicos.</p></div>'+
        '<span class="sp"></span>'+
@@ -4389,6 +4562,10 @@ function vistaGestion(){
     });
     h += '</div></div>';
   }
+
+  /* Y si no falta nada por instalar, la línea de «está todo» va al final: es
+     información de fondo, no un aviso. (08-11-2026) */
+  if (!faltanCosas) h += panelInstalacion();
 
   return h + '</div>';
 }
