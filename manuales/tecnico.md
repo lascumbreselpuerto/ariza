@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.08-8**
+> **Versión de la aplicación que describe este manual: 2026.11.08-9**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -1264,6 +1264,28 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 3. Recarga a fondo: en el móvil, cierra la aplicación del todo y vuelve a abrirla.
 4. Si sigue sin cuadrar, dilo **con el número de versión delante**. Sin eso se pierde el doble de tiempo.
 
+### Si una función que debería estar no aparece
+
+Esto es de oficina, pero conviene que lo sepas porque explica una cosa rara:
+**hay funciones que pueden estar apagadas** y entonces, sencillamente, no se
+ven. No es que fallen: es que no están.
+
+Pasa cuando la aplicación se actualiza y falta por instalar su parte en el
+servidor. La aplicación lo detecta sola al arrancar y sigue funcionando sin esa
+función, en vez de dar error. Eso está hecho a propósito, para que nadie se
+quede parado en la calle.
+
+Desde el **8 de noviembre de 2026** se puede ver qué hay apagado y por qué.
+Está en **Oficina → Gestión**, en el apartado **«Lo que hace falta en el
+servidor»**:
+
+- si está todo, lo dice en una línea;
+- si falta algo, sale arriba del todo, con **qué te estás perdiendo** mientras
+  falte y **qué fichero** hay que ejecutar.
+
+Así que, si echas de menos algo que creías que existía, díselo a la oficina y
+que mire ahí antes de nada. Puede ser eso.
+
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.08-8 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.08-9 de ARIZA SAT*

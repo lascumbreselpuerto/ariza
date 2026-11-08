@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.11.08-8**
+> **Versión de la aplicación que describe este manual: 2026.11.08-9**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -626,6 +626,43 @@ cuatro puntos donde se escanea algo, y el banco de pruebas comprueba que la
 cámara solo se abre dentro de él. Si alguien vuelve a copiar uno, se pone en
 rojo.
 
+### La información que la aplicación tenía y no enseñaba
+
+Y el final del día, que es la moraleja de todo lo anterior.
+
+Después de los tres fallos, se fueron cinco mensajes averiguando una cosa tan
+tonta como si un fichero SQL estaba ejecutado o no. Yo mandé a David a mirar un
+panel al sitio equivocado, él dedujo que faltaba, y acabó ejecutando un script
+que ya estaba puesto. Nadie hizo nada mal.
+
+Y aquí está lo importante: **la aplicación lo sabía desde el principio**. Al
+arrancar hace treinta y cinco comprobaciones contra el servidor para saber qué
+sabe hacer y qué no, y con eso enciende o apaga funciones enteras. Esa
+información existía, era exacta y se usaba... y no se le enseñaba a nadie.
+
+Es el equivalente a un cuadro de maniobra que sabe perfectamente que le falta
+el final de carrera de apertura, lo tiene en un registro interno, y en la
+botonera solo pone que la puerta no abre. El dato está. Lo que falta es el
+led.
+
+Desde el 8 de noviembre de 2026 hay un apartado en Oficina que lo enseña: qué
+falta, qué te pierdes mientras falte y qué fichero hay que ejecutar.
+
+**Por qué este apartado se queda cuando la aplicación esté terminada**, que fue
+la pregunta de David y es la buena: porque entonces hará más falta, no menos.
+El día que la use otra empresa, alguien tendrá que instalar esos ficheros en SU
+servidor, y esto es la lista de comprobación de esa instalación. Y cuando un
+cliente llame diciendo «no me funciona tal cosa», la respuesta pasa a ser
+«ábreme esta pantalla y léeme lo que hay en rojo» en vez de empezar a adivinar.
+No es un andamio que se quita al acabar la obra: es el cuadro de maniobra.
+
+Con una condición, que es lo que lo mantiene vivo: **cada entrega que traiga un
+SQL nuevo tiene que añadir su línea a esa lista**. Si se olvida, la pantalla
+miente, y una pantalla que miente es peor que no tenerla. Por eso el banco de
+pruebas compara la lista con las comprobaciones que la aplicación hace de
+verdad, y se pone en rojo si alguien se despista. Lo mismo de siempre: lo que
+no se comprueba solo, se olvida.
+
 ### El banco que no castigaba lo que la realidad castiga
 
 Y una tercera, la misma noche, que es la más fina de las tres.
@@ -1240,4 +1277,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.08-8 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.08-9 de ARIZA SAT*
