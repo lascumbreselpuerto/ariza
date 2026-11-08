@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.11.08-6**
+> **Versión de la aplicación que describe este manual: 2026.11.08-7**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -604,6 +604,28 @@ en el almacén un material que no existe y nadie se entera. Por eso el nuestro
 exige que **dos líneas distintas de la imagen digan exactamente lo mismo** antes
 de dar un código por leído.
 
+### El mismo fallo, tres veces, por copiar
+
+Y una segunda lección el mismo día, que es todavía más barata de aprender aquí
+que en una instalación.
+
+Arreglado el lector, David lo probó y escribió: «Desde una asistencia funciona.
+Desde cargar material nuevo desde almacén no funciona.»
+
+El motivo no era el lector. Era que había **tres lectores copiados** por dentro
+de la aplicación: el del parte, el del campo del código de barras en la ficha
+del artículo, y lo que hiciera falta cada vez. Se arregló uno, y los otros dos
+se quedaron exactamente igual de rotos, con el fotograma reducido a 640 puntos,
+sin recuadro y sin botón.
+
+Esto es lo mismo que pasa en una instalación cuando el mismo ajuste está en tres
+sitios: cambias el final de carrera en el cuadro, te olvidas del tope mecánico
+y del encoder, y la puerta vuelve a hacer lo que hacía. La regla es la de
+siempre: **una cosa, en un solo sitio**. Ahora hay UN lector y lo usan los
+cuatro puntos donde se escanea algo, y el banco de pruebas comprueba que la
+cámara solo se abre dentro de él. Si alguien vuelve a copiar uno, se pone en
+rojo.
+
 La conclusión práctica, que sirve igual para una puerta que para un programa:
 **una prueba que haces tú con tus propios materiales te dice que sabes hacer tu
 trabajo; solo la prueba en el sitio del cliente te dice si funciona.** Las ocho
@@ -1178,4 +1200,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.08-6 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.08-7 de ARIZA SAT*

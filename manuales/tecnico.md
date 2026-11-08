@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.08-6**
+> **Versión de la aplicación que describe este manual: 2026.11.08-7**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -1170,6 +1170,34 @@ Cada material lleva su etiqueta QR pegada en la caja o en la balda. **La escanea
 | **Lo he gastado** | Lo has puesto en una obra o en una avería. Puedes decir en qué asistencia |
 | **Me lo llevo** | Lo pasas de la nave a tu furgoneta |
 
+### Leer la caja desde Almacén
+
+Arriba, al lado del buscador, está el botón **Leer código**. Abre la cámara con
+el recuadro verde, y vale tanto el **código de barras del fabricante** como el
+**QR de nuestra etiqueta**: la caja que tengas en la mano llevará uno u otro y
+no tienes que saber cuál.
+
+En cuanto lo lee, te dice **qué material es y cuánto hay en cada sitio**, y te
+pone los tres botones delante: **Entrada**, **Salida** y **Traspaso**. Eliges y
+vas directo a la cantidad.
+
+Si el código no está en el catálogo, la oficina lo da de alta ahí mismo con el
+código ya puesto; a ti te dice que lo pidas desde un parte, con la foto de la
+caja.
+
+### Comprobar que la caja es la que crees
+
+Dentro de Entrada, Salida y Traspaso hay un botón: **Comprobar la caja con la
+cámara**. Lees el código y te dice una de tres cosas:
+
+- que es ese material y puedes seguir;
+- que **no lo es**, y cuál es de verdad;
+- o que ese código no está en el catálogo, y entonces no puede opinar.
+
+No te impide nada: avisa. Está para cuando dos cajas se parecen y la salida se
+apunta con prisa, que es cuando se dan de baja unas por otras y el inventario
+deja de valer.
+
 Tu furgoneta se crea sola la primera vez que coges material. No hay que pedirla.
 
 Si das salida a más de lo que la aplicación creía que llevabas, **no te lo impide**: manda lo que de verdad hay en la furgoneta, no lo que diga la pantalla. Te avisa para que se revise el inventario, y ese aviso es lo que hace que el almacén se ponga al día en vez de quedarse mintiendo.
@@ -1179,6 +1207,13 @@ Si das salida a más de lo que la aplicación creía que llevabas, **no te lo im
 Los materiales llevan ahora **foto** y una **explicación** de qué son y para qué
 sirven. Eso está puesto para la oferta al cliente, pero a ti te sirve para lo de
 siempre: saber si la pieza que tienes en la mano es la que pone la lista.
+
+Y desde el 8 de noviembre de 2026, cuando pides un material que no está en el
+catálogo, **la foto de la caja que te obligan a mandar pasa a ser la foto del
+material** en cuanto la oficina lo da de alta. Antes se quedaba colgada en la
+petición y el material nacía sin foto, que era justo lo contrario de para lo que
+se pedía. Tu foto sigue guardada en la petición: ahí es el justificante de lo
+que pediste, y eso no se toca.
 
 También están los **proveedores**, con su ficha: a quién se le compra cada cosa,
 su teléfono y su plazo de entrega. Y los **conjuntos**: lo que lleva una
@@ -1231,4 +1266,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.08-6 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.08-7 de ARIZA SAT*
