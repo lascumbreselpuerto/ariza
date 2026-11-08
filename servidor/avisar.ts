@@ -200,6 +200,52 @@ async function telegram(texto: string) {
   }
 }
 
+/* ---- Las fotos de la visita, al grupo (07-11-2026) ----
+   David: «Cuando recibimos el mensaje en Telegram del cierre de una asistencia,
+   debemos encontrar toda la misma información que se envía al correo y las
+   fotos que el técnico ha realizado.»
+
+   Telegram admite hasta diez imágenes en un álbum, que es justo el tope de
+   fotos por visita que puso David. Se mandan por URL: Telegram las descarga en
+   el momento, así que basta con una firma corta del almacén. No se suben los
+   bytes desde aquí, que sería lo mismo pagado dos veces.
+
+   Lo que esto significa, y está dicho en el LEEME de la entrega: la foto queda
+   guardada en los servidores de Telegram. Son fotos de puertas, y eso lo
+   decidió David el 07-11-2026 sabiéndolo.
+
+   Si falla, no pasa nada: el mensaje de texto ya se ha mandado y es lo que de
+   verdad hace falta. Las fotos están en la aplicación de todas formas. */
+async function telegramFotos(urls: string[], pie: string) {
+  const TOKEN = Deno.env.get('TELEGRAM_TOKEN');
+  const CHAT = Deno.env.get('TELEGRAM_CHAT');
+  if (!TOKEN || !CHAT || !urls.length) return { fotos: 0 };
+  const diez = urls.slice(0, 10);
+  try {
+    /* Una sola foto no puede ir como álbum: Telegram lo rechaza. */
+    if (diez.length === 1) {
+      const r = await fetch(`https://api.telegram.org/bot${TOKEN}/sendPhoto`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: CHAT, photo: diez[0], caption: pie, parse_mode: 'HTML' }),
+      });
+      return { fotos: r.ok ? 1 : 0 };
+    }
+    const media = diez.map((u, i) => ({
+      type: 'photo', media: u,
+      ...(i === 0 ? { caption: pie, parse_mode: 'HTML' } : {}),
+    }));
+    const r = await fetch(`https://api.telegram.org/bot${TOKEN}/sendMediaGroup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: CHAT, media }),
+    });
+    return { fotos: r.ok ? diez.length : 0 };
+  } catch (_) {
+    return { fotos: 0 };
+  }
+}
+
 /* ---- Un aviso, una vez ----
    Los disparadores de la base pueden llamar aquí más de una vez para el mismo
    hecho (un update que vuelve a pasar por la misma condición, un reintento).
@@ -398,7 +444,33 @@ Deno.serve(async (req) => {
     if (tipo === 'cierre') {
       if (await yaAvisado(admin, 'cierre:' + a.id)) return ok({ ok: true, repetido: true });
       const { data: mats } = await admin.from('materiales')
-        .select('descripcion, precio').eq('aviso_id', a.id);
+        .select('descripcion, cantidad, unidad, precio').eq('aviso_id', a.id).order('creado');
+      /* El material gastado, para el mensaje: la oficina lo necesita para saber
+         qué hay que reponer en la furgoneta. (07-11-2026) */
+      const matFilas = (mats || []).map((m: Record<string, unknown>) =>
+        escTg(String(m.descripcion || '')) +
+        (m.cantidad != null ? ` · ${escTg(num(m.cantidad))} ${escTg(String(m.unidad || 'ud'))}` : ''))
+        .filter(Boolean);
+      /* Y el resultado de las revisiones: si una puerta queda NO APTA, eso es lo
+         primero que tiene que ver la oficina al leer el mensaje. */
+      const revFilas: string[] = [];
+      try {
+        const { data: revs } = await admin.from('revisiones')
+          .select('resultado, riesgo, tipo_puerta, puerta_id').eq('aviso_id', a.id);
+        const nombreRes: Record<string, string> = {
+          apta: 'apta para el servicio', reservas: 'apta con reservas', no_apta: '<b>NO APTA</b>' };
+        for (const rev of (revs || [])) {
+          let cual = String(rev.tipo_puerta || '');
+          if (rev.puerta_id) {
+            const { data: pr } = await admin.from('puertas')
+              .select('codigo').eq('id', rev.puerta_id).maybeSingle();
+            if (pr?.codigo) cual = String(pr.codigo);
+          }
+          revFilas.push(`Revisión${cual ? ' de ' + escTg(cual) : ''}: ` +
+            (nombreRes[String(rev.resultado || '')] || escTg(String(rev.resultado || 'sin resultado'))) +
+            (rev.riesgo ? ' · <b>RIESGO PARA LAS PERSONAS</b>' : ''));
+        }
+      } catch (_) { /* sin revisiones el mensaje sale igual */ }
       /* Lo que hay que rematar antes de facturar. Esto no se le dice al cliente
          ni sale en el parte: es trabajo de oficina, y hasta hoy solo se veía si
          alguien entraba en Gestión a mirarlo. */
@@ -517,7 +589,18 @@ Deno.serve(async (req) => {
         loQueSeMonta(a) ? `Se monta: ${escTg(loQueSeMonta(a))}` : '',
         a.subtipo === 'otros' && a.subtipo_detalle
           ? `Trabajo pedido: ${escTg(String(a.subtipo_detalle))}` : '',
+        /* ---- Lo mismo que lleva el correo (07-11-2026) ----
+           David: «Cuando recibimos el mensaje en Telegram del cierre, debemos
+           encontrar toda la misma información que se envía al correo.» Faltaban
+           el diagnóstico, el material gastado, cómo queda la puerta y el
+           resultado de la revisión: justo lo que la oficina necesita para saber
+           si hay que volver, qué hay que reponer y qué se le puede decir al
+           cliente si llama. */
+        a.diagnostico ? `Encontrado: ${escTg(a.diagnostico)}` : '',
         a.trabajo ? `Trabajo: ${escTg(a.trabajo)}` : '',
+        a.estado_final ? `Cómo queda: ${escTg(a.estado_final)}` : '',
+        matFilas.length ? 'Material:\n' + matFilas.map(x => '· ' + x).join('\n') : '',
+        revFilas.length ? revFilas.join('\n') : '',
         medFilas.length ? medFilas.join('\n') : '',
         remate.length ? remate.join('\n') : '',
         a.firma_ruta
@@ -530,7 +613,25 @@ Deno.serve(async (req) => {
           ? '<b>A rematar en oficina:</b>\n' + pendientes.map(x => '· ' + escTg(x)).join('\n')
           : '',
       ].filter(Boolean).join('\n') + pieTg);
-      return ok({ ok: true, ...r });
+      /* ---- Y las fotos que hizo el técnico (07-11-2026) ----
+         Van DESPUÉS del texto y en su propio mensaje: así el resumen se lee
+         entero aunque las fotos tarden o fallen. Se firman diez minutos, que es
+         de sobra para que Telegram las descargue. */
+      let fotos = { fotos: 0 };
+      try {
+        const { data: fs } = await admin.from('fotos')
+          .select('ruta, etapa').eq('aviso_id', a.id).order('creado').limit(10);
+        const rutas = (fs || []).map((f: Record<string, string>) => f.ruta).filter(Boolean);
+        if (rutas.length) {
+          const { data: firmadas } = await admin.storage.from('fotos')
+            .createSignedUrls(rutas, 600);
+          const urls = (firmadas || [])
+            .map((x: Record<string, string>) => x.signedUrl).filter(Boolean);
+          fotos = await telegramFotos(urls,
+            `Fotos de la visita · ${escTg(nombreCli || '')} · ${escTg(laPuerta)}`);
+        }
+      } catch (_) { /* el resumen ya se mandó: las fotos son un extra */ }
+      return ok({ ok: true, ...r, ...fotos });
     }
 
     const contacto = [a.contacto_nombre, a.contacto_telefono, a.contacto_email].filter(Boolean).join(' · ') || a.contacto || '';
