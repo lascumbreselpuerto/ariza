@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.11.08-2**
+> **Versión de la aplicación que describe este manual: 2026.11.08-3**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -533,6 +533,51 @@ mayúsculas ni espacios de los lados, pero **sí los acentos**. «Fotocelula» y
 escribir bien lo que se da de alta, porque ese nombre es el que va a tener que
 coincidir durante los próximos años.
 
+### El código de barras de la caja, y quién gobierna el catálogo
+
+Desde el 8 de noviembre de 2026 la aplicación lee también el **código de barras
+del fabricante**, el que viene impreso en la caja, además de nuestra etiqueta
+QR. Y de ahí sale una pregunta que conviene entender antes de usarlo, porque se
+responde mal muy fácilmente.
+
+**El código de barras no trae el nombre del producto.** Son trece cifras y nada
+más. No dice «fotocélula de espejo Erreka FT-20»: dice `8412345678905`. La
+traducción de ese número a un producto está en bases de datos comerciales que
+cubren bien el gran consumo (alimentación, droguería, libros) y que no tienen
+material de puertas automáticas industriales. Nuestros proveedores no publican
+nada de eso.
+
+Así que leer la caja sirve para dos cosas, que son las dos que hacen falta:
+
+1. **Reconocer** un material que ya está dado de alta con su código. Se acerca
+   la cámara y el material entra en el parte solo.
+2. **No teclear** trece cifras cuando hay que pedir que lo den de alta.
+
+La descripción la escribe una persona **la primera vez**. A partir de ahí, esa
+caja se reconoce sola para siempre.
+
+Y la segunda decisión, que es de gobierno y no técnica: **el catálogo lo
+gobierna la oficina**. El técnico no crea artículos; manda una petición con la
+descripción, la unidad y una **foto de la caja**, que es obligatoria. La oficina
+la resuelve de una de dos maneras, y las dos quedan escritas:
+
+- **darlo de alta**, y entonces el código de barras le queda atado desde el
+  primer día;
+- o **decir que eso ya existía** con otro nombre, y entonces se apunta cuál era.
+
+Esa segunda salida es la importante, y es la que explica por qué no se dejó que
+el técnico creara artículos. El apartado anterior ya lo advierte: «Fotocelula» y
+«Fotocélula» son dos materiales distintos para el servidor. Si cinco técnicos
+dan de alta material cinco meses, el catálogo acaba con el mismo producto tres
+veces escrito de tres formas, y a partir de ahí el inventario no sirve: ni dice
+lo que hay, ni dice lo que se gasta, ni se puede comprar por él.
+
+El precio de dejarlo en manos de la oficina es que el técnico espera. Por eso la
+aplicación hace las dos cosas a la vez: manda la petición **y apunta el material
+en el parte** escrito a mano. Lo gastado se apunta el día que se gasta; el
+catálogo se arregla cuando la oficina pueda. Lo que no se puede permitir es que
+se pierda ninguna de las dos.
+
 ### El tipo de la visita decide si se cobra
 
 Esta es la más silenciosa de las tres, porque no se ve en ningún importe: se ve
@@ -991,4 +1036,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.08-2 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.08-3 de ARIZA SAT*

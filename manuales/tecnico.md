@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.08-2**
+> **Versión de la aplicación que describe este manual: 2026.11.08-3**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -543,11 +543,15 @@ significa que un traspaso no se apuntó.
 Botón **Leer la etiqueta**, dentro del propio apartado de Materiales. Se abre ahí
 mismo, sin salir del parte.
 
-1. Se abre la cámara: acercas el QR de la caja y el material entra como una
-   línea más. Funciona en cualquier teléfono, **también en iPhone**, y
-   funciona sin cobertura.
-2. Si el QR está roto, sucio, muy pequeño o no hay luz, escribes el **código
-   que va impreso debajo del QR**: `MAT-0012`, o solo `12`. Intro, y listo.
+1. Se abre la cámara y puedes acercarle **dos cosas distintas**:
+   - el **QR de nuestra etiqueta**, el que pegamos nosotros;
+   - o el **código de barras de la caja del fabricante**, el que viene impreso
+     de serie. Si ese material ya está dado de alta con su código de barras,
+     entra en el parte igual que con nuestro QR.
+   Funciona en cualquier teléfono, **también en iPhone**, y sin cobertura.
+2. Si el código está roto, sucio, muy pequeño o no hay luz, escribes el
+   **código que va impreso debajo del QR**: `MAT-0012`, o solo `12`. Intro, y
+   listo.
 
 Escanea tres cajas de lo mismo y quedan **tres unidades en una línea**, no tres
 líneas de una. La cantidad siempre se puede corregir a mano.
@@ -571,6 +575,44 @@ pequeño en la pantalla o que falte un trozo de etiqueta.
 Y un aviso: si al leer una etiqueta te dice que **no cuadra con el material**,
 no insistas ni lo metas a mano. Significa que ese QR no es el de ese código, y
 eso lo tiene que mirar la oficina.
+
+### 3 bis. Material que no está en el catálogo
+
+Te pasa cuando gastas algo que compró otro, que vino de una obra, o que es de
+un proveedor nuevo. Antes lo escribías a mano y ahí se quedaba: nadie en la
+oficina se enteraba de que ese material existe, y el parte salía sin precio.
+
+Ahora hay dos formas de llegar al mismo sitio:
+
+- **Lees el código de barras de la caja** y la aplicación te dice que no lo
+  tiene. Te ofrece pedirlo, con el código ya puesto.
+- O le das al botón **No está en el catálogo**, que está al lado de «Leer
+  etiqueta o código de barras».
+
+Te pide tres cosas, y las tres hacen falta:
+
+1. **Qué es.** Escríbelo como se lo dirías a un compañero. Si al escribir te
+   sale sugerido algo parecido, **elige la sugerencia**: a lo mejor ya existe
+   con otro nombre y no hace falta pedir nada.
+2. **La unidad y cuántos has gastado.**
+3. **Una foto de la caja.** Es obligatoria. Con la foto, la oficina ve la marca
+   y la referencia y lo da de alta bien. Sin ella tendría que llamarte para
+   preguntarte qué era aquello, y seguramente ya no te acuerdes.
+
+Al mandarlo pasan dos cosas a la vez: **le llega a la oficina** con la foto, y
+**el material se apunta en tu parte** escrito a mano. O sea, que no te quedas
+sin apuntar lo que has gastado esperando a que la oficina conteste. Puedes
+seguir rellenando el parte como si nada: pedir material no cierra el parte ni
+te borra lo que llevabas escrito.
+
+> **Por qué tú no lo das de alta.** Lo decidió David así, y tiene su motivo: si
+> cada uno diera de alta material, en medio año el catálogo tendría
+> «fotocelula», «foto celula» y «Fotocélula espejo» como tres materiales
+> distintos, y el inventario dejaría de servir para nada. El catálogo lo
+> gobierna la oficina; tú avisas, que es lo que de verdad hacía falta.
+
+Cuando la oficina lo dé de alta, ese código de barras le queda puesto al
+material, así que **la próxima caja igual la reconoce la aplicación sola**.
 
 ### 4. «He llegado»
 
@@ -1105,4 +1147,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.08-2 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.08-3 de ARIZA SAT*
