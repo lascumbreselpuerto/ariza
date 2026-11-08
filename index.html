@@ -1808,6 +1808,11 @@ async function cargar(){
      antes del 07-11-2026. */
   const fa = await sb.from('avisos').select('falso, falso_motivo, falso_resuelto').limit(1);
   S.sinFalso = !!fa.error;
+  /* Las fotos de la visita: servidor/fotos-aviso.sql. Sin esas columnas las
+     fotos se siguen subiendo colgadas de la puerta, como antes del 07-11-2026,
+     y el parte no enseña el apartado ni exige ninguna. */
+  const fv = await sb.from('fotos').select('aviso_id, etapa').limit(1);
+  S.sinFotoAviso = !!fv.error;
   /* ---- El almacén ----
      Las existencias no se guardan en ninguna columna: se leen de la vista, que
      las suma de los movimientos. Si falta el SQL del almacén, la aplicación
@@ -1971,7 +1976,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.07-4';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.08-1';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -8702,6 +8707,36 @@ async function pintarFotos(puertaId){
       '<button data-act="foto-borrar" data-id="'+f.id+'" data-ruta="'+esc(f.ruta)+'" data-puerta="'+puertaId+'">Borrar</button></div>';
   }).join('');
 }
+/* Las fotos de la visita, dentro del parte. Se pintan en el orden en que se
+   hicieron y con su etiqueta: lo encontrado primero, lo hecho después. Así el
+   que lo lea tres meses más tarde entiende la secuencia sin preguntar.
+   (07-11-2026) */
+async function pintarFotosAviso(avisoId){
+  const cont = document.getElementById('z-fotos');
+  if (!cont || !avisoId) return;
+  const xs = fotosDeAviso(avisoId);
+  const cuenta = document.getElementById('z-fotos-cuenta');
+  if (cuenta) cuenta.textContent = xs.length
+    ? xs.length+' de '+MAX_FOTOS_AVISO
+    : 'ninguna todavía';
+  if (!xs.length){
+    cont.innerHTML = '<p class="mini" style="margin:0">Todavía no has hecho ninguna foto.</p>';
+    return;
+  }
+  const urls = await Promise.all(xs.map(f => sb.storage.from('fotos').createSignedUrl(f.ruta, 3600)));
+  cont.innerHTML = xs.map((f, i) => {
+    const u = urls[i] && urls[i].data ? urls[i].data.signedUrl : '';
+    FOTOS[f.id] = { url:u, autor:f.autor||'', creado:f.creado, ruta:f.ruta, puerta:f.puerta_id };
+    return '<div class="foto">'+
+      /* Sin «ampliar»: abrir la foto en un diálogo cerraría el parte a medio
+         rellenar. Si hace falta verla grande, está el enlace de «abrir». */
+      '<img src="'+esc(u)+'" alt="Foto de la visita" loading="lazy" '+
+        'onerror="this.replaceWith(Object.assign(document.createElement(\'a\'),{href:this.src,target:\'_blank\',rel:\'noopener\',className:\'foto-rota\',textContent:\'Foto guardada · abrir\'}))">'+
+      '<span class="pie-foto">'+esc(nombreEtapa(f.etapa) || 'Foto')+'</span>'+
+      '<button data-act="foto-borrar-aviso" data-id="'+f.id+'" data-ruta="'+esc(f.ruta)+
+        '" data-aviso="'+esc(avisoId)+'">Borrar</button></div>';
+  }).join('');
+}
 const FOTOS = {};
 function dlgFoto(id){
   const f = FOTOS[id];
@@ -8714,7 +8749,33 @@ function dlgFoto(id){
     '<div class="pie"><a class="btn plana" href="'+esc(f.url)+'" target="_blank" rel="noopener" style="text-decoration:none">Abrir aparte</a>'+
     '<span class="sp"></span><button type="button" class="btn" data-cerrar>Cerrar</button></div>', null);
 }
-async function subirFotos(puertaId, ficheros){
+/* ---- Las fotos de la visita (07-11-2026) ----
+   David: «En cualquier asistencia el técnico debe poder hacer fotos de la
+   puerta, de lo encontrado, de lo reparado, de lo sustituido. Es importante
+   como evidencia y referencia pasada para poder enviar al cliente si lo
+   solicita. Mínimo una foto obligatoria y un máximo de 10.»
+
+   Una foto, dos sitios: la misma foto cuelga de la VISITA y de la PUERTA, si la
+   visita tiene puerta. Así aparece en el parte y en la ficha sin hacerla dos
+   veces, que es lo que decidió David. */
+const ETAPAS_FOTO = [
+  ['encontrado',  'Lo que me encontré'],
+  ['hecho',       'Cómo queda'],
+  ['sustituido',  'La pieza sustituida'],
+  ['otra',        'Otra cosa'],
+];
+const MAX_FOTOS_AVISO = 10;
+const nombreEtapa = k => {
+  const f = ETAPAS_FOTO.find(x => x[0] === String(k == null ? '' : k).trim());
+  return f ? f[1] : '';
+};
+/* A qué visitas se les pide la foto. A todas menos al viaje en balde: si el
+   técnico no ha podido entrar, no hay nada que fotografiar, y un bloqueo
+   imposible de cumplir se acaba sorteando. Decisión de David, 07-11-2026. */
+const pideFotoVisita = a => !!a && !esFalso(a);
+const fotosDeAviso = avisoId => (S.fotosAviso || []).filter(f => f && f.aviso_id === avisoId);
+async function subirFotos(puertaId, ficheros, opts){
+  const o = opts || {};
   let n = 0, tal = 0;
   for (const file of ficheros){
     const esImagen = file.type.startsWith('image/') || /\.(jpe?g|png|heic|heif|webp|gif|tiff?)$/i.test(file.name||'');
@@ -8730,14 +8791,26 @@ async function subirFotos(puertaId, ficheros){
         ext = ((file.name||'').split('.').pop() || 'jpg').toLowerCase().slice(0,5);
         tal++;
       }
-      const ruta = puertaId+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'.'+ext;
+      /* La carpeta: la de la puerta si la hay, y si no la de la visita. Una
+         foto de una comercial de un hueco que todavía no existe no tiene
+         puerta de la que colgar. */
+      const carpeta = puertaId || ('avisos/'+(o.avisoId || 'sueltas'));
+      const ruta = carpeta+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'.'+ext;
       const { error } = await sb.storage.from('fotos').upload(ruta, blob, { contentType: tipo });
       if (error) throw error;
       /* El alta en la tabla hay que comprobarla: supabase no lanza error, lo
          devuelve. Si no se comprobaba, la foto se quedaba en el almacén sin
          ninguna fila que la nombre (ocupando sitio y sin poder borrarla desde la
          aplicación) y aun así salía el aviso de «foto subida». */
-      const { error: eFila } = await sb.from('fotos').insert({ puerta_id: puertaId, ruta, autor: yo() });
+      const fila = { puerta_id: puertaId || null, ruta, autor: yo() };
+      /* La visita y la etapa solo se mandan si la base las tiene: contra una
+         base sin fotos-aviso.sql ejecutado, las fotos se siguen subiendo como
+         siempre, colgadas de la puerta. */
+      if (!S.sinFotoAviso){
+        if (o.avisoId) fila.aviso_id = o.avisoId;
+        if (o.etapa) fila.etapa = o.etapa;
+      }
+      const { error: eFila } = await sb.from('fotos').insert(fila);
       if (eFila){
         await sb.storage.from('fotos').remove([ruta]);   // no se deja basura en el almacén
         throw eFila;
@@ -8747,7 +8820,22 @@ async function subirFotos(puertaId, ficheros){
   }
   if (n) toast(n === 1 ? 'Foto subida.' : n+' fotos subidas.');
   if (tal) toast(tal+(tal===1?' foto se ha guardado en su formato original (HEIC): se ve desde el iPhone y con «abrir».':' fotos se han guardado en su formato original (HEIC).'));
-  pintarFotos(puertaId);
+  if (puertaId) pintarFotos(puertaId);
+  if (o.avisoId) await cargarFotosAviso(o.avisoId);
+}
+/* Las fotos de una visita, traídas de la base y guardadas en memoria para
+   pintarlas. Se cuentan contra la base y no contra lo que haya en pantalla: un
+   parte abierto hace media hora puede traer un número que ya no es el bueno. */
+async function cargarFotosAviso(avisoId){
+  if (S.sinFotoAviso || !avisoId) return [];
+  try {
+    const { data, error } = await sb.from('fotos').select('*')
+      .eq('aviso_id', avisoId).order('creado');
+    if (error) throw error;
+    S.fotosAviso = (S.fotosAviso || []).filter(f => f.aviso_id !== avisoId).concat(data || []);
+    await pintarFotosAviso(avisoId);
+    return data || [];
+  } catch(_){ return fotosDeAviso(avisoId); }
 }
 function reducir(file, max=1600, calidad=0.82){
   return new Promise((res, rej) => {
@@ -18788,7 +18876,35 @@ dlgForm.addEventListener('change', e => {
     const av = S.avisos.find(x => x.id === t.dataset.aviso);
     const ficheros = Array.from(t.files);
     t.value = '';
-    subirFotos(t.dataset.id, ficheros).then(() => { if (av) pintarAltaObra(av); });
+    /* ---- La misma foto, para la puerta y para la visita (07-11-2026) ----
+       Decisión de David: una exigencia, no dos. La foto que el técnico hace en
+       «Documentar la puerta» cuenta también como foto de la visita, así que se
+       le pone el aviso además de la puerta. Si no, el técnico tendría que hacer
+       la misma foto dos veces para cerrar el mismo parte. */
+    subirFotos(t.dataset.id, ficheros, { avisoId: t.dataset.aviso, etapa: 'otra' })
+      .then(() => { if (av) pintarAltaObra(av); });
+    return;
+  }
+  /* ---- Las fotos de la visita (07-11-2026) ----
+     Se suben sin salir del parte, como las del alta en obra, y quedan colgadas
+     de la visita Y de su puerta, si la tiene. El tope de diez se comprueba
+     ANTES de subir: una foto que se sube y luego se rechaza es tiempo del
+     técnico y sitio en el almacén tirados. */
+  if (t.dataset && t.dataset.act === 'foto-aviso' && t.files && t.files.length){
+    const avisoId = t.dataset.aviso;
+    const av = S.avisos.find(x => x.id === avisoId);
+    const ficheros = Array.from(t.files);
+    t.value = '';
+    const ya = fotosDeAviso(avisoId).length;
+    const caben = Math.max(0, MAX_FOTOS_AVISO - ya);
+    if (!caben){
+      toast('Ya hay '+MAX_FOTOS_AVISO+' fotos en esta visita, que es el máximo. Borra alguna si quieres cambiarla.');
+      return;
+    }
+    if (ficheros.length > caben)
+      toast('Caben '+caben+' foto'+(caben===1?'':'s')+' más: se suben las '+caben+' primeras.');
+    subirFotos((av && av.puerta_id) || null, ficheros.slice(0, caben),
+      { avisoId, etapa: t.dataset.etapa });
     return;
   }
   if (t.dataset && t.dataset.act === 'comp-foto' && t.files && t.files.length){
@@ -24033,6 +24149,31 @@ function dlgCierre(avisoId){
       '<p class="mini" style="margin:8px 0 0">Esto es lo previsto, no lo gastado. Pásalo abajo y corrige '+
       'las cantidades con lo que de verdad hayas puesto.</p></div>';
 
+  /* ---- Las fotos de la visita (07-11-2026) ----
+     David: «En cualquier asistencia el técnico debe poder hacer fotos de la
+     puerta, de lo encontrado, de lo reparado, de lo sustituido. Es importante
+     como evidencia y referencia pasada para poder enviar al cliente si lo
+     solicita. Mínimo una foto obligatoria y un máximo de 10.»
+
+     Van antes de los materiales porque es lo que se hace estando delante de la
+     puerta, y los materiales se rellenan ya con la furgoneta cerrada. */
+  if (!S.sinFotoAviso)
+  h += '<div class="grupo"><h3>Fotos de esta visita</h3>'+
+    '<p class="mini" style="margin:0 0 10px">Lo que te encontraste, cómo queda y la pieza que has '+
+    'cambiado. Es la prueba de lo que había y de lo que se hizo: dentro de tres meses, cuando el '+
+    'cliente pregunte, esto es lo único que lo cuenta. '+
+    (pideFotoVisita(a)
+      ? '<b>Hace falta al menos una para cerrar.</b> '
+      : 'En un viaje en balde no hace falta ninguna: no has podido ver nada. ')+
+    'Caben hasta '+MAX_FOTOS_AVISO+'. <span id="z-fotos-cuenta"></span></p>'+
+    '<div class="fila" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">'+
+    ETAPAS_FOTO.map(([k, n]) =>
+      '<label class="btn sm'+(k === 'encontrado' ? ' pri' : '')+'">'+esc(n)+
+      '<input type="file" accept="image/*" capture="environment" multiple hidden '+
+      'data-act="foto-aviso" data-aviso="'+a.id+'" data-etapa="'+k+'"></label>').join('')+
+    '</div>'+
+    '<div class="fotos" id="z-fotos"></div></div>';
+
   if (pideMateriales(a))
   h += '<div class="grupo"><h3>Materiales</h3>'+
     '<datalist id="sugeridos">'+
@@ -25057,6 +25198,9 @@ function repintarCuentas(cont){
 async function prepararCierre(a){
   // el alta en obra, con las fotos contadas de verdad
   if (obligaAltaObra(a)) pintarAltaObra(a);
+  /* Las fotos que ya tenga la visita, para que el técnico vea lo que lleva y no
+     repita. Se traen de la base, no de memoria. (07-11-2026) */
+  if (!S.sinFotoAviso) cargarFotosAviso(a.id);
   // materiales ya guardados
   const cont = document.getElementById('mats');
   if (cont){
@@ -25488,7 +25632,12 @@ async function guardarCierre(a, cerrando){
             'nadie sabe en el presupuesto cuál es cuál.');
         }
       }
-      if (!medidas.length)
+      /* ---- Salvo que el viaje fuera en balde (07-11-2026) ----
+         Si el técnico no ha podido entrar, no hay huecos que medir: exigirle
+         una medida sería un bloqueo imposible de cumplir, y esos se acaban
+         sorteando. Lo encontró la suite de las fotos probando justo este caso:
+         una comercial cerrada en balde. */
+      if (!medidas.length && !esBalde)
         return setErr('Esta es una visita comercial y no has apuntado ninguna medida. De aquí sale '+
           'el presupuesto: rellena al menos un hueco. Si no has podido medir nada, marca «No se ha '+
           'podido medir» y di por qué.');
@@ -25626,6 +25775,17 @@ async function guardarCierre(a, cerrando){
       return setErr('Pon las horas a facturar. Si esta visita no se cobra, marca «Esta visita no se cobra» y di por qué.');
     if (o.sin_cargo && !o.sin_cargo_motivo)
       return setErr('Has marcado que la visita no se cobra: escribe por qué.');
+    /* ---- La foto de la visita (07-11-2026) ----
+       Al menos una, y se cuenta contra la BASE, no contra lo que haya pintado:
+       un parte abierto hace media hora puede traer un número que ya no vale.
+       No se pide en un viaje en balde: ahí no se ha podido ver nada. */
+    if (!S.sinFotoAviso && pideFotoVisita(Object.assign({}, a, o))){
+      const hay = (await cargarFotosAviso(a.id)).length;
+      if (!hay)
+        return setErr('Haz al menos una foto de esta visita. Es la prueba de lo que había y de lo '+
+          'que se hizo: dentro de tres meses, cuando el cliente pregunte, es lo único que lo '+
+          'cuenta. Tienes los botones arriba, en «Fotos de esta visita».');
+    }
     if (!FIRMA.pintado && !a.firma_ruta && !o.firma_sin)
       return setErr('Falta la firma del cliente. Si no hay nadie, escribe el motivo abajo.');
     /* El viaje en balde se cierra ahí mismo, sin más preguntas: el parte dice lo
@@ -27518,6 +27678,20 @@ dlgForm.addEventListener('click', async e => {
         toast('Cliente creado y puesto en la asistencia. No se ha perdido nada de lo que habías escrito.');
       }, 120);
     });
+    return;
+  }
+  /* ---- Borrar una foto de la visita (07-11-2026) ----
+     Va en el manejador del DIÁLOGO, que es donde está el parte. En el de la
+     pantalla no llegaría nunca el clic, que es el fallo que ya pasó una vez con
+     los botones de los viajes en balde. */
+  if (a === 'foto-borrar-aviso'){
+    if (!armar(b, 'Confirmar')) return;
+    try {
+      await sb.storage.from('fotos').remove([b.dataset.ruta]);
+      await sb.from('fotos').delete().eq('id', b.dataset.id);
+      S.fotosAviso = (S.fotosAviso || []).filter(f => f.id !== b.dataset.id);
+      await cargarFotosAviso(b.dataset.aviso);
+    } catch(err){ fallo(err); }
     return;
   }
   /* ---- Crear la puerta desde el alta de la asistencia (07-11-2026) ----
