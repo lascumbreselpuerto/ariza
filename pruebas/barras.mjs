@@ -632,6 +632,71 @@ paso('y un código de otra caja da OTRO material, que es lo que hay que avisar',
      juicio.otro === 'art-upc', juicio.otro);
 paso('y un código que no existe no devuelve nada', juicio.sinNada === null);
 
+bloque('14. La petición se cierra de verdad al dar el material de alta');
+/* David, 08-11-2026 por la noche: «Cuando la oficina da de alta un producto que
+   los técnicos han solicitado, sigue apareciendo en material que piden los
+   técnicos.»
+
+   La causa: la aplicación mandaba el NOMBRE de quien resolvía («David Ariza») a
+   una columna que guarda el IDENTIFICADOR del usuario. Postgres rechazaba el
+   cambio entero, la petición se quedaba pendiente y volvía a salir en la lista.
+   El material SÍ se daba de alta, porque eso es otra orden distinta, y por eso
+   parecía que todo había ido bien.
+
+   Esto NO lo cazaba el banco porque el simulador guardaba lo que le echaran sin
+   mirar el tipo. Ahora el simulador rechaza un uuid que no lo es, igual que
+   Postgres, y esta comprobación se apoya en eso. */
+const cierre = await T(async () => {
+  const g = window.__T;
+  g.cerrarDlg();
+  await new Promise(r => setTimeout(r, 300));
+  const ruta = 'peticiones/cierre.jpg';
+  await g.sb.storage.from('fotos').upload(ruta,
+    new Blob([new Uint8Array([255,216,255])], { type:'image/jpeg' }), { contentType:'image/jpeg' });
+  const { data } = await g.sb.from('peticiones_material').insert({
+    aviso_id:'ba-1', descripcion:'Muelle de torsion 2 pulgadas', unidad:'ud',
+    foto_ruta: ruta, estado:'pendiente' }).select('id').single();
+  await g.cargar(); g.pintar();
+  await new Promise(r => setTimeout(r, 600));
+  const id = data.id;
+  const antes = g.peticionesPendientes().length;
+  g.resolverPeticionCreando(id);
+  await new Promise(r => setTimeout(r, 600));
+  document.querySelector('#dlg-form [type=submit]').click();
+  await new Promise(r => setTimeout(r, 1800));
+  const pet = (g.S.peticiones || []).find(x => x.id === id);
+  /* Y, lo que de verdad veía David: que YA NO SALE en la lista de pendientes */
+  g.S.vista = 'almacen'; g.pintar();
+  await new Promise(r => setTimeout(r, 500));
+  const enPantalla = document.body.textContent;
+  return { antes, despues: g.peticionesPendientes().length,
+           estado: pet ? pet.estado : null,
+           quien: pet ? pet.resuelto_por : 'x',
+           cuando: pet ? !!pet.resuelto : false,
+           atado: pet ? !!pet.articulo_id : false,
+           sigueEnPantalla: /Muelle de torsion 2 pulgadas/.test(enPantalla) &&
+                            !/Resueltas/.test(enPantalla.split('Muelle de torsion 2 pulgadas')[0].slice(-400)) };
+});
+paso('la petición queda resuelta', cierre.estado === 'resuelta', cierre.estado);
+paso('Y DESAPARECE DE LAS PENDIENTES, que es lo que veía David',
+     cierre.despues === cierre.antes - 1, cierre.antes + ' → ' + cierre.despues);
+paso('queda apuntado cuándo se resolvió', cierre.cuando === true);
+paso('y con qué material', cierre.atado === true);
+paso('quien la resolvió se guarda por su identificador, no por su nombre',
+     cierre.quien == null || !/\s/.test(String(cierre.quien)), cierre.quien);
+
+/* Y la comprobación de raíz: que el simulador castiga lo mismo que Postgres.
+   Si esto dejara de fallar, el banco habría vuelto a ser un banco que da
+   tranquilidad en vez de información. */
+const castiga = await T(async () => {
+  const g = window.__T;
+  const r = await g.sb.from('peticiones_material')
+    .update({ resuelto_por: 'David Ariza' }).eq('id', 'no-existe');
+  return { hayError: !!r.error, mensaje: r.error ? r.error.message : '' };
+});
+paso('el banco rechaza un nombre donde va un identificador, como haría Postgres',
+     castiga.hayError === true, castiga.mensaje);
+
 console.log('\n'+ok+' bien, '+mal+' mal.');
 if (errores.length){ console.log('Errores de JavaScript:'); errores.forEach(e => console.log('   '+e)); }
 else console.log('Sin errores de JavaScript.');

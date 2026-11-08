@@ -128,6 +128,76 @@ if (typeof window !== 'undefined') window.__DB = DB;
 const clonar = x => (x === undefined || x === null) ? x : JSON.parse(JSON.stringify(x));
 const tabla = t => (DB[t] = DB[t] || []);
 
+/* ---------------------------------------------------------------------------
+   Las columnas que en la base de datos de verdad son UUID       08-11-2026
+
+   POR QUÉ ESTO EXISTE
+   David: «Cuando la oficina da de alta un producto que los técnicos han
+   solicitado, sigue apareciendo en material que piden los técnicos.»
+
+   La causa era que la aplicación mandaba el NOMBRE de quien resolvía la
+   petición («David Ariza») a una columna que guarda el IDENTIFICADOR del
+   usuario. Postgres rechazaba el cambio entero y la petición se quedaba
+   pendiente. Pero el banco de pruebas lo daba por bueno, porque este simulador
+   guardaba lo que le echaran sin mirar el tipo.
+
+   Un banco que no castiga lo que la base de datos castiga sirve para la mitad
+   de lo que uno cree. Así que ahora estas columnas se comprueban aquí igual
+   que allí: si no parece un uuid, la orden falla.
+
+   La lista se amplía según hagan falta: no están todas las columnas uuid de la
+   aplicación, están las que una persona puede confundir con un nombre o un
+   texto, que son las que de verdad se equivocan.
+
+   CÓMO SE HIZO ESTA LISTA, QUE TAMBIÉN TIENE SU HISTORIA
+   La primera versión la escribí de memoria y traía dos errores: puse
+   «ubicaciones.creado_por» como identificador cuando es TEXTO, y me inventé una
+   columna «tecnico_id» que en realidad se llama «perfil_id». Resultado: cinco
+   pruebas del almacén en rojo por culpa de la comprobación, no del programa.
+   Esta lista está sacada LEYENDO los ficheros de servidor/, columna a columna.
+   Solo están las tablas cuyo SQL está en el repositorio: de «avisos»,
+   «puertas» y «perfiles» no está, así que no se adivinan.
+
+   OJO con una cosa que se ve aquí y vale la pena entender: en el almacén
+   conviven «creado_por», que guarda el NOMBRE para leerlo de un vistazo en el
+   historial, y «creado_por_id», que guarda QUIÉN es de verdad. Son dos
+   columnas distintas a propósito. El fallo del 08-11-2026 fue meter un nombre
+   donde iba un identificador. */
+const COLUMNAS_UUID = {
+  /* servidor/barras.sql */
+  peticiones_material: ['aviso_id', 'articulo_id', 'creado_por', 'resuelto_por'],
+  /* servidor/almacen.sql y servidor/almacenes.sql. «creado_por» NO está: ahí
+     es texto, el nombre de quien lo hizo. El identificador es creado_por_id. */
+  movimientos_material: ['articulo_id', 'desde', 'hasta', 'aviso_id',
+                         'puerta_id', 'creado_por_id'],
+  /* servidor/almacen.sql. «creado_por» tampoco: es texto. */
+  ubicaciones: ['perfil_id'],
+};
+/* Vale cualquier cosa con pinta de uuid, y también los identificadores que
+   fabrica este simulador («id-000007») y los que inventan las pruebas
+   («art-banda»): lo que NO vale es un nombre de persona o una frase, que es lo
+   que se escapó. */
+const PARECE_UUID = v =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v) ||
+  /^[a-z0-9]+(-[a-z0-9]+)*$/i.test(v) && !/\s/.test(v);
+
+function vigilarUuid(nombreTabla, payload){
+  const cols = COLUMNAS_UUID[nombreTabla];
+  if (!cols || !payload) return null;
+  const filas = Array.isArray(payload) ? payload : [payload];
+  for (const fila of filas){
+    for (const c of cols){
+      const v = fila[c];
+      if (v === undefined || v === null || v === '') continue;
+      if (typeof v !== 'string' || !PARECE_UUID(v))
+        return { message: 'invalid input syntax for type uuid: "' + v + '" (columna ' +
+                          nombreTabla + '.' + c + ')',
+                 code: '22P02' };
+    }
+  }
+  return null;
+}
+
 /* Constructor de consultas. Es «thenable»: al esperarlo resuelve {data,error}. */
 class Consulta {
   constructor(t){
@@ -187,6 +257,12 @@ class Consulta {
     const t = tabla(this.t);
     let data = null;
     try {
+      /* Lo mismo que haría Postgres: si a una columna uuid le llega algo que no
+         lo es, la orden entera falla. (08-11-2026) */
+      if (this.op === 'insert' || this.op === 'update' || this.op === 'upsert'){
+        const mal = vigilarUuid(this.t, this.payload);
+        if (mal) return { data: null, error: mal, count: null };
+      }
       if (this.op === 'select'){
         let f = this._filas().slice();
         if (this.ord) f.sort((a, b) => {
