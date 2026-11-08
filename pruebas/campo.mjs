@@ -216,9 +216,22 @@ const lector = await T(async () => {
 paso('el lector se abre dentro del parte', lector.abierto === true);
 paso('el parte NO se ha cerrado al abrirlo: nada de otro diálogo',
   lector.sigueAbierto === true && lector.diagIgual === true);
-paso('si el teléfono no sabe leer códigos, lo dice y pide el código escrito',
-  lector.puedeCamara ? /Acerca el QR/.test(lector.aviso) : /Escribe el código/.test(lector.aviso),
+/* Cambiada el 08-11-2026. Antes se comprobaba que, si el navegador no traía
+   lector de códigos, saliera el cartel de «este teléfono no sabe leer códigos».
+   Ese cartel era justamente el que dejaba fuera al iPhone, porque Safari no
+   trae lector, y desde esta fecha la aplicación lleva el suyo propio dentro.
+   Lo que se comprueba ahora es lo que queda en pie: si la cámara se abre, se
+   dice que acerque el QR; si no se puede abrir (como en el navegador de
+   pruebas, que no tiene cámara), se dice por qué y se pide el código escrito.
+   El lector en sí se prueba con códigos de verdad en codigos.mjs. */
+paso('si la cámara se abre, pide acercar el QR, y si no, dice por qué y pide el código escrito',
+  lector.puedeCamara
+    ? (/Acerca el QR/.test(lector.aviso) ||
+       (/no se ha podido abrir la cámara/i.test(lector.aviso) && /Escribe el código/.test(lector.aviso)))
+    : /Escribe el código/.test(lector.aviso),
   lector.aviso);
+paso('y ya no sale el cartel de que el teléfono no sabe leer códigos',
+  !/no sabe leer códigos/i.test(lector.aviso), lector.aviso);
 paso('el código escrito añade el material como línea del parte',
   lector.linea1.some(l => l.art === 'art-banda' && /Banda/.test(l.desc) && l.cant === '1'),
   JSON.stringify(lector.linea1));

@@ -102,6 +102,8 @@ bloqueCritico colocarBloques repintarCuentas
 dlgPuertaRapida anioPuerta instaladorPuerta centroElegido pistaCentro moldeDePuerta
 URGENCIA_MODOS factorDeModo nombreUrgModo explicaUrgModo urgModoCfg URG_X_UNO URG_X_DOS
 ASIST_NO_SE_CREAN esFalso falsoExplicado falsosPendientes
+ETAPAS_FOTO MAX_FOTOS_AVISO nombreEtapa pideFotoVisita fotosDeAviso
+cargarFotosAviso pintarFotosAviso subirFotos contarFotos
 SUBTIPOS_TRABAJO PERIFERICOS PERIF_TODOS nombrePeriferico esPerifericoValido
 pidePerifericos pideDetalleSubtipo detallePerifericos detalleSubtipo
 perifMarcados pintarPerifericos pintarCuentaPerifericos
@@ -198,7 +200,7 @@ vistaManual cargarManual mdAHtml MANUALES
 FRASES_DIAG FRASES_TRAB frasesDe meterFrase hhmm
 NO_SE_COPIA moldeDePuerta
 LECTOR puedeLeerCamara pararLector articuloDeEtiqueta meterMaterialLeido
-usarEtiqueta arrancarLector
+usarEtiqueta arrancarLector fotogramaEnGrises
 guardarBorradorPuerta aplicarBorradorPuerta CAMPOS_PUERTA dlgPuerta dlgCliente
 libroExpediente informeSituacion propuestaActuaciones actaEntrega vidaPuerta
 hojaDeCampo libroMantenimiento etiquetaCE documentoDTE documentoCPF hojaParte
