@@ -215,6 +215,17 @@ create table if not exists public.expedientes (
   creado     timestamptz not null default now()
 );
 
+/* Las fotos. Existen en producción desde el principio, con la puerta como
+   dueña; faltaban aquí porque hasta el 07-11-2026 ningún SQL las tocaba. Las
+   columnas son las que usa la aplicación. */
+create table if not exists public.fotos (
+  id         uuid primary key default gen_random_uuid(),
+  puerta_id  uuid not null references public.puertas(id) on delete cascade,
+  ruta       text not null,
+  autor      text default '',
+  creado     timestamptz not null default now()
+);
+
 create table if not exists public.revisiones (
   id         uuid primary key default gen_random_uuid(),
   aviso_id   uuid references public.avisos(id) on delete cascade,
