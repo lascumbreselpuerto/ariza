@@ -1104,7 +1104,10 @@ const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etique
             sinQRnativo:false, sinQRpropio:false,
             /* El código de barras del fabricante y las peticiones de material:
                servidor/barras.sql (08-11-2026) */
-            peticiones:[], sinBarras:false, sinPeticiones:false, sinQRbarras:false };
+            peticiones:[], sinBarras:false, sinPeticiones:false, sinQRbarras:false,
+            /* Los almacenes que gobierna la oficina y el rastro de las bajas:
+               servidor/almacenes.sql (08-11-2026) */
+            bajas:[], resumenBajas:[], sinAlmacenesOfi:false, mesBajas:'' };
 /* Importes: solo existen para el administrador. Si no hay tarifas cargadas, no se enseña nada. */
 const valoracionDe = id => S.valoraciones[id] || null;
 const eur = n => (n == null || isNaN(n)) ? '—' :
@@ -1831,6 +1834,12 @@ async function cargar(){
      parte y nadie en la oficina se entera, como antes del 08-11-2026. */
   const pm = await sb.from('peticiones_material').select('id').limit(1);
   S.sinPeticiones = !!pm.error;
+  /* Los almacenes gobernados por la oficina y el rastro de las bajas:
+     servidor/almacenes.sql. Sin eso, los almacenes siguen naciendo solos y la
+     baja es un único motivo sin obligación de explicarla, como antes del
+     08-11-2026. */
+  const ao = await sb.from('ubicaciones').select('orden, nota').limit(1);
+  S.sinAlmacenesOfi = !!ao.error;
   /* ---- El almacén ----
      Las existencias no se guardan en ninguna columna: se leen de la vista, que
      las suma de los movimientos. Si falta el SQL del almacén, la aplicación
@@ -1855,6 +1864,18 @@ async function cargar(){
   const pe = S.sinPeticiones ? { data: [] }
     : await sb.from('peticiones_material').select('*').order('creado', { ascending:false }).limit(400);
   S.peticiones = pe.error ? [] : (pe.data || []);
+  /* ---- Lo que se rompe y se pierde, en euros (08-11-2026) ----
+     La vista lleva precios, así que el servidor solo le devuelve filas a
+     gestión: a un técnico le llega vacía y no hay que esconder nada aquí. */
+  if (S.sinAlmacenesOfi){ S.bajas = []; S.resumenBajas = []; }
+  else {
+    const [bj, rb] = await Promise.all([
+      sb.from('bajas_material').select('*').order('creado', { ascending:false }).limit(500),
+      sb.rpc('resumen_bajas'),
+    ]);
+    S.bajas = bj.error ? [] : (bj.data || []);
+    S.resumenBajas = rb.error ? [] : (rb.data || []);
+  }
   /* ---- El material que no está enlazado con el almacén (01-11-2026) ----
      La línea de material del parte tiene artículo, descripción, cantidad y
      unidad, y ningún campo de precio: el precio sale del almacén. Lo que el
@@ -2002,7 +2023,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.08-3';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.08-4';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -4387,6 +4408,10 @@ function vistaAlmacen(){
   /* Lo primero del almacén es lo que hay que atender: el material que los
      técnicos han pedido dar de alta (08-11-2026). */
   h += panelPeticiones();
+  /* Y lo que se rompe y se pierde, que es dinero que hoy no aparece en ninguna
+     otra cuenta, y los almacenes que gobierna la oficina (08-11-2026). */
+  h += panelBajas();
+  h += panelAlmacenes();
 
   const q = normTxt(S.buscaMat);
   const todos = (S.catalogo || []).filter(a => a.activo !== false);
@@ -4543,7 +4568,15 @@ function dlgMaterial(id){
 }
 
 const MOTIVO_MOV = { compra:'Compra', obra:'Usado en obra', averia:'Usado en una avería',
-  traspaso:'Traspaso', devolucion:'Devuelto', ajuste:'Ajuste de inventario', baja:'Baja' };
+  traspaso:'Traspaso', devolucion:'Devuelto', ajuste:'Ajuste de inventario',
+  /* Roto y perdido van por separado desde el 08-11-2026: uno dice que el
+     material no aguanta y el otro que se queda por el camino, y son dos
+     problemas que se arreglan de maneras distintas. «baja» a secas es el
+     motivo de antes y solo existe en el histórico. */
+  baja_roto:'Baja: roto', baja_perdido:'Baja: perdido', baja_otro:'Baja: otro motivo',
+  baja:'Baja (antes del 08-11-2026)' };
+const MOTIVOS_BAJA = ['baja_roto', 'baja_perdido', 'baja_otro'];
+const esBaja = m => MOTIVOS_BAJA.includes(String(m || '')) || String(m || '') === 'baja';
 
 /* ================================================================
    LO QUE LA OFICINA MANDA LLEVAR
@@ -4672,7 +4705,14 @@ function dlgMover(articuloId, modo, avisoId){
       '<div class="campo"><label for="mv-motivo">Para qué</label><select id="mv-motivo">'+
         '<option value="obra">Montado en una obra</option>'+
         '<option value="averia">Usado en una avería</option>'+
-        '<option value="baja">Roto o perdido</option>'+
+        /* Roto y perdido van por separado desde el 08-11-2026: decisión de
+           David. Uno dice que el material no aguanta, el otro que se queda por
+           el camino, y mezclados no se puede actuar sobre ninguno. */
+        (S.sinAlmacenesOfi
+          ? '<option value="baja">Roto o perdido</option>'
+          : '<option value="baja_roto">Se ha roto</option>'+
+            '<option value="baja_perdido">Se ha perdido</option>'+
+            '<option value="baja_otro">Baja por otro motivo</option>')+
       '</select></div>'+
       '<div class="campo full"><label for="mv-aviso">¿En qué asistencia?</label><select id="mv-aviso">'+
         '<option value="">Sin asistencia</option>'+
@@ -4681,7 +4721,22 @@ function dlgMover(articuloId, modo, avisoId){
           '</option>').join('')+
       '</select><span class="pista">Así el material queda imputado a esa obra y sale en su parte.</span></div>'+
       '<div class="campo full"><label for="mv-nota">Nota</label>'+
-      '<input id="mv-nota" type="text" maxlength="160"></div>';
+      '<input id="mv-nota" type="text" maxlength="160"></div>'+
+      /* Lo que convierte una baja en algo que se puede revisar seis meses
+         después: el motivo escrito, obligatorio, y una foto si hace falta.
+         La foto es opcional a propósito: obligatoria sería un freno para un
+         tornillo, y para una banda de 200 euros vale más que un párrafo. */
+      (S.sinAlmacenesOfi ? '' :
+        '<div id="mv-baja" class="campo full" hidden style="border:1px solid var(--line);border-radius:8px;padding:10px">'+
+        '<label for="mv-baja-motivo">Qué ha pasado</label>'+
+        '<input id="mv-baja-motivo" type="text" maxlength="200" '+
+          'placeholder="Ej.: se partió el perfil al montarla, venía con una grieta">'+
+        '<span class="pista">Obligatorio. Una baja es material pagado que desaparece: sin esto, '+
+        'dentro de tres meses nadie sabe si se rompió, se perdió o se quedó en una obra.</span>'+
+        '<div style="margin-top:8px"><label for="mv-baja-foto">Foto, si procede</label>'+
+        '<input id="mv-baja-foto" type="file" accept="image/*" capture="environment">'+
+        '<span class="pista">Opcional. Para una pieza cara, una foto explica más que un texto.</span>'+
+        '</div></div>');
 
   if (modo === 'traspaso')
     h += '<div class="campo"><label for="mv-desde">Sale de</label><select id="mv-desde">'+
@@ -4723,6 +4778,20 @@ function dlgMover(articuloId, modo, avisoId){
           const av = (S.avisos || []).find(x => x.id === o.aviso_id);
           if (av) o.puerta_id = av.puerta_id || null;
         }
+        /* Una baja sin explicar no sale de aquí. Decisión de David el
+           08-11-2026: el motivo escrito es obligatorio siempre. Lo que se
+           escribe aquí es LA NOTA del movimiento, que es donde la base lo
+           exige: así no hay dos sitios diciendo cosas distintas. */
+        if (!S.sinAlmacenesOfi && MOTIVOS_BAJA.includes(o.motivo)){
+          const porque = (val('mv-baja-motivo') || '').trim();
+          if (porque.length < 3)
+            return setErr('Escribe qué ha pasado con ese material. Una baja sin explicar no se '+
+                          'puede revisar después, y es material que se ha pagado.');
+          const suya = (val('mv-nota') || '').trim();
+          o.nota = suya ? porque + ' · ' + suya : porque;
+          if (!o.desde)
+            return setErr('Di de qué almacén se da de baja: si no, no se sabe qué queda descuadrado.');
+        }
       }
       if (modo === 'traspaso'){
         o.desde = val('mv-desde'); o.hasta = val('mv-hasta'); o.motivo = 'traspaso';
@@ -4742,11 +4811,52 @@ function dlgMover(articuloId, modo, avisoId){
           '. Si aun así es correcto, vuelve a darle a guardar y se anota.');
       }
       await moverMaterial(o);
+      /* La foto de lo roto, si la ha hecho. Va después de guardar el
+         movimiento a propósito: si falla la foto, la baja ya está apuntada,
+         que es lo importante. Y se dice, no se calla. */
+      let avisoFoto = '';
+      if (!S.sinAlmacenesOfi && MOTIVOS_BAJA.includes(o.motivo)){
+        const inp = document.getElementById('mv-baja-foto');
+        const fich = inp && inp.files ? inp.files[0] : null;
+        if (fich){
+          try { await subirFotoBaja(fich, articuloId); }
+          catch(e){ avisoFoto = ' La baja está apuntada, pero la foto no se ha podido subir: '+
+                                (e.message || e); }
+        }
+      }
       delete dlgForm.dataset.avisado;
       cerrarDlg(); await cargar(); pintar();
-      toast('Movimiento guardado.');
+      toast('Movimiento guardado.' + avisoFoto);
     } catch(err){ setErr(err.message || 'No se ha podido guardar el movimiento.'); }
   });
+  /* El bloque de «qué ha pasado» solo estorba cuando no es una baja, así que
+     sale y se esconde según el motivo que se elija. */
+  if (modo === 'salida' && !S.sinAlmacenesOfi){
+    const sel = document.getElementById('mv-motivo');
+    const caja = document.getElementById('mv-baja');
+    const mirar = () => { if (caja) caja.hidden = !MOTIVOS_BAJA.includes(sel ? sel.value : ''); };
+    if (sel) sel.addEventListener('change', mirar);
+    mirar();
+  }
+}
+
+/* La foto de un material dado de baja. Va al mismo almacén privado que las
+   demás fotos, en su propia carpeta, y se cuelga de la puerta solo si el
+   movimiento venía de una visita con puerta. */
+async function subirFotoBaja(file, articuloId){
+  let blob, tipo = 'image/jpeg', ext = 'jpg';
+  try { blob = await reducir(file); }
+  catch(_){
+    if (file.size > 25*1024*1024) throw new Error('La foto pesa demasiado (más de 25 MB).');
+    blob = file;
+    tipo = file.type || 'application/octet-stream';
+    ext = ((file.name || '').split('.').pop() || 'jpg').toLowerCase().slice(0, 5);
+  }
+  const ruta = 'bajas/'+(articuloId || 'material')+'/'+Date.now()+'-'+
+               Math.random().toString(36).slice(2,7)+'.'+ext;
+  const { error } = await sb.storage.from('fotos').upload(ruta, blob, { contentType: tipo });
+  if (error) throw error;
+  return ruta;
 }
 
 /* ================================================================
@@ -7507,6 +7617,13 @@ const miFurgoneta = () => S.perfil ? furgonetaDe(S.perfil.id) : null;
 async function asegurarFurgoneta(perfilId){
   const ya = furgonetaDe(perfilId);
   if (ya) return ya;
+  /* Desde el 08-11-2026 los almacenes los crea la OFICINA: decisión de David,
+     para poder llamarlas «Furgo 1» y «Furgo 2» y decidir él qué almacenes hay.
+     Así que esto ya no crea nada por su cuenta salvo que lo pida alguien de
+     oficina. Si un técnico no tiene furgoneta asignada, el material de su
+     parte sale del almacén general y la oficina lo ve escrito en el
+     movimiento: nadie se queda parado en la calle y el almacén cuadra. */
+  if (!S.sinAlmacenesOfi && !esGestion()) return null;
   const t = (S.equipo || []).find(x => x.id === perfilId);
   const { data, error } = await sb.from('ubicaciones')
     .insert({ nombre: 'Furgoneta de ' + ((t && t.nombre) ? t.nombre.split(' ')[0] : 'un técnico'),
@@ -7593,6 +7710,9 @@ async function moverMaterial(o){
     nota: o.nota || null,
     creado_por: yo(),
   };
+  /* Y quién es, no solo cómo se llama: un nombre no identifica a nadie si un
+     día hay dos Juan o alguien se lo cambia (08-11-2026). */
+  if (!S.sinAlmacenesOfi && S.perfil && S.perfil.id) fila.creado_por_id = S.perfil.id;
   if (!fila.articulo_id) throw new Error('Falta el material.');
   if (!(fila.cantidad > 0)) throw new Error('La cantidad tiene que ser mayor que cero.');
   if (!fila.desde && !fila.hasta) throw new Error('Un movimiento tiene que venir de algún sitio o ir a alguno.');
@@ -19954,6 +20074,208 @@ async function subirFotoPeticion(file){
 
 const peticionesPendientes = () => (S.peticiones || []).filter(p => p.estado === 'pendiente');
 
+/* ================================================================
+   LOS ALMACENES, QUE GOBIERNA LA OFICINA            08-11-2026
+
+   David: «Siempre debe de quedar marcado quien da de baja el material y de que
+   almacen. General, furgo 1 y furgo 2. Aunque se debe de crear almacen desde
+   la ofi.»
+
+   Hasta hoy la nave venía del SQL y la furgoneta de cada técnico nacía sola la
+   primera vez que movía material, con el nombre «Furgoneta de Juan». Ahora los
+   crea la oficina y les pone el nombre que quiera, y además puede crear
+   almacenes que no son de nadie: un taller, un trastero, un contenedor en una
+   obra larga, que es donde se queda el material de una obra de tres semanas y
+   hasta hoy no estaba en ninguna parte.
+   ================================================================ */
+const TIPOS_ALMACEN = [['nave','Almacén general'], ['furgoneta','Furgoneta'],
+                       ['otro','Otro sitio (taller, obra, trastero)']];
+const almacenesOrdenados = () => (S.ubicaciones || [])
+  .slice()
+  .sort((a, b) => (a.orden || 99) - (b.orden || 99) ||
+                  (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+
+function panelAlmacenes(){
+  if (S.sinAlmacen || !esGestion()) return '';
+  const lista = almacenesOrdenados();
+  const activos = lista.filter(u => u.activo !== false);
+  const retirados = lista.filter(u => u.activo === false);
+  let h = '<div class="panel"><div class="panel-h"><h3>Los almacenes</h3>'+
+    (S.sinAlmacenesOfi ? '' :
+      '<button class="btn sm pri" data-act="alm-nuevo">Nuevo almacén</button>')+'</div>';
+  if (S.sinAlmacenesOfi){
+    h += '<p class="mini" style="margin:0">Falta ejecutar en la base de datos '+
+      'servidor/almacenes.sql. Hasta entonces los almacenes siguen creándose solos y no se '+
+      'pueden nombrar desde aquí.</p></div>';
+    return h;
+  }
+  h += '<p class="mini" style="margin:0 0 10px">Dónde está el material. El general, las '+
+    'furgonetas y los sitios que hagan falta. Llámalos como los llamáis hablando: estos nombres '+
+    'son los que ve el técnico al dar entrada o salida.</p>';
+  if (!activos.length)
+    h += '<p class="mini">Todavía no hay ninguno. Crea al menos el almacén general.</p>';
+  activos.forEach(u => {
+    const tec = u.perfil_id ? (S.equipo || []).find(x => x.id === u.perfil_id) : null;
+    const dentro = (S.existencias || []).filter(x => x.ubicacion_id === u.id &&
+                                                     Number(x.cantidad || 0) > 0);
+    h += '<div class="item sp"><div style="flex:1">'+
+      '<strong>'+esc(u.nombre)+'</strong>'+
+      '<p class="mini" style="margin:2px 0 0">'+
+      esc((TIPOS_ALMACEN.find(t => t[0] === u.tipo) || ['','Sitio'])[1])+
+      (tec ? ' · de '+esc(tec.nombre) : (u.tipo === 'furgoneta' ? ' · sin técnico asignado' : ''))+
+      ' · '+dentro.length+' material'+(dentro.length === 1 ? '' : 'es')+' dentro'+
+      (u.nota ? ' · '+esc(u.nota) : '')+'</p></div>'+
+      '<div class="fila" style="gap:6px">'+
+      '<button class="btn sm" data-act="alm-editar" data-id="'+u.id+'">Cambiar</button>'+
+      '<button class="btn sm plana" data-act="alm-retirar" data-id="'+u.id+'">Retirar</button>'+
+      '</div></div>';
+  });
+  if (retirados.length){
+    h += '<details class="g-bloque" style="margin-top:10px"><summary>Retirados ('+
+      retirados.length+')</summary>';
+    retirados.forEach(u => {
+      h += '<p class="mini" style="margin:6px 0 0">'+esc(u.nombre)+' · '+
+        esc((TIPOS_ALMACEN.find(t => t[0] === u.tipo) || ['','Sitio'])[1])+
+        ' <button class="btn sm plana" data-act="alm-volver" data-id="'+u.id+'">Volver a usarlo</button></p>';
+    });
+    h += '</details>';
+  }
+  return h + '</div>';
+}
+
+function dlgAlmacen(id){
+  const u = id ? (S.ubicaciones || []).find(x => x.id === id) : null;
+  const tecnicos = (S.equipo || []).filter(x => x.activo !== false);
+  const h = '<h3>'+(u ? 'Almacén' : 'Nuevo almacén')+'</h3>'+
+    '<div class="campos">'+
+    '<div class="campo full"><label for="al-nombre">Cómo se llama</label>'+
+      '<input id="al-nombre" type="text" maxlength="60" value="'+esc(u ? u.nombre : '')+'" '+
+      'placeholder="Ej.: General, Furgo 1, Furgo 2">'+
+      '<span class="pista">Este nombre es el que ve el técnico al dar entrada o salida, '+
+      'así que ponle el que uséis hablando.</span></div>'+
+    '<div class="campo"><label for="al-tipo">Qué es</label><select id="al-tipo">'+
+      TIPOS_ALMACEN.map(t => '<option value="'+t[0]+'"'+(u && u.tipo === t[0] ? ' selected' : '')+
+        '>'+esc(t[1])+'</option>').join('')+'</select></div>'+
+    '<div class="campo"><label for="al-tec">De quién es</label><select id="al-tec">'+
+      '<option value="">De nadie en concreto</option>'+
+      tecnicos.map(t => '<option value="'+t.id+'"'+(u && u.perfil_id === t.id ? ' selected' : '')+
+        '>'+esc(t.nombre)+'</option>').join('')+
+      '</select><span class="pista">Solo para las furgonetas: así el material de sus partes sale '+
+      'de la suya.</span></div>'+
+    '<div class="campo full"><label for="al-nota">Para qué es</label>'+
+      '<input id="al-nota" type="text" maxlength="200" value="'+esc(u && u.nota ? u.nota : '')+'" '+
+      'placeholder="Opcional. Ej.: contenedor de la obra de Jerez, hasta marzo"></div>'+
+    '</div><div class="err"></div>'+
+    '<div class="fila" style="gap:8px;margin-top:12px"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Guardar</button></div>';
+  abrirDlg(h, async () => {
+    const nombre = (val('al-nombre') || '').trim();
+    const tipo = val('al-tipo') || 'otro';
+    const perfil = val('al-tec') || null;
+    const nota = (val('al-nota') || '').trim();
+    if (nombre.length < 2) return setErr('Ponle un nombre al almacén.');
+    /* Dos almacenes activos con el mismo nombre son una trampa: nadie sabe en
+       cuál está el material. La base lo impide y aquí se dice en claro. */
+    const repe = (S.ubicaciones || []).find(x => x.activo !== false && x.id !== id &&
+      normTxt(x.nombre || '') === normTxt(nombre));
+    if (repe) return setErr('Ya hay un almacén que se llama así. Ponle otro nombre: si dos se '+
+                            'llaman igual, nadie sabe en cuál está el material.');
+    if (tipo === 'furgoneta' && !perfil && !document.getElementById('al-sin-tec')){
+      setErr('Es una furgoneta y no has dicho de quién es. Si de verdad no es de nadie, vuelve a '+
+             'darle a guardar: el material de los partes no saldrá de ella sola.');
+      const e = document.querySelector('#dlg-form .err');
+      if (e) e.insertAdjacentHTML('beforeend', '<input type="hidden" id="al-sin-tec" value="1">');
+      return;
+    }
+    const o = { nombre, tipo, perfil_id: tipo === 'furgoneta' ? perfil : null,
+                nota: nota || null,
+                orden: tipo === 'nave' ? 10 : (tipo === 'furgoneta' ? 20 : 30) };
+    try {
+      if (id){ const { error } = await sb.from('ubicaciones').update(o).eq('id', id); if (error) throw error; }
+      else {
+        o.activo = true; o.creado_por = yo();
+        const { error } = await sb.from('ubicaciones').insert(o); if (error) throw error;
+      }
+      cerrarDlg(); await cargar(); pintar(); toast('Almacén guardado.');
+    } catch(e){
+      const m = String(e.message || e);
+      setErr(/unique|duplicate/i.test(m)
+        ? 'Ya hay un almacén activo con ese nombre.'
+        : (/permission|policy|row-level/i.test(m)
+            ? 'Los almacenes solo los puede crear la oficina.'
+            : m));
+    }
+  });
+}
+
+/* ================================================================
+   LO QUE SE ROMPE Y SE PIERDE, EN EUROS              08-11-2026
+
+   Comprobado antes de escribir esto: la valoración de una asistencia lee las
+   líneas del parte, no los movimientos de almacén. Así que una baja no se
+   factura al cliente, que es correcto, pero TAMPOCO entra en el coste de
+   ninguna visita ni del mes: el dinero que se rompe o se pierde no aparece hoy
+   en ninguna cuenta.
+
+   Este panel no cambia eso. Lo que hace es ponerle cifra, para que la decisión
+   de cargarlo o no se tome con el número delante. Los márgenes no se tocan sin
+   que lo diga David.
+   ================================================================ */
+function panelBajas(){
+  if (S.sinAlmacenesOfi || !esGestion()) return '';
+  const bajas = S.bajas || [];
+  const res = S.resumenBajas || [];
+  if (!bajas.length) return '';
+  const meses = [...new Set(res.map(r => r.mes))].sort().reverse();
+  const mes = S.mesBajas || meses[0] || '';
+  const delMes = res.filter(r => r.mes === mes);
+  const total = delMes.reduce((a, r) => a + Number(r.coste_total || 0), 0);
+  const nombreMes = m => {
+    if (!m) return '';
+    const d = new Date(m + '-01T00:00:00');
+    return d.toLocaleDateString('es-ES', { month:'long', year:'numeric' });
+  };
+  let h = '<div class="panel"><div class="panel-h"><h3>Lo que se rompe y se pierde</h3>'+
+    (meses.length > 1
+      ? '<select class="cal-sel" data-act="bajas-mes">'+
+        meses.map(m => '<option value="'+m+'"'+(m === mes ? ' selected' : '')+'>'+
+          esc(nombreMes(m))+'</option>').join('')+'</select>'
+      : '')+'</div>';
+  h += '<p class="mini" style="margin:0 0 10px">Este dinero no se le factura a nadie y tampoco '+
+    'entra en el coste de ninguna visita: hoy no aparece en ninguna otra cuenta. Aquí está.</p>';
+  h += '<p style="margin:0 0 10px;font-size:1.2rem"><strong>'+eur(total)+'</strong> '+
+    '<span class="mini">en '+esc(nombreMes(mes))+'</span></p>';
+  if (delMes.length){
+    h += '<div class="tabla-wrap"><table class="tabla"><thead><tr>'+
+      '<th>Almacén</th><th>Por qué</th><th style="width:70px">Cuántas</th>'+
+      '<th style="width:90px">Coste</th></tr></thead><tbody>';
+    delMes.slice().sort((a,b) => Number(b.coste_total||0) - Number(a.coste_total||0))
+      .forEach(r => {
+        h += '<tr><td>'+esc(r.almacen || '')+'</td><td>'+esc(r.motivo_nombre || '')+'</td>'+
+          '<td>'+esc(r.cuantas)+'</td><td>'+eur(Number(r.coste_total || 0))+'</td></tr>';
+      });
+    h += '</tbody></table></div>';
+  }
+  const ultimas = bajas.filter(b => String(b.creado || '').slice(0, 7) === mes).slice(0, 12);
+  if (ultimas.length){
+    h += '<details class="g-bloque" style="margin-top:10px"><summary>Una por una ('+
+      ultimas.length+')</summary>';
+    ultimas.forEach(b => {
+      const av = b.aviso_id ? (S.avisos || []).find(x => x.id === b.aviso_id) : null;
+      h += '<p class="mini" style="margin:8px 0 0">'+fechaCorta(b.creado)+' · '+
+        esc(b.articulo || '')+' · '+esc(b.cantidad)+' '+esc(b.unidad || 'ud')+' · '+
+        eur(Number(b.coste_total || 0))+'<br>'+
+        esc(b.motivo_nombre || '')+' · de '+esc(b.almacen || 'sin almacén')+
+        ' · lo dio de baja '+esc(b.quien || b.creado_por || 'alguien')+
+        (av ? ' · '+esc(nombreCliente(av)) : '')+
+        (b.nota ? '<br>«'+esc(b.nota)+'»' : '')+'</p>';
+    });
+    h += '</details>';
+  }
+  return h + '</div>';
+}
+
 /* ---- Leer el código de barras desde la ficha del material (oficina) ----
    La oficina da de alta con la caja en la mano, así que lo normal es leer el
    código, no teclear trece cifras. Es su propio lector, pequeño y aparte del
@@ -27070,11 +27392,12 @@ async function descontarMaterialDelParte(a, mats){
   /* El material sale de donde lo lleva quien hace la visita: su furgoneta. Si
      todavía no tenía, se crea ahora, que es cuando hace falta. */
   let origen = null;
+  let sinFurgo = false;
   try {
     const quien = a.tecnico_id || (S.perfil || {}).id;
     origen = quien ? await asegurarFurgoneta(quien) : null;
   } catch(_){ origen = null; }
-  if (!origen) origen = laNave();
+  if (!origen){ origen = laNave(); sinFurgo = true; }
   if (!origen) return { bajas:0, aviso:'No hay ningún sitio del almacén donde descontar el material.' };
 
   const motivo = a.tipo === 'averia' ? 'averia' : 'obra';
@@ -27087,7 +27410,10 @@ async function descontarMaterialDelParte(a, mats){
       }
       await moverMaterial({ articulo_id: m.articulo_id, cantidad: m.cantidad,
         desde: origen.id, motivo, aviso_id: a.id, puerta_id: a.puerta_id || null,
-        nota: 'Gastado en la visita' });
+        nota: sinFurgo
+          ? 'Gastado en la visita. Sale del almacén general porque este técnico '+
+            'no tiene furgoneta asignada.'
+          : 'Gastado en la visita' });
       bajas++;
     } catch(_){ /* una línea que falle no puede impedir cerrar la visita */ }
   }
@@ -28398,6 +28724,51 @@ raiz.addEventListener('click', async e => {
         '<button type="button" class="btn plana" data-cerrar>Cerrar</button></div>', null);
     } catch(e){ toast('No se ha podido abrir la foto: '+e.message); }
   }
+  /* ---- Los almacenes que gobierna la oficina (08-11-2026) ---- */
+  else if (a === 'alm-nuevo') dlgAlmacen(null);
+  else if (a === 'alm-editar') dlgAlmacen(b.dataset.id);
+  else if (a === 'alm-retirar'){
+    const u = (S.ubicaciones || []).find(x => x.id === b.dataset.id);
+    if (!u) return;
+    const dentro = (S.existencias || []).filter(x => x.ubicacion_id === u.id &&
+                                                     Number(x.cantidad || 0) > 0);
+    /* Retirar un almacén con material dentro deja ese material sin sitio: se
+       dice antes, con la lista, porque después ya no se ve. */
+    abrirDlg('<h3>Retirar «'+esc(u.nombre)+'»</h3>'+
+      (dentro.length
+        ? '<p class="mini" style="margin:0 0 10px"><b>Ojo: ahí dentro consta material.</b> '+
+          'Si lo retiras, ese material se queda sin sitio y no va a aparecer en ningún almacén. '+
+          'Lo suyo es traspasarlo antes a otro.</p>'+
+          '<p class="mini" style="margin:0 0 10px">'+
+          dentro.slice(0, 12).map(x => {
+            const art = articuloDe(x.articulo_id);
+            return esc((art ? art.descripcion : 'un material')+': '+x.cantidad);
+          }).join('<br>')+
+          (dentro.length > 12 ? '<br>y '+(dentro.length-12)+' más' : '')+'</p>'
+        : '<p class="mini" style="margin:0 0 10px">No consta material dentro, así que se puede '+
+          'retirar sin más. Su histórico de movimientos se queda como está.</p>')+
+      '<div class="err"></div>'+
+      '<div class="fila" style="gap:8px;margin-top:12px"><span class="sp"></span>'+
+      '<button type="button" class="btn plana" data-cerrar>Dejarlo</button>'+
+      '<button type="submit" class="btn pri">Retirarlo</button></div>',
+      async () => {
+        try {
+          const { error } = await sb.from('ubicaciones').update({ activo: false }).eq('id', u.id);
+          if (error) throw error;
+          cerrarDlg(); await cargar(); pintar(); toast('Almacén retirado.');
+        } catch(e){
+          setErr(/permission|policy|row-level/i.test(String(e.message || e))
+            ? 'Los almacenes solo los puede retirar la oficina.' : (e.message || String(e)));
+        }
+      });
+  }
+  else if (a === 'alm-volver'){
+    try {
+      const { error } = await sb.from('ubicaciones').update({ activo: true }).eq('id', b.dataset.id);
+      if (error) throw error;
+      await cargar(); pintar(); toast('Almacén otra vez en uso.');
+    } catch(e){ toast('No se ha podido: '+(e.message || e)); }
+  }
   else if (a === 'pet-crear') resolverPeticionCreando(b.dataset.id);
   else if (a === 'pet-atar'){
     const p = (S.peticiones || []).find(x => x.id === b.dataset.id);
@@ -29061,6 +29432,8 @@ raiz.addEventListener('change', e => {
   if (e.target.dataset.act === 'mat-familia'){ S.matFamilia = e.target.value; pintar(); return; }
   if (e.target.dataset.act === 'mat-proveedor'){ S.matProveedor = e.target.value; pintar(); return; }
   if (e.target.dataset.act === 'mat-filtro'){ S.matFiltro = e.target.value; pintar(); return; }
+  /* El mes del panel de bajas (08-11-2026) */
+  if (e.target.dataset.act === 'bajas-mes'){ S.mesBajas = e.target.value; pintar(); return; }
   if (e.target.dataset.act === 'presu-filtro'){ S.presuFiltro = e.target.value; pintar(); return; }
   if (e.target.dataset.act === 'cal-tec'){ S.calTec = e.target.value; pintar(); return; }
   if (e.target.dataset.act === 'guion-tipo'){ S.guionTipo = e.target.value; pintar(); return; }
