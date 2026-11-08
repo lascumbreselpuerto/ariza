@@ -2023,7 +2023,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.08-4';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.08-5';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -7062,6 +7062,81 @@ function indiceSecciones(){
    alguna llamada suelta, y no hay motivo para romperlas. */
 const indiceEquipo = indiceSecciones;
 
+/* ---- Cambiar el nombre de alguien del equipo (08-11-2026) ----
+   David: «dime como miro y cambio el usuario arizapuertasautomaticas». Había
+   que entrar en la base de datos para eso, porque el nombre se fijaba al dar
+   de alta y no se podía tocar desde la aplicación. Y ese nombre no es un
+   detalle: es el que sale en el parte que firma el cliente, en la columna
+   «Quién» de cada movimiento de almacén y en las bajas de material.
+
+   Lo ya escrito no cambia: los movimientos guardan el nombre tal y como era el
+   día que se hicieron, y el histórico no se reescribe. Por eso desde esta misma
+   fecha se guarda además QUIÉN es, que es lo que aguanta aunque el nombre
+   cambie. */
+function dlgNombreEquipo(id){
+  const t = (S.equipo || []).find(x => x.id === id);
+  if (!t) return;
+  /* Si tiene furgoneta y lleva su nombre viejo, se avisa: el almacén no se
+     renombra solo, y quedaría una «Furgoneta de Pepe» de alguien que ya no se
+     llama así. */
+  const furgo = (S.ubicaciones || []).find(u => u.tipo === 'furgoneta' &&
+    u.perfil_id === t.id && u.activo !== false);
+  const llevaSuNombre = furgo && t.nombre &&
+    normTxt(furgo.nombre || '').includes(normTxt(String(t.nombre).split(' ')[0] || 'xxxx'));
+  const h = '<h3>Cambiar el nombre</h3>'+
+    '<p class="mini" style="margin:0 0 10px">Este nombre sale en el parte que firma el cliente, '+
+    'en el reparto del calendario y en la columna «Quién» de cada movimiento de almacén. '+
+    'Escríbelo como quieres que se lea.</p>'+
+    '<div class="campos">'+
+    '<div class="campo full"><label for="eq-nombre">Nombre</label>'+
+      '<input id="eq-nombre" type="text" maxlength="80" value="'+esc(t.nombre || '')+'" '+
+      'placeholder="Ej.: Juan Pérez"><span class="pista">Con apellido se distingue mejor cuando '+
+      'hay dos personas que se llaman parecido.</span></div>'+
+    '</div>'+
+    '<p class="mini" style="margin:10px 0 0">Lo ya guardado no cambia: los partes y los '+
+    'movimientos de almacén de antes siguen con el nombre que tenían el día que se hicieron. '+
+    'El histórico no se reescribe.</p>'+
+    (llevaSuNombre
+      ? '<p class="mini" style="margin:8px 0 0"><b>Ojo:</b> su furgoneta se llama «'+esc(furgo.nombre)+'». '+
+        'Eso no se cambia solo: si quieres, renómbrala en Almacén.</p>'
+      : '')+
+    '<div class="err"></div>'+
+    '<div class="fila" style="gap:8px;margin-top:12px"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Guardar</button></div>';
+  abrirDlg(h, async () => {
+    const nombre = (val('eq-nombre') || '').trim();
+    if (nombre.length < 2) return setErr('Escribe el nombre.');
+    if (nombre === (t.nombre || '')) { cerrarDlg(); return; }
+    /* Dos personas con el mismo nombre exacto se confunden en cuanto se lee un
+       parte con prisa. Se avisa, pero no se impide: puede haber dos Juan de
+       verdad. */
+    const repe = (S.equipo || []).find(x => x.id !== id && x.activo !== false &&
+      normTxt(x.nombre || '') === normTxt(nombre));
+    if (repe && !document.getElementById('eq-aun-asi')){
+      setErr('Ya hay alguien del equipo que se llama «'+repe.nombre+'». Si son dos personas '+
+             'distintas, ponles el apellido para distinguirlas. Si aun así es correcto, vuelve a '+
+             'darle a guardar.');
+      const e = document.querySelector('#dlg-form .err');
+      if (e) e.insertAdjacentHTML('beforeend', '<input type="hidden" id="eq-aun-asi" value="1">');
+      return;
+    }
+    try {
+      const { error } = await sb.from('perfiles').update({ nombre }).eq('id', id);
+      if (error) throw error;
+      cerrarDlg(); await cargar(); pintar();
+      toast('Nombre cambiado. Lo de antes se queda como estaba.');
+    } catch(e){
+      const m = String(e.message || e);
+      setErr(/permission|policy|row-level|denied/i.test(m)
+        ? 'El servidor no ha dejado cambiarlo. Falta ejecutar servidor/nombre-equipo.sql en la '+
+          'base de datos, o tu usuario no tiene permiso para tocar el equipo.'
+        : m);
+    }
+  });
+  setTimeout(() => { const c = document.getElementById('eq-nombre'); if (c) c.select(); }, 60);
+}
+
 function vistaEquipo(){
   let h = '<div class="stack"><div class="panel"><div class="panel-h"><h2>Técnicos con acceso</h2><span class="mini">'+S.equipo.length+'</span></div>';
   if (!S.equipo.length) h += '<p class="muted" style="margin:0">Todavía no hay técnicos dados de alta.</p>';
@@ -7081,7 +7156,15 @@ function vistaEquipo(){
            '</div></td>'+
            '<td>'+esc(t.nombre||'—')+'</td><td>'+rolCelda+'</td>'+
            '<td>'+(t.activo?'<span class="chip ok sin">Activo</span>':'<span class="chip gris sin">Sin acceso</span>')+'</td>'+
-           '<td style="text-align:right">'+(t.rol==='admin'?'':'<button class="btn sm" data-act="equipo-activo" data-id="'+t.id+'" data-v="'+(t.activo?'0':'1')+'">'+(t.activo?'Quitar acceso':'Dar acceso')+'</button>')+'</td></tr>';
+           '<td style="text-align:right"><div class="fila" style="gap:6px;justify-content:flex-end">'+
+             /* Cambiar el nombre desde aquí (08-11-2026). Hasta hoy el nombre se
+                fijaba al dar de alta y solo se podía corregir entrando en la base
+                de datos. Un apellido que falta o un nombre mal escrito el día del
+                alta se quedaba para siempre, y ese nombre es el que sale en los
+                partes, en las bajas de material y en el almacén. */
+             '<button class="btn sm plana" data-act="equipo-nombre" data-id="'+t.id+'">Cambiar el nombre</button>'+
+             (t.rol==='admin'?'':'<button class="btn sm" data-act="equipo-activo" data-id="'+t.id+'" data-v="'+(t.activo?'0':'1')+'">'+(t.activo?'Quitar acceso':'Dar acceso')+'</button>')+
+           '</div></td></tr>';
     });
     h += '</tbody></table></div>';
     h += '<p class="mini" style="margin:10px 0 0">La foto sale junto a cada asistencia y en el parte que firma el cliente, '+
@@ -28725,6 +28808,7 @@ raiz.addEventListener('click', async e => {
     } catch(e){ toast('No se ha podido abrir la foto: '+e.message); }
   }
   /* ---- Los almacenes que gobierna la oficina (08-11-2026) ---- */
+  else if (a === 'equipo-nombre') dlgNombreEquipo(b.dataset.id);
   else if (a === 'alm-nuevo') dlgAlmacen(null);
   else if (a === 'alm-editar') dlgAlmacen(b.dataset.id);
   else if (a === 'alm-retirar'){
