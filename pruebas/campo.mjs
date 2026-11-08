@@ -189,7 +189,10 @@ const lector = await T(async () => {
   await new Promise(r => setTimeout(r, 400));
   const caja = document.getElementById('mat-lector');
   const campo = document.getElementById('mat-cod');
-  const aviso = document.getElementById('mat-lector-aviso');
+  /* El aviso lo pinta el lector único desde el 08-11-2026, dentro del hueco
+     que le da el parte: antes era un párrafo fijo del propio parte. */
+  const aviso = document.getElementById('mat-lector-camara-aviso') ||
+                document.getElementById('mat-lector-aviso');
   const abierto = caja && !caja.hidden;
   /* Se escribe el código y se da a Buscar */
   campo.value = 'MAT-0001';
@@ -220,15 +223,21 @@ paso('el parte NO se ha cerrado al abrirlo: nada de otro diálogo',
    lector de códigos, saliera el cartel de «este teléfono no sabe leer códigos».
    Ese cartel era justamente el que dejaba fuera al iPhone, porque Safari no
    trae lector, y desde esta fecha la aplicación lleva el suyo propio dentro.
-   Lo que se comprueba ahora es lo que queda en pie: si la cámara se abre, se
-   dice que acerque el QR; si no se puede abrir (como en el navegador de
-   pruebas, que no tiene cámara), se dice por qué y se pide el código escrito.
-   El lector en sí se prueba con códigos de verdad en codigos.mjs. */
-paso('si la cámara se abre, pide acercar el QR, y si no, dice por qué y pide el código escrito',
+
+   Y cambiada OTRA VEZ el mismo 08-11-2026, por la tarde, al unificar los tres
+   lectores copiados en uno solo. El aviso ya no es un párrafo fijo del parte
+   («Acerca el QR…»): lo escribe el lector único, y lo que dice ahora es que el
+   código tiene que llenar el recuadro verde, que es la instrucción que de
+   verdad hace que lea. La prueba comprueba eso: si la cámara se abre, que
+   explique dónde poner el código; si no se puede abrir (como en el navegador
+   de pruebas, que no tiene cámara), que diga por qué y pida el código escrito.
+   El lector en sí se prueba con códigos de verdad en codigos.mjs y con cajas
+   de verdad en cajas.mjs. */
+paso('si la cámara se abre, dice dónde poner el código, y si no, por qué y que lo escriba',
   lector.puedeCamara
-    ? (/Acerca el QR/.test(lector.aviso) ||
-       (/no se ha podido abrir la cámara/i.test(lector.aviso) && /Escribe el código/.test(lector.aviso)))
-    : /Escribe el código/.test(lector.aviso),
+    ? (/recuadro/i.test(lector.aviso) ||
+       (/no se ha podido abrir la cámara/i.test(lector.aviso) && /a mano|Escribe el código/i.test(lector.aviso)))
+    : /a mano|Escribe el código/i.test(lector.aviso),
   lector.aviso);
 paso('y ya no sale el cartel de que el teléfono no sabe leer códigos',
   !/no sabe leer códigos/i.test(lector.aviso), lector.aviso);

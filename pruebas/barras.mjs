@@ -469,6 +469,169 @@ const falso39 = await T(async () => {
 });
 paso('con barras todas iguales no se inventa un Code 39', falso39 === 0, falso39);
 
+bloque('10. La foto de la caja llega al material');
+/* David, 08-11-2026: «las fotos que se exigen al dar de alta no aparecen en el
+   producto una vez aceptada desde oficina». La foto de la petición vivía en el
+   almacén de fotos de los partes y la ficha del material busca la suya en
+   otro: nadie las juntaba, así que la foto que se le EXIGE al técnico se
+   quedaba colgada y el material nacía sin foto. */
+const fotoAlta = await T(async () => {
+  const g = window.__T;
+  g.cerrarDlg();
+  await new Promise(r => setTimeout(r, 300));
+  /* una foto de verdad en el almacén de ficheros, como la que subiría el móvil */
+  const ruta = 'peticiones/para-el-alta.jpg';
+  const trozo = new Blob([new Uint8Array([255,216,255,224,0,16,74,70,73,70])],
+                         { type:'image/jpeg' });
+  await g.sb.storage.from('fotos').upload(ruta, trozo, { contentType:'image/jpeg' });
+  const { data } = await g.sb.from('peticiones_material').insert({
+    aviso_id:'ba-1', descripcion:'Cerradura electrica nueva', unidad:'ud',
+    ean:'8499988877766', foto_ruta: ruta, estado:'pendiente' }).select('id').single();
+  await g.cargar(); g.pintar();
+  await new Promise(r => setTimeout(r, 600));
+  const id = data ? data.id : g.peticionesPendientes()[0].id;
+  g.resolverPeticionCreando(id);
+  await new Promise(r => setTimeout(r, 600));
+  const desc = (document.getElementById('x-desc') || {}).value || '';
+  const ean = (document.getElementById('x-ean') || {}).value || '';
+  document.querySelector('#dlg-form [type=submit]').click();
+  await new Promise(r => setTimeout(r, 1800));
+  const art = (g.S.catalogo || []).find(x => x.descripcion === 'Cerradura electrica nueva');
+  const pet = (g.S.peticiones || []).find(x => x.id === id);
+  return { desc, ean,
+           fotoArt: art ? (art.foto_ruta || null) : null,
+           url: art ? g.fotoArticulo(art) : '',
+           fotoPet: pet ? (pet.foto_ruta || null) : null,
+           estadoPet: pet ? pet.estado : null };
+});
+paso('el alta se abre con lo que pidió el técnico', /Cerradura/.test(fotoAlta.desc), fotoAlta.desc);
+paso('y con el código de la caja ya puesto', fotoAlta.ean === '8499988877766', fotoAlta.ean);
+paso('EL MATERIAL NACE CON LA FOTO DE LA CAJA, que es lo que fallaba',
+     !!fotoAlta.fotoArt && /^catalogo\//.test(fotoAlta.fotoArt), fotoAlta.fotoArt);
+paso('y la ficha sabe enseñarla', !!fotoAlta.url, fotoAlta.url ? 'sí' : '(vacío)');
+paso('la petición CONSERVA la suya: es el justificante y no se toca',
+     fotoAlta.fotoPet === 'peticiones/para-el-alta.jpg', fotoAlta.fotoPet);
+paso('y la petición queda resuelta', fotoAlta.estadoPet === 'resuelta', fotoAlta.estadoPet);
+
+/* Que no se pise una foto ya puesta: si el material ya tiene la suya, manda esa. */
+const noPisa = await T(async () => {
+  const g = window.__T;
+  const art = (g.S.catalogo || []).find(x => x.descripcion === 'Cerradura electrica nueva');
+  await g.sb.from('articulos').update({ foto_ruta:'catalogo/la-buena.jpg' }).eq('id', art.id);
+  await g.cargar();
+  const hecho = await g.copiarFotoDePeticion(
+    (g.S.peticiones || []).find(x => x.descripcion === 'Cerradura electrica nueva').id, art.id);
+  await g.cargar();
+  const ya = (g.S.catalogo || []).find(x => x.id === art.id);
+  return { hecho, ruta: ya.foto_ruta };
+});
+paso('una foto que ya tenía el material no se pisa',
+     noPisa.hecho === false && noPisa.ruta === 'catalogo/la-buena.jpg', noPisa.ruta);
+
+bloque('11. Un solo lector para toda la aplicación');
+/* La raíz del fallo que contó David: «Desde una asistencia funciona. Desde
+   cargar material nuevo desde almacén no funciona.» Había TRES lectores
+   copiados; se arregló uno y los otros se quedaron rotos. Esta comprobación
+   existe para que no vuelva a haber dos. */
+const unico = await T(() => {
+  const g = window.__T;
+  return { abrir: typeof g.abrirLector === 'function',
+           parar: typeof g.pararTodosLosLectores === 'function',
+           almacen: typeof g.arrancarLectorAlmacen === 'function',
+           comprobar: typeof g.comprobarCajaMovimiento === 'function',
+           queHago: typeof g.dlgQueHagoCon === 'function' };
+});
+paso('existe el lector único', unico.abrir === true);
+paso('y se pueden apagar todas las cámaras de una vez', unico.parar === true);
+
+const copias = await T(async () => {
+  const txt = await (await fetch(location.href)).text();
+  /* getUserMedia es lo único que abre la cámara. Se cuenta cuántas veces
+     aparece FUERA del lector único: tiene que aparecer una sola, la de
+     comprobar si este aparato tiene cámara siquiera. Si aparecen más, alguien
+     ha vuelto a copiar un lector, que es exactamente el fallo del 08-11-2026.
+
+     (Esta comprobación se afinó el mismo día: nació contando el total y
+      exigiendo dos o menos, y se ponía en rojo con tres, que son las dos del
+      propio lector único más la de comprobar la cámara. Contaba una cosa que
+      no era la que importa.) */
+  const ini = txt.indexOf('async function abrirLector');
+  const fin = txt.indexOf('function fotogramaEnGrises');
+  if (ini < 0 || fin < 0 || fin < ini) return { error:'no encuentro el lector único' };
+  const dentro = txt.slice(ini, fin);
+  const total = (txt.match(/getUserMedia/g) || []).length;
+  const enElLector = (dentro.match(/getUserMedia/g) || []).length;
+  return { fuera: total - enElLector, total, enElLector };
+});
+paso('la cámara solo se abre dentro del lector único',
+     copias.fuera === 1,
+     copias.error || (copias.fuera + ' fuera, ' + copias.enElLector + ' dentro'));
+
+bloque('12. Leer la caja en Almacén y mover material');
+const enAlmacen = await T(async () => {
+  const g = window.__T;
+  g.cerrarDlg();
+  g.S.vista = 'almacen'; g.pintar();
+  await new Promise(r => setTimeout(r, 500));
+  const bot = document.querySelector('[data-act="alm-leer"]');
+  const hueco = document.getElementById('alm-lector');
+  return { hayBoton: !!bot, hayHueco: !!hueco,
+           texto: bot ? bot.textContent.trim() : '' };
+});
+paso('Almacén tiene su botón de leer el código', enAlmacen.hayBoton === true, enAlmacen.texto);
+paso('y su sitio para la cámara', enAlmacen.hayHueco === true);
+
+const tresBotones = await T(async () => {
+  const g = window.__T;
+  g.dlgQueHagoCon('art-banda');
+  await new Promise(r => setTimeout(r, 500));
+  const modos = [...document.querySelectorAll('#dlg-form [data-act="mat-mover"]')]
+    .map(b => b.dataset.modo);
+  const txt = document.getElementById('dlg-form').textContent;
+  return { modos, dice: /Banda de seguridad/.test(txt), existencias: /hay/.test(txt) };
+});
+paso('al leer una caja salen Entrada, Salida y Traspaso',
+     ['entrada','salida','traspaso'].every(m => tresBotones.modos.includes(m)),
+     tresBotones.modos.join(' '));
+paso('y dice de qué material se trata', tresBotones.dice === true);
+paso('con las existencias delante, para no mover a ciegas', tresBotones.existencias === true);
+
+bloque('13. Comprobar la caja antes de moverla');
+const comprobar = await T(async () => {
+  const g = window.__T;
+  g.cerrarDlg();
+  await new Promise(r => setTimeout(r, 300));
+  g.dlgMover('art-banda', 'salida');
+  await new Promise(r => setTimeout(r, 500));
+  const bot = document.querySelector('#dlg-form [data-act="mv-comprobar"]');
+  const hueco = document.getElementById('mv-lector');
+  /* y lo que de verdad importa: que avise cuando la caja es OTRA */
+  const salida = { bien:null, mal:null, nada:null };
+  const sal = document.getElementById('mv-comprob');
+  const probar = async cod => {
+    await g.abrirLector({ caja:'mv-lector', queBusco:'ambos', alLeer: ()=>{} });
+    return null;
+  };
+  return { hayBoton: !!bot, hayHueco: !!hueco, haySalida: !!sal };
+});
+paso('el movimiento trae botón para comprobar la caja', comprobar.hayBoton === true);
+paso('con su sitio para la cámara y para la respuesta',
+     comprobar.hayHueco === true && comprobar.haySalida === true);
+
+/* El juicio, sin cámara: se le da directamente el código leído. */
+const juicio = await T(async () => {
+  const g = window.__T;
+  const banda = g.articuloDeBarras('8412345678905');
+  const otro = g.articuloDeBarras('0036000291452');
+  const sinNada = g.articuloDeBarras('8499999999999');
+  return { banda: banda ? banda.id : null, otro: otro ? otro.id : null,
+           sinNada: sinNada ? sinNada.id : null };
+});
+paso('el código de la caja encuentra su material', juicio.banda === 'art-banda', juicio.banda);
+paso('y un código de otra caja da OTRO material, que es lo que hay que avisar',
+     juicio.otro === 'art-upc', juicio.otro);
+paso('y un código que no existe no devuelve nada', juicio.sinNada === null);
+
 console.log('\n'+ok+' bien, '+mal+' mal.');
 if (errores.length){ console.log('Errores de JavaScript:'); errores.forEach(e => console.log('   '+e)); }
 else console.log('Sin errores de JavaScript.');
