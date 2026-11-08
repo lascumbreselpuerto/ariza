@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.08-1**
+> **Versión de la aplicación que describe este manual: 2026.11.08-2**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -543,18 +543,30 @@ significa que un traspaso no se apuntó.
 Botón **Leer la etiqueta**, dentro del propio apartado de Materiales. Se abre ahí
 mismo, sin salir del parte.
 
-1. Si tu teléfono sabe leer códigos desde la aplicación, se abre la cámara:
-   acercas el QR de la caja y el material entra como una línea más.
-2. Si no, o si el QR está roto, sucio o no hay luz, escribes el **código que va
-   impreso debajo del QR**: `MAT-0012`, o solo `12`. Intro, y listo.
+1. Se abre la cámara: acercas el QR de la caja y el material entra como una
+   línea más. Funciona en cualquier teléfono, **también en iPhone**, y
+   funciona sin cobertura.
+2. Si el QR está roto, sucio, muy pequeño o no hay luz, escribes el **código
+   que va impreso debajo del QR**: `MAT-0012`, o solo `12`. Intro, y listo.
 
 Escanea tres cajas de lo mismo y quedan **tres unidades en una línea**, no tres
 líneas de una. La cantidad siempre se puede corregir a mano.
+
+Para que lo coja a la primera: acerca el móvil hasta que el QR ocupe más o menos
+la mitad de la pantalla, sin tapar las esquinas de la etiqueta. Da igual que
+esté torcido o un poco de lado. Lo que no perdona es que el QR salga muy
+pequeño en la pantalla o que falte un trozo de etiqueta.
 
 > **Por qué este botón existe.** La etiqueta del material se podía escanear desde
 > antes, pero con la cámara del teléfono: eso abre la aplicación otra vez por la
 > dirección del QR y lo que tuvieras a medio rellenar en el parte se quedaba por
 > el camino. Con este botón no se sale del parte en ningún momento.
+>
+> **Y por qué antes no iba en iPhone.** Hasta el 8 de noviembre de 2026 la
+> aplicación usaba el lector de códigos del propio navegador, y Safari no lo
+> trae: en iPhone salía el cartel de «este teléfono no sabe leer códigos» y
+> había que teclear el código. Desde esa fecha la aplicación lleva su propio
+> lector dentro, así que el iPhone lee igual que los Android.
 
 Y un aviso: si al leer una etiqueta te dice que **no cuadra con el material**,
 no insistas ni lo metas a mano. Significa que ese QR no es el de ese código, y
@@ -1093,4 +1105,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.08-1 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.08-2 de ARIZA SAT*
