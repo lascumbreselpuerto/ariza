@@ -47,7 +47,7 @@ ORDEN="componentes.sql centros.sql parte-por-correo.sql obra.sql ficha.sql \
 almacen.sql presupuestos.sql presupuestos2.sql comercial.sql anexos.sql \
 tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos3.sql valoracion.sql \
 parado.sql factura.sql rutas.sql ruta-cliente.sql telegram.sql subtipo.sql urgencia.sql \
-medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql perifericos.sql ficha4.sql urgencia2.sql falso.sql fotos-aviso.sql barras.sql almacenes.sql nombre-equipo.sql"
+medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql perifericos.sql ficha4.sql urgencia2.sql falso.sql fotos-aviso.sql barras.sql almacenes.sql nombre-equipo.sql sitio-material.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -377,6 +377,21 @@ if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/almacenes-pruebas.sql" ]; then
     fallos=$((fallos+1))
     echo " FALLA los almacenes y las bajas:"
     grep -a -m3 -E "ERROR|EXCEPTION" /tmp/almacenes-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
+# En qué almacén se guarda cada material y en qué parte: que las dos cosas se
+# guarden por separado, que borrar un almacén no se lleve el material por
+# delante, y que dónde se GUARDA no se confunda con dónde ESTÁ.
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/sitio-material-pruebas.sql" ]; then
+  echo ""
+  echo "── Dónde se guarda cada material ───────────────"
+  if $PSQL -f "$AQUI/sql/sitio-material-pruebas.sql" > /tmp/sitio-material-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/sitio-material-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA dónde se guarda cada material:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/sitio-material-pruebas.log | sed 's/^/         /'
   fi
 fi
 
