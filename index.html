@@ -1840,6 +1840,12 @@ async function cargar(){
      08-11-2026. */
   const ao = await sb.from('ubicaciones').select('orden, nota').limit(1);
   S.sinAlmacenesOfi = !!ao.error;
+  /* En qué almacén se guarda cada material y en qué parte de él:
+     servidor/sitio-material.sql. Sin eso, la ficha sigue preguntando «dónde
+     está en la nave» con un texto libre, como antes del 08-11-2026, que es lo
+     que dejó de servir cuando hubo más de un almacén. */
+  const sm = await sb.from('articulos').select('ubicacion_id').limit(1);
+  S.sinSitioMaterial = !!sm.error;
   /* ---- El almacén ----
      Las existencias no se guardan en ninguna columna: se leen de la vista, que
      las suma de los movimientos. Si falta el SQL del almacén, la aplicación
@@ -2023,7 +2029,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.08-9';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.08-10';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -3831,6 +3837,9 @@ const QUE_HACE_FALTA = [
   { marca:'sinAlmacenesOfi', fichero:'almacenes.sql', que:'Almacenes que gobierna la oficina',
     pierdes:'Las furgonetas nacen solas, no se pueden crear almacenes, y la baja de '+
             'material no obliga a explicar qué pasó.' },
+  { marca:'sinSitioMaterial', fichero:'sitio-material.sql', que:'En qué almacén se guarda cada material',
+    pierdes:'La ficha solo pregunta «dónde está en la nave», con un texto libre: no se '+
+            'puede decir en QUÉ almacén se guarda ni buscar por él.' },
   { marca:'sinProveedores', fichero:'catalogo.sql', que:'Fichas de proveedor',
     pierdes:'El proveedor es solo un nombre escrito, sin teléfono ni plazo de entrega.' },
   { marca:'sinConjuntos', fichero:'catalogo.sql', que:'Conjuntos de material',
@@ -6404,6 +6413,23 @@ function dlgLineaPresu(tipo){
    porque la ve el cliente desde el enlace de su presupuesto, sin haber
    entrado en la aplicación. */
 async function subirFotoArticulo(articuloId, file){
+  /* ---- Dos fallos que contó David el 08-11-2026 ----
+     «Al editar el material meto código de barras y foto, y al guardar vuelvo a
+     abrir almacén y el producto no queda guardado con los cambios.»
+     «En dar de alta un nuevo producto hago una foto y no se refleja.»
+
+     Eran dos cosas distintas y las dos estaban aquí:
+
+     1. Al acabar de subir se llamaba a dlgArticulo(id), que VUELVE A DIBUJAR
+        la ficha entera con lo que hay guardado. Todo lo que el usuario tuviera
+        escrito y sin guardar (el código de barras, el proveedor, el mínimo) se
+        borraba en ese momento. Subir una foto te tiraba el trabajo.
+        Ahora solo se cambia la imagen que se ve, y lo escrito se queda.
+
+     2. En un material que todavía NO EXISTE no hay ningún id al que colgarle
+        la foto, así que esto se salía en silencio y la foto no iba a ninguna
+        parte. Ahora, en un material nuevo, la foto se guarda esperando y se
+        sube sola al darle a Guardar. */
   const a = articuloDe(articuloId);
   if (!a) return;
   try {
@@ -6418,9 +6444,48 @@ async function subirFotoArticulo(articuloId, file){
        falla, siempre queda una foto en vez de ninguna. */
     if (a.foto_ruta){ try { await sb.storage.from('ofertas').remove([a.foto_ruta]); } catch(_){} }
     await cargar();
-    dlgArticulo(articuloId);
+    /* NO se vuelve a dibujar la ficha: solo se cambia la foto que se ve. Lo
+       que el usuario estuviera escribiendo sigue donde estaba. */
+    pintarFotoArticulo(articuloId);
     toast('Foto guardada.');
   } catch(e){ fallo(e); }
+}
+
+/* Cambia solo la imagen y los botones de la foto, sin tocar el resto. */
+function pintarFotoArticulo(articuloId){
+  const hueco = document.getElementById('x-foto');
+  const a = articuloDe(articuloId);
+  if (!hueco || !a) return;
+  hueco.innerHTML =
+    '<div class="marca-hueco sello" style="width:120px;height:120px">'+
+      (a.foto_ruta ? '<img src="'+esc(fotoArticulo(a))+'" alt="">' : '<span class="mini">Sin foto</span>')+
+    '</div>'+
+    '<div class="fila" style="gap:6px;margin-top:6px">'+
+    '<label class="btn sm" style="cursor:pointer">'+(a.foto_ruta?'Cambiar':'Subir foto')+
+    '<input type="file" accept="image/*" hidden data-act="subir-foto-art" data-id="'+a.id+'"></label>'+
+    (a.foto_ruta ? '<button type="button" class="btn sm plana" data-act="quitar-foto-art" data-id="'+a.id+'">Quitar</button>' : '')+
+    '</div>';
+}
+
+/* ---- La foto de un material que todavía no existe ----
+   Se queda esperando aquí, con su vista previa, y se sube en cuanto el
+   material tiene id, que es al darle a Guardar. (08-11-2026) */
+let FOTO_ESPERANDO = null;
+function fotoEnEspera(file){
+  FOTO_ESPERANDO = file;
+  const hueco = document.getElementById('x-foto');
+  if (!hueco) return;
+  const url = URL.createObjectURL(file);
+  hueco.innerHTML =
+    '<div class="marca-hueco sello" style="width:120px;height:120px">'+
+      '<img src="'+url+'" alt=""></div>'+
+    '<div class="fila" style="gap:6px;margin-top:6px">'+
+    '<label class="btn sm" style="cursor:pointer">Cambiar'+
+    '<input type="file" accept="image/*" hidden data-act="foto-art-espera"></label>'+
+    '<button type="button" class="btn sm plana" data-act="foto-art-quitar-espera">Quitar</button>'+
+    '</div>'+
+    '<p class="mini" style="margin:6px 0 0;max-width:140px">Se guardará con el material '+
+    'en cuanto le des a Guardar.</p>';
 }
 
 /* Subir papeles a una oferta. Se pueden soltar varios de una vez, que es como
@@ -21644,6 +21709,14 @@ dlgForm.addEventListener('change', e => {
     subirFotoArticulo(id, f);
     return;
   }
+  /* La foto de un material que todavía no existe: se queda esperando y se
+     sube al guardar. (08-11-2026) */
+  if (t.dataset && t.dataset.act === 'foto-art-espera' && t.files && t.files.length){
+    const f = t.files[0];
+    t.value = '';
+    fotoEnEspera(f);
+    return;
+  }
   if (t.classList && t.classList.contains('k-p')) sumarCuotas();
   if (t.dataset && t.dataset.act === 'k-cond'){ condicionCambiada(); return; }
   if (t.id === 'k-cli'){ pintarPuertasContrato(t.value || null, {}); return; }
@@ -24595,17 +24668,64 @@ function dlgTarifas(){
    El código y el código de seguridad del QR se ponen solos al dar de alta: son
    lo que identifica al material cuando se escanea su etiqueta, y pedírselos a
    quien está dando de alta veinte materiales seguidos no tiene sentido. */
+/* ---- Irse a crear un proveedor y volver sin perder nada ----
+   David, 08-11-2026: «al cargar un material y elegir proveedor, si no está
+   dado de alta el proveedor, no puedo dar de alta a un proveedor nuevo».
+   Había que salirse del material, irse a Proveedores, crearlo y volver a
+   empezar el material desde cero.
+
+   Ahora se guarda aquí lo que lleva escrito, se abre la ficha del proveedor
+   entera (que es lo que eligió David: nombre, teléfono, plazo y lo demás de
+   una vez), y al guardarlo se vuelve al material con todo donde estaba y el
+   proveedor nuevo ya elegido. */
+let MATERIAL_A_MEDIAS = null;
+
+function recogerMaterial(){
+  const v = id => (document.getElementById(id) || {}).value;
+  const o = { descripcion: v('x-desc'), unidad: v('x-uni'), familia: v('x-fam'),
+              marca: v('x-marca'), referencia: v('x-ref'), minimo: v('x-min'),
+              ubicacion: v('x-sitio'), ubicacion_id: v('x-alm'), ean: v('x-ean'),
+              coste: v('x-coste'), recargo: v('x-rec'), detalle: v('x-det'),
+              precio_venta: v('x-pv'), notas: v('x-notas'),
+              id: (document.getElementById('x-id') || {}).value || null };
+  return o;
+}
+
+function irAProveedorNuevo(){
+  MATERIAL_A_MEDIAS = recogerMaterial();
+  dlgProveedor(null, true);
+}
+
 function dlgArticulo(id, inicial){
   /* «inicial» son los datos con los que nace el alta cuando se viene de una
      petición de un técnico: lo que él escribió y el código de barras que leyó,
      para no teclearlo otra vez (08-11-2026). */
+  FOTO_ESPERANDO = null;   /* una foto a medio poner no se arrastra a otra ficha */
   const ini = inicial || {};
-  const a = id ? S.catalogo.find(x => x.id === id)
-              : (Object.keys(ini).length ? { descripcion: ini.descripcion || '',
-                                             unidad: ini.unidad || 'ud',
-                                             ean: ini.ean || '' } : null);
+  /* Si se viene de crear un proveedor, «inicial» trae TODO lo que había
+     escrito, no solo lo de una petición: se vuelve a pintar tal cual estaba.
+     Y si el material ya existía, lo de «inicial» manda sobre lo guardado,
+     porque es lo que el usuario tenía delante. (08-11-2026) */
+  const guardado = id ? S.catalogo.find(x => x.id === id) : null;
+  const a = Object.keys(ini).length
+    ? Object.assign({}, guardado || {}, {
+        descripcion: ini.descripcion != null ? ini.descripcion : (guardado||{}).descripcion || '',
+        unidad: ini.unidad || (guardado||{}).unidad || 'ud',
+        familia: ini.familia != null ? ini.familia : (guardado||{}).familia,
+        marca: ini.marca != null ? ini.marca : (guardado||{}).marca,
+        referencia: ini.referencia != null ? ini.referencia : (guardado||{}).referencia,
+        minimo: ini.minimo !== undefined && ini.minimo !== '' ? ini.minimo : (guardado||{}).minimo,
+        ubicacion: ini.ubicacion != null ? ini.ubicacion : (guardado||{}).ubicacion,
+        ubicacion_id: ini.ubicacion_id || (guardado||{}).ubicacion_id,
+        proveedor_id: ini.proveedor_id || (guardado||{}).proveedor_id,
+        ean: ini.ean != null ? ini.ean : (guardado||{}).ean || '',
+        detalle: ini.detalle != null ? ini.detalle : (guardado||{}).detalle,
+        notas: ini.notas != null ? ini.notas : (guardado||{}).notas,
+        id: id || null })
+    : guardado;
   const fams = familiasMaterial();
   let h = '<h3>'+(id ? 'Material del catálogo' : 'Nuevo material')+'</h3>'+
+    '<input type="hidden" id="x-id" value="'+esc(id || '')+'">'+
     (id && a && a.codigo ? '<p class="mini" style="margin:0 0 10px">'+esc(a.codigo)+'</p>' : '')+
     (!id && PETICION_EN_CURSO
       ? '<p class="mini" style="margin:0 0 10px">Viene de lo que pidió un técnico. '+
@@ -24622,13 +24742,37 @@ function dlgArticulo(id, inicial){
       (S.sinProveedores
         ? '<input id="x-prov" type="text" maxlength="80" list="prov-lista" value="'+esc(a&&a.proveedor?a.proveedor:'')+'">'+
           '<datalist id="prov-lista">'+proveedoresMaterial().map(p => '<option value="'+esc(p)+'">').join('')+'</datalist>'
-        : '<select id="x-prov"><option value="">Sin proveedor</option>'+
+        : /* Y poder dar de alta uno nuevo SIN SALIR DE AQUÍ. David, 08-11-2026:
+             «al cargar un material y elegir proveedor, si no está dado de alta
+             el proveedor no puedo dar de alta a un proveedor nuevo». Había que
+             salirse del material, irse a Proveedores, crearlo y volver a
+             empezar, con lo que llevaras escrito perdido por el camino. */
+          '<div class="fila" style="gap:6px">'+
+          '<select id="x-prov" style="flex:1"><option value="">Sin proveedor</option>'+
           (S.proveedores||[]).filter(p => p.activo !== false).map(p =>
             '<option value="'+p.id+'"'+(a && a.proveedor_id === p.id ? ' selected':'')+'>'+esc(p.nombre)+'</option>').join('')+
-          '</select><span class="pista">Las fichas de proveedor se llevan en el almacén</span>')+
+          '</select>'+
+          '<button type="button" class="btn sm" data-act="x-prov-nuevo">Nuevo</button></div>'+
+          '<span class="pista">Si no está en la lista, dale a «Nuevo»: se abre su ficha, lo '+
+          'creas y vuelves aquí con él ya elegido y sin perder lo que llevas escrito.</span>')+
       '</div>'+
     '<div class="campo"><label for="x-min">Mínimo en almacén</label><input id="x-min" type="number" step="any" min="0" value="'+esc(a&&a.minimo!=null?a.minimo:'')+'"><span class="pista">Por debajo de esto, el almacén avisa</span></div>'+
-    '<div class="campo"><label for="x-sitio">Dónde está en la nave</label><input id="x-sitio" type="text" maxlength="60" value="'+esc(a&&a.ubicacion?a.ubicacion:'')+'" placeholder="Ej.: estantería B, balda 3"></div>'+
+    /* Dónde se guarda: el almacén y, dentro de él, el sitio. David, 08-11-2026:
+       «en vez de preguntar dónde está en la nave debería de preguntar en qué
+       almacén está, y luego en qué parte de este almacén está guardado».
+       Desde que hay nave, furgonetas y los sitios que cree la oficina, poner
+       «balda 3» sin decir de dónde no sirve para buscar nada. */
+    (S.sinSitioMaterial || S.sinAlmacen ? '' :
+      '<div class="campo"><label for="x-alm">En qué almacén se guarda</label>'+
+      '<select id="x-alm"><option value="">Sin decidir</option>'+
+      almacenesOrdenados().filter(u => u.activo !== false).map(u =>
+        '<option value="'+u.id+'"'+(a && a.ubicacion_id === u.id ? ' selected':'')+'>'+
+        esc(u.nombre)+'</option>').join('')+
+      '</select><span class="pista">Dónde se guarda habitualmente. No es dónde está ahora: '+
+      'eso lo dicen las existencias, que salen de los movimientos.</span></div>')+
+    '<div class="campo"><label for="x-sitio">'+
+      (S.sinSitioMaterial || S.sinAlmacen ? 'Dónde está en la nave' : 'En qué parte de ese almacén')+
+      '</label><input id="x-sitio" type="text" maxlength="60" value="'+esc(a&&a.ubicacion?a.ubicacion:'')+'" placeholder="Ej.: estantería B, balda 3"></div>'+
     /* El código de barras de la caja del fabricante (08-11-2026). Estaba en la
        base desde el almacén y solo se rellenaba importando un Excel: ahora se
        puede escribir y leer con la cámara, que es lo que hace que el técnico
@@ -24658,15 +24802,27 @@ function dlgArticulo(id, inicial){
       '<p class="mini" style="margin:0 0 10px">Esto es lo que sale en el presupuesto del cliente. '+
       'Se escribe una vez y se repite solo en todas las ofertas donde uses este material.</p>'+
       '<div class="fila" style="gap:14px;align-items:flex-start;flex-wrap:wrap">'+
-      '<div><div class="marca-hueco sello" style="width:120px;height:120px">'+
+      /* Todo el bloque de la foto va dentro de «x-foto» y se repinta solo él.
+         Antes se volvía a dibujar la ficha entera al subir una foto, y eso
+         borraba lo que el usuario llevara escrito sin guardar. (08-11-2026) */
+      '<div id="x-foto">'+
+      '<div class="marca-hueco sello" style="width:120px;height:120px">'+
         (a && a.foto_ruta ? '<img src="'+esc(fotoArticulo(a))+'" alt="">' : '<span class="mini">Sin foto</span>')+
       '</div>'+
-      (a ? '<div class="fila" style="gap:6px;margin-top:6px">'+
+      (a && a.id ? '<div class="fila" style="gap:6px;margin-top:6px">'+
         '<label class="btn sm" style="cursor:pointer">'+(a.foto_ruta?'Cambiar':'Subir foto')+
         '<input type="file" accept="image/*" hidden data-act="subir-foto-art" data-id="'+a.id+'"></label>'+
         (a.foto_ruta ? '<button type="button" class="btn sm plana" data-act="quitar-foto-art" data-id="'+a.id+'">Quitar</button>' : '')+
         '</div>'
-        : '<p class="mini" style="margin:6px 0 0;max-width:120px">Guarda primero y podrás ponerle foto.</p>')+
+        /* Material que todavía no existe: la foto se puede elegir YA y se sube
+           sola al guardar. Antes aquí ponía «guarda primero», y cuando el alta
+           venía de una petición de un técnico salía el botón pero la foto se
+           perdía en silencio, que es peor. (08-11-2026) */
+        : '<div class="fila" style="gap:6px;margin-top:6px">'+
+          '<label class="btn sm" style="cursor:pointer">Poner foto'+
+          '<input type="file" accept="image/*" hidden data-act="foto-art-espera"></label></div>'+
+          '<p class="mini" style="margin:6px 0 0;max-width:140px">Se guardará con el material '+
+          'en cuanto le des a Guardar.</p>')+
       '</div>'+
       '<div class="sp" style="min-width:240px"><div class="campos">'+
       '<div class="campo full"><label for="x-det">Explicación para el cliente</label>'+
@@ -24691,6 +24847,10 @@ function dlgArticulo(id, inicial){
                 referencia: val('x-ref') || null,
                 familia: val('x-fam') || null, marca: val('x-marca') || null,
                 ubicacion: val('x-sitio') || null, notas: val('x-notas') || null };
+    /* El almacén donde se guarda (08-11-2026). Solo se manda si el servidor
+       tiene la columna: si no, se guardaría un campo que no existe y fallaría
+       el alta entera por una cosa que es un añadido. */
+    if (!S.sinSitioMaterial && !S.sinAlmacen) o.ubicacion_id = val('x-alm') || null;
     /* Con fichas de proveedor se guarda el enlace y, de paso, su nombre: así
        el listado y la búsqueda siguen funcionando igual que antes. */
     if (S.sinProveedores) o.proveedor = val('x-prov') || null;
@@ -24721,6 +24881,22 @@ function dlgArticulo(id, inicial){
         if (error) throw error;
         /* Si el alta viene de lo que pidió un técnico, su petición se cierra
            aquí y queda apuntado qué artículo salió de ella. */
+        /* La foto que el usuario eligió antes de que el material existiera.
+           Se sube ahora, que ya hay id. (08-11-2026) */
+        if (FOTO_ESPERANDO && nuevo && nuevo.id){
+          const f = FOTO_ESPERANDO; FOTO_ESPERANDO = null;
+          try {
+            const blob = await reducir(f, 900, 0.82);
+            const ruta = 'catalogo/' + nuevo.id + '-' + Date.now() + '.jpg';
+            const su = await sb.storage.from('ofertas').upload(ruta, blob, { contentType:'image/jpeg' });
+            if (su.error) throw su.error;
+            const uf = await sb.from('articulos').update({ foto_ruta: ruta }).eq('id', nuevo.id);
+            if (uf.error){ try { await sb.storage.from('ofertas').remove([ruta]); } catch(_){} throw uf.error; }
+          } catch(err){
+            toast('El material se ha dado de alta, pero la foto no se ha podido guardar ('+
+                  err.message+'). Ponla desde su ficha.');
+          }
+        }
         if (PETICION_EN_CURSO && nuevo && nuevo.id){
           /* Y la foto de la caja, que es lo que se le exigió al técnico, pasa a
              ser la foto del material. Antes se quedaba en la petición y el
@@ -24785,7 +24961,7 @@ function dlgProveedores(){
   abrirDlg(h, null);
 }
 
-function dlgProveedor(id){
+function dlgProveedor(id, volverAlMaterial){
   const p = id ? proveedorDe(id) : null;
   const d = p || {};
   const n = p ? (S.catalogo || []).filter(a => a.proveedor_id === p.id).length : 0;
@@ -24820,7 +24996,8 @@ function dlgProveedor(id){
       ' style="accent-color:var(--amarillo);width:18px;height:18px">En activo</label>'+
       '<span class="pista">Dar de baja no borra nada: deja de salir al elegir proveedor</span></div>' : '')+
     '</div><p class="err"></p><div class="pie">'+
-    '<span class="sp"></span><button type="button" class="btn plana" data-act="proveedores">Volver</button>'+
+    '<span class="sp"></span><button type="button" class="btn plana" data-act="'+
+      (volverAlMaterial ? 'volver-al-material' : 'proveedores')+'">Volver</button>'+
     '<button type="submit" class="btn pri">Guardar</button></div>', async () => {
     const o = { nombre: val('pv-nom'), nif: val('pv-nif')||null, contacto: val('pv-contacto')||null,
       telefono: val('pv-tel')||null, email: val('pv-mail')||null, direccion: val('pv-dir')||null,
@@ -24840,7 +25017,20 @@ function dlgProveedor(id){
         o.creado_por = yo();
         const { error } = await sb.from('proveedores').insert(o); if (error) throw error;
       }
-      await cargar(); dlgProveedores(); toast(p ? 'Proveedor guardado.' : 'Proveedor creado.');
+      await cargar();
+      /* Si veníamos de un material a medias, se vuelve a él con todo donde
+         estaba y el proveedor nuevo ya elegido. (08-11-2026) */
+      if (volverAlMaterial && MATERIAL_A_MEDIAS){
+        const nuevoProv = (S.proveedores || []).find(x =>
+          (x.nombre || '').trim() === (o.nombre || '').trim());
+        const vuelve = MATERIAL_A_MEDIAS;
+        MATERIAL_A_MEDIAS = null;
+        if (nuevoProv) vuelve.proveedor_id = nuevoProv.id;
+        dlgArticulo(vuelve.id || null, vuelve);
+        toast(p ? 'Proveedor guardado.' : 'Proveedor creado y elegido.');
+        return;
+      }
+      dlgProveedores(); toast(p ? 'Proveedor guardado.' : 'Proveedor creado.');
     } catch(e){
       setErr((e.message||'').includes('duplicate') ? 'Ya hay un proveedor con ese nombre.'
         : ((e.message||'').match(/proveedores/i) ? 'Falta ejecutar catalogo.sql en la base de datos.'
@@ -30995,6 +31185,23 @@ dlgForm.addEventListener('click', async e => {
   /* ---- Proveedores y conjuntos ---- */
   if (a === 'proveedores'){ dlgProveedores(); return; }
   if (a === 'proveedor-nuevo'){ dlgProveedor(null); return; }
+  if (a === 'x-prov-nuevo'){ irAProveedorNuevo(); return; }
+  if (a === 'volver-al-material'){
+    const v = MATERIAL_A_MEDIAS; MATERIAL_A_MEDIAS = null;
+    if (v) dlgArticulo(v.id || null, v); else cerrarDlg();
+    return;
+  }
+  if (a === 'foto-art-quitar-espera'){
+    FOTO_ESPERANDO = null;
+    const hueco = document.getElementById('x-foto');
+    if (hueco) hueco.innerHTML =
+      '<div class="marca-hueco sello" style="width:120px;height:120px">'+
+      '<span class="mini">Sin foto</span></div>'+
+      '<div class="fila" style="gap:6px;margin-top:6px">'+
+      '<label class="btn sm" style="cursor:pointer">Poner foto'+
+      '<input type="file" accept="image/*" hidden data-act="foto-art-espera"></label></div>';
+    return;
+  }
   if (a === 'proveedor-edit'){ dlgProveedor(b.dataset.id); return; }
   if (a === 'conjuntos'){ dlgConjuntos(); return; }
   if (a === 'conjunto-nuevo'){ dlgConjunto(null); return; }
