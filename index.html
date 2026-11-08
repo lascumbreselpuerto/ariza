@@ -2023,7 +2023,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.08-7';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.08-8';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -21021,8 +21021,32 @@ async function copiarFotoDePeticion(peticionId, articuloId){
   return true;
 }
 
+/* Cerrar una petición: resuelta, atada a otro material o descartada.
+   ---------------------------------------------------------------------------
+   AQUÍ HUBO UN FALLO MÍO, Y ES DE LOS QUE ENSEÑAN      08-11-2026, por la noche
+
+   David: «Cuando la oficina da de alta un producto que los técnicos han
+   solicitado, sigue apareciendo en material que piden los técnicos.»
+
+   La columna «resuelto_por» de la base de datos guarda el IDENTIFICADOR del
+   usuario (un uuid que apunta a la tabla de usuarios), y aquí se le estaba
+   mandando su NOMBRE, «David Ariza». Postgres rechazaba el cambio entero por
+   el tipo, la petición se quedaba en pendiente y volvía a salir en la lista.
+   El material SÍ se daba de alta, porque eso es otra orden distinta: de ahí
+   que pareciera que todo había ido bien.
+
+   Por qué no lo cazó el banco de pruebas: el simulador de base de datos
+   guardaba lo que le echaran sin mirar el tipo, así que allí funcionaba. Eso
+   se ha arreglado también, y ahora el simulador rechaza un uuid que no lo es,
+   igual que lo haría Postgres. Un banco que no castiga lo que la base de datos
+   castiga sirve para la mitad de lo que uno cree. */
 async function cerrarPeticion(id, articuloId, estado, nota){
-  const o = { estado: estado, resuelto: new Date().toISOString(), resuelto_por: yo() };
+  const o = { estado: estado, resuelto: new Date().toISOString() };
+  /* El identificador de quien la resuelve, no su nombre. Si por lo que sea no
+     lo tenemos, se deja sin poner: vale más una petición cerrada sin firmar
+     que una petición que no se puede cerrar. */
+  const quien = (S.user && S.user.id) || (S.perfil && S.perfil.id) || null;
+  if (quien) o.resuelto_por = quien;
   if (articuloId) o.articulo_id = articuloId;
   if (nota != null) o.nota = nota;
   const { error } = await sb.from('peticiones_material').update(o).eq('id', id);
