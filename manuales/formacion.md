@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.11.08-9**
+> **Versión de la aplicación que describe este manual: 2026.11.08-10**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -625,6 +625,37 @@ siempre: **una cosa, en un solo sitio**. Ahora hay UN lector y lo usan los
 cuatro puntos donde se escanea algo, y el banco de pruebas comprueba que la
 cámara solo se abre dentro de él. Si alguien vuelve a copiar uno, se pone en
 rojo.
+
+### Cuatro cosas que solo se ven usando la aplicación de verdad
+
+El 08-11-2026, después de todo lo anterior, David se puso a dar de alta
+materiales de verdad y en diez minutos encontró cuatro cosas más. Ninguna la
+habría encontrado yo, y las cuatro son distintas entre sí:
+
+1. **Subir una foto le borraba lo que estaba escribiendo.** Al acabar de subir,
+   la aplicación volvía a dibujar la ficha entera con lo que había guardado, y
+   lo que el usuario llevara escrito sin guardar desaparecía. Metías el código
+   de barras, subías la foto, dabas a guardar, y el código no estaba.
+2. **La foto de un material que todavía no existe se perdía en silencio.** No
+   hay dónde colgarla hasta que el material tiene su sitio en la base de datos,
+   y el programa se salía sin decir nada. Peor cuando el alta venía de una
+   petición de un técnico: ahí sí salía el botón, y la foto no iba a ningún
+   lado.
+3. **No se podía crear un proveedor sin salirse.** Había que abandonar el
+   material a medias, irse a Proveedores, crearlo y volver a empezar.
+4. **«Dónde está en la nave» se había quedado viejo.** Cuando se escribió, solo
+   había una nave. Desde que hay furgonetas y los almacenes que crea la oficina,
+   «balda 3» sin decir de dónde no sirve para buscar nada.
+
+Fíjate en la número 4, que es la más interesante: **no era un fallo**. Funcionó
+perfectamente durante semanas. Se estropeó sola el día que se añadieron los
+almacenes, sin que nadie tocara ese campo. En una instalación pasa igual: el
+cuadro que estaba bien ajustado deja de estarlo cuando cambias el motor, aunque
+nadie haya tocado el cuadro.
+
+Las cuatro salieron de **usar la aplicación para trabajar**, no de probarla. Y
+ese es el único sitio donde salen: ningún banco de pruebas pregunta «¿tiene
+sentido todavía la pregunta que hace esta pantalla?».
 
 ### La información que la aplicación tenía y no enseñaba
 
@@ -1277,4 +1308,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.08-9 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.08-10 de ARIZA SAT*

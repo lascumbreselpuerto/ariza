@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.08-9**
+> **Versión de la aplicación que describe este manual: 2026.11.08-10**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -1202,6 +1202,26 @@ Tu furgoneta se crea sola la primera vez que coges material. No hay que pedirla.
 
 Si das salida a más de lo que la aplicación creía que llevabas, **no te lo impide**: manda lo que de verdad hay en la furgoneta, no lo que diga la pantalla. Te avisa para que se revise el inventario, y ese aviso es lo que hace que el almacén se ponga al día en vez de quedarse mintiendo.
 
+### Dónde se guarda cada material
+
+Desde el 8 de noviembre de 2026, la ficha de un material pregunta **dos cosas
+separadas**:
+
+- **En qué almacén se guarda**: se elige de la lista (General, Furgo 1, Furgo 2,
+  el taller, lo que haya creado la oficina).
+- **En qué parte de ese almacén**: se escribe («estantería B, balda 3», «cajón
+  de la puerta izquierda»).
+
+Antes era un solo campo que ponía «dónde está en la nave», y eso dejó de servir
+en cuanto hubo más de un almacén: leer «balda 3» no dice si es la balda 3 de la
+nave o la de la furgoneta del compañero.
+
+> **Ojo, que son dos cosas distintas.** Esto es dónde se **guarda**
+> habitualmente, que lo decide la oficina una vez. Dónde **está ahora** y
+> cuántas unidades hay en cada sitio sale de las entradas y salidas, y eso no
+> cambia. Un material puede estar guardado «en la nave, estantería B» y tener
+> tres unidades rodando en tu furgoneta.
+
 ### Lo que verás además de la cantidad
 
 Los materiales llevan ahora **foto** y una **explicación** de qué son y para qué
@@ -1288,4 +1308,4 @@ que mire ahí antes de nada. Puede ser eso.
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.08-9 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.08-10 de ARIZA SAT*
