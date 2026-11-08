@@ -145,6 +145,16 @@ html{scroll-padding-top:104px}
 .item .tit{display:block;font-weight:600;overflow-wrap:anywhere}
 .item .sub{display:block;font-size:13px;color:var(--muted);overflow-wrap:anywhere}
 .item .qr{width:38px;height:38px;display:grid;place-items:center;background:var(--negro);color:var(--amarillo);border-radius:6px;font:700 11px var(--mono)}
+/* La foto del material en la lista del almacén. David, 08-11-2026: «Se ve la
+   foto cuando se da a editar el material, pero no se ve en la lista de
+   almacén». No era una decisión tomada: la lista se escribió antes de que el
+   material tuviera foto, y nadie volvió a tocarla. El hueco gris de los que no
+   la tienen sí es a propósito: así se ve de un golpe a qué material le falta
+   la foto, que es la mitad de la faena para tener el catálogo presentable. */
+/* Arriba y no centrada: en una fila alta, centrada se queda a media altura,
+   lejos del nombre al que pertenece. Visto en la captura a 430 px. */
+.foto-mat{width:46px;height:46px;flex:none;align-self:start;margin-top:2px;border-radius:6px;border:1px solid var(--line);object-fit:cover;display:block;background:var(--surface-2)}
+.foto-mat.sin{display:grid;place-items:center;font:600 9px/1.1 var(--sans);color:var(--muted);text-align:center;padding:2px}
 
 /* Calendario de mantenimientos */
 .cifras{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}
@@ -2029,7 +2039,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.08-10';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.08-11';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -4674,6 +4684,14 @@ function vistaAlmacen(){
       const e = existenciasDe(a.id);
       const falta = bajoMinimo(a);
       h += '<div class="item" data-act="mat-ficha" data-id="'+a.id+'" style="cursor:pointer">'+
+        /* La foto delante del nombre. «loading=lazy» para que el móvil solo
+           baje las que entran en pantalla: con 300 materiales en la lista, lo
+           otro sería bajar 300 fotos de golpe. Si la foto se quedó sin
+           fichero, el cuadrado gris en vez de la imagen partida. */
+        (a.foto_ruta
+          ? '<img class="foto-mat" loading="lazy" alt="" src="'+esc(fotoArticulo(a))+'" '+
+            'onerror="this.className=\'foto-mat sin\';this.removeAttribute(\'src\')">'
+          : '<div class="foto-mat sin">Sin<br>foto</div>')+
         '<div class="item-in">'+
         '<div class="fila" style="gap:8px;flex-wrap:wrap">'+
           '<b>'+esc(a.descripcion)+'</b>'+
