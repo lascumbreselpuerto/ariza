@@ -451,6 +451,23 @@ Deno.serve(async (req) => {
         escTg(String(m.descripcion || '')) +
         (m.cantidad != null ? ` · ${escTg(num(m.cantidad))} ${escTg(String(m.unidad || 'ud'))}` : ''))
         .filter(Boolean);
+      /* El material que el técnico ha pedido dar de alta porque no está en el
+         catálogo (08-11-2026). David lo pidió así: el técnico avisa y la
+         oficina decide. Si no se dice aquí, la petición se queda esperando a
+         que alguien entre en el almacén a mirar, y mientras ese material ya
+         está gastado y sin precio. */
+      const petFilas: string[] = [];
+      try {
+        const { data: pets } = await admin.from('peticiones_material')
+          .select('descripcion, unidad, cantidad, ean, estado').eq('aviso_id', a.id);
+        for (const p of (pets || [])) {
+          if (String(p.estado || '') !== 'pendiente') continue;
+          petFilas.push('· ' + escTg(String(p.descripcion || '')) +
+            (p.cantidad != null ? ` · ${escTg(num(p.cantidad))} ${escTg(String(p.unidad || 'ud'))}` : '') +
+            (p.ean ? ` · código ${escTg(String(p.ean))}` : ''));
+        }
+      } catch (_) { /* base sin barras.sql: no se dice nada y el aviso sale igual */ }
+
       /* Y el resultado de las revisiones: si una puerta queda NO APTA, eso es lo
          primero que tiene que ver la oficina al leer el mensaje. */
       const revFilas: string[] = [];
@@ -600,6 +617,10 @@ Deno.serve(async (req) => {
         a.trabajo ? `Trabajo: ${escTg(a.trabajo)}` : '',
         a.estado_final ? `Cómo queda: ${escTg(a.estado_final)}` : '',
         matFilas.length ? 'Material:\n' + matFilas.map(x => '· ' + x).join('\n') : '',
+        petFilas.length
+          ? '<b>PIDE DAR DE ALTA EN EL CATÁLOGO:</b>\n' + petFilas.join('\n') +
+            '\nEstá en Almacén, con la foto de la caja.'
+          : '',
         revFilas.length ? revFilas.join('\n') : '',
         medFilas.length ? medFilas.join('\n') : '',
         remate.length ? remate.join('\n') : '',
@@ -662,6 +683,21 @@ Deno.serve(async (req) => {
     if (tipo === 'cerrado' || tipo === 'parte') {
       const { data: mats } = await admin.from('materiales').select('*').eq('aviso_id', a.id).order('creado');
       const material = (mats || []).map(m => `${m.descripcion} · ${m.cantidad} ${m.unidad || ''}`).join('<br>');
+      /* El material que el técnico ha pedido dar de alta porque no está en el
+         catálogo (08-11-2026). En el correo va porque el correo es lo que la
+         oficina archiva: así queda constancia de que ese material se gastó
+         antes de existir en el catálogo, que es lo que explica un parte sin
+         precio tres meses después. */
+      let pedidoAlta = '';
+      try {
+        const { data: pets } = await admin.from('peticiones_material')
+          .select('descripcion, unidad, cantidad, ean, estado').eq('aviso_id', a.id);
+        pedidoAlta = (pets || [])
+          .filter(p => String(p.estado || '') === 'pendiente')
+          .map(p => `${p.descripcion}${p.cantidad != null ? ` · ${p.cantidad} ${p.unidad || 'ud'}` : ''}` +
+                    `${p.ean ? ` · código de barras ${p.ean}` : ''}`)
+          .join('<br>');
+      } catch (_) { /* base sin barras.sql: el correo sale igual, sin esta fila */ }
       /* ---- El resumen del guión, UNA POR PUERTA (04-11-2026) ----
          Desde hoy una preventiva puede llevar varias puertas y cada una deja su
          propia revisión. Antes se traía una sola con .limit(1), así que en una
@@ -695,6 +731,7 @@ Deno.serve(async (req) => {
         ['Diagnóstico', a.diagnostico || ''],
         ['Trabajo realizado', a.trabajo || ''],
         ['Materiales', material],
+        ['Pide dar de alta', pedidoAlta],
         ['Tiempo', [a.horas != null ? a.horas + ' h' : '', a.num_tecnicos > 1 ? a.num_tecnicos + ' técnicos' : '',
                     a.desplazamiento != null ? a.desplazamiento + ' km' : ''].filter(Boolean).join(' · ')],
         ['Cómo queda', a.estado_final || ''],
