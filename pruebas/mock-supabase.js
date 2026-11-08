@@ -68,6 +68,8 @@ function semilla(){
     materiales: [],
     documentos: [],
     fotos: [],
+    /* Las peticiones de material a la oficina: servidor/barras.sql (08-11-2026) */
+    peticiones_material: [],
     articulos: [],
     movimientos: [],
     revisiones: [],
