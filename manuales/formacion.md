@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.11.08-3**
+> **Versión de la aplicación que describe este manual: 2026.11.08-4**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -578,6 +578,60 @@ en el parte** escrito a mano. Lo gastado se apunta el día que se gasta; el
 catálogo se arregla cuando la oficina pueda. Lo que no se puede permitir es que
 se pierda ninguna de las dos.
 
+### El dinero que se rompe no aparece en ninguna cuenta
+
+Esta es la tercera forma de perder dinero sin verlo, y es la más silenciosa de
+todas, porque no está ni mal puesta: simplemente no está.
+
+Cuando un material se rompe o se pierde, se da de baja del almacén. Eso está
+bien y es lo que hay que hacer. Pero conviene entender exactamente dónde va ese
+dinero, y la respuesta es: **a ninguna parte**.
+
+- **No se le factura al cliente.** Correcto: una banda que se parte al sacarla
+  de la caja no es cosa suya.
+- **Pero tampoco entra en el coste de la visita.** La valoración de una
+  asistencia se calcula con las líneas del parte, que son el material que se
+  montó. Una baja no es una línea del parte: es un movimiento de almacén.
+- **Ni en el coste del mes.** Por lo mismo.
+
+O sea que el margen de la visita sale **igual de bueno** se haya roto una banda
+o no, y el del mes también. El dinero se ha ido de verdad, el almacén lo sabe,
+pero ninguna cuenta lo refleja.
+
+Desde el 8 de noviembre de 2026 hay un sitio donde se ve: en **Almacén**, el
+panel de lo que se rompe y se pierde, con el coste en euros, por mes, por
+almacén y separando lo roto de lo perdido. No cambia ningún margen: pone la
+cifra encima de la mesa para que se pueda decidir qué hacer con ella.
+
+Y la decisión de qué hacer con ella no es técnica, es de empresa. Hay tres
+caminos razonables y los tres se defienden:
+
+1. **Dejarlo como está** y mirar la cifra cada mes. Si son cuarenta euros, no
+   merece tocar nada.
+2. **Cargarlo al mes**, como un gasto general más, igual que el teléfono o el
+   seguro de la furgoneta. Es lo más honesto con el margen global.
+3. **Cargarlo a la visita** donde se rompió, cuando se sepa de cuál fue. Es lo
+   más exacto, pero también lo que más discusiones genera: una banda que venía
+   con una grieta de fábrica no es culpa de la visita en la que se descubrió.
+
+Lo que no se puede hacer es decidirlo sin el número. Por eso el número es lo
+primero que se construyó.
+
+### Roto y perdido son dos problemas distintos
+
+Y van separados a propósito, que parece un detalle y no lo es.
+
+Si en un trimestre se rompen cinco bandas del mismo proveedor, el problema está
+en el material o en cómo viene embalado: se habla con el proveedor.
+
+Si se pierden cinco, el problema está en cómo se trabaja: material que se queda
+en una obra, que se cambia de furgoneta sin apuntarlo, que se deja en un
+contenedor y nadie lo recoge. Se arregla de otra manera, hablando con el
+equipo y mirando los traspasos.
+
+Juntos en un solo montón llamado «bajas», no se ve ninguno de los dos. Y es la
+clase de cosa que solo se descubre cuando ya se ha repetido muchas veces.
+
 ### El tipo de la visita decide si se cobra
 
 Esta es la más silenciosa de las tres, porque no se ve en ningún importe: se ve
@@ -1036,4 +1090,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.08-3 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.08-4 de ARIZA SAT*

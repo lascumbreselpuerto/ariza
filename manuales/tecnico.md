@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.08-3**
+> **Versión de la aplicación que describe este manual: 2026.11.08-4**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -614,6 +614,51 @@ te borra lo que llevabas escrito.
 Cuando la oficina lo dé de alta, ese código de barras le queda puesto al
 material, así que **la próxima caja igual la reconoce la aplicación sola**.
 
+### 3 ter. Dar de baja material: roto o perdido
+
+Esto no es lo mismo que gastar material en una obra. El material que montas en
+una puerta lo apuntas en el parte y sale del almacén solo al cerrar la visita,
+sin que tengas que hacer nada. **Dar de baja es otra cosa:** material que se ha
+pagado y que ya no está, sin haberlo montado en ningún sitio. Una banda que se
+parte al sacarla de la caja. Una fotocélula que no aparece.
+
+Se hace desde la ficha del material, en **Almacén**, con el botón **Salida**:
+
+1. Pon la **cantidad**.
+2. En **Sale de**, elige **de qué almacén** se va: tu furgoneta, el general, o
+   donde estuviera.
+3. En **Para qué**, elige **Se ha roto** o **Se ha perdido**. Son dos opciones
+   distintas a propósito.
+4. Escribe **qué ha pasado**. Esto es obligatorio y no se puede saltar.
+5. Si quieres, **haz una foto** de lo roto. Es opcional, pero para una pieza
+   cara dice más que un párrafo.
+6. Si vino de una asistencia, elígela en «¿En qué asistencia?».
+
+Esto lo puedes hacer tú y lo puede hacer la oficina, los dos.
+
+> **Por qué se te pide escribir qué ha pasado.** Una baja es material que la
+> empresa ha pagado y que desaparece. Dentro de tres meses, «baja de 1 banda»
+> no le dice nada a nadie: no se sabe si se rompió, si se perdió o si se quedó
+> en una obra. Con una línea escrita, sí. Son cinco segundos.
+
+> **Por qué roto y perdido van separados.** Porque se arreglan de maneras
+> distintas. Si se rompen tres bandas del mismo proveedor, el problema es el
+> material. Si se pierden tres, el problema es cómo se está trabajando. Juntos
+> en un solo montón, no se ve ninguno de los dos.
+
+**Lo que queda guardado de cada baja, siempre:** quién la dio, de qué almacén,
+qué día, si fue rota o perdida, lo que escribiste y de qué asistencia venía.
+Eso no se puede borrar después. Si te equivocas, no se borra: se mete una
+entrada que lo deshace, y las dos cosas quedan a la vista. Un almacén donde las
+bajas se pueden borrar no sirve para saber nada.
+
+**Y una cosa que cambia para ti:** las furgonetas ya no se crean solas. Antes,
+la primera vez que movías material, la aplicación te creaba una «Furgoneta de
+Juan». Ahora las crea la oficina y les pone el nombre que usáis de verdad:
+«Furgo 1», «Furgo 2». Si todavía no tienes la tuya asignada, el material de tus
+partes sale del almacén general y la oficina lo ve escrito. No te bloquea nada,
+pero díselo para que te la asignen.
+
 ### 4. «He llegado»
 
 En la tarjeta de **Mi trabajo**, mientras no haya hora apuntada, tienes el botón
@@ -1147,4 +1192,4 @@ La aplicación abre con lo último que tenía. Para medir, llévate impresa la *
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.08-3 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.08-4 de ARIZA SAT*
