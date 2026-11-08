@@ -675,6 +675,85 @@ paso('con los proveedores dados de alta',
   prov.opciones.some(o => /Collbaix/.test(o)), prov.opciones.join(' | '));
 
 /* ================================================================
+   La foto del material en la lista
+   --------------------------------
+   David, 08-11-2026: «Se ve la foto cuando se da a editar el
+   material, pero no se ve en la lista de almacén. ¿Es así como se ha
+   planteado?». No lo era: la lista se escribió antes de que el
+   material tuviera foto y nadie volvió a tocarla.
+
+   Lo que se vigila aquí es que la miniatura esté, que el material sin
+   foto deje su hueco gris (para ver de un golpe lo que falta por
+   fotografiar), que el móvil no se baje las 300 fotos de golpe, y que
+   la foto no se haya llevado por delante lo que ya funcionaba: el
+   clic en la fila y los tres botones de movimiento.
+   ================================================================ */
+bloque('La foto del material en la lista del almacén');
+
+const minis = await T(() => {
+  const g = window.__T;
+  /* A uno se le pone foto y al otro no, que es como está el catálogo de
+     verdad mientras se va fotografiando el almacén. */
+  g.articuloDe('art-foto').foto_ruta = 'catalogo/art-foto-1.jpg';
+  delete g.articuloDe('art-banda').foto_ruta;
+  g.S.buscaMat = ''; g.S.matFamilia = ''; g.S.matProveedor = ''; g.S.matFiltro = '';
+  /* A cero el cuaderno de direcciones pedidas ANTES de pintar la lista: si no,
+     la prueba del cubo se pondría verde con lo que pidió la ficha hace diez
+     comprobaciones y no estaría midiendo nada. Cazado el 08-11-2026 quitando
+     la miniatura a propósito: esa comprobación seguía en verde sin ella. */
+  window.__DB.__publicas = [];
+  const caja = document.createElement('div');
+  caja.innerHTML = (() => { g.S.tab = 'almacen'; return g.vistaAlmacen(); })();
+  /* Solo las filas de material: los paneles de arriba (peticiones, bajas,
+     almacenes) también usan «item», y no son materiales. */
+  const filas = [...caja.querySelectorAll('.item[data-act="mat-ficha"]')];
+  const dela = f => f.firstElementChild;
+  const fotoDe = id => filas.find(f => f.dataset.id === id);
+  const conFoto = fotoDe('art-foto'), sinFoto = fotoDe('art-banda');
+  const img = conFoto && dela(conFoto);
+  const hueco = sinFoto && dela(sinFoto);
+  return {
+    nFilas: filas.length,
+    /* Todas las filas empiezan por la miniatura: ninguna se descuadra */
+    todasEmpiezanPorFoto: filas.every(f => dela(f) && /foto-mat/.test(dela(f).className)),
+    esImagen: img ? img.tagName : null,
+    claseImg: img ? img.className : null,
+    lazy: img ? img.getAttribute('loading') : null,
+    tieneSrc: !!(img && img.getAttribute('src')),
+    seRompeBien: img ? /foto-mat sin/.test(img.getAttribute('onerror') || '') : false,
+    claseHueco: hueco ? hueco.className : null,
+    textoHueco: hueco ? hueco.textContent.replace(/\s+/g, ' ').trim() : null,
+    /* Y lo de siempre sigue en su sitio */
+    abreLaFicha: !!(conFoto && conFoto.dataset.act === 'mat-ficha' && conFoto.dataset.id === 'art-foto'),
+    nombreVisible: /Fotocélula de espejo/.test(conFoto ? conFoto.textContent : ''),
+    botones: conFoto
+      ? [...conFoto.querySelectorAll('[data-act="mat-mover"]')].map(b => b.dataset.modo)
+      : [],
+    /* Del cubo «ofertas», que es el público: si se pidiera firmada serían
+       300 peticiones al servidor para pintar una lista. */
+    pidioOfertas: (window.__DB.__publicas || []).some(x => x === 'ofertas/catalogo/art-foto-1.jpg'),
+  };
+});
+paso('cada material de la lista lleva su hueco de foto delante',
+  minis.nFilas >= 3 && minis.todasEmpiezanPorFoto === true, minis.nFilas+' filas');
+paso('el que tiene foto la enseña',
+  minis.esImagen === 'IMG' && minis.claseImg === 'foto-mat' && minis.tieneSrc === true,
+  minis.esImagen+' · '+minis.claseImg);
+paso('con carga perezosa, para no bajar 300 fotos de golpe en el móvil',
+  minis.lazy === 'lazy', minis.lazy);
+paso('y la saca del cubo público, sin pedir permiso foto por foto',
+  minis.pidioOfertas === true);
+paso('si la foto se quedó sin fichero, cuadrado gris y no imagen partida',
+  minis.seRompeBien === true);
+paso('el que no tiene foto deja su hueco, que es como se ve lo que falta',
+  minis.claseHueco === 'foto-mat sin' && /Sin ?foto/.test(minis.textoHueco || ''),
+  minis.claseHueco+' · '+minis.textoHueco);
+paso('la foto no tapa el nombre del material', minis.nombreVisible === true);
+paso('y el clic en la fila sigue abriendo la ficha', minis.abreLaFicha === true);
+paso('y los tres botones de movimiento siguen donde estaban',
+  minis.botones.join(',') === 'entrada,salida,traspaso', minis.botones.join(','));
+
+/* ================================================================
    Final
    ================================================================ */
 console.log('\n'+ok+' bien, '+mal+' mal.');
