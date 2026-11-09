@@ -198,6 +198,15 @@ html{scroll-padding-top:104px}
 .g-resp button[aria-pressed="true"][data-r="mal"]{background:var(--mal-bg);color:var(--mal);border-color:var(--mal)}
 .g-resp button[aria-pressed="true"][data-r="na"]{background:var(--gris-bg);color:var(--gris);border-color:var(--gris)}
 .g-resp input.g-val{width:92px;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:15px}
+/* Los seis puntos de normativa de cualquier visita (09-11-2026) */
+.cf-punto{display:grid;gap:7px;padding:11px 0;border-top:1px solid var(--line)}
+.cf-txt{font-size:15px;line-height:1.4}
+.cf-norma{display:block;font:600 12px var(--mono);color:var(--muted);margin-top:3px;overflow-wrap:anywhere}
+.cf-resp{display:flex;gap:6px;flex-wrap:wrap}
+.cf-resp button{font:600 13px var(--sans);padding:7px 12px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--muted);cursor:pointer;min-width:56px}
+.cf-resp button[aria-pressed="true"][data-r="si"]{background:var(--ok-bg);color:var(--ok);border-color:var(--ok)}
+.cf-resp button[aria-pressed="true"][data-r="no"]{background:var(--mal-bg);color:var(--mal);border-color:var(--mal)}
+.cf-resp button[aria-pressed="true"][data-r="nd"]{background:var(--gris-bg);color:var(--gris);border-color:var(--gris)}
 .g-resp .g-uni{font:600 13px var(--sans);color:var(--muted)}
 .g-punto input.g-nota{padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:14px}
 .g-aviso{background:var(--mal-bg);color:var(--mal);border-radius:6px;padding:8px 10px;font:600 13px var(--sans)}
@@ -1795,6 +1804,12 @@ async function cargar(){
      sola y se factura, como antes del 05-11-2026. */
   const ps = await sb.from('avisos').select('instalacion_id, ps_causa, repercutible').limit(1);
   S.sinRemates = !!ps.error;
+  /* La situación de la puerta frente a la normativa en cada visita:
+     servidor/conformidad-visita.sql. Sin esa tabla no se pregunta nada y el
+     parte sale como antes del 09-11-2026: solo las preventivas dicen algo de
+     normativa, que es justo el agujero que esto viene a tapar. */
+  const cv = await sb.from('conformidad_visita').select('id').limit(1);
+  S.sinConformidad = !!cv.error;
   /* La salida al alta de puerta obligatoria: servidor/alta-puerta.sql. Sin esas
      columnas no se puede declarar que la visita no era de ninguna puerta, así
      que tampoco se bloquea el cierre por no tener ficha en los tipos nuevos:
@@ -1880,6 +1895,13 @@ async function cargar(){
   const pe = S.sinPeticiones ? { data: [] }
     : await sb.from('peticiones_material').select('*').order('creado', { ascending:false }).limit(400);
   S.peticiones = pe.error ? [] : (pe.data || []);
+  /* ---- La situación de cada puerta frente a la normativa (09-11-2026) ----
+     Seis puntos por visita. Se cargan todas las que caben porque hacen dos
+     cosas: pintar lo de la visita que se está haciendo, y enseñar lo último
+     que se vio de esa puerta aunque fuera en otra visita de hace meses. */
+  const cf = S.sinConformidad ? { data: [] }
+    : await sb.from('conformidad_visita').select('*').order('creado', { ascending:false }).limit(800);
+  S.conformidad = cf.error ? [] : (cf.data || []);
   /* ---- Lo que se rompe y se pierde, en euros (08-11-2026) ----
      La vista lleva precios, así que el servidor solo le devuelve filas a
      gestión: a un técnico le llega vacía y no hay que esconder nada aquí. */
@@ -2039,7 +2061,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.08-11';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.09-1';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -3871,6 +3893,8 @@ const QUE_HACE_FALTA = [
     pierdes:'No se apunta qué mandos, lectores o pulsadores lleva la instalación.' },
   { marca:'sinAltaPuerta', fichero:'alta-puerta.sql', que:'Visitas sin puerta',
     pierdes:'Toda visita tiene que estar atada a una puerta, aunque no lo esté.' },
+  { marca:'sinConformidad', fichero:'conformidad-visita.sql', que:'Normativa en cada visita',
+    pierdes:'El cliente no se entera de en qué situación está su puerta salvo en las preventivas.' },
 
   { marca:'sinObra', fichero:'obra.sql', que:'Obras de varios días',
     pierdes:'Un trabajo largo se apunta como visitas sueltas sin relación.' },
@@ -7877,7 +7901,7 @@ const TABLAS_COPIA = [
   'conjuntos', 'conjunto_lineas',
   'avisos', 'aviso_puertas', 'jornadas',
   'materiales', 'materiales_previstos', 'movimientos_material',
-  'revisiones', 'entregas_obra', 'fotos', 'documentos', 'valoraciones',
+  'revisiones', 'conformidad_visita', 'entregas_obra', 'fotos', 'documentos', 'valoraciones',
   'expedientes', 'expediente_fotos', 'expediente_docs',
   'textos_presu', 'presupuestos', 'presupuesto_lineas',
   'presupuesto_adjuntos', 'presupuesto_envios', 'presupuesto_visitas',
@@ -12001,6 +12025,76 @@ const EXP_COMPROBACIONES = {
        'UNE-EN 12453:2018+A1:2022', 0, 0],
   ],
 };
+
+/* ---- Los seis puntos que se miran en cualquier visita (09-11-2026) ----
+   David: «Cada vez que tocamos una puerta existente debemos decir si cumple
+   normativa o no, y debemos informar al cliente para que sepa en qué situación
+   legal está su puerta».
+
+   Tenía razón en el agujero: el guión de revisión pregunta todo esto, pero
+   SOLO se rellena en las preventivas. En una avería, que es por donde se entra
+   en casa de un cliente nuevo, no se preguntaba nada.
+
+   Los seis no se han inventado: son seis de los puntos críticos que ya tiene
+   cada familia en EXP_COMPROBACIONES, elegidos por un criterio concreto, que
+   es LO QUE SE PUEDE MIRAR EN DOS MINUTOS SIN DESMONTAR NADA. Por eso no está
+   aquí la medida de fuerzas, que es crítica pero exige dinamómetro y tiempo, y
+   sí está el marcado CE, que se ve de un vistazo.
+
+   Si algún día se cambia una clave en EXP_COMPROBACIONES hay que cambiarla
+   aquí: hay una prueba que se pone en rojo si una de estas seis deja de
+   existir en su familia. */
+const SEIS_DE_CAMPO = {
+  industrial:  ['marcado', 'presencia', 'aplastamiento', 'manual', 'caida', 'libro'],
+  peatonal:    ['marcado', 'presencia', 'apertura', 'laterales', 'evacuacion', 'libro'],
+  barrera:     ['marcado', 'presencia', 'aplastamiento', 'manual', 'electrico', 'libro'],
+  cortafuegos: ['marcado', 'etiqueta', 'cierre', 'retenedor', 'juntas', 'evacuacion'],
+};
+
+/* Las tres respuestas. «No se ha podido comprobar» existe a propósito: sin esa
+   salida, el técnico con prisa marca «sí», y un «sí» falso en un papel que
+   firma el cliente es peor que no haber preguntado. */
+const RESP_CONFORMIDAD = [
+  ['si', 'Sí',                   'ok'],
+  ['no', 'No',                   'mal'],
+  ['nd', 'No he podido mirarlo', 'gris'],
+];
+
+/* Los seis puntos de una puerta, con su texto y su norma, sacados de la lista
+   del expediente para que las dos digan exactamente lo mismo. */
+function puntosDeCampo(puerta){
+  const fam = familiaDePuerta(puerta);
+  const todos = EXP_COMPROBACIONES[fam] || EXP_COMPROBACIONES.industrial;
+  const quiero = SEIS_DE_CAMPO[fam] || SEIS_DE_CAMPO.industrial;
+  return quiero.map(k => {
+    const c = todos.find(x => x[0] === k);
+    return c ? { k: k, t: c[1], n: c[2] } : null;
+  }).filter(Boolean);
+}
+
+/* En qué visitas se pregunta. Fuera las dos que no tocan puerta, y fuera la
+   preventiva, donde el guión completo ya lo pregunta y sería preguntarlo dos
+   veces con la posibilidad de contestarse distinto. */
+const CONFORMIDAD_NO_PIDE = ['comercial', 'falso', 'mantenimiento'];
+const pideConformidad = a =>
+  !!a && !S.sinConformidad && !CONFORMIDAD_NO_PIDE.includes(a.tipo);
+
+const conformidadDe = (avisoId, puertaId) =>
+  (S.conformidad || []).find(x => x.aviso_id === avisoId && x.puerta_id === puertaId) || null;
+
+/* La última vez que se miró esta puerta, sea en la visita que sea. Sirve para
+   que el técnico vea de entrada lo que ya se sabía, y para no volver a dar la
+   misma noticia como si fuera nueva. */
+const ultimaConformidad = puertaId => (S.conformidad || [])
+  .filter(x => x.puerta_id === puertaId)
+  /* Desempata por identificador: dos comprobaciones guardadas en el mismo
+     segundo dejarían «la última» al azar, y lo que sale en pantalla no puede
+     depender de eso. (09-11-2026) */
+  .sort((a, b) => {
+    const fa = a.creado || '', fb = b.creado || '';
+    if (fa !== fb) return fa < fb ? 1 : -1;
+    return String(a.id) < String(b.id) ? 1 : -1;
+  })[0] || null;
 
 /* ---- Prestaciones declaradas en la declaración de prestaciones ----
    Las obligatorias no admiten "prestación no determinada". El desglose procede
@@ -27608,6 +27702,17 @@ function dlgCierre(avisoId){
     }
   }
 
+  /* ---- Cómo está la puerta de normativa (09-11-2026) ----
+     En todas las visitas que tocan una puerta menos la preventiva, que ya lo
+     pregunta entero en el guión. Solo si hay puerta dada de alta: sin ficha no
+     hay de qué hablar, y el alta ya se pide antes en esta misma pantalla. */
+  if (pideConformidad(a)){
+    const pts = puertasDeAviso(a.id);
+    if (pts.length > 1) pts.forEach((pu, i) => { h += bloqueConformidad(a, pu, i); });
+    else if (pts.length === 1) h += bloqueConformidad(a, pts[0]);
+    else if (p && p.id) h += bloqueConformidad(a, p);
+  }
+
   /* ---- La toma de medidas, solo en la comercial (05-11-2026) ----
      Si la oficina marcó sobre qué tipos de puerta va la oferta, se pinta un
      bloque por tipo y ya viene elegido: es lo que se sabe antes de ir. Si no
@@ -28219,6 +28324,78 @@ function bloqueGuion(a, p, n){
   return h + '</div>';
 }
 
+/* ---- Los seis puntos de normativa, en cualquier visita (09-11-2026) ----
+   David: «debemos informar al cliente para que sepa en qué situación legal
+   está su puerta». Esto es ese bloque: seis preguntas, tres botones cada una,
+   y lo que se conteste sale impreso en el parte que firma el cliente.
+
+   Es opcional a propósito, decisión de David: no bloquea el cierre y no sale
+   en ninguna lista de pendientes. Si un día se queda siempre en blanco, la
+   decisión se revisa; dejarlo opcional es lo que permite empezar a usarlo sin
+   que nadie se sienta perseguido. */
+function bloqueConformidad(a, p, n){
+  const puntos = puntosDeCampo(p);
+  if (!puntos.length) return '';
+  const cual = (p && p.codigo) ? p.codigo : 'esta puerta';
+  const quePuerta = (n == null) ? '' : ' · ' + esc(cual);
+  const ya = (p && p.id) ? conformidadDe(a.id, p.id) : null;
+  const antes = (p && p.id && !ya) ? ultimaConformidad(p.id) : null;
+  const puesto = (ya && ya.puntos) || {};
+
+  let h = '<div class="grupo conformidad" data-puerta="' + esc((p && p.id) || '') + '">' +
+    '<h3>Cómo está esta puerta de normativa' + quePuerta + '</h3>' +
+    '<p class="mini" style="margin:0 0 10px">Seis puntos que se ven mirando la puerta, sin desmontar nada. ' +
+    '<b>Lo que marques aquí sale impreso en el parte que se lleva el cliente</b>, así que queda por escrito que ' +
+    'se le ha informado. Si algo no lo puedes mirar, dilo: es mejor que un «sí» que no es verdad.</p>';
+
+  if (antes && antes.creado){
+    const f = new Date(antes.creado);
+    h += '<p class="mini" style="margin:0 0 10px;color:var(--muted)">La última vez que se miró esta puerta fue el ' +
+      esc(f.toLocaleDateString('es-ES')) +
+      (antes.fallos > 0 ? ', y había <b>' + antes.fallos + '</b> punto' + (antes.fallos === 1 ? '' : 's') + ' sin cumplir.' : '.') +
+      '</p>';
+  }
+
+  puntos.forEach(x => {
+    const r = puesto[x.k] || '';
+    h += '<div class="cf-punto" data-k="' + esc(x.k) + '">' +
+      '<div class="cf-txt">' + esc(x.t) +
+        (x.n ? '<span class="cf-norma">' + esc(x.n) + '</span>' : '') + '</div>' +
+      '<div class="cf-resp">' +
+        RESP_CONFORMIDAD.map(([v, txt, cl]) =>
+          '<button type="button" class="btn sm ' + cl + '" data-act="cf-resp" data-r="' + v + '"' +
+          ' aria-pressed="' + (r === v ? 'true' : 'false') + '">' + esc(txt) + '</button>').join('') +
+      '</div></div>';
+  });
+
+  h += '<div class="campo full" style="margin-top:10px"><label>Algo que añadir sobre la normativa de esta puerta</label>' +
+    '<textarea class="cf-nota" rows="2" maxlength="400" placeholder="Opcional. Ej.: falta la placa del motor, el resto está">' +
+    esc((ya && ya.nota) || '') + '</textarea></div>';
+  return h + '</div>';
+}
+
+/* Lee UN bloque de conformidad de la pantalla. Devuelve null si no se ha
+   tocado nada: lo opcional, si no se contesta, no se guarda ni genera fila. */
+function leerConformidad(cont){
+  if (!cont) return null;
+  const puntos = {};
+  let fallos = 0, sinMirar = 0, contestados = 0;
+  Array.from(cont.querySelectorAll('.cf-punto')).forEach(d => {
+    const m = d.querySelector('.cf-resp button[aria-pressed="true"]');
+    if (!m) return;
+    const r = m.dataset.r;
+    puntos[d.dataset.k] = r;
+    contestados++;
+    if (r === 'no') fallos++;
+    if (r === 'nd') sinMirar++;
+  });
+  const ta = cont.querySelector('.cf-nota');
+  const nota = ta && ta.value.trim() ? ta.value.trim() : null;
+  if (!contestados && !nota) return null;
+  return { puerta_id: cont.dataset.puerta || null, puntos, fallos,
+           sin_mirar: sinMirar, contestados, nota };
+}
+
 /* Lee UN guión tal y como está relleno en pantalla */
 function leerGuion(cont){
   if (!cont) return null;
@@ -28813,6 +28990,16 @@ async function guardarCierre(a, cerrando){
       recomendaciones: g.reco || null,
     });
   }
+  /* ---- Cómo está la puerta de normativa (09-11-2026) ----
+     No se comprueba nada y no se bloquea nada: es opcional por decisión de
+     David. Lo que no se ha tocado no deja fila, para que el parte no imprima
+     un apartado vacío que parezca que se miró y salió bien. */
+  const conformidades = [];
+  document.querySelectorAll('#dlg-form .conformidad').forEach(cont => {
+    const c = leerConformidad(cont);
+    if (c && c.puerta_id) conformidades.push(c);
+  });
+
   /* ---- Las medidas de la comercial (05-11-2026) ----
      Se leen todos los bloques, se comprueban uno a uno y se avisa diciendo qué
      hueco es: con tres bloques en pantalla, «falta el ancho» no sirve de nada.
@@ -29062,6 +29249,27 @@ async function guardarCierre(a, cerrando){
     let almacen = null;
     if (cerrando) almacen = await descontarMaterialDelParte(a, mats);
     if (revisiones.length) await rehacer('revisiones', revisiones);
+    /* ---- Cómo está la puerta de normativa (09-11-2026) ----
+       Se rehace siempre que el bloque se ha pintado, también con la lista
+       vacía: si el técnico se arrepiente y desmarca los seis puntos, eso tiene
+       que desaparecer del parte. Lo que no se pinta no se toca.
+       El nombre del técnico se guarda escrito además del identificador: un
+       parte entregado al cliente no se reescribe si mañana se corrige el
+       nombre en Equipo. */
+    if (pideConformidad(a)){
+      const quien = (S.user && S.user.id) || (S.perfil && S.perfil.id) || null;
+      await rehacer('conformidad_visita', conformidades.map(c => ({
+        aviso_id: a.id,
+        puerta_id: c.puerta_id,
+        familia: familiaDePuerta(puertaDe(c.puerta_id)),
+        puntos: c.puntos,
+        fallos: c.fallos,
+        sin_mirar: c.sin_mirar,
+        nota: c.nota,
+        perfil_id: quien,
+        quien: yo(),
+      })));
+    }
     /* Las medidas se rehacen SIEMPRE que la visita es comercial, también cuando
        la lista se ha quedado vacía: si el técnico quitó un hueco que había
        apuntado por error, tiene que desaparecer de verdad. Con un «if
@@ -29163,6 +29371,69 @@ function bloqueRevisionHTML(rev, fila){
   return h;
 }
 
+/* ---- La situación de la puerta frente a la normativa, en el parte (09-11-2026) ----
+   David: «debemos informar al cliente para que sepa en qué situación legal está
+   su puerta». Esto es ese apartado, y es el motivo de todo este añadido: el
+   cliente firma el parte, así que queda por escrito y con fecha que se le
+   informó.
+
+   Dos reglas de redacción, y las dos importan:
+
+   1. NUNCA dice que la puerta cumple. Son seis puntos de los veintiuno que
+      tiene el expediente de una industrial. Con seis se puede afirmar que algo
+      NO cumple; que cumple, no. Decirlo sería afirmar lo que no se ha mirado,
+      en un papel firmado.
+   2. Cuando hay incumplimientos lo dice claro y dice qué supone, porque de eso
+      se trata: un cliente que no sabe que su puerta está mal no la arregla. */
+function bloqueConformidadHTML(cf, fila){
+  const pu = cf.puerta_id ? puertaDe(cf.puerta_id) : null;
+  const puntos = puntosDeCampo(pu || { tipo: null });
+  const dicho = cf.puntos || {};
+  const nombre = { si:'Sí', no:'NO', nd:'No se pudo comprobar' };
+  const mal = puntos.filter(x => dicho[x.k] === 'no');
+  const nd  = puntos.filter(x => dicho[x.k] === 'nd');
+  const contestados = puntos.filter(x => dicho[x.k]);
+  if (!contestados.length && !cf.nota) return '';
+
+  let h = '<h2>Situación de la puerta frente a la normativa' +
+    (pu && pu.codigo ? ' · ' + esc(pu.codigo) : '') + '</h2>' +
+    '<p style="color:#6B6560;font-size:11px;margin:0 0 6px">Comprobación visual realizada durante esta ' +
+    'visita sobre seis requisitos de seguridad exigibles a una puerta motorizada. ' +
+    'No es una inspección completa ni sustituye al informe de situación de la puerta.</p>' +
+    '<table class="mats"><tr><th>Requisito</th><th style="width:150px">¿Se cumple?</th></tr>' +
+    puntos.map(x => {
+      const r = dicho[x.k] || '';
+      const col = r === 'no' ? ' style="color:#B3271E;font-weight:600"' : '';
+      return '<tr><td>' + esc(x.t) +
+        (x.n ? '<br><span style="color:#6B6560;font-size:10px">' + esc(x.n) + '</span>' : '') + '</td>' +
+        '<td' + col + '>' + esc(nombre[r] || '—') + '</td></tr>';
+    }).join('') + '</table>';
+
+  if (cf.nota)
+    h += '<p style="white-space:pre-wrap;margin:6px 0 0">' + esc(cf.nota) + '</p>';
+
+  if (mal.length){
+    h += '<p style="margin:8px 0 0;padding:8px 10px;border:1px solid #B3271E;' +
+      'background:#F8E1DF;color:#1C1817;font-size:11.5px">' +
+      '<b>AVISO: esta puerta no cumple ' + mal.length + ' de los requisitos comprobados.</b><br>' +
+      'Una puerta motorizada es una máquina y su titular responde de mantenerla en condiciones ' +
+      'seguras de uso. Mientras estos puntos sigan sin cumplirse, la puerta no está en condiciones ' +
+      'de uso seguro conforme a la normativa vigente, y eso puede tener consecuencias en caso de ' +
+      'accidente o de inspección. Podemos presupuestar la adecuación y emitir el informe de ' +
+      'situación completo de la puerta.</p>';
+  } else if (contestados.length){
+    h += '<p style="margin:8px 0 0;color:#6B6560;font-size:11px">' +
+      'De los requisitos comprobados en esta visita no se ha detectado ningún incumplimiento. ' +
+      '<b>Esto no significa que la puerta cumpla toda la normativa</b>: la comprobación completa ' +
+      'de una puerta abarca más puntos de los que se revisan en una visita de este tipo, e incluye ' +
+      'la medida de las fuerzas de maniobra con equipo específico.</p>';
+  }
+  if (nd.length)
+    h += '<p style="margin:6px 0 0;color:#6B6560;font-size:11px">' + nd.length +
+      ' requisito' + (nd.length === 1 ? '' : 's') + ' no se pudo comprobar en esta visita.</p>';
+  return h;
+}
+
 /* ---- Las medidas en la hoja del parte (05-11-2026) ----
    Una tabla por hueco, con el mismo rótulo que llevará el presupuesto: así el
    cliente puede comparar el parte que firmó con la oferta que le llega. */
@@ -29203,6 +29474,16 @@ async function hojaParte(avisoId){
      puede llevar varias puertas, y el parte que firma el cliente tiene que
      llevarlas todas. Antes salía solo la primera. */
   const { data: revs } = await sb.from('revisiones').select('*').eq('aviso_id', a.id);
+  /* Cómo está la puerta de normativa (09-11-2026). Se lee del servidor y no de
+     lo que haya en memoria, igual que las revisiones: el parte es un documento
+     y tiene que decir lo que está guardado, no lo que se vio en pantalla. */
+  let cfs = [];
+  if (!S.sinConformidad){
+    try {
+      const { data } = await sb.from('conformidad_visita').select('*').eq('aviso_id', a.id);
+      cfs = data || [];
+    } catch(_){ cfs = []; }
+  }
   /* Las medidas de la comercial (05-11-2026). El cliente firma lo que se ha
      medido en su casa: si mañana discute una medida, el papel lo dice. */
   let meds = [];
@@ -29291,6 +29572,10 @@ async function hojaParte(avisoId){
     '</table>'+
     (a.cobrado ? ('<h2>Cobro</h2><table>'+fila('Importe cobrado', (a.cobro_importe||0) + ' €')+fila('Forma', a.cobro_forma)+fila('Referencia', a.cobro_ref)+'</table>') : '')+
     ((revs || []).map(r => bloqueRevisionHTML(r, fila)).join(''))+
+    /* La normativa va después del trabajo y antes de la firma: el cliente lee
+       primero qué se ha hecho y luego en qué situación queda su puerta, que es
+       el orden en que lo cuenta el técnico. (09-11-2026) */
+    (cfs.map(c => bloqueConformidadHTML(c, fila)).join(''))+
     (meds.length ? bloqueMedidasHTML(meds, fila) : '')+
     /* ---- El remate, en el papel (05-11-2026) ----
        El cliente firma un parte que dice que esto es el final de su obra y por
@@ -30970,6 +31255,16 @@ dlgForm.addEventListener('click', async e => {
     /* Solo el guion de esta puerta: con cuatro en pantalla, repintar todos
        haría que la cuenta de una puerta saltara al tocar otra. */
     repintarCuentas(b.closest('.guion'));
+    return;
+  }
+  /* Los seis puntos de normativa. Se puede desmarcar volviendo a pulsar, igual
+     que en el guión: lo contrario obligaría a elegir una respuesta por haber
+     tocado el botón sin querer. */
+  if (a === 'cf-resp'){
+    const grupo = b.closest('.cf-resp');
+    const ya = b.getAttribute('aria-pressed') === 'true';
+    grupo.querySelectorAll('button[data-act="cf-resp"]').forEach(x => x.setAttribute('aria-pressed','false'));
+    b.setAttribute('aria-pressed', ya ? 'false' : 'true');
     return;
   }
   if (a === 'g-todo'){
