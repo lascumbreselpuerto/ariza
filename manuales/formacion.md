@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.11.08-11**
+> **Versión de la aplicación que describe este manual: 2026.11.09-1**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -1224,6 +1224,63 @@ La regla de siempre en esta lista, otra vez: **el dato lo tiene quien coge el
 teléfono, y el coste lo paga quien va**. Si no viajan juntos, el viaje se paga
 dos veces.
 
+### El cliente que no sabe en qué situación está su puerta
+
+Esta no es una forma de perder dinero: es una obligación que además resulta ser
+la mejor vía comercial que hay, y por eso va aquí.
+
+Cuando se interviene en una puerta existente, el titular tiene derecho a saber
+en qué situación está. Una puerta motorizada es una máquina, y de mantenerla en
+condiciones seguras de uso responde él. El problema es que **casi ningún titular
+sabe que responde**: compró una puerta, le funciona, y nadie le ha dicho nunca
+que la ley le pide algo.
+
+Lo que pasa cuando no se le dice es doble. Para el cliente, que un día hay un
+accidente o una inspección y descubre su situación de golpe. Para la empresa, que
+ha estado tocando esa puerta durante años sin dejar constancia de que advirtió
+nada, y eso es exactamente lo que se mira después.
+
+Desde el 09-11-2026, en toda visita que toque una puerta —salvo la comercial, el
+desplazamiento en falso y la preventiva, que ya lo lleva en el guión— la
+aplicación pide seis puntos de seguridad y los imprime en el parte que firma el
+cliente. Seis, no veintiuno: los que se ven mirando la puerta sin desmontar
+nada. El técnico marca **sí**, **no** o **no he podido mirarlo**.
+
+#### Por qué el parte nunca dice que la puerta cumple
+
+Aquí está la parte que hay que entender, y es la más importante de todo el
+apartado.
+
+Con seis puntos **se puede afirmar que algo NO cumple**: si falta la detección de
+presencia, falta, y eso es un hecho comprobado. Lo que no se puede es afirmar lo
+contrario. El expediente completo de una puerta industrial lleva veintiún puntos
+e incluye la medida de las cuatro magnitudes de fuerza con dinamómetro. Decir
+«esta puerta cumple» después de mirar seis sería afirmar por escrito, en un papel
+firmado por el cliente, algo que no se ha comprobado.
+
+Por eso el documento está redactado de forma asimétrica a propósito:
+
+- Con incumplimientos: **se dice claro**, con el aviso de lo que supone y la
+  oferta de presupuestar la adecuación.
+- Sin incumplimientos: se dice que **de lo comprobado** no se ha detectado nada,
+  y se advierte de que eso no significa que la puerta cumpla toda la normativa.
+
+Es la misma lógica del ensayo de fuerzas incompleto: un punto con una sola
+magnitud anotada no es un punto medido, y una puerta con seis requisitos mirados
+no es una puerta comprobada.
+
+#### Y lo que tiene de negocio
+
+Un cliente al que se le entrega un papel donde pone qué le falta a su puerta y
+qué supone es un cliente que pregunta cuánto cuesta arreglarlo. No hay que
+venderle nada: se le informa de lo que la ley le pide, que es lo que había que
+hacer de todas formas.
+
+Y como cada visita deja su comprobación con su fecha, al cabo de un tiempo se
+puede ver una cosa que antes no se veía: qué puertas llevan tres visitas con el
+mismo punto sin cumplir. Esa lista es, literalmente, la lista de presupuestos de
+adecuación que nadie ha pedido todavía.
+
 ---
 
 ## 9. Cómo se registra todo esto en ARIZA SAT
@@ -1308,4 +1365,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.08-11 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.09-1 de ARIZA SAT*

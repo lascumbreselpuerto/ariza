@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.08-11**
+> **Versión de la aplicación que describe este manual: 2026.11.09-1**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -253,6 +253,7 @@ tipos de visita, porque no en todos tiene sentido:
 | Fotos de esta visita | Sí | Sí | Sí | Sí |
 | Materiales | Sí | Sí | **No** | Sí |
 | Tiempo y desplazamiento | Sí | Sí | Sí | Sí |
+| Cómo está esta puerta de normativa | Sí | No, ya va en el guión | No | Sí |
 | Cómo queda la puerta | Sí | Sí | **No** | Sí |
 | Cobro en obra | Sí | Sí | No | Solo si la oficina marca que se cobra |
 | Firma del cliente | Sí | Sí | Sí | Sí |
@@ -480,6 +481,48 @@ desplazamiento.
 
 En una obra de varios días estos tres campos salen **ya sumados** de todas las
 jornadas, no con los del último día. El apartado 4 lo explica.
+
+### Cómo está esta puerta de normativa (9 de noviembre de 2026)
+
+Aparece en **todas las visitas que tocan una puerta** menos tres: la comercial
+(ahí la puerta todavía no existe), el desplazamiento en falso (no has trabajado)
+y la preventiva (ahí ya lo pregunta el guión entero).
+
+Son **seis puntos**, los que se ven mirando la puerta sin desmontar nada. Cada
+uno con tres botones:
+
+| Botón | Cuándo |
+|---|---|
+| **Sí** | Lo has mirado y está |
+| **No** | Lo has mirado y no está |
+| **No he podido mirarlo** | No has llegado, no estaba a la vista o no te ha dado tiempo |
+
+**El tercer botón existe a propósito y no es para salir del paso: es para no
+mentir.** Un «sí» que no es verdad va a un papel que firma el cliente. Si no lo
+has mirado, dilo y no pasa nada.
+
+**Es opcional.** El parte se cierra igual sin contestar nada. Pero piensa lo que
+te estás dejando: esos seis puntos son por los que responde el titular de la
+puerta, y la mayoría de los clientes no sabe que responde de ellos.
+
+#### Lo que ve el cliente
+
+Lo que marques sale impreso en el parte, con el nombre de cada punto y la norma
+que lo exige. Y ahí pasan dos cosas distintas:
+
+- **Si marcas algún NO**, el parte saca un recuadro rojo diciendo que la puerta
+  no cumple esos puntos, qué significa eso para el titular, y que podemos
+  presupuestar la adecuación. Eso es informar, y queda firmado y con fecha.
+- **Si no marcas ningún NO**, el parte **no dice que la puerta cumpla**. Dice
+  que de lo comprobado no se ha detectado nada, y avisa de que la comprobación
+  completa lleva más puntos y la medida de fuerzas. Es a propósito: con seis
+  puntos se puede afirmar que algo no cumple, pero no que cumple.
+
+#### Si ya se miró antes
+
+Si esta puerta se miró en otra visita, arriba te dice cuándo fue y cuántos
+puntos fallaban. Así no das la misma noticia como si fuera nueva, y ves de un
+vistazo si el cliente arregló lo que se le dijo.
 
 ### Cómo queda
 
@@ -1310,4 +1353,4 @@ que mire ahí antes de nada. Puede ser eso.
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.08-11 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.09-1 de ARIZA SAT*
