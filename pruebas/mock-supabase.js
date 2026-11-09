@@ -73,6 +73,9 @@ function semilla(){
     articulos: [],
     movimientos: [],
     revisiones: [],
+    /* Cómo está la puerta de normativa en cada visita:
+       servidor/conformidad-visita.sql (09-11-2026) */
+    conformidad_visita: [],
     medidas: [],
     componentes: [],
     centros: [],
@@ -172,6 +175,9 @@ const COLUMNAS_UUID = {
                          'puerta_id', 'creado_por_id'],
   /* servidor/almacen.sql. «creado_por» tampoco: es texto. */
   ubicaciones: ['perfil_id'],
+  /* servidor/conformidad-visita.sql. «quien» NO está: es el nombre escrito
+     del técnico, a propósito, para que un parte entregado no se reescriba. */
+  conformidad_visita: ['aviso_id', 'puerta_id', 'perfil_id'],
 };
 /* Vale cualquier cosa con pinta de uuid, y también los identificadores que
    fabrica este simulador («id-000007») y los que inventan las pruebas

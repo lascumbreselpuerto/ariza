@@ -47,7 +47,7 @@ ORDEN="componentes.sql centros.sql parte-por-correo.sql obra.sql ficha.sql \
 almacen.sql presupuestos.sql presupuestos2.sql comercial.sql anexos.sql \
 tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos3.sql valoracion.sql \
 parado.sql factura.sql rutas.sql ruta-cliente.sql telegram.sql subtipo.sql urgencia.sql \
-medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql perifericos.sql ficha4.sql urgencia2.sql falso.sql fotos-aviso.sql barras.sql almacenes.sql nombre-equipo.sql sitio-material.sql"
+medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql perifericos.sql ficha4.sql urgencia2.sql falso.sql fotos-aviso.sql barras.sql almacenes.sql nombre-equipo.sql sitio-material.sql conformidad-visita.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -393,6 +393,40 @@ if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/sitio-material-pruebas.sql" ]; then
     echo " FALLA dónde se guarda cada material:"
     grep -a -m3 -E "ERROR|EXCEPTION" /tmp/sitio-material-pruebas.log | sed 's/^/         /'
   fi
+fi
+
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/conformidad-visita-pruebas.sql" ]; then
+  echo ""
+  echo "── Normativa en cada visita ────────────────────"
+  if $PSQL -f "$AQUI/sql/conformidad-visita-pruebas.sql" > /tmp/conformidad-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/conformidad-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA normativa en cada visita:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/conformidad-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
+# ---- Que no se quede ninguna prueba sin lanzar (09-11-2026) ----
+# Cada prueba de SQL hay que añadirla a mano aquí arriba, y el 08-11-2026 ya
+# pasó con la lista de ficheros: había 38 en la carpeta y 37 en la lista, así
+# que el SQL de aquella entrega NO SE ESTABA PROBANDO y el banco decía que todo
+# iba bien. Esto compara la carpeta con lo que este guion ejecuta de verdad y
+# se pone en rojo si alguien añade una prueba y se olvida de llamarla.
+echo ""
+echo "── Que no falte ninguna prueba por lanzar ──────"
+sin_lanzar=""
+for f in "$AQUI"/sql/*-pruebas.sql; do
+  [ -e "$f" ] || continue
+  n="$(basename "$f")"
+  grep -q "$n" "$0" || sin_lanzar="$sin_lanzar $n"
+done
+if [ -n "$sin_lanzar" ]; then
+  fallos=$((fallos+1))
+  echo " FALLA hay pruebas en la carpeta que este guion no lanza:$sin_lanzar"
+  echo "        Añádelas arriba, como las demás, o no se prueban y nadie se entera."
+else
+  echo "  OK   todas las pruebas de la carpeta se lanzan"
 fi
 
 echo ""

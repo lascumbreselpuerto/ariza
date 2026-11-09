@@ -324,8 +324,12 @@ const bajarCopia = async (pag, act) => {
      obras largas, las actas de entrega y las puertas de cada obra. La copia
      funcionaba y decía que estaba completa, que es la peor clase de fallo.
      «catalogo» salió de la lista: es una vista sobre articulos, no una tabla, y
-     el SQL de restauración generaba inserts que una vista no acepta. */
-  paso('se copian las treinta y seis tablas', R.tablas === 36, String(R.tablas));
+     el SQL de restauración generaba inserts que una vista no acepta.
+     Y de 36 a 37 el 09-11-2026, al entrar «conformidad_visita»: lo que el
+     técnico comprobó de normativa en cada visita, que es lo que sostiene el
+     aviso impreso en el parte del cliente. Si eso se quedara fuera de la copia,
+     el día que hubiera que restaurar se perdería la prueba de que se informó. */
+  paso('se copian las treinta y siete tablas', R.tablas === 37, String(R.tablas));
   ['presupuestos','presupuesto_lineas','presupuesto_adjuntos','presupuesto_envios',
    'presupuesto_visitas','textos_presu','proveedores','conjuntos','conjunto_lineas',
    'ubicaciones','movimientos_material','materiales_previstos','contactos','jornadas',
