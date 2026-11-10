@@ -318,6 +318,64 @@ paso('si todas tienen etiqueta, manda a crear la puerta desde la asistencia',
 paso('y no ofrece ningún selector vacío', todasPuestas.sinSelector === true);
 
 /* ================================================================
+   6. Lo que dice la pegatina
+   --------------------------------------------------------------
+   David, el 10-11-2026: «en la pegatina pone "Avisos y Urgencias" y
+   debería poner "Aviso e información sobre la puerta", de esta
+   manera avisamos al cliente que desde ese escaneo se podrá tanto
+   revisar la info de la puerta como dar un nuevo aviso».
+   Eligió la variante C: el texto encima del QR, que es lo que
+   describe, y el teléfono abajo como alternativa.
+   ================================================================ */
+bloque('6. El texto de la pegatina');
+
+const pegatina = await T(() => {
+  const g = window.__T;
+  /* Se captura lo que la aplicación escribiría en la ventana de impresión, sin
+     abrirla: en el banco no hay ventanas nuevas y tampoco hacen falta. */
+  const abrirDeVerdad = window.open;
+  /* Con teléfono puesto: es como está la casa de verdad, y es lo que decide si
+     el pie de la pegatina se pinta o no. */
+  const telAntes = g.S.ajustes.telefono_avisos;
+  g.S.ajustes.telefono_avisos = '661 352 795';
+  let html = '';
+  window.open = () => ({ document: { write: t => { html += t; }, close(){} } });
+  g.etiquetaTermica(g.S.etiquetas[0].codigo);
+  /* Y sin teléfono, que también pasa si nadie lo ha configurado todavía */
+  g.S.ajustes.telefono_avisos = '';
+  let sinTel = '';
+  window.open = () => ({ document: { write: t => { sinTel += t; }, close(){} } });
+  g.etiquetaTermica(g.S.etiquetas[0].codigo);
+  g.S.ajustes.telefono_avisos = telAntes;
+  let hoja = '';
+  window.open = () => ({ document: { write: t => { hoja += t; }, close(){} } });
+  g.hojaImprimible();
+  window.open = abrirDeVerdad;
+  return { html, hoja, sinTel, lema: g.LEMA_QR };
+});
+paso('la pegatina dice para qué es el QR',
+  /Aviso e información sobre la puerta/.test(pegatina.html));
+paso('y lo que se encuentra el cliente al escanear',
+  /Desbloqueo, estado y avisos/.test(pegatina.html));
+paso('el texto va ENCIMA del QR, que es lo que describe',
+  pegatina.html.indexOf('Aviso e información') < pegatina.html.indexOf('</svg>'),
+  'lema en ' + pegatina.html.indexOf('Aviso e información') + ', QR en ' + pegatina.html.indexOf('</svg>'));
+paso('y ya no dice «avisos y urgencias» encima del teléfono',
+  !/Avisos y urgencias/i.test(pegatina.html));
+paso('el teléfono sigue, como alternativa a escanear',
+  /O llámanos/.test(pegatina.html) && /661|\d{3}\s?\d{3}\s?\d{3}/.test(pegatina.html));
+/* Las dos pegatinas que acaban en puertas de clientes tienen que decir lo
+   mismo: la térmica de una en una y la plancha de la imprenta. */
+paso('y si no hay teléfono configurado, el texto del QR sale igual',
+  /Aviso e información sobre la puerta/.test(pegatina.sinTel) &&
+  !/O llámanos/.test(pegatina.sinTel));
+paso('la hoja de la imprenta dice lo mismo que la térmica',
+  /Aviso e información sobre la puerta/.test(pegatina.hoja));
+paso('y el texto está escrito en un solo sitio del programa',
+  Array.isArray(pegatina.lema) && pegatina.lema[0] === 'Aviso e información sobre la puerta',
+  (pegatina.lema || []).join(' · '));
+
+/* ================================================================
    Final
    ================================================================ */
 console.log('\n'+ok+' bien, '+mal+' mal.');
