@@ -2061,7 +2061,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.10-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.10-3';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -29987,9 +29987,23 @@ async function enviarContrato(id, boton){
    circulando dos pegatinas distintas por las puertas de los clientes. */
 const LEMA_QR = ['Aviso e información sobre la puerta', 'Desbloqueo, estado y avisos'];
 
+/* ---- Sin QR no se imprime (10-11-2026) ----
+   David, al mirar una etiqueta de muestra: «en la etiqueta que me mandas no
+   aparece el QR». Esa era de las pruebas, donde el generador es un sustituto
+   que dibuja un cuadrado blanco. Pero la pregunta destapó algo de verdad: si el
+   generador no llega a cargar, la etiqueta SE IMPRIMÍA IGUAL, con un párrafo
+   pequeño donde debería ir el QR. Una pegatina así se pega en una puerta y no
+   se descubre hasta que un cliente la escanea y no pasa nada.
+   Así que ahora no se imprime: se dice por qué y qué hacer. */
+const hayGeneradorQR = () => typeof qrcode !== 'undefined';
+const avisoSinQR = 'No se ha podido cargar el generador de códigos QR, así que la etiqueta '+
+  'saldría sin QR. Conéctate a internet una vez y vuelve a intentarlo: después se queda '+
+  'guardado y funciona sin cobertura.';
+
 function etiquetaTermica(codigo){
   const e = S.etiquetas.find(x => x.codigo === codigo);
   if (!e) return toast('No encuentro esa etiqueta.');
+  if (!hayGeneradorQR()) return toast(avisoSinQR);
   const url = enlaceQR(codigo);
   const tel = (S.ajustes.telefono_avisos || '').toString().trim();
   const w = window.open('', '_blank');
@@ -29998,14 +30012,14 @@ function etiquetaTermica(codigo){
     '@page{size:62mm 100mm;margin:0}'+
     'html,body{margin:0;padding:0;background:#fff;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
     'body{font-family:"Barlow Condensed","Arial Narrow",Arial,sans-serif}'+
-    '.eti{width:62mm;height:100mm;box-sizing:border-box;padding:3.5mm 3mm;display:flex;flex-direction:column;'+
+    '.eti{width:62mm;height:97mm;box-sizing:border-box;padding:2mm 3mm;overflow:hidden;display:flex;flex-direction:column;'+
       'align-items:center;justify-content:space-between;text-align:center;page-break-after:always}'+
-    '.cab{width:100%;background:#000;color:#fff;padding:1.6mm 0;border-radius:1mm}'+
-    '.cab b{font:700 6.4mm/1 "Barlow Condensed",Arial,sans-serif;letter-spacing:.3mm}'+
+    '.cab{width:100%;background:#000;color:#fff;padding:1.1mm 0;border-radius:1mm}'+
+    '.cab b{font:700 5.8mm/1 "Barlow Condensed",Arial,sans-serif;letter-spacing:.3mm}'+
     '.cab span{display:block;font:500 2.7mm/1.2 Arial,sans-serif;letter-spacing:.35mm;text-transform:uppercase;margin-top:.8mm}'+
-    '.qr{width:44mm;height:44mm;display:block}'+
-    '.qr svg{width:44mm;height:44mm;display:block}'+
-    '.cod{font:700 11mm/1 ui-monospace,"Courier New",monospace;letter-spacing:.6mm}'+
+    '.qr{width:40mm;height:40mm;display:block}'+
+    '.qr svg{width:40mm;height:40mm;display:block}'+
+    '.cod{font:700 9mm/1 ui-monospace,"Courier New",monospace;letter-spacing:.5mm}'+
     /* ---- Qué hace este QR, escrito encima (10-11-2026) ----
        David: «en la pegatina pone "Avisos y Urgencias" y debería poner "Aviso e
        información sobre la puerta", de esta manera avisamos al cliente que desde
@@ -30032,7 +30046,7 @@ function etiquetaTermica(codigo){
     '<div class="eti">'+
       '<div class="cab"><b>ARIZA</b><span>puertas automáticas</span></div>'+
       '<div class="lema">'+LEMA_QR[0]+'<em>'+LEMA_QR[1]+'</em></div>'+
-      '<div class="qr">'+svgQR(url, '44mm')+'</div>'+
+      '<div class="qr">'+svgQR(url, '40mm')+'</div>'+
       '<div class="cod">'+esc(codigo)+'</div>'+
       '<div class="pie">'+
         (tel ? '<div class="tel"><small>O llámanos</small>'+esc(tel)+'</div>' : '')+
@@ -30044,6 +30058,9 @@ function etiquetaTermica(codigo){
 
 function hojaImprimible(){
   const libres = etiquetasLibres();
+  /* Una plancha de imprenta sin QR son cientos de pegatinas inútiles y una
+     factura de imprenta pagada. (10-11-2026) */
+  if (!hayGeneradorQR()) return toast(avisoSinQR);
   const w = window.open('', '_blank');
   if (!w){ toast('El navegador ha bloqueado la ventana de impresión.'); return; }
   const etiquetas = libres.map(e => {
