@@ -376,6 +376,124 @@ paso('y el texto está escrito en un solo sitio del programa',
   (pegatina.lema || []).join(' · '));
 
 /* ================================================================
+   7. Que la pegatina quepa en el rollo
+   --------------------------------------------------------------
+   David, el 10-11-2026: «hay que recortar un poco la pegatina de
+   alto. El teléfono de abajo sale la mitad en otra pegatina».
+   Y tenía razón: al añadir el texto del QR el día antes, el
+   contenido pasó a medir 102,5 mm en un rollo de 100. El pie se
+   partía en dos etiquetas.
+
+   Esto no se puede comprobar leyendo el HTML: hay que MEDIRLO. Se
+   pinta la etiqueta en un marco aparte y se mide en milímetros.
+   ================================================================ */
+bloque('7. La pegatina cabe en el rollo');
+
+const medida = await T(async () => {
+  const g = window.__T;
+  g.S.ajustes.telefono_avisos = '661 352 795';
+  const abrir = window.open; let h = '';
+  window.open = () => ({ document: { write: t => { h += t; }, close(){} } });
+  g.etiquetaTermica(g.S.etiquetas[0].codigo);
+  window.open = abrir;
+  /* En un marco aparte, para que los estilos de la etiqueta (html, body, @page)
+     no se mezclen con los de la aplicación. */
+  const marco = document.createElement('iframe');
+  marco.style.cssText = 'position:fixed;left:-9999px;width:400px;height:900px;border:0';
+  marco.srcdoc = h.replace(/<div class="barra">[\s\S]*?<\/div>\s*(?=<div class="eti">)/, '')
+                  .replace('body{padding-top:52px}', 'body{padding-top:0}');
+  document.body.appendChild(marco);
+  await new Promise(r => { marco.onload = r; setTimeout(r, 1500); });
+  const d = marco.contentDocument;
+  const mm = px => +(px / (96 / 25.4)).toFixed(2);
+  const eti = d.querySelector('.eti');
+  const cs = d.defaultView.getComputedStyle(eti);
+  const piezas = {};
+  for (const sel of ['.cab', '.lema', '.qr', '.cod', '.pie'])
+    piezas[sel] = mm((d.querySelector(sel) || {}).offsetHeight || 0);
+  const r = {
+    piezas,
+    contenido: +(Object.values(piezas).reduce((a, b) => a + b, 0) +
+      mm(parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom))).toFixed(2),
+    caja: mm(eti.clientHeight),
+    desborda: eti.scrollHeight > eti.clientHeight + 2,
+    recorta: cs.overflow === 'hidden',
+    qr: piezas['.qr'],
+  };
+  marco.remove();
+  return r;
+});
+/* 97 mm es el alto útil de una DK-11202: el rollo mide 100 y la impresora no
+   llega a los bordes. Si se apura a 100, lo de abajo salta a la siguiente. */
+paso('el contenido cabe en el alto útil del rollo',
+  medida.contenido <= 97, medida.contenido + ' mm de 97');
+paso('y sobra margen, no va justo',
+  medida.contenido <= 94, 'sobran ' + (97 - medida.contenido).toFixed(1) + ' mm');
+paso('la caja no se declara al borde del rollo',
+  medida.caja <= 97.5, medida.caja + ' mm');
+paso('nada se sale de la caja',
+  medida.desborda === false);
+paso('y si algún día alguien alarga un texto, se recorta en vez de empujar',
+  medida.recorta === true);
+paso('el QR sigue siendo grande de verdad',
+  medida.qr >= 36, medida.qr + ' mm');
+paso('y el pie con el teléfono entra entero',
+  medida.piezas['.pie'] > 10, medida.piezas['.pie'] + ' mm');
+
+/* ================================================================
+   8. El QR, que es lo único que no puede faltar
+   --------------------------------------------------------------
+   David, el 10-11-2026: «en la etiqueta que me mandas no aparece el
+   QR». Era una muestra sacada del banco, donde el generador es un
+   sustituto que dibuja un cuadrado blanco a propósito. Pero al
+   mirarlo salió algo de verdad: si el generador no cargaba, la
+   etiqueta se imprimía IGUAL, con un párrafo donde iba el QR. Esa
+   pegatina se pega en una puerta y nadie lo nota hasta que un
+   cliente la escanea.
+   ================================================================ */
+bloque('8. Sin QR no se imprime');
+
+const conQR = await T(() => {
+  const g = window.__T;
+  const abrir = window.open; let h = '';
+  window.open = () => ({ document: { write: t => { h += t; }, close(){} } });
+  g.etiquetaTermica(g.S.etiquetas[0].codigo);
+  window.open = abrir;
+  const pu = g.S.puertas.find(p => p.codigo) || {};
+  return {
+    pideElQR: /<svg/.test(h),
+    alTamano: /style="width:40mm;height:40mm"/.test(h),
+    conLaDireccion: h.indexOf('arizapa.es/#') > 0 || /qr/i.test(h),
+    noDiceQueFalla: !/No se pudo cargar el generador/.test(h),
+  };
+});
+paso('la etiqueta lleva su QR', conQR.pideElQR === true);
+paso('y se le pide al tamaño nuevo, 40 mm', conQR.alTamano === true);
+paso('sin el aviso de que el generador ha fallado', conQR.noDiceQueFalla === true);
+
+const sinQR = await T(() => {
+  const g = window.__T;
+  /* Se quita el generador, que es lo que pasa sin internet la primera vez */
+  const guardado = window.qrcode;
+  delete window.qrcode;
+  let abrio = false, hojaAbrio = false;
+  const abrir = window.open;
+  window.open = () => { abrio = true; return { document:{ write(){}, close(){} } }; };
+  g.etiquetaTermica(g.S.etiquetas[0].codigo);
+  window.open = () => { hojaAbrio = true; return { document:{ write(){}, close(){} } }; };
+  g.hojaImprimible();
+  window.open = abrir;
+  window.qrcode = guardado;
+  const aviso = (document.querySelector('.toast, #toast') || {}).textContent || '';
+  return { abrio, hojaAbrio, aviso };
+});
+paso('SIN GENERADOR, LA ETIQUETA NO SE IMPRIME', sinQR.abrio === false);
+paso('y la plancha de la imprenta tampoco', sinQR.hojaAbrio === false);
+paso('se avisa de por qué y de qué hacer',
+  /generador de códigos QR/.test(sinQR.aviso) && /internet/.test(sinQR.aviso),
+  sinQR.aviso.slice(0, 60));
+
+/* ================================================================
    Final
    ================================================================ */
 console.log('\n'+ok+' bien, '+mal+' mal.');
