@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.09-1**
+> **Versión de la aplicación que describe este manual: 2026.11.09-2**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -199,6 +199,35 @@ Botones de la tarjeta:
 Al acabar el día tienes dos finales distintos y conviene elegir a propósito:
 **Obra sin terminar** si vuelves, **Cerrar** si ya está. El apartado 4 explica lo
 que cambia.
+
+### La pegatina del QR, desde la furgoneta (9 de noviembre de 2026)
+
+En la tarjeta de Mi trabajo tienes el botón **Imprimir pegatina**, al lado de
+«Ficha de la puerta». Saca la etiqueta de esa puerta: el QR grande, el número y
+el teléfono de avisos. Está pensada para la impresora portátil de la furgoneta.
+
+Solo sale si esa puerta ya tiene etiqueta asignada. Si no sale es que no la
+tiene, y entonces hay dos caminos: la eliges tú en la ficha de la puerta, o se
+la pones escaneando una pegatina en blanco, que es lo de abajo.
+
+### Qué pasa al escanear un QR de puerta (9 de noviembre de 2026)
+
+**Depende de quién escanee, y eso es nuevo.**
+
+- **El cliente**, que no tiene sesión, ve la ficha pública de su puerta: estado,
+  si hay aviso abierto y el botón para avisar de una avería. Igual que siempre.
+- **Tú, con la aplicación abierta**, vas directo a la **ficha de dentro** de esa
+  puerta, y arriba te dice lo que le falta: el tipo, las medidas, la matrícula.
+  Es para lo que escaneas estando delante: para completarla.
+
+Y si escaneas una pegatina que **todavía no es de ninguna puerta** (una de las
+que llevas en blanco), te pregunta en cuál la has pegado y te enseña las puertas
+que no tienen etiqueta. La eliges y queda asignada.
+
+> **Lo que no hace, y es a propósito.** Escanear no crea puertas. Una puerta se
+> crea desde su asistencia, para que nazca con su cliente y su aviso. Si la
+> puerta que tienes delante no está en la aplicación, se da de alta desde el
+> parte, como siempre.
 
 ---
 
@@ -1353,4 +1382,4 @@ que mire ahí antes de nada. Puede ser eso.
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.09-1 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.09-2 de ARIZA SAT*
