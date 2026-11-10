@@ -253,12 +253,23 @@ const url = await T(() => {
   const g = window.__T;
   const p = g.S.puertas.find(x => x.codigo);
   const u = g.enlaceQR(p.codigo);
-  const ref = g.codigoDeURL ? null : null;
+  /* Y el viaje de vuelta: lo que lleva el QR tiene que volver a salir entero al
+     leerlo. Hasta el 10-11-2026 aquí había un «null : null» que no comprobaba
+     nada, y por ese hueco se coló que nadie probara nunca el camino del
+     escaneo de principio a fin. */
+  const et = g.S.etiquetas.find(e => e.codigo === p.codigo);
+  const delHash = g.puertaDeEtiqueta(u);
   return { url: u, llevaCodigo: u.indexOf(p.codigo.replace('-','')) > 0,
-           llevaToken: u.length > ('https://arizapa.es/#'+p.codigo.replace('-','')).length };
+           llevaToken: u.length > ('https://arizapa.es/#'+p.codigo.replace('-','')).length,
+           vuelveCodigo: delHash && delHash.codigo === p.codigo,
+           vuelveToken: delHash && delHash.token === (et ? et.token : null) };
 });
 paso('el QR lleva el código y el código de seguridad pegado',
   url.llevaCodigo && url.llevaToken, url.url);
+paso('y al leer ese mismo QR vuelve a salir el código de la puerta',
+  url.vuelveCodigo === true);
+paso('y vuelve a salir su código de seguridad',
+  url.vuelveToken === true);
 
 /* ================================================================
    5. La etiqueta pegada que no es de nadie
@@ -492,6 +503,102 @@ paso('y la plancha de la imprenta tampoco', sinQR.hojaAbrio === false);
 paso('se avisa de por qué y de qué hacer',
   /generador de códigos QR/.test(sinQR.aviso) && /internet/.test(sinQR.aviso),
   sinQR.aviso.slice(0, 60));
+
+/* ================================================================
+   9. Leer la etiqueta de una puerta DESDE la aplicación   10-11-2026
+
+   David: «escaneo el QR con un móvil registrado en la app y con uno sin
+   registrar y salen lo mismo.» La causa era que no había manera de escanear
+   una puerta sin salir de la aplicación, y fuera de ella no hay sesión.
+   ================================================================ */
+bloque('9. El lector de puertas de dentro de la aplicación');
+
+/* Lo que lee la cámara es la URL entera; lo que se escribe a mano, solo el
+   código. Los dos caminos tienen que acabar en la misma puerta. */
+const lee = await T(() => {
+  const g = window.__T;
+  const et = g.S.etiquetas[0];
+  const bueno = { codigo: et.codigo, token: et.token };
+  const igual = r => !!r && r.codigo === bueno.codigo && r.token === bueno.token;
+  return {
+    deLaURL:        igual(g.puertaDeEtiqueta('https://arizapa.es/#'+et.codigo.replace('-','')+et.token)),
+    conGuiones:     igual(g.puertaDeEtiqueta(et.codigo+'-'+et.token)),
+    aManoSinGuion:  igual(g.puertaDeEtiqueta(et.codigo+et.token)),
+    enMinusculas:   igual(g.puertaDeEtiqueta((et.codigo+'-'+et.token).toLowerCase())),
+    conEspacios:    igual(g.puertaDeEtiqueta('  '+et.codigo+'-'+et.token+'  ')),
+    vacio:          g.puertaDeEtiqueta('') === null,
+    cualquierCosa:  g.puertaDeEtiqueta('hola que tal') === null,
+    /* La etiqueta de un MATERIAL no es la de una puerta: empieza por M- */
+    noEsMaterial:   g.puertaDeEtiqueta('https://arizapa.es/#M-MAT0012-KJ47') === null,
+  };
+});
+paso('lee el QR entero tal y como lo da la cámara', lee.deLaURL === true);
+paso('y el código escrito a mano con guiones',    lee.conGuiones === true);
+paso('y escrito de corrido, sin el guión',        lee.aManoSinGuion === true);
+paso('y en minúsculas',                           lee.enMinusculas === true);
+paso('y con espacios delante y detrás',           lee.conEspacios === true);
+paso('no se inventa nada con el campo vacío',     lee.vacio === true);
+paso('ni con un texto cualquiera',                lee.cualquierCosa === true);
+paso('la etiqueta de un material no cuela como puerta', lee.noEsMaterial === true);
+
+/* El botón tiene que estar donde David lo pidió: en Mi trabajo y en Puertas. */
+const botones = await T(async () => {
+  const g = window.__T;
+  const mira = async tab => {
+    g.S.ficha = null; g.S.tab = tab; g.pintar();
+    await new Promise(r => setTimeout(r, 350));
+    return {
+      boton: !!document.querySelector('[data-act="puerta-leer"]'),
+      caja:  !!document.getElementById('puerta-lector'),
+      campo: !!document.getElementById('puerta-cod'),
+    };
+  };
+  return { trabajo: await mira('trabajo'), puertas: await mira('puertas') };
+});
+paso('en Mi trabajo hay botón de leer la etiqueta', botones.trabajo.boton === true);
+paso('y su recuadro de cámara',                     botones.trabajo.caja === true);
+paso('y el campo para escribir el código a mano',   botones.trabajo.campo === true);
+paso('en Puertas también hay botón',                botones.puertas.boton === true);
+paso('y su recuadro de cámara',                     botones.puertas.caja === true);
+
+/* Y escribiendo el código a mano se llega a la ficha de dentro. Es el camino
+   que vale cuando la cámara no enfoca o la pegatina está rayada. */
+const aMano = await T(async () => {
+  const g = window.__T;
+  const p = g.S.puertas.find(x => x.codigo);
+  const et = g.S.etiquetas.find(e => e.codigo === p.codigo);
+  g.S.ficha = null; g.S.tab = 'trabajo'; g.pintar();
+  await new Promise(r => setTimeout(r, 350));
+  const campo = document.getElementById('puerta-cod');
+  campo.value = p.codigo + '-' + et.token;
+  document.querySelector('[data-act="puerta-cod-ir"]').click();
+  await new Promise(r => setTimeout(r, 500));
+  return { ficha: g.S.ficha === p.id, tab: g.S.tab,
+           cajaCerrada: (document.getElementById('puerta-lector')||{}).hidden !== false };
+});
+paso('escribiendo el código a mano se abre la ficha de dentro', aMano.ficha === true);
+paso('y lleva a la pestaña de puertas', aMano.tab === 'puertas', aMano.tab);
+paso('y el recuadro del lector se cierra solo', aMano.cajaCerrada === true);
+
+/* La cámara encendida de un recuadro que ya no está en pantalla se apaga. En
+   la furgoneta esto es batería, y antes se quedaba encendida. */
+const camara = await T(async () => {
+  const g = window.__T;
+  let parado = false;
+  g.S.tab = 'trabajo'; g.pintar();
+  await new Promise(r => setTimeout(r, 300));
+  /* Se finge un lector abierto en un recuadro que existe... */
+  window.__T.LECTORES['puerta-lector-camara'] = {
+    timer: null,
+    stream: { getTracks: () => [{ stop(){ parado = true; } }] },
+  };
+  /* ...y se cambia de pestaña, que es lo que se lleva el recuadro por delante */
+  g.S.tab = 'clientes'; g.pintar();
+  await new Promise(r => setTimeout(r, 350));
+  return { parado, yaNoEsta: !window.__T.LECTORES['puerta-lector-camara'] };
+});
+paso('al irse de la pantalla, la cámara se apaga', camara.parado === true);
+paso('y el lector deja de estar abierto',          camara.yaNoEsta === true);
 
 /* ================================================================
    Final

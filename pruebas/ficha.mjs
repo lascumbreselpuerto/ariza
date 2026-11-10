@@ -48,7 +48,7 @@ await ctx.addInitScript(() => {
     for (let i = 0; i < 20; i++){
       db.clientes.push({ id:'cli-'+i, nombre:'Cliente de prueba '+i, archivado:false,
                          creado:new Date().toISOString() });
-      db.etiquetas.push({ codigo:'AR-03'+i, token:'tok-03'+i, creado:new Date().toISOString() });
+      db.etiquetas.push({ codigo:'AR-03'+i, token:window.__TOKEN('AR-03'+i), creado:new Date().toISOString() });
       db.puertas.push({ id:'pu-'+i, codigo:'AR-03'+i, cliente_id:'cli-'+i,
         cliente:'Cliente de prueba '+i, direccion:'Calle '+i, tipo:'Corredera',
         estado:'operativa', creado:new Date().toISOString() });

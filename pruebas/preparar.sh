@@ -223,6 +223,7 @@ libroExpediente informeSituacion propuestaActuaciones actaEntrega vidaPuerta
 hojaDeCampo libroMantenimiento etiquetaCE documentoDTE documentoCPF hojaParte
 hojaContrato hojaImprimible etiquetaTermica expDe puertaDe clienteDe cargar
 pintar peligrosDe cerrarDlg
+puertaDeEtiqueta arrancarLectorPuerta cerrarLectorPuerta LECTORES
 S sb
 """.split()
 

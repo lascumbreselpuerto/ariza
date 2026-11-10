@@ -46,11 +46,11 @@ await ctx.addInitScript(() => {
        veces y nada que diga en qué portal está cada una. */
     const cli = db.clientes[0];
     ['AR-0101','AR-0102','AR-0103'].forEach((cod, i) => {
-      db.etiquetas.push({ codigo:cod, token:'tok-'+cod, creado:new Date().toISOString() });
+      db.etiquetas.push({ codigo:cod, token:window.__TOKEN(cod), creado:new Date().toISOString() });
       db.puertas.push({ id:'pt-portal-'+i, codigo:cod, cliente_id:cli.id, cliente:cli.nombre,
         direccion:'Avenida de la Bajamar 14', ubicacion:'Portal '+(i+1),
         tipo:'Corredera', marca:'Erreka', modelo:'Rino 4', estado:'operativa',
-        token:'tok-'+cod, creado:new Date().toISOString() });
+        token:window.__TOKEN(cod), creado:new Date().toISOString() });
     });
   };
 });

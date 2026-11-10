@@ -13,6 +13,24 @@ let n = 0;
 const id = () => 'id-' + (++n).toString().padStart(6, '0');
 const ahora = () => new Date().toISOString();
 
+/* Tokens de etiqueta: cuatro caracteres del mismo alfabeto que usa la
+   aplicación (ACDEFHJKLMNPQRTUVWXY3479, sin letras que se confundan a simple
+   vista). Fijos y no aleatorios, para que una prueba pueda escribir el código
+   entero de una etiqueta concreta y no cambie de una vuelta a otra. */
+const TOKENS = ['KJ47','M3QP','RTUV','WXY9','ACDE','FHJK','LMNP','QRTU','VWXY','3479','AC34','DE79'];
+/* Y para las pruebas que se inventan etiquetas sobre la marcha: un token válido
+   deducido del código, siempre el mismo para el mismo código. */
+const ABC_TOKEN = 'ACDEFHJKLMNPQRTUVWXY3479';
+function tokenDe(cod){
+  const s = String(cod || '');
+  let n = 7;
+  for (let i = 0; i < s.length; i++) n = (n * 31 + s.charCodeAt(i)) >>> 0;
+  let t = '';
+  for (let i = 0; i < 4; i++){ t += ABC_TOKEN[n % ABC_TOKEN.length]; n = Math.floor(n / ABC_TOKEN.length) + 11; }
+  return t;
+}
+if (typeof window !== 'undefined') window.__TOKEN = tokenDe;
+
 /* ---- Semilla ---- */
 function semilla(){
   const cliente = {
@@ -31,13 +49,13 @@ function semilla(){
     id: id(), codigo: 'AR-0001', cliente_id: cliente.id, cliente: cliente.nombre,
     direccion: cliente.direccion, ubicacion: 'Rampa de garaje',
     tipo: 'Corredera', marca: 'Erreka', modelo: 'Rino 4',
-    estado: 'ok', token: 'tok-0001', creado: ahora(),
+    estado: 'ok', token: TOKENS[0], creado: ahora(),
   };
   const puerta2 = {
     id: id(), codigo: 'AR-0002', cliente_id: cliente2.id, cliente: cliente2.nombre,
     direccion: cliente2.direccion, ubicacion: 'Muelle 2',
     tipo: 'Seccional', marca: 'Hörmann', modelo: 'SPU F42',
-    estado: 'ok', token: 'tok-0002', creado: ahora(),
+    estado: 'ok', token: TOKENS[1], creado: ahora(),
   };
   const perfil = {
     id: 'usuario-admin', nombre: 'David Ariza Arana',
@@ -54,9 +72,15 @@ function semilla(){
        prueba de una misma suite se quedaba sin ninguna libre y fallaba por eso,
        no por lo que estaba probando. Un rollo de etiquetas de verdad tampoco
        trae tres. */
+    /* Los tokens son de CUATRO caracteres del alfabeto de la aplicación
+       (ACDEFHJKLMNPQRTUVWXY3479), como los que genera token() de verdad.
+       Hasta el 10-11-2026 aquí ponía 'tok-0001', que no es un token: no encaja
+       con el formato, así que ninguna prueba podía escanear una etiqueta y el
+       hueco del escaneo llevaba meses sin tapar. Un simulador con datos que no
+       existen prueba cosas que no pasan. */
     etiquetas: Array.from({ length: 12 }, (_, i) => ({
       codigo: 'AR-' + String(i + 1).padStart(4, '0'),
-      token: 'tok-' + String(i + 1).padStart(4, '0'),
+      token: TOKENS[i],
       creado: ahora(),
     })),
     avisos: [],

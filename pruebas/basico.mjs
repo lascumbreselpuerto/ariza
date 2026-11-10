@@ -65,14 +65,14 @@ await ctx.addInitScript(() => {
     db.puertas.push({ id:'pu-suelta', codigo:'AR-0004', cliente_id:null,
       cliente:'Talleres Guadalete', direccion:'Polígono El Palmar, nave 9',
       ubicacion:'Portón trasero', tipo:'Enrollable', marca:'Angel Mir',
-      estado:'ok', token:'tok-0004', creado:new Date().toISOString() });
+      estado:'ok', token:window.__TOKEN('AR-0004'), creado:new Date().toISOString() });
     db.puertas.push({ id:'pu-huerfana', codigo:'AR-0005', cliente_id:null,
       cliente:'Bodegas Sin Ficha', direccion:'Camino del Molino 8',
-      tipo:'Batiente', estado:'ok', token:'tok-0005', creado:new Date().toISOString() });
-    db.etiquetas.push({ codigo:'AR-0004', token:'tok-0004', creado:new Date().toISOString() });
-    db.etiquetas.push({ codigo:'AR-0005', token:'tok-0005', creado:new Date().toISOString() });
-    db.etiquetas.push({ codigo:'AR-0006', token:'tok-0006', creado:new Date().toISOString() });
-    db.etiquetas.push({ codigo:'AR-0007', token:'tok-0007', creado:new Date().toISOString() });
+      tipo:'Batiente', estado:'ok', token:window.__TOKEN('AR-0005'), creado:new Date().toISOString() });
+    db.etiquetas.push({ codigo:'AR-0004', token:window.__TOKEN('AR-0004'), creado:new Date().toISOString() });
+    db.etiquetas.push({ codigo:'AR-0005', token:window.__TOKEN('AR-0005'), creado:new Date().toISOString() });
+    db.etiquetas.push({ codigo:'AR-0006', token:window.__TOKEN('AR-0006'), creado:new Date().toISOString() });
+    db.etiquetas.push({ codigo:'AR-0007', token:window.__TOKEN('AR-0007'), creado:new Date().toISOString() });
   };
 });
 const pag = await ctx.newPage();

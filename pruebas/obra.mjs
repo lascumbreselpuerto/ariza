@@ -46,7 +46,7 @@ await ctx.addInitScript(() => {
     /* Etiquetas de sobra para que «no quedan etiquetas libres» sea algo que la
        prueba provoca cuando quiere, y no el estado de partida. */
     ['AR-0101','AR-0102','AR-0103','AR-0104'].forEach(cod =>
-      db.etiquetas.push({ codigo:cod, token:'tok-'+cod, creado:new Date().toISOString() }));
+      db.etiquetas.push({ codigo:cod, token:window.__TOKEN(cod), creado:new Date().toISOString() }));
     /* La puerta del caso: existe en la obra pero no en la empresa. Ficha recién
        creada, sin etiqueta, sin tipo, sin medidas, sin fotos y sin matrícula. */
     db.puertas.push({ id:'pt-sin-doc', codigo:null, cliente_id:db.clientes[0].id,
