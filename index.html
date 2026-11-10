@@ -2061,7 +2061,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.09-2';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.10-1';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -29982,6 +29982,11 @@ async function enviarContrato(id, boton){
 }
 /* ---- Etiqueta suelta para la Brother QL-500 (DK-11202, 62 x 100 mm) ----
    Térmica directa: solo negro sobre blanco, sin grises ni colores. */
+/* Lo que dice la pegatina encima del QR, en un solo sitio: la térmica de una
+   en una y la plancha de la imprenta tienen que decir lo mismo, o acaban
+   circulando dos pegatinas distintas por las puertas de los clientes. */
+const LEMA_QR = ['Aviso e información sobre la puerta', 'Desbloqueo, estado y avisos'];
+
 function etiquetaTermica(codigo){
   const e = S.etiquetas.find(x => x.codigo === codigo);
   if (!e) return toast('No encuentro esa etiqueta.');
@@ -30001,6 +30006,17 @@ function etiquetaTermica(codigo){
     '.qr{width:44mm;height:44mm;display:block}'+
     '.qr svg{width:44mm;height:44mm;display:block}'+
     '.cod{font:700 11mm/1 ui-monospace,"Courier New",monospace;letter-spacing:.6mm}'+
+    /* ---- Qué hace este QR, escrito encima (10-11-2026) ----
+       David: «en la pegatina pone "Avisos y Urgencias" y debería poner "Aviso e
+       información sobre la puerta", de esta manera avisamos al cliente que desde
+       ese escaneo se podrá tanto revisar la info de la puerta (desbloqueo,
+       situación de la puerta, aviso pendiente) como dar un nuevo aviso».
+       El texto va encima del QR y no en el pie, porque describe lo que hace el
+       QR: puesto donde estaba, el cliente leería que es lo que consigue
+       LLAMANDO a ese número. El teléfono se queda, como alternativa para quien
+       no sepa escanear. */
+    '.lema{font:700 3.3mm/1.15 Arial,sans-serif;letter-spacing:.15mm;text-transform:uppercase;max-width:54mm}'+
+    '.lema em{display:block;font:500 2.6mm/1.2 Arial,sans-serif;text-transform:none;letter-spacing:0;margin-top:.5mm}'+
     '.pie{width:100%;border-top:.4mm solid #000;padding-top:1.4mm}'+
     '.tel{font:700 5.4mm/1.1 Arial,sans-serif;letter-spacing:.2mm}'+
     '.tel small{display:block;font:500 2.6mm/1.2 Arial,sans-serif;letter-spacing:.3mm;text-transform:uppercase}'+
@@ -30015,10 +30031,11 @@ function etiquetaTermica(codigo){
     '<span>Elige la Brother QL-500, papel 62 mm x 100 mm y escala 100 %. No uses «ajustar al papel».</span></div>'+
     '<div class="eti">'+
       '<div class="cab"><b>ARIZA</b><span>puertas automáticas</span></div>'+
+      '<div class="lema">'+LEMA_QR[0]+'<em>'+LEMA_QR[1]+'</em></div>'+
       '<div class="qr">'+svgQR(url, '44mm')+'</div>'+
       '<div class="cod">'+esc(codigo)+'</div>'+
       '<div class="pie">'+
-        (tel ? '<div class="tel"><small>Avisos y urgencias</small>'+esc(tel)+'</div>' : '')+
+        (tel ? '<div class="tel"><small>O llámanos</small>'+esc(tel)+'</div>' : '')+
         '<div class="web">arizapa.es</div>'+
       '</div>'+
     '</div></body></html>');
@@ -30031,7 +30048,11 @@ function hojaImprimible(){
   if (!w){ toast('El navegador ha bloqueado la ventana de impresión.'); return; }
   const etiquetas = libres.map(e => {
     const url = BASE_QR + e.codigo.replace('-','') + e.token;
+    /* El mismo texto que la etiqueta térmica, a esta escala: las dos pegatinas
+       acaban pegadas en puertas de clientes y no pueden decir cosas distintas.
+       (10-11-2026) */
     return '<div class="etq"><div class="logo">ARIZA <span style="color:#C98F08">puertas automáticas</span></div>'+
+           '<div class="lema">'+LEMA_QR[0]+'</div>'+
            svgQR(url, '30mm')+'<div class="cod">'+e.codigo+'</div><div class="url">arizapa.es</div></div>';
   }).join('');
   w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Etiquetas ARIZA SAT</title>'+
@@ -30040,6 +30061,7 @@ function hojaImprimible(){
     '.etq{width:50mm;height:65mm;border:.2mm dashed #bbb;padding:3mm;display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-align:center;page-break-inside:avoid}'+
     '.etq .logo{font-weight:700;font-size:3.4mm}.etq .cod{font-family:ui-monospace,monospace;font-weight:700;font-size:6mm;letter-spacing:.5mm}'+
     '.etq .url{font-size:2.6mm;color:#333}.etq svg{width:30mm;height:30mm}'+
+    '.etq .lema{font-weight:700;font-size:2.5mm;line-height:1.15;text-transform:uppercase;letter-spacing:.1mm}'+
     '@media print{.aviso-print{display:none}}</style></head><body>'+
     '<p class="aviso-print" style="padding:8mm;font-size:4mm">Hoja de '+libres.length+' etiquetas. Imprime o guarda como PDF y mándala a tu imprenta. Tamaño de plancha: 1000 x 500 mm.</p>'+
     '<div class="hoja-grid">'+etiquetas+'</div></body></html>');
