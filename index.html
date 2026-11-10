@@ -2061,7 +2061,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.09-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.09-2';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -2114,8 +2114,20 @@ async function arranque(){
   if (tokenK){ await vistaContratoPublico(tokenK); return; }
   const presuTok = presupuestoDeURL();
   if (presuTok){ await vistaPresupuestoPublico(presuTok); return; }
+  /* ---- La etiqueta de una puerta, según quién la escanee (09-11-2026) ----
+     Hasta hoy, cualquiera que escaneara el QR de una puerta iba a la ficha
+     pública, también el técnico que acababa de pegarla. Y eso es justo lo que
+     no sirve en la furgoneta: el técnico escanea para TRABAJAR con esa puerta,
+     no para ver lo que ve el cliente.
+     Así que si hay sesión del equipo, la etiqueta abre la ficha de dentro, con
+     lo que le falta a esa puerta. Para el cliente no cambia nada: sin sesión,
+     la ficha pública de siempre. */
   const ref = codigoDeURL();
-  if (ref){ await vistaPublica(ref); return; }
+  if (ref){
+    const { data: ses } = await sb.auth.getSession();
+    if (!ses || !ses.session){ await vistaPublica(ref); return; }
+    S.qrPuerta = ref;
+  }
   /* La etiqueta de un material NO tiene vista pública: dentro hay existencias y
      proveedores, que no son cosa de quien pase por allí. Se guarda y, en cuanto
      haya sesión, se abre su entrada y salida. */
@@ -2156,6 +2168,93 @@ async function entrar(sesion){
     if (a){ S.tab = 'almacen'; pintar(); dlgEscaneado(a.id); }
     else toast('Esa etiqueta no corresponde a ningún material del almacén.');
   }
+  /* Y si se ha entrado escaneando la etiqueta de una puerta, se abre su ficha.
+     El técnico tiene la puerta delante: es el momento de completarla. */
+  if (S.qrPuerta){
+    const ref = S.qrPuerta; S.qrPuerta = null;
+    abrirPuertaEscaneada(ref);
+  }
+}
+
+/* Qué hacer con la etiqueta de puerta que acaba de escanear alguien del
+   equipo. Tres casos, y los tres pasan de verdad:
+     · la etiqueta está puesta en una puerta  → su ficha, y se dice lo que le
+       falta, que es a lo que ha venido;
+     · la etiqueta existe pero está sin pegar → se ofrece ponérsela a una
+       puerta, que es el caso de la pegatina recién impresa en la furgoneta;
+     · la etiqueta no existe                  → se dice, sin más vueltas. */
+function abrirPuertaEscaneada(ref){
+  const et = (S.etiquetas || []).find(e =>
+    normTxt(e.codigo || '') === normTxt(ref.codigo) && (e.token || '') === ref.token);
+  if (!et){
+    toast('La etiqueta ' + ref.codigo + ' no es de esta empresa, o el código de seguridad no '+
+      'coincide. Compruébalo en Etiquetas.');
+    return;
+  }
+  const p = (S.puertas || []).find(x => x.codigo === et.codigo);
+  if (p){
+    S.ficha = p.id; S.tab = 'puertas'; pintar();
+    /* 99 fotos: las fotos no se pueden contar sin ir al servidor, y aquí lo que
+       interesa es lo que se remata mirando la ficha. Mismo truco que usa la
+       lista de fichas incompletas de la oficina. */
+    const falta = (minimoObra(p, 99).faltan || []).filter(x => !x.imposible);
+    toast(falta.length
+      ? 'Puerta ' + et.codigo + '. Le falta: ' +
+        falta.map(x => String(x.texto || '').toLowerCase()).filter(Boolean).join('; ') + '.'
+      : 'Puerta ' + et.codigo + '. La ficha está completa.');
+    return;
+  }
+  /* Etiqueta impresa y pegada, pero todavía de nadie. */
+  dlgEtiquetaSinPuerta(et.codigo);
+}
+
+/* ---- La etiqueta pegada que todavía no es de ninguna puerta (09-11-2026) ----
+   David lo acotó así: «la puerta debe de estar ya dada de alta desde la
+   empresa, ya que para que una asistencia se cree necesita tener asignada una
+   puerta». Por eso esto NO crea puertas: enseña las que están sin etiqueta y
+   deja ponerle esta. Crear una puerta sigue siendo cosa de la asistencia. */
+function dlgEtiquetaSinPuerta(codigo){
+  const sin = (S.puertas || [])
+    .filter(p => !String(p.codigo || '').trim() && p.activa !== false)
+    .sort((a, b) => (b.creado || '').localeCompare(a.creado || ''));
+  const comoSeLlama = p => [p.tipo, p.ubicacion, p.cliente, p.direccion]
+    .filter(Boolean).join(' · ') || 'Puerta sin datos';
+
+  let h = '<h3>Etiqueta ' + esc(codigo) + '</h3>' +
+    '<p class="mini" style="margin:0 0 12px">Esta etiqueta todavía no es de ninguna puerta. '+
+    'Si la acabas de pegar, dime en cuál y queda asignada.</p>';
+
+  if (!sin.length){
+    h += '<p class="sin-ficha" style="margin:0 0 12px">Todas las puertas dadas de alta tienen ya '+
+      'su etiqueta. Si esta puerta no existe en la aplicación, se crea desde su asistencia, no '+
+      'desde aquí: así nace con su cliente y su aviso.</p>'+
+      '<div class="pie"><span class="sp"></span>'+
+      '<button type="button" class="btn pri" data-cerrar>Entendido</button></div>';
+    abrirDlg(h, null);
+    return;
+  }
+
+  h += '<div class="campos"><div class="campo full"><label for="es-puerta">En qué puerta la has pegado</label>'+
+    '<select id="es-puerta"><option value="">Elige la puerta</option>'+
+    sin.slice(0, 300).map(p => '<option value="'+esc(p.id)+'">'+esc(comoSeLlama(p))+'</option>').join('')+
+    '</select>'+
+    '<span class="pista">Solo salen las puertas que todavía no tienen etiqueta. '+
+    'Son '+sin.length+'</span></div></div>'+
+    '<p class="err"></p><div class="pie">'+
+    '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Ahora no</button>'+
+    '<button type="submit" class="btn pri">Asignar la etiqueta</button></div>';
+
+  abrirDlg(h, async () => {
+    const id = val('es-puerta');
+    if (!id) return setErr('Elige la puerta en la que has pegado la etiqueta.');
+    try {
+      const { error } = await sb.from('puertas').update({ codigo }).eq('id', id);
+      if (error) throw error;
+      cerrarDlg(); await cargar();
+      S.ficha = id; S.tab = 'puertas'; pintar();
+      toast('Etiqueta ' + codigo + ' asignada. Ya se puede escanear.');
+    } catch(e){ setErr(e.message || 'No se pudo asignar la etiqueta.'); }
+  });
 }
 const yo = () => (S.perfil && S.perfil.nombre) || (S.user && S.user.email) || 'Técnico';
 
@@ -2245,7 +2344,7 @@ function vistaPuertas(){
   h += '<div class="fila"><div class="buscador sp"><input id="busca" type="search" placeholder="Buscar por código, cliente, dirección o marca" value="'+esc(S.busca)+'" data-act="busca"></div>'+
        (esGestion() ? '<button class="btn" data-act="importar" data-tipo="puertas">Cargar desde Excel</button>' : '')+
        '<button class="btn pri" data-act="puerta-nueva">Nueva puerta</button></div>';
-  const libres = S.etiquetas.filter(e => !S.puertas.some(p => p.codigo === e.codigo)).length;
+  const libres = etiquetasLibres().length;
   const sinFicha = S.puertas.filter(p => !p.cliente_id).length;
   h += '<p class="mini" style="margin:0">'+S.puertas.length+' puertas dadas de alta · '+libres+' etiquetas libres en la furgoneta</p>';
   if (sinFicha) h += '<div class="sin-ficha">'+sinFicha+' puerta'+(sinFicha===1?'':'s')+' sin ficha de cliente: '+
@@ -2723,6 +2822,7 @@ const MAPA = d => 'https://www.google.com/maps/search/?api=1&query=' + encodeURI
 /* Tarjeta de trabajo: lo justo para salir a la calle y los atajos a un toque */
 function tarjetaTrabajo(a){
   const p = a.puerta_id ? (puertaDe(a.puerta_id) || {}) : {};
+  const etQR = etiquetaDe(p);
   const donde = dondeAsistencia(a);
   const tel = (a.contacto_telefono || '').trim();
   const ceT = centroDePuerta(p);
@@ -2809,6 +2909,17 @@ function tarjetaTrabajo(a){
           (ceT && ceT.contacto_nombre ? ' ('+esc(ceT.contacto_nombre.split(/[\s,;·]+/)[0])+')' : '')+'</a>' : '')+
       (donde ? '<a class="btn sm" target="_blank" rel="noopener" href="'+esc(MAPA(donde))+'">Cómo llegar</a>' : '')+
       (a.puerta_id ? '<button class="btn sm" data-act="abrir" data-id="'+a.puerta_id+'">Ficha de la puerta</button>' : '')+
+      /* ---- La pegatina, desde la furgoneta (09-11-2026) ----
+         David: «desde los cuadros de asistencias asignadas en Mi trabajo se
+         debe de poder imprimir el QR, para que el técnico pueda imprimir la
+         pegatina desde la furgoneta con la impresora portátil». La impresión
+         ya existía entera: lo único que faltaba era sacarla aquí, donde el
+         técnico está de verdad cuando le hace falta.
+         Solo si la etiqueta existe en la tabla: sin su fila no hay código de
+         seguridad, y una pegatina con un QR que no lleva a ningún sitio es
+         peor que no pegar nada. */
+      (etQR ? '<button class="btn sm" data-act="etiqueta-imprimir" data-cod="'+esc(etQR.codigo)+'">'+
+        'Imprimir pegatina</button>' : '')+
       /* ---- La hora de llegada, con un toque (03-11-2026) ----
          Hasta hoy la hora de entrada se escribía al cerrar el parte, de
          memoria, a las ocho de la tarde. Eso no es un dato: es un recuerdo.
@@ -3771,13 +3882,17 @@ function vistaManual(){
 
 /* ---- Etiquetas ---- */
 function vistaEtiquetas(){
-  const usadas = new Set(S.puertas.map(p => p.codigo));
-  const libres = S.etiquetas.filter(e => !usadas.has(e.codigo));
+  const libres = etiquetasLibres();
   let h = '<div class="stack">';
   h += '<div class="fila"><div><h2 style="font-size:20px">Etiquetas con QR</h2><p class="mini" style="margin:2px 0 0">'+S.etiquetas.length+' generadas · '+libres.length+' sin asignar</p></div><span class="sp"></span>'+
        '<button class="btn" data-act="hoja" '+(libres.length?'':'disabled')+'>Hoja para imprimir</button>'+
        '<button class="btn pri" data-act="generar">Generar serie</button></div>';
-  h += '<div class="panel"><p class="mini" style="margin:0 0 10px">Cada etiqueta lleva el número visible y un QR con un código de seguridad. Genera la serie, mándala a imprimir y pega las etiquetas; después, al escanearlas, la app te ofrece dar de alta la puerta.</p>';
+  h += '<div class="panel"><p class="mini" style="margin:0 0 10px">Cada etiqueta lleva el número visible y un QR con un código de seguridad. Genera la serie, mándala a imprimir y pega las etiquetas.</p>'+
+    '<p class="mini" style="margin:0 0 10px">Desde el 09-11-2026, <b>al escanear una etiqueta '+
+    'cambia lo que sale según quién la escanee</b>: el cliente ve la ficha pública de su puerta, '+
+    'y quien tiene sesión abierta va a la ficha de dentro, con lo que a esa puerta le falta. Si '+
+    'la etiqueta está pegada pero todavía no es de nadie, se puede asignar ahí mismo a una '+
+    'puerta que no tenga.</p>';
   if (!S.etiquetas.length) h += '<p class="muted" style="margin:0">Todavía no has generado ninguna etiqueta.</p>';
   else {
     h += '<div class="tabla-wrap"><table class="tabla"><thead><tr><th>Código</th><th>Estado</th><th>Puerta</th><th></th></tr></thead><tbody>';
@@ -9530,6 +9645,26 @@ function enlaceQR(codigo){
   return BASE_QR + (codigo.replace('-','')) + (e ? e.token : '');
 }
 
+/* ---- Las etiquetas que quedan sin pegar (09-11-2026) ----
+   Una etiqueta está libre si ninguna puerta la lleva puesta: no hay columna
+   que lo diga, se deduce de las puertas. Ese cálculo estaba escrito cinco
+   veces en el fichero, y en dos de ellas con una diferencia sutil (excluir la
+   puerta que se está editando, para que no pierda la suya al reabrir su
+   ficha). Cinco copias de una regla es la forma de que un día dejen de decir
+   lo mismo, así que ahora es una sola función con esa excepción dentro. */
+function etiquetasLibres(salvoPuertaId){
+  const puestas = new Set((S.puertas || [])
+    .filter(p => !salvoPuertaId || p.id !== salvoPuertaId)
+    .map(p => p.codigo).filter(Boolean));
+  return (S.etiquetas || []).filter(e => !puestas.has(e.codigo));
+}
+/* La etiqueta de una puerta, si la tiene y si existe de verdad en la tabla.
+   Una puerta puede traer un código escrito de una importación y no tener fila
+   de etiqueta: entonces no hay token, y sin token el QR no lleva a ningún
+   sitio. Por eso lo que manda es la fila, no el campo. */
+const etiquetaDe = puerta =>
+  (puerta && puerta.codigo && (S.etiquetas || []).find(e => e.codigo === puerta.codigo)) || null;
+
 /* ================= Expediente de documentación de puerta =================
    Genera la documentación obligatoria de una puerta: instalación nueva,
    adecuación a normativa y modificación sustancial.
@@ -11690,8 +11825,7 @@ function minimoObra(p, nFotos){
     return { puntos, faltan: puntos, bloquean: puntos, completo: false, sinFicha: true };
   }
 
-  const usadas = new Set(S.puertas.filter(x => x.id !== p.id).map(x => x.codigo));
-  const libres = (S.etiquetas || []).filter(e => !usadas.has(e.codigo)).length;
+  const libres = etiquetasLibres(p.id).length;
 
   mete('ficha', 'Ficha de la puerta creada', 'Ya está. El resto se cuelga de aquí.', true, { basico: true });
   mete('etiqueta', 'Etiqueta con QR pegada y asignada',
@@ -16138,8 +16272,7 @@ function etiquetaCE(expId){
 function dlgAsignarQR(expId){
   const e = expDe(expId); if (!e) return;
   const p = e.puerta_id ? (puertaDe(e.puerta_id) || {}) : {};
-  const usadas = new Set(S.puertas.map(x => x.codigo).filter(Boolean));
-  const libres = S.etiquetas.filter(x => !usadas.has(x.codigo));
+  const libres = etiquetasLibres();
   if (!libres.length){
     toast('No quedan etiquetas libres. Genera más en la pestaña Etiquetas.');
     return;
@@ -22867,10 +23000,14 @@ function moldeDePuerta(pu){
 function dlgPuertaRapida(clienteId, direccion, alGuardar){
   const c = clienteId ? clienteDe(clienteId) : null;
   const dir = String(direccion || '').trim();
+  const libres = etiquetasLibres();
+  /* Se guarda a qué cliente y dirección pertenece este alta, para poder
+     reabrir el mismo diálogo después de generar etiquetas sin perder nada. */
+  PUERTA_RAPIDA = { clienteId, direccion, alGuardar };
   let h = '<h3>Puerta nueva, lo mínimo</h3>'+
-    '<p class="mini" style="margin:0 0 12px">Con el <b>tipo</b> basta para crearla. El resto lo '+
-    'rellena el técnico en obra, delante de la puerta, que es donde se ve. Si te equivocas de '+
-    'tipo con lo que te cuenta el cliente, él lo cambia allí.</p>'+
+    '<p class="mini" style="margin:0 0 12px">Con el <b>tipo</b> y su <b>etiqueta QR</b> queda '+
+    'creada. El resto lo rellena el técnico en obra, delante de la puerta, que es donde se ve. '+
+    'Si te equivocas de tipo con lo que te cuenta el cliente, él lo cambia allí.</p>'+
     '<div class="campos">'+
     '<div class="campo full"><label>Cliente</label>'+
       '<input type="text" value="'+esc(c ? (c.nombre || '') : '')+'" disabled>'+
@@ -22883,13 +23020,38 @@ function dlgPuertaRapida(clienteId, direccion, alGuardar){
       lista('tipos', TIPOS).map(x => '<option value="'+esc(x)+'">'+esc(x)+'</option>').join('')+
       '</select>'+
       '<span class="pista">De aquí salen el guión de revisión del técnico, los peligros propios '+
-      'de esa puerta y los límites de fuerza que se le aplican. Por eso es lo único que se pide: '+
-      'es lo que más cambia el trabajo</span></div>'+
+      'de esa puerta y los límites de fuerza que se le aplican: es lo que más cambia el '+
+      'trabajo</span></div>'+
     '<div class="campo full"><label for="pr-ubi">Dónde está, si lo sabes</label>'+
       '<input id="pr-ubi" type="text" maxlength="120" placeholder="Ej.: portón del muelle, '+
       'entrada de oficinas, rampa del garaje">'+
       '<span class="pista">Opcional, pero si el cliente tiene varias puertas es lo que evita que '+
       'el técnico tenga que llamar para saber a cuál va</span></div>'+
+    /* ---- La etiqueta QR, desde el minuto uno (09-11-2026) ----
+       David: «cuando desde oficina se crea una nueva asistencia y desde esta
+       se crea la puerta con datos básicos, veo que falta el añadir o asignar
+       QR a esa puerta». Hasta hoy la puerta nacía sin código y la deuda se
+       apuntaba sola en la lista de fichas incompletas de la oficina: quedaba
+       contabilizada, pero nadie daba el atajo para no generarla.
+       Es obligatoria, por decisión suya. Y para que obligatoria no signifique
+       bloqueada, cuando no quedan libres se puede generar una serie ahí mismo
+       sin salir del diálogo. */
+    (libres.length
+      ? '<div class="campo full"><label for="pr-cod">Etiqueta QR</label>'+
+        '<select id="pr-cod">'+
+        libres.slice(0, 400).map((e, i) =>
+          '<option value="'+esc(e.codigo)+'"'+(i === 0 ? ' selected' : '')+'>'+esc(e.codigo)+'</option>').join('')+
+        '</select>'+
+        '<span class="pista">Va puesta la primera que queda libre, y se puede cambiar. '+
+        'Quedan <b>'+libres.length+'</b> sin pegar. La pegatina se imprime desde la ficha de la '+
+        'puerta o desde la tarjeta de la visita, en Mi trabajo</span></div>'
+      : '<div class="campo full"><label>Etiqueta QR</label>'+
+        '<p class="sin-ficha" style="margin:0">No quedan etiquetas libres, y sin etiqueta no se '+
+        'crea la puerta. Genera una serie y sigues aquí mismo.</p>'+
+        (esGestion() ? '<button type="button" class="btn sm pri" data-act="pr-generar" '+
+          'style="margin-top:8px">Generar etiquetas</button>'
+         : '<span class="pista">Díselo a la oficina: las series las genera gestión</span>')+
+        '</div>')+
     (dir ? '<div class="campo full"><label>Dirección</label>'+
       '<input type="text" value="'+esc(dir)+'" disabled>'+
       '<span class="pista">La de la asistencia</span></div>' : '')+
@@ -22898,12 +23060,20 @@ function dlgPuertaRapida(clienteId, direccion, alGuardar){
     '<button type="submit" class="btn pri">Crear la puerta</button></div>';
   abrirDlg(h, async () => {
     const tipo = val('pr-tipo');
-    if (!tipo) return setErr('Elige el tipo de puerta. Es lo único que hace falta, y es lo que '+
-      'decide el guión de revisión y los límites que se le aplican.');
+    if (!tipo) return setErr('Elige el tipo de puerta. Es lo que decide el guión de revisión y '+
+      'los límites de fuerza que se le aplican.');
     if (!clienteId && !dir) return setErr('Esta asistencia no tiene ni cliente ni dirección, así '+
       'que la puerta nacería sin saber dónde está. Pon antes el cliente o la dirección en la '+
       'asistencia.');
-    const o = { tipo, ubicacion: val('pr-ubi') || '', direccion: dir,
+    const cod = val('pr-cod');
+    if (!cod) return setErr('Esta puerta necesita su etiqueta QR. Si no queda ninguna libre, '+
+      'genera una serie con el botón de arriba y vuelve a elegir.');
+    /* Dos personas pueden estar dando de alta a la vez: se comprueba que la
+       etiqueta elegida siga libre con lo que hay cargado ahora mismo. */
+    if (etiquetasLibres().every(e => e.codigo !== cod))
+      return setErr('La etiqueta '+cod+' se la acaban de quedar. Cierra y vuelve a abrir este '+
+        'cuadro para coger otra.');
+    const o = { tipo, ubicacion: val('pr-ubi') || '', direccion: dir, codigo: cod,
                 cliente_id: clienteId || null, cliente: c ? (c.nombre || '') : '',
                 estado: 'operativa', seguridad: [], creado_por: yo() };
     try {
@@ -22919,8 +23089,7 @@ function dlgPuerta(id, avisoId, molde){
      anterior que se abandonó: aplicarlo machacaría lo copiado sin avisar. */
   if (molde) S.borradorPuerta = null;
   const p = id ? puertaDe(id) : null;
-  const usadas = new Set(S.puertas.filter(x => !p || x.id !== p.id).map(x => x.codigo));
-  const libres = S.etiquetas.filter(e => !usadas.has(e.codigo)).map(e => e.codigo);
+  const libres = etiquetasLibres(p && p.id).map(e => e.codigo);
   const d = p || molde || { estado:'operativa', seguridad:[] };
   /* ---- El cliente sale de la asistencia (07-11-2026) ----
      David, probando en campo: «Al dar de alta la puerta desde una asistencia, el
@@ -24791,6 +24960,9 @@ function dlgTarifas(){
    una vez), y al guardarlo se vuelve al material con todo donde estaba y el
    proveedor nuevo ya elegido. */
 let MATERIAL_A_MEDIAS = null;
+/* El alta rápida de puerta que está a medias, para poder reabrirla igual
+   después de ir a generar etiquetas. (09-11-2026) */
+let PUERTA_RAPIDA = null;
 
 function recogerMaterial(){
   const v = id => (document.getElementById(id) || {}).value;
@@ -29338,6 +29510,13 @@ function dlgGenerar(){
       const { error } = await sb.from('etiquetas').upsert(filas, { onConflict:'codigo', ignoreDuplicates:true });
       if (error) throw error;
       cerrarDlg(); await cargar(); toast(cuantas + ' etiquetas generadas.');
+      /* Si veníamos de un alta de puerta que se quedó sin etiquetas, se vuelve
+         a ella con la misma asistencia detrás, en vez de dejar a la oficina
+         buscando por dónde iba. (09-11-2026) */
+      if (PUERTA_RAPIDA){
+        const v = PUERTA_RAPIDA; PUERTA_RAPIDA = null;
+        dlgPuertaRapida(v.clienteId, v.direccion, v.alGuardar);
+      }
     } catch(e){ setErr(e.message); }
   });
 }
@@ -29847,8 +30026,7 @@ function etiquetaTermica(codigo){
 }
 
 function hojaImprimible(){
-  const usadas = new Set(S.puertas.map(p => p.codigo));
-  const libres = S.etiquetas.filter(e => !usadas.has(e.codigo));
+  const libres = etiquetasLibres();
   const w = window.open('', '_blank');
   if (!w){ toast('El navegador ha bloqueado la ventana de impresión.'); return; }
   const etiquetas = libres.map(e => {
@@ -31260,6 +31438,9 @@ dlgForm.addEventListener('click', async e => {
   /* Los seis puntos de normativa. Se puede desmarcar volviendo a pulsar, igual
      que en el guión: lo contrario obligaría a elegir una respuesta por haber
      tocado el botón sin querer. */
+  /* Se acabaron las etiquetas en mitad de un alta de puerta: se va a generar
+     y se vuelve solo. (09-11-2026) */
+  if (a === 'pr-generar'){ cerrarDlg(); dlgGenerar(); return; }
   if (a === 'cf-resp'){
     const grupo = b.closest('.cf-resp');
     const ya = b.getAttribute('aria-pressed') === 'true';
