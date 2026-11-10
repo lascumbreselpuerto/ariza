@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.09-2**
+> **Versión de la aplicación que describe este manual: 2026.11.10-1**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -205,6 +205,13 @@ que cambia.
 En la tarjeta de Mi trabajo tienes el botón **Imprimir pegatina**, al lado de
 «Ficha de la puerta». Saca la etiqueta de esa puerta: el QR grande, el número y
 el teléfono de avisos. Está pensada para la impresora portátil de la furgoneta.
+
+**Lo que lee el cliente en la pegatina, desde el 10 de noviembre de 2026:**
+encima del QR pone **«Aviso e información sobre la puerta»** y, debajo,
+«Desbloqueo, estado y avisos». Eso es lo que hace que la escaneen: un QR sin
+texto es un cuadrado que nadie sabe para qué sirve. Y debajo del número sigue el
+teléfono, ahora con el rótulo «O llámanos», para el cliente que no sepa
+escanear.
 
 Solo sale si esa puerta ya tiene etiqueta asignada. Si no sale es que no la
 tiene, y entonces hay dos caminos: la eliges tú en la ficha de la puerta, o se
@@ -1382,4 +1389,4 @@ que mire ahí antes de nada. Puede ser eso.
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.09-2 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.10-1 de ARIZA SAT*
