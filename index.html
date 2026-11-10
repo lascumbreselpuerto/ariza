@@ -2061,7 +2061,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.10-3';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.10-4';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -2208,6 +2208,84 @@ function abrirPuertaEscaneada(ref){
   dlgEtiquetaSinPuerta(et.codigo);
 }
 
+/* ---- Leer la etiqueta de una puerta DESDE la aplicación (10-11-2026) ----
+
+   POR QUÉ SE HIZO ESTO, QUE ES LO IMPORTANTE
+   David, el 10-11-2026: «escaneo el QR con un móvil registrado en la app y con
+   uno sin registrar y salen lo mismo, info básica y petición de asistencia.
+   Cuando lo que debe de aparecer con móviles asignados es toda la info y
+   documentación completa de la puerta.»
+
+   Y tenía razón en lo que veía, aunque la causa no era la que parecía. El
+   enrutado funciona: medido, con sesión la etiqueta abre la ficha interna. Lo
+   que fallaba es POR DÓNDE se escanea. El técnico salía de la aplicación,
+   abría la cámara del móvil y el enlace se abría en Safari o en Chrome, que no
+   son la aplicación instalada y no tienen su sesión. Así que caía en la vista
+   del cliente, hiciera lo que hiciera.
+
+   La aplicación llevaba meses con lector de QR propio, pero solo enganchado al
+   almacén y al material. Para una puerta no había botón ninguno. Ahora sí: se
+   lee desde dentro, sin salir, y por tanto siempre con sesión.
+
+   Esto no sustituye al QR pegado: el de la puerta es para el CLIENTE, y debe
+   seguir abriendo la vista pública en cualquier móvil. Son dos caminos para
+   dos personas distintas. */
+function puertaDeEtiqueta(txt){
+  let s = String(txt || '').trim();
+  if (!s) return null;
+  /* Lo que lee la cámara es la URL entera (https://arizapa.es/#AR-0001-KJ47),
+     pero el campo de escribir a mano recibe solo el código. Lo que vale es
+     siempre lo que va detrás de la almohadilla. */
+  const alm = s.lastIndexOf('#');
+  if (alm >= 0) s = s.slice(alm + 1);
+  s = s.trim().toUpperCase().replace(/\s+/g, '');
+  /* Y se exige el código ENTERO, de principio a fin. El primer intento buscaba
+     el patrón dentro del texto y por eso la etiqueta de un material
+     (M-MAT0012-KJ47) colaba como si fuera una puerta: dentro de «MAT0012» hay
+     dos letras y cuatro dígitos. Lo cazó la prueba. */
+  const m = s.match(/^([A-Z]{2})-?(\d{3,6})-?([A-Z0-9]{4})$/);
+  if (!m) return null;
+  return { codigo: m[1] + '-' + m[2], token: m[3] };
+}
+async function arrancarLectorPuerta(){
+  const caja = document.getElementById('puerta-lector');
+  if (!caja) return;
+  caja.hidden = false;
+  await abrirLector({
+    caja: 'puerta-lector-camara',
+    queBusco: 'qr',
+    aviso: 'Pon el QR de la pegatina dentro del recuadro verde y acerca hasta que lo llene. '+
+           'Si no lo coge solo, dale a «Leer ahora».',
+    alLeer: txt => {
+      const ref = puertaDeEtiqueta(txt);
+      if (!ref){ toast('Eso no parece la etiqueta de una puerta nuestra.'); return; }
+      cerrarLectorPuerta();
+      abrirPuertaEscaneada(ref);
+    },
+    alCerrar: cerrarLectorPuerta,
+  });
+}
+function cerrarLectorPuerta(){
+  pararLectorEn('puerta-lector-camara');
+  const c = document.getElementById('puerta-lector');
+  if (c) c.hidden = true;
+}
+/* El recuadro donde se abre la cámara. Es el mismo en las dos pestañas, porque
+   solo puede haber una abierta a la vez. */
+const CAJA_LECTOR_PUERTA =
+  '<div id="puerta-lector" hidden style="margin:8px 0;border:1px solid var(--line);'+
+  'border-radius:8px;padding:10px">'+
+    '<div id="puerta-lector-camara"></div>'+
+    '<div class="fila" style="margin-top:8px">'+
+      '<input id="puerta-cod" type="text" maxlength="20" autocapitalize="characters" '+
+        'placeholder="O escribe el código: AR-0001-KJ47" style="flex:1">'+
+      '<button type="button" class="btn sm" data-act="puerta-cod-ir">Abrir</button>'+
+      '<button type="button" class="btn sm plana" data-act="puerta-leer-cerrar">Cerrar</button>'+
+    '</div>'+
+    '<p class="mini" style="margin:8px 0 0">El código va debajo del QR en la pegatina, '+
+      'con las cuatro letras de seguridad.</p>'+
+  '</div>';
+
 /* ---- La etiqueta pegada que todavía no es de ninguna puerta (09-11-2026) ----
    David lo acotó así: «la puerta debe de estar ya dada de alta desde la
    empresa, ya que para que una asistencia se cree necesita tener asignada una
@@ -2298,6 +2376,18 @@ function render(){
   const mismoSitio = sitio === SITIO;
   const scroll = window.scrollY || document.documentElement.scrollTop || 0;
   SITIO = sitio;
+  /* Una cámara encendida cuyo recuadro ya no está en pantalla se queda
+     encendida: el repintado se lleva el div, no el stream. En la furgoneta eso
+     es batería gastada sin que nadie lo vea. Aquí se apaga la de cualquier
+     lector que haya dejado de estar. (10-11-2026) */
+  /* El try es porque LECTORES se declara mucho más abajo en el fichero: si
+     alguna vez se repinta antes de llegar a esa línea, esto no debe tumbar la
+     aplicación entera por una cámara. */
+  try {
+    Object.keys(LECTORES).forEach(id => {
+      if (!document.getElementById(id)) pararLectorEn(id);
+    });
+  } catch(_){}
   pintarBarras();
   let h = '';
   if (S.cargando) h = '<p class="cargando">Cargando datos…</p>';
@@ -2342,8 +2432,10 @@ function vistaPuertas(){
     (centroDePuerta(p)||{}).nombre].join(' ').toLowerCase().includes(q));
   let h = '<div class="stack">';
   h += '<div class="fila"><div class="buscador sp"><input id="busca" type="search" placeholder="Buscar por código, cliente, dirección o marca" value="'+esc(S.busca)+'" data-act="busca"></div>'+
+       '<button class="btn" data-act="puerta-leer">Leer etiqueta</button>'+
        (esGestion() ? '<button class="btn" data-act="importar" data-tipo="puertas">Cargar desde Excel</button>' : '')+
-       '<button class="btn pri" data-act="puerta-nueva">Nueva puerta</button></div>';
+       '<button class="btn pri" data-act="puerta-nueva">Nueva puerta</button></div>'+
+       CAJA_LECTOR_PUERTA;
   const libres = etiquetasLibres().length;
   const sinFicha = S.puertas.filter(p => !p.cliente_id).length;
   h += '<p class="mini" style="margin:0">'+S.puertas.length+' puertas dadas de alta · '+libres+' etiquetas libres en la furgoneta</p>';
@@ -2974,7 +3066,11 @@ function vistaMiTrabajo(){
            (vencidasN ? ' · '+vencidasN+' se pasaron de fecha' : '')
          : 'No tienes asistencias asignadas')+
        '</p></div><span class="sp"></span>'+
-       '<button class="btn" data-act="asistencia-nueva">Nueva asistencia</button></div>';
+       /* El técnico tiene la puerta delante: leer su pegatina desde aquí le
+          abre la ficha de dentro, no la del cliente. (10-11-2026) */
+       '<button class="btn" data-act="puerta-leer">Leer etiqueta</button>'+
+       '<button class="btn" data-act="asistencia-nueva">Nueva asistencia</button></div>'+
+       CAJA_LECTOR_PUERTA;
 
   /* Aviso de copia de seguridad pendiente. Solo lo ve quien puede hacerla, y
      solo cuando ya hace tiempo: no se avisa por avisar. No bloquea nada. */
@@ -30526,6 +30622,15 @@ raiz.addEventListener('click', async e => {
   else if (a === 'prev-abrir') dlgPrevistos(b.dataset.id);
   else if (a === 'mat-ficha') dlgMaterial(b.dataset.id);
   else if (a === 'alm-leer') arrancarLectorAlmacen();
+  /* Leer la pegatina de una puerta desde dentro de la aplicación (10-11-2026) */
+  else if (a === 'puerta-leer') arrancarLectorPuerta();
+  else if (a === 'puerta-leer-cerrar') cerrarLectorPuerta();
+  else if (a === 'puerta-cod-ir'){
+    const campo = document.getElementById('puerta-cod');
+    const ref = puertaDeEtiqueta(campo ? campo.value : '');
+    if (!ref) toast('Escribe el código entero, el de debajo del QR: AR-0001-KJ47.');
+    else { cerrarLectorPuerta(); abrirPuertaEscaneada(ref); }
+  }
   else if (a === 'mat-mover') dlgMover(b.dataset.id, b.dataset.modo || 'entrada', b.dataset.aviso || null);
   else if (a === 'mat-qr') dlgQrMaterial(b.dataset.id);
   else if (a === 'mat-etiquetas') hojaEtiquetasMaterial();
