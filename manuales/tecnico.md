@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.10-3**
+> **Versión de la aplicación que describe este manual: 2026.11.10-4**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -235,6 +235,31 @@ que no tienen etiqueta. La eliges y queda asignada.
 > crea desde su asistencia, para que nazca con su cliente y su aviso. Si la
 > puerta que tienes delante no está en la aplicación, se da de alta desde el
 > parte, como siempre.
+
+### Escanea DESDE la aplicación, no con la cámara del móvil (10 de noviembre de 2026)
+
+**Esto es importante y es lo que más confunde.** Si abres la cámara del móvil y
+apuntas a la pegatina, el enlace se abre en Safari o en Chrome, **que no son la
+aplicación**. Y tu sesión está en la aplicación. Resultado: ves la ficha del
+cliente, no la de dentro, por muy registrado que estés.
+
+**Lo que tienes que hacer:**
+
+1. Abre **ARIZA SAT** (el icono, no el navegador).
+2. En **Mi trabajo** o en **Puertas**, dale a **«Leer etiqueta»**.
+3. Pon el QR dentro del recuadro verde y acerca hasta que lo llene.
+4. Se abre la **ficha de dentro** de esa puerta, con lo que le falta.
+
+Si la cámara no lo coge, o la pegatina está rayada o sucia, en ese mismo
+recuadro tienes un campo para **escribir el código a mano**: el que va impreso
+debajo del QR, con las cuatro letras de seguridad. `AR-0001-KJ47`. Vale escrito
+de corrido, con guiones o sin ellos, y en minúsculas.
+
+> **Por qué este botón existe.** David, el 10 de noviembre de 2026: «escaneo el
+> QR con un móvil registrado en la app y con uno sin registrar y salen lo mismo».
+> La aplicación hacía bien su parte, pero no había ninguna manera de escanear
+> una puerta sin salir de ella, y fuera de ella no hay sesión. El QR pegado
+> sigue siendo para el cliente: ese no cambia.
 
 ---
 
@@ -1389,4 +1414,4 @@ que mire ahí antes de nada. Puede ser eso.
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.10-3 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.10-4 de ARIZA SAT*
