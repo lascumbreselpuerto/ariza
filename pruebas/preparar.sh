@@ -133,6 +133,8 @@ guionDe claveGuion GUION_POR_FORMA GUION_PROPIO guionDeForma GUIONES_FABRICA
 panelLista guardarLista lista
 AYUDA_PUNTO ayudaDePunto lineasAyuda limiteDe limitesObra LIM_OBRA_CAMPOS
 bloqueGuion panelGuiones vistaEquipo
+etiquetasLibres etiquetaDe dlgPuertaRapida dlgEtiquetaSinPuerta abrirPuertaEscaneada
+tarjetaTrabajo etiquetaTermica hojaImprimible dlgGenerar enlaceQR codigoDeURL
 SEIS_DE_CAMPO RESP_CONFORMIDAD puntosDeCampo pideConformidad conformidadDe
 ultimaConformidad bloqueConformidad leerConformidad bloqueConformidadHTML
 CONFORMIDAD_NO_PIDE

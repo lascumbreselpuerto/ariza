@@ -47,11 +47,18 @@ function semilla(){
     clientes: [cliente, cliente2],
     puertas: [puerta, puerta2],
     perfiles: [perfil],
-    etiquetas: [
-      { codigo:'AR-0001', token:'tok-0001', creado: ahora() },
-      { codigo:'AR-0002', token:'tok-0002', creado: ahora() },
-      { codigo:'AR-0003', token:'tok-0003', creado: ahora() },
-    ],
+    /* Doce etiquetas, de las que dos están ya puestas en las puertas de arriba.
+       Eran tres hasta el 09-11-2026, y con tres bastaba porque nadie las
+       gastaba. Ese día la etiqueta pasó a ser obligatoria al crear una puerta
+       desde una asistencia, así que cada alta consume una: con tres, la segunda
+       prueba de una misma suite se quedaba sin ninguna libre y fallaba por eso,
+       no por lo que estaba probando. Un rollo de etiquetas de verdad tampoco
+       trae tres. */
+    etiquetas: Array.from({ length: 12 }, (_, i) => ({
+      codigo: 'AR-' + String(i + 1).padStart(4, '0'),
+      token: 'tok-' + String(i + 1).padStart(4, '0'),
+      creado: ahora(),
+    })),
     avisos: [],
     ajustes: [],
     contratos: [],

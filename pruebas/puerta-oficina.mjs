@@ -122,10 +122,15 @@ const rapida = await T(async () => {
            cid: p ? p.cliente_id : '', cliEsperado: cli.id,
            nombreCli: p ? p.cliente : '', codigo: p ? (p.codigo || '') : 'x' };
 });
-/* Lo que se pide es UNA cosa. Si esto crece, el alta rápida deja de ser rápida
-   y vuelve a pasar lo de siempre: la puerta no se crea. */
-paso('solo se piden dos campos, y uno es opcional',
-  rapida.campos.join(',') === 'pr-tipo,pr-ubi', rapida.campos.join(','));
+/* Lo que se pide es poco. Si esto crece, el alta rápida deja de ser rápida y
+   vuelve a pasar lo de siempre: la puerta no se crea.
+   Cambiado a propósito el 09-11-2026: entra la etiqueta QR. Eran dos campos y
+   ahora son tres. David: «cuando desde oficina se crea una nueva asistencia y
+   desde esta se crea la puerta con datos básicos, veo que falta el añadir o
+   asignar QR a esa puerta», y al preguntarle si debía obligar, eligió que sí:
+   «obligatoria: sin etiqueta no se crea». */
+paso('se piden tres campos, y uno es opcional',
+  rapida.campos.join(',') === 'pr-tipo,pr-ubi,pr-cod', rapida.campos.join(','));
 paso('el cliente sale escrito y no se puede cambiar aquí',
   rapida.cliEnPantalla.includes(rapida.cliNombre), rapida.cliEnPantalla);
 paso('sin tipo no se crea', /Elige el tipo/i.test(rapida.err), rapida.err);
@@ -135,9 +140,15 @@ paso('el sitio que escribió la oficina', rapida.ubi === 'Portón del muelle', r
 paso('la dirección de la asistencia', rapida.dir === 'C/ Larga 4', rapida.dir);
 paso('y colgada del cliente de la asistencia',
   rapida.cid === rapida.cliEsperado && rapida.nombreCli === rapida.cliNombre, rapida.nombreCli);
-/* La etiqueta se pega en obra: una puerta creada por teléfono no puede tener
-   una etiqueta asignada que nadie ha pegado en ninguna parte. */
-paso('nace sin etiqueta, que se pega en obra', rapida.codigo === '', rapida.codigo);
+/* Esto decía lo contrario hasta el 09-11-2026: «nace sin etiqueta, que se pega
+   en obra», con el razonamiento de que una puerta creada por teléfono no podía
+   llevar una etiqueta que nadie había pegado todavía. El razonamiento no era
+   malo, pero la realidad lo desmintió: la puerta nacía sin código, nadie se lo
+   ponía, y acababa en la lista de fichas incompletas de la oficina.
+   Ahora la etiqueta se reserva aquí y el técnico imprime esa misma pegatina en
+   la furgoneta, con el botón de Mi trabajo. Reservada no es pegada, y eso lo
+   sigue vigilando el punto «etiqueta» del cierre, que mira la ficha. */
+paso('nace con su etiqueta ya reservada', /^AR-/.test(rapida.codigo), rapida.codigo);
 
 /* ================================================================
    2. Crear la puerta sin perder la asistencia a medias
@@ -158,6 +169,9 @@ const desdeAviso = await T(async () => {
   await new Promise(r => setTimeout(r, 800));
   const esRapida = !!document.getElementById('pr-tipo');
   document.getElementById('pr-tipo').value = 'Batiente automática de dos hojas';
+  /* Desde el 09-11-2026 la etiqueta es obligatoria: se coge la que viene puesta */
+  const selCod = document.getElementById('pr-cod');
+  if (selCod && !selCod.value && selCod.options.length) selCod.selectedIndex = 0;
   document.querySelector('#dlg-form button[type="submit"]').click();
   await new Promise(r => setTimeout(r, 2200));
   const sel = document.getElementById('a-puerta');
