@@ -47,7 +47,7 @@ ORDEN="componentes.sql centros.sql parte-por-correo.sql obra.sql ficha.sql \
 almacen.sql presupuestos.sql presupuestos2.sql comercial.sql anexos.sql \
 tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos3.sql valoracion.sql \
 parado.sql factura.sql rutas.sql ruta-cliente.sql telegram.sql subtipo.sql urgencia.sql \
-medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql perifericos.sql ficha4.sql urgencia2.sql falso.sql fotos-aviso.sql barras.sql almacenes.sql nombre-equipo.sql sitio-material.sql conformidad-visita.sql"
+medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql perifericos.sql ficha4.sql urgencia2.sql falso.sql fotos-aviso.sql barras.sql almacenes.sql nombre-equipo.sql sitio-material.sql conformidad-visita.sql mensajes.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -404,6 +404,18 @@ if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/conformidad-visita-pruebas.sql" ]; the
     fallos=$((fallos+1))
     echo " FALLA normativa en cada visita:"
     grep -a -m3 -E "ERROR|EXCEPTION" /tmp/conformidad-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/mensajes-pruebas.sql" ]; then
+  echo ""
+  echo "── El hilo de conversación ─────────────────────"
+  if $PSQL -f "$AQUI/sql/mensajes-pruebas.sql" > /tmp/mensajes-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/mensajes-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA el hilo de conversación:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/mensajes-pruebas.log | sed 's/^/         /'
   fi
 fi
 

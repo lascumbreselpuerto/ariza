@@ -329,7 +329,10 @@ const bajarCopia = async (pag, act) => {
      técnico comprobó de normativa en cada visita, que es lo que sostiene el
      aviso impreso en el parte del cliente. Si eso se quedara fuera de la copia,
      el día que hubiera que restaurar se perdería la prueba de que se informó. */
-  paso('se copian las treinta y siete tablas', R.tablas === 37, String(R.tablas));
+  /* 38 desde el 12-11-2026: entró «mensajes», el hilo de conversación del
+     equipo. Va en la copia porque es lo que se habló de cada puerta y no está
+     en ningún otro sitio: perderlo es perder el porqué de media ficha. */
+  paso('se copian las treinta y ocho tablas', R.tablas === 38, String(R.tablas));
   ['presupuestos','presupuesto_lineas','presupuesto_adjuntos','presupuesto_envios',
    'presupuesto_visitas','textos_presu','proveedores','conjuntos','conjunto_lineas',
    'ubicaciones','movimientos_material','materiales_previstos','contactos','jornadas',

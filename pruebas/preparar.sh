@@ -224,6 +224,8 @@ hojaDeCampo libroMantenimiento etiquetaCE documentoDTE documentoCPF hojaParte
 hojaContrato hojaImprimible etiquetaTermica expDe puertaDe clienteDe cargar
 pintar peligrosDe cerrarDlg
 puertaDeEtiqueta arrancarLectorPuerta cerrarLectorPuerta LECTORES
+dlgConversacion dlgConversacionPuerta enviarMensaje fijarMensaje traerMensajes
+contarMensajes botonConversacion hiloHTML ordenMensajes pintarFijadosFicha
 S sb
 """.split()
 
