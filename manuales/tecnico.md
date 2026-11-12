@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.10-4**
+> **Versión de la aplicación que describe este manual: 2026.11.12-1**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -235,6 +235,42 @@ que no tienen etiqueta. La eliges y queda asignada.
 > crea desde su asistencia, para que nazca con su cliente y su aviso. Si la
 > puerta que tienes delante no está en la aplicación, se da de alta desde el
 > parte, como siempre.
+
+### La conversación de la puerta (12 de noviembre de 2026)
+
+**Lo que hoy se habla por WhatsApp y a los tres meses no encuentra nadie.**
+
+Cada asistencia tiene un botón **«Conversación»**, al lado de «Detalles». Ahí
+escribes lo que hay que saber de esa puerta: que el cuadro no es el que pone en
+la ficha, que el portero solo está por la mañana, que esto ya se intentó
+arreglar en marzo y no funcionó.
+
+En la ficha de la puerta hay otro botón igual, y ese junta lo escrito en
+**todas** sus visitas. El técnico que vaya dentro de un año lo abre y lo lee.
+
+**Tres cosas que tienes que saber:**
+
+1. **El cliente no lo ve nunca.** No sale en el parte, ni en la vida de la
+   puerta que se le entrega, ni en ningún papel. Es del equipo.
+2. **No se puede editar ni borrar.** Ni tú ni nadie, tampoco la oficina. Si te
+   equivocas, escribe otro mensaje corrigiéndolo, igual que harías en un parte.
+   No es una norma de la casa: la base de datos no deja.
+3. **La chincheta es para lo que hay que saber ANTES de ir.** Lo que marcas con
+   la chincheta sale arriba del hilo, aparece en la ficha de la puerta sin
+   abrir nada, y hace sonar el grupo de Telegram.
+
+**Cuándo suena el grupo**
+
+- Si alguien escribe en **tu** asistencia, suena. Es que quieren que te enteres.
+- Si escribes en la tuya, no suena. Es una nota para que quede, y la oficina la
+  ve al abrir la ficha.
+- Si va con chincheta, suena siempre.
+
+Puedes adjuntar una foto al mensaje. Esa foto no es la del parte: las del parte
+tienen su apartado y salen en el documento del cliente. Esta se queda en la
+conversación.
+
+---
 
 ### Escanea DESDE la aplicación, no con la cámara del móvil (10 de noviembre de 2026)
 
@@ -1414,4 +1450,4 @@ que mire ahí antes de nada. Puede ser eso.
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.10-4 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.12-1 de ARIZA SAT*
