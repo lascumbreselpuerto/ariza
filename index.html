@@ -154,6 +154,38 @@ html{scroll-padding-top:104px}
 /* Arriba y no centrada: en una fila alta, centrada se queda a media altura,
    lejos del nombre al que pertenece. Visto en la captura a 430 px. */
 .foto-mat{width:46px;height:46px;flex:none;align-self:start;margin-top:2px;border-radius:6px;border:1px solid var(--line);object-fit:cover;display:block;background:var(--surface-2)}
+/* ---- El hilo de conversación (12-11-2026) ---- */
+.hilo{display:flex;flex-direction:column;gap:10px;max-height:46vh;overflow-y:auto;
+  padding:2px 2px 2px 0;margin-bottom:12px}
+.msj{border:1px solid var(--line);border-radius:10px;padding:9px 11px;background:var(--surface)}
+.msj.fijado{border-color:var(--amarillo);border-left:4px solid var(--amarillo);background:var(--aviso-bg)}
+.msj-cab{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:3px}
+.msj-cab b{font-size:14px}
+.msj-cuando{font:500 12px var(--sans);color:var(--muted)}
+.msj-origen{font:600 11px var(--sans);color:var(--muted);background:var(--surface-2);
+  border-radius:4px;padding:1px 6px}
+.msj-pin{background:none;border:0;cursor:pointer;font-size:15px;line-height:1;padding:2px 4px;
+  filter:grayscale(1);opacity:.45;border-radius:5px}
+.msj-pin:hover{opacity:.8;background:var(--surface-2)}
+.msj-pin.on{filter:none;opacity:1}
+.msj-txt{margin:0;font-size:15px;line-height:1.45;white-space:normal;overflow-wrap:anywhere}
+.msj-foto{display:inline-block;margin-top:6px;font-size:13px;font-weight:600;color:var(--amarillo-oscuro)}
+.msj-nuevo{border-top:1px solid var(--line);padding-top:12px}
+.msj-nuevo textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;
+  background:var(--surface);resize:vertical;font-size:15px}
+.btn.con-fijado{border-color:var(--amarillo);background:var(--aviso-bg)}
+.fijados{border-left:4px solid var(--amarillo);background:var(--aviso-bg)}
+.msj-fijo{margin:0 0 8px;font-size:14px;line-height:1.45}
+.msj-fijo:last-of-type{margin-bottom:10px}
+/* En el móvil la fila de debajo de la caja se parte y «Enviar» se quedaba
+   suelto a la izquierda, con pinta de botón olvidado. Ahí va a todo lo ancho,
+   que además es más fácil de acertar con el dedo. Visto en la captura, no en
+   las pruebas. (12-11-2026) */
+@media (max-width:520px){
+  .msj-nuevo .fila{flex-wrap:wrap}
+  .msj-nuevo [data-act="msj-enviar"]{flex:1 0 100%;margin-top:4px}
+  .hilo{max-height:38vh}
+}
 .foto-mat.sin{display:grid;place-items:center;font:600 9px/1.1 var(--sans);color:var(--muted);text-align:center;padding:2px}
 
 /* Calendario de mantenimientos */
@@ -1859,6 +1891,11 @@ async function cargar(){
      parte y nadie en la oficina se entera, como antes del 08-11-2026. */
   const pm = await sb.from('peticiones_material').select('id').limit(1);
   S.sinPeticiones = !!pm.error;
+  /* El hilo de conversación de la asistencia y de la puerta:
+     servidor/mensajes.sql. Sin esa tabla no sale el botón en ningún sitio y la
+     aplicación funciona exactamente igual que antes del 12-11-2026. */
+  const ms = await sb.from('mensajes').select('id').limit(1);
+  S.sinMensajes = !!ms.error;
   /* Los almacenes gobernados por la oficina y el rastro de las bajas:
      servidor/almacenes.sql. Sin eso, los almacenes siguen naciendo solos y la
      baja es un único motivo sin obligación de explicarla, como antes del
@@ -2012,6 +2049,10 @@ async function cargar(){
     S.sugerencias = Array.from(vistos.values());
   }
   await sembrarGuiones();
+  /* Cuántos mensajes tiene cada asistencia, de una vez. Es para el número del
+     botón «Conversación»: contarlos por tarjeta sería una consulta por cada
+     visita del día. (12-11-2026) */
+  await contarMensajes();
   S.cargando = false; pintar();
 }
 
@@ -2061,7 +2102,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.10-4';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.12-1';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -2206,6 +2247,283 @@ function abrirPuertaEscaneada(ref){
   }
   /* Etiqueta impresa y pegada, pero todavía de nadie. */
   dlgEtiquetaSinPuerta(et.codigo);
+}
+
+/* ===========================================================================
+   EL HILO DE CONVERSACIÓN                                         12-11-2026
+
+   POR QUÉ ESTO Y NO UN CHAT
+   David preguntó por un chat dentro de la aplicación: un canal del grupo, otro
+   entre dos usuarios y otro para el cliente desde el QR. Se descartaron los
+   tres, y conviene que el motivo quede aquí y no solo en el SQL:
+
+     · Un canal general compite con Telegram y con WhatsApp, que ya están en el
+       móvil todo el día. Y la aplicación NO tiene notificaciones push: un
+       canal que no avisa es un buzón que nadie abre.
+     · Lo que se habla en un canal suelto se pierde igual que en un WhatsApp.
+       A los tres meses nadie lo encuentra.
+     · Un chat con el cliente obliga a contestar. Si nadie responde en una
+       hora, el cliente se enfada más que si no existiera.
+
+   Así que la conversación va ANCLADA al trabajo: dentro de la asistencia, y
+   recogida en la ficha de la puerta. Lo que se habla de una puerta se queda
+   pegado a esa puerta.
+
+   LAS REGLAS
+     · No se edita y no se borra. Es un registro. Quien se equivoca escribe
+       otro mensaje corrigiendo. La base de datos tampoco deja: no hay permiso
+       de borrado ni de cambiar el texto, solo la chincheta.
+     · La chincheta marca lo que hay que saber ANTES de ir. Sale arriba del
+       hilo, aparece en la Vida de la puerta y hace sonar el grupo.
+     · El cliente no lo ve nunca. No sale en el parte ni en ningún documento.
+   =========================================================================== */
+const MENSAJE_MAX = 2000;
+
+/* Los mensajes de una asistencia o de una puerta. Se traen de la base cada vez
+   que se abre el hilo: son pocos y tienen que estar al día, que es justo lo que
+   se espera de una conversación. */
+async function traerMensajes(op){
+  if (S.sinMensajes) return [];
+  let q = sb.from('mensajes').select('*');
+  q = op.avisoId ? q.eq('aviso_id', op.avisoId) : q.eq('puerta_id', op.puertaId);
+  const { data, error } = await q.order('creado');
+  if (error){ fallo(error); return []; }
+  return data || [];
+}
+
+/* Cuántos mensajes tiene cada asistencia, para el número del botón. Se cuenta
+   todo de una vez al cargar: una consulta por tarjeta sería una consulta por
+   cada visita del día. */
+async function contarMensajes(){
+  if (S.sinMensajes){ S.nMensajes = {}; return; }
+  const { data, error } = await sb.from('mensajes').select('aviso_id, fijado');
+  if (error){ S.nMensajes = {}; return; }
+  const n = {};
+  (data || []).forEach(m => {
+    if (!m.aviso_id) return;
+    n[m.aviso_id] = n[m.aviso_id] || { total:0, fijados:0 };
+    n[m.aviso_id].total++;
+    if (m.fijado) n[m.aviso_id].fijados++;
+  });
+  S.nMensajes = n;
+}
+
+/* El botón que abre el hilo, con lo que lleva dentro. Se usa igual en la
+   tarjeta de Mi trabajo y en la lista de asistencias. */
+function botonConversacion(avisoId){
+  if (S.sinMensajes) return '';
+  const n = (S.nMensajes || {})[avisoId] || { total:0, fijados:0 };
+  const etiqueta = n.total
+    ? 'Conversación · ' + n.total + (n.fijados ? ' 📌' : '')
+    : 'Conversación';
+  return '<button class="btn sm'+(n.fijados ? ' con-fijado' : '')+'" '+
+    'data-act="conversacion" data-id="'+avisoId+'">'+etiqueta+'</button>';
+}
+
+/* Un mensaje pintado. El orden lo decide quien llama: los fijados van arriba
+   y después el resto por fecha. */
+function filaMensaje(m, op){
+  const o = op || {};
+  const cuando = m.creado ? fechaHora(m.creado) : '';
+  const foto = m.foto_ruta
+    ? '<a class="msj-foto" target="_blank" rel="noopener" href="'+
+      esc(SUPA_URL + '/storage/v1/object/public/fotos/' +
+        String(m.foto_ruta).split('/').map(encodeURIComponent).join('/'))+'">Ver la foto</a>'
+    : '';
+  /* De qué asistencia viene, solo en el hilo de la puerta: ahí se mezclan los
+     mensajes de todas sus visitas y sin esto no se sabe de cuál habla cada uno. */
+  let deDonde = '';
+  if (o.conOrigen && m.aviso_id){
+    const a = (S.avisos || []).find(x => x.id === m.aviso_id);
+    if (a) deDonde = '<span class="msj-origen">'+esc(tipoAsis(a))+'</span>';
+  }
+  return '<div class="msj'+(m.fijado ? ' fijado' : '')+'" data-id="'+m.id+'">'+
+    '<div class="msj-cab">'+
+      '<b>'+esc(m.quien || 'Alguien')+'</b>'+
+      '<span class="msj-cuando">'+esc(cuando)+'</span>'+
+      deDonde+
+      '<span class="sp"></span>'+
+      '<button type="button" class="msj-pin'+(m.fijado ? ' on' : '')+'" '+
+        'data-act="msj-fijar" data-id="'+m.id+'" '+
+        'aria-pressed="'+(m.fijado ? 'true' : 'false')+'" '+
+        'title="'+(m.fijado ? 'Quitar la chincheta' : 'Fijar: hay que saberlo antes de ir')+'">📌</button>'+
+    '</div>'+
+    '<p class="msj-txt">'+esc(m.texto || '').replace(/\n/g,'<br>')+'</p>'+
+    foto+
+  '</div>';
+}
+
+/* Los mensajes ordenados como se leen: lo fijado primero, porque es lo que hay
+   que saber antes de ponerse, y después la conversación por fecha. */
+const ordenMensajes = ms => [
+  ...ms.filter(m => m.fijado),
+  ...ms.filter(m => !m.fijado),
+];
+
+function hiloHTML(ms, op){
+  if (!ms.length)
+    return '<p class="muted" style="margin:0">Todavía no hay nada escrito. '+
+      'Lo que se escriba aquí se queda con esta puerta para siempre: lo verá quien venga dentro de un año.</p>';
+  return '<div class="hilo">'+ordenMensajes(ms).map(m => filaMensaje(m, op)).join('')+'</div>';
+}
+
+/* El hilo de una asistencia, con su caja para escribir. */
+async function dlgConversacion(avisoId){
+  const a = (S.avisos || []).find(x => x.id === avisoId);
+  if (!a) return;
+  MSJ_DE = { avisoId, puertaId: a.puerta_id || null };
+  const ms = await traerMensajes({ avisoId });
+  const p = a.puerta_id ? puertaDe(a.puerta_id) : null;
+  const h = '<h3>Conversación</h3>'+
+    '<p class="mini" style="margin:0 0 12px">'+
+      esc(tipoAsis(a))+(p && p.codigo ? ' · puerta '+esc(p.codigo) : '')+'. '+
+      'Solo lo ve el equipo: no sale en el parte ni en ningún papel del cliente.</p>'+
+    '<div id="msj-lista">'+hiloHTML(ms)+'</div>'+
+    cajaDeEscribir()+
+    '<div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn pri" data-cerrar>Cerrar</button></div>';
+  abrirDlg(h, null);
+}
+
+/* La caja de escribir. Es la misma en la asistencia y en la puerta. */
+function cajaDeEscribir(){
+  return '<div class="msj-nuevo">'+
+    '<textarea id="msj-txt" rows="3" maxlength="'+MENSAJE_MAX+'" '+
+      'placeholder="Escribe aquí lo que hay que saber de esta puerta..."></textarea>'+
+    '<div class="fila" style="margin-top:6px">'+
+      '<label class="btn sm plana" for="msj-foto">Añadir foto</label>'+
+      '<input id="msj-foto" type="file" accept="image/*" hidden>'+
+      '<span class="mini" id="msj-foto-dice"></span>'+
+      '<label class="fila mini" style="gap:6px;margin:0">'+
+        '<input type="checkbox" id="msj-fijar-nuevo"> Hay que saberlo antes de ir'+
+      '</label>'+
+      '<span class="sp"></span>'+
+      '<button type="button" class="btn sm pri" data-act="msj-enviar">Enviar</button>'+
+    '</div>'+
+    '<p class="mini" style="margin:6px 0 0;color:var(--muted)">Lo escrito no se puede '+
+      'editar ni borrar. Si te equivocas, escribe otro mensaje corrigiéndolo.</p>'+
+  '</div>';
+}
+
+/* De qué hilo se está escribiendo ahora mismo. */
+let MSJ_DE = null;
+
+/* Que se vea que la foto está puesta. Sin esto, quien la elige no tiene manera
+   de saber si se ha cogido, y acaba adjuntándola dos veces. Va delegado en el
+   documento porque la caja de escribir se pinta y se repinta. */
+document.addEventListener('change', e => {
+  if (!e.target || e.target.id !== 'msj-foto') return;
+  const dice = document.getElementById('msj-foto-dice');
+  const f = e.target.files && e.target.files[0];
+  if (dice) dice.textContent = f ? (f.name || 'Foto puesta') : '';
+});
+
+async function enviarMensaje(){
+  if (!MSJ_DE) return;
+  const campo = document.getElementById('msj-txt');
+  const texto = (campo ? campo.value : '').trim();
+  if (texto.length < 1) return toast('Escribe algo antes de enviar.');
+  const fijado = !!(document.getElementById('msj-fijar-nuevo') || {}).checked;
+  const boton = document.querySelector('[data-act="msj-enviar"]');
+  if (boton){ boton.disabled = true; boton.textContent = 'Enviando…'; }
+  try {
+    /* La foto, si la hay. Va al mismo almacén que las de la visita, en su
+       propia carpeta: así se distingue de las fotos del parte, que tienen
+       etapa y salen en el documento. Estas no salen en ningún documento. */
+    let ruta = null;
+    const f = document.getElementById('msj-foto');
+    const file = f && f.files && f.files[0];
+    if (file){
+      let blob, tipo = 'image/jpeg', ext = 'jpg';
+      try { blob = await reducir(file); }
+      catch(_){
+        if (file.size > 25*1024*1024) throw new Error('La foto pesa demasiado (más de 25 MB).');
+        blob = file; tipo = file.type || 'application/octet-stream';
+        ext = ((file.name||'').split('.').pop() || 'jpg').toLowerCase().slice(0,5);
+      }
+      ruta = 'mensajes/'+(MSJ_DE.puertaId || MSJ_DE.avisoId || 'sueltos')+'/'+
+        Date.now()+'-'+Math.random().toString(36).slice(2,7)+'.'+ext;
+      const { error } = await sb.storage.from('fotos').upload(ruta, blob, { contentType: tipo });
+      if (error) throw error;
+    }
+    const fila = {
+      aviso_id:  MSJ_DE.avisoId  || null,
+      puerta_id: MSJ_DE.puertaId || null,
+      texto, foto_ruta: ruta, fijado,
+      perfil_id: S.perfil ? S.perfil.id : null,
+      quien: yo(),
+    };
+    const { error: e } = await sb.from('mensajes').insert(fila);
+    if (e){
+      if (ruta) await sb.storage.from('fotos').remove([ruta]);   // sin basura en el almacén
+      throw e;
+    }
+    await contarMensajes();
+    await refrescarHilo();
+    if (campo) campo.value = '';
+    if (f) f.value = '';
+    const dice = document.getElementById('msj-foto-dice'); if (dice) dice.textContent = '';
+    const chk = document.getElementById('msj-fijar-nuevo'); if (chk) chk.checked = false;
+    toast(fijado ? 'Enviado y fijado. Sale en la ficha de la puerta y suena el grupo.' : 'Enviado.');
+  } catch(e){ fallo(e); }
+  finally { if (boton){ boton.disabled = false; boton.textContent = 'Enviar'; } }
+}
+
+/* Poner y quitar la chincheta. Es lo único que se puede cambiar de un mensaje
+   ya escrito, y la base de datos no deja tocar nada más. */
+async function fijarMensaje(id){
+  const caja = document.querySelector('.msj[data-id="'+id+'"]');
+  const boton = caja && caja.querySelector('.msj-pin');
+  const ahora = boton && boton.getAttribute('aria-pressed') === 'true';
+  const { error } = await sb.from('mensajes').update({ fijado: !ahora }).eq('id', id);
+  if (error) return fallo(error);
+  await contarMensajes();
+  await refrescarHilo();
+  toast(ahora ? 'Chincheta quitada.' : 'Fijado. Sale arriba y en la Vida de la puerta.');
+}
+
+async function refrescarHilo(){
+  const cont = document.getElementById('msj-lista');
+  if (!cont || !MSJ_DE) return;
+  const ms = await traerMensajes(MSJ_DE);
+  cont.innerHTML = hiloHTML(ms, { conOrigen: !MSJ_DE.avisoId });
+  if (!MSJ_DE.avisoId) pintarFijadosFicha();
+}
+
+/* Lo fijado con chincheta, a la vista en la ficha de la puerta.
+   No va detrás de un botón a propósito: «el portero solo está de 8 a 10» hay
+   que leerlo antes de salir, no cuando ya estás delante del portal. */
+async function pintarFijadosFicha(){
+  const cont = document.getElementById('fijados-ficha');
+  if (!cont || S.sinMensajes) return;
+  const id = S.ficha;
+  if (!id){ cont.innerHTML = ''; return; }
+  const { data, error } = await sb.from('mensajes')
+    .select('*').eq('puerta_id', id).eq('fijado', true).order('creado');
+  if (error || !data || !data.length){ cont.innerHTML = ''; return; }
+  cont.innerHTML = '<div class="panel fijados">'+
+    '<h3 style="font-size:16px;margin:0 0 4px">Hay que saberlo antes de ir</h3>'+
+    data.map(m => '<p class="msj-fijo"><b>'+esc(m.quien || 'Alguien')+'</b> '+
+      '<span class="msj-cuando">'+esc(m.creado ? fechaCorta(m.creado) : '')+'</span><br>'+
+      esc(m.texto || '').replace(/\n/g,'<br>')+'</p>').join('')+
+    '<button class="btn sm plana" data-act="conversacion-puerta" data-id="'+id+'">'+
+      'Ver la conversación entera</button></div>';
+}
+
+/* El hilo de una puerta: junta los mensajes de todas sus asistencias. */
+async function dlgConversacionPuerta(puertaId){
+  const p = puertaDe(puertaId);
+  if (!p) return;
+  MSJ_DE = { avisoId: null, puertaId };
+  const ms = await traerMensajes({ puertaId });
+  const h = '<h3>Conversación de la puerta</h3>'+
+    '<p class="mini" style="margin:0 0 12px">Todo lo que se ha escrito en las visitas de '+
+      'la puerta '+esc(p.codigo || '')+', junto y en orden. Solo lo ve el equipo.</p>'+
+    '<div id="msj-lista">'+hiloHTML(ms, { conOrigen:true })+'</div>'+
+    cajaDeEscribir()+
+    '<div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn pri" data-cerrar>Cerrar</button></div>';
+  abrirDlg(h, null);
 }
 
 /* ---- Leer la etiqueta de una puerta DESDE la aplicación (10-11-2026) ----
@@ -2413,6 +2731,10 @@ function render(){
      propio documento. */
   if (!S.exp && !S.ficha && !S.fichaCliente) indiceSecciones();
   activarCombos(raiz);
+  /* Lo fijado de la puerta, que se trae de la base. Va aquí y no dentro de
+     vistaFicha porque esa función es síncrona: devuelve el HTML de un tirón y
+     no puede esperar a una consulta. (12-11-2026) */
+  if (S.ficha && !S.sinMensajes) pintarFijadosFicha();
   if (keep){ const el = document.getElementById(keep.id); if (el){ if(keep.txt) el.value = keep.v; el.focus(); if(keep.txt){ try{ el.setSelectionRange(keep.s,keep.e); }catch(_){} } } }
   /* Volver a la altura de antes. Se hace después de pintar, porque hasta que no
      está el contenido la página no es tan alta como para poder bajar. */
@@ -2480,8 +2802,15 @@ function vistaFicha(id){
        (et ? '<button class="btn sm plana" data-act="ver-qr" data-cod="'+esc(p.codigo)+'">Ver QR</button>'+
              '<button class="btn sm plana" data-act="etiqueta-imprimir" data-cod="'+esc(p.codigo)+'">Imprimir etiqueta</button>' : '')+
        '<button class="btn sm" data-act="exp-nuevo" data-id="'+p.id+'">Documentación</button>'+
+       /* El hilo de la puerta: junta lo escrito en todas sus visitas (12-11-2026) */
+       (S.sinMensajes ? ''
+         : '<button class="btn sm" data-act="conversacion-puerta" data-id="'+p.id+'">Conversación</button>')+
        '<button class="btn sm pri" data-act="aviso-nuevo" data-id="'+p.id+'">Nuevo aviso</button></div>'+
-       '<p class="mini" style="margin:10px 0 0">Estado desde '+fechaCorta(p.estado_desde)+'</p></div>';
+       '<p class="mini" style="margin:10px 0 0">Estado desde '+fechaCorta(p.estado_desde)+'</p></div>'+
+       /* Lo fijado con chincheta, a la vista en la ficha. Es lo que hay que
+          saber ANTES de ir, así que no puede estar escondido detrás de un
+          botón: se rellena solo al abrir la ficha. */
+       (S.sinMensajes ? '' : '<div id="fijados-ficha"></div>');
 
   /* ---- De quién es ----
      Una puerta puede tener el nombre del cliente escrito y no estar enlazada con
@@ -3021,6 +3350,10 @@ function tarjetaTrabajo(a){
       (a.hora_inicio
         ? '<span class="mini">Llegada '+esc(hhmm(a.hora_inicio))+'</span>'
         : '<button class="btn sm" data-act="he-llegado" data-id="'+a.id+'">He llegado</button>')+
+      /* El hilo de la asistencia (12-11-2026). Va aquí, entre los botones que
+         el técnico usa antes de entrar en casa del cliente: lo que la oficina
+         le haya escrito se lee ahora, no al cerrar el parte. */
+      botonConversacion(a.id)+
       '<button class="btn sm plana" data-act="aviso-editar" data-id="'+a.id+'">Detalles</button>'+
       '<span class="sp"></span>'+
       /* Al acabar el día hay dos finales distintos, y conviene que se elija a
@@ -4106,6 +4439,9 @@ const QUE_HACE_FALTA = [
     pierdes:'Toda visita tiene que estar atada a una puerta, aunque no lo esté.' },
   { marca:'sinConformidad', fichero:'conformidad-visita.sql', que:'Normativa en cada visita',
     pierdes:'El cliente no se entera de en qué situación está su puerta salvo en las preventivas.' },
+  { marca:'sinMensajes', fichero:'mensajes.sql', que:'La conversación de la puerta',
+    pierdes:'Lo que se habla de una puerta se queda en el grupo de WhatsApp y a los tres '+
+            'meses no lo encuentra nadie.' },
 
   { marca:'sinObra', fichero:'obra.sql', que:'Obras de varios días',
     pierdes:'Un trabajo largo se apunta como visitas sueltas sin relación.' },
@@ -8113,6 +8449,10 @@ const TABLAS_COPIA = [
   'avisos', 'aviso_puertas', 'jornadas',
   'materiales', 'materiales_previstos', 'movimientos_material',
   'revisiones', 'conformidad_visita', 'entregas_obra', 'fotos', 'documentos', 'valoraciones',
+  /* La conversación del equipo. Entra en la copia porque es lo que se habló de
+     cada puerta y no está en ningún otro sitio: perderla es perder el porqué de
+     media ficha. (12-11-2026) */
+  'mensajes',
   'expedientes', 'expediente_fotos', 'expediente_docs',
   'textos_presu', 'presupuestos', 'presupuesto_lineas',
   'presupuesto_adjuntos', 'presupuesto_envios', 'presupuesto_visitas',
@@ -30623,6 +30963,11 @@ raiz.addEventListener('click', async e => {
   else if (a === 'mat-ficha') dlgMaterial(b.dataset.id);
   else if (a === 'alm-leer') arrancarLectorAlmacen();
   /* Leer la pegatina de una puerta desde dentro de la aplicación (10-11-2026) */
+  /* El hilo de conversación (12-11-2026) */
+  else if (a === 'conversacion') dlgConversacion(b.dataset.id);
+  else if (a === 'conversacion-puerta') dlgConversacionPuerta(b.dataset.id);
+  else if (a === 'msj-enviar') enviarMensaje();
+  else if (a === 'msj-fijar') fijarMensaje(b.dataset.id);
   else if (a === 'puerta-leer') arrancarLectorPuerta();
   else if (a === 'puerta-leer-cerrar') cerrarLectorPuerta();
   else if (a === 'puerta-cod-ir'){
@@ -31396,6 +31741,14 @@ document.addEventListener('drop', e => {
 dlgForm.addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const a = b.dataset.act;
+  /* ---- El hilo de conversación (12-11-2026) ----
+     Va aquí Y en el despachador de la aplicación porque hay DOS: uno escucha
+     en la raíz y otro dentro del diálogo. El hilo se abre en un diálogo, así
+     que enviar y fijar solo llegan por este. Lo aprendí en rojo: la prueba
+     guardaba el mensaje llamando a la función, pero el clic de verdad no hacía
+     nada porque la acción estaba registrada en el despachador de al lado. */
+  if (a === 'msj-enviar'){ await enviarMensaje(); return; }
+  if (a === 'msj-fijar'){ await fijarMensaje(b.dataset.id); return; }
   /* ---- Jornadas y entrega en obra ---- */
   /* Declarar que la obra sigue mañana. Lo que cambia se explica antes de
      marcarlo, porque cambia bastante: el botón de cerrar, qué se firma y de
