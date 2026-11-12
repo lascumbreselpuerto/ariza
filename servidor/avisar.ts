@@ -266,7 +266,7 @@ Deno.serve(async (req) => {
 
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const ADMIN_MAIL = Deno.env.get('AVISOS_ADMIN') || 'arizapuertasautomaticas@gmail.com';
-    const { tipo, aviso_id, contrato_id, jornada_id } = await req.json();
+    const { tipo, aviso_id, contrato_id, jornada_id, mensaje_id } = await req.json();
 
     // ---- Resumen semanal de revisiones ----
     if (tipo === 'revisiones') {
@@ -410,6 +410,33 @@ Deno.serve(async (req) => {
         `Hora de entrada: <b>${escTg(hhmm(a.hora_inicio))}</b>`,
         a.fecha_prevista ? `Estaba prevista para el ${escTg(a.fecha_prevista)}` : '',
         a.descripcion ? `Lo que dice el cliente: ${escTg(a.descripcion)}` : '',
+      ].filter(Boolean).join('\n') + pieTg);
+      return ok({ ok: true, ...r });
+    }
+
+    /* ---- Un mensaje del hilo de una asistencia (12-11-2026) ----
+       El hilo de conversación vive dentro de la asistencia y de la puerta. Que
+       un mensaje suene aquí o no lo decide la base de datos, en el disparador
+       avisar_mensaje de servidor/mensajes.sql: suena cuando alguien escribe en
+       la asistencia de otro, y siempre si va fijado con chincheta. Aquí no se
+       vuelve a decidir nada, solo se escribe. */
+    if (tipo === 'mensaje') {
+      const { data: m } = await admin.from('mensajes')
+        .select('id, texto, quien, fijado, foto_ruta').eq('id', mensaje_id).maybeSingle();
+      if (!m) return ok({ error: 'mensaje no encontrado' }, 404);
+      if (await yaAvisado(admin, 'mensaje:' + m.id)) return ok({ ok: true, repetido: true });
+      /* A quién le toca leerlo. Como el bot escribe en un grupo y no a cada
+         persona, el nombre va dentro del texto: es la única manera de que el
+         técnico sepa de un vistazo que le hablan a él. Solo se pone cuando
+         quien escribe no es el que tiene la asistencia, que es justo el caso
+         en el que alguien quiere que otro se entere. */
+      const deOtro = (m.quien || '').trim() && (m.quien || '').trim() !== quien;
+      const r = await telegram([
+        ...cabecera(m.fijado ? 'HAY QUE SABERLO' : 'MENSAJE EN LA ASISTENCIA'),
+        deOtro && a.tecnico_id ? `<b>Para ${escTg(quien)}</b>` : '',
+        `${escTg(m.quien || 'Alguien')} escribe:`,
+        escTg(m.texto),
+        m.foto_ruta ? 'Lleva una foto. Se ve abriendo la asistencia.' : '',
       ].filter(Boolean).join('\n') + pieTg);
       return ok({ ok: true, ...r });
     }
