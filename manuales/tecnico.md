@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.12-1**
+> **Versión de la aplicación que describe este manual: 2026.11.13-1**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -1450,4 +1450,4 @@ que mire ahí antes de nada. Puede ser eso.
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.12-1 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.13-1 de ARIZA SAT*
