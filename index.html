@@ -2102,7 +2102,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.12-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.13-1';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -8250,15 +8250,35 @@ function panelEmpresa(){
     const tabla = S.ajustes.proteccion || {};
     h += '<div class="panel"><div class="panel-h"><h3>Protección exigida según accionamiento y usuario</h3></div>'+
       '<p class="nota-oficina" style="margin:0 0 10px">Lo que ves cargado es una <b>interpretación</b> de la matriz '+
-      'de protección mínima de la UNE-EN 12453:2018+A1:2022, procedente de un documento de trabajo, no del texto de '+
-      'la norma. <b>Contrástala con tu ejemplar</b> y corrige lo que no cuadre: lo que escribas aquí manda sobre lo '+
-      'cargado de serie, y los expedientes dirán que el texto es tuyo.</p>'+
+      'de protección mínima de la UNE-EN 12453:2018+A1:2022, que en la norma está en el '+
+      '<b>apartado 5.1.3, «Nivel mínimo de protección del lado principal de cierre»</b>. Procede de un documento '+
+      'de trabajo, no del texto de la norma. <b>Contrástala con tu ejemplar</b> y corrige lo que no cuadre: lo que '+
+      'escribas aquí manda sobre lo cargado de serie, y los expedientes dirán que el texto es tuyo.</p>'+
+      /* ---- Lo que sí está contrastado, y hasta dónde (13-11-2026) ----
+         No es la tabla, pero tampoco es nada: el extracto oficial de la norma
+         confirma que el anexo D separa los ensayos en D.3, «dispositivos
+         adicionales a usar CON limitación de fuerzas», y D.4, «sistema de
+         detección de presencia a usar SIN la limitación de la fuerza». Esa es
+         exactamente la lógica de la matriz: la D acompaña a la C y la E la
+         sustituye. La estructura encaja; faltan los valores de las casillas. */
+      '<p class="mini" style="margin:0 0 10px">Lo que sí está contrastado con el extracto oficial de la norma es '+
+      'la <b>lógica</b> de la tabla, no sus casillas: el anexo D separa el ensayo de los «dispositivos adicionales '+
+      'a usar <b>con</b> limitación de fuerzas» (que es el nivel D) del ensayo del «sistema de detección de '+
+      'presencia a usar <b>sin</b> la limitación de la fuerza» (que es el nivel E). Por eso D acompaña a C y E la '+
+      'sustituye.</p>'+
       '<p class="mini" style="margin:0 0 10px"><b>Niveles:</b> '+
       Object.values(NIVELES_PROTECCION).map(n => esc(n.nombre)+' — '+esc(n.detalle)).join('<br>')+
       '<br><b>Ojo:</b> C+D no es «poner una fotocélula». Primero hay que proteger el impacto y el '+
       'aplastamiento con C, y la D es una protección añadida, no un sustituto.</p>'+
       '<p class="mini" style="margin:0 0 10px">Esta matriz <b>no se aplica a las puertas exclusivamente '+
-      'peatonales</b>: esas van por la UNE-EN 16005+A1:2024, que tiene su propio método.</p>'+
+      'peatonales</b>: esas van por la UNE-EN 16005+A1:2024, que tiene su propio método. Y eso no es criterio '+
+      'nuestro: el campo de aplicación de la 12453 excluye expresamente las «puertas motorizadas de movimiento '+
+      'horizontal previstas principalmente para el uso por parte de peatones» y las «barreras destinadas solo a '+
+      'ser usadas por peatones».</p>'+
+      /* La frase que más se olvida al adecuar una puerta vieja (13-11-2026) */
+      '<p class="mini" style="margin:0 0 10px"><b>Al adecuar una puerta antigua, acuérdate:</b> «'+
+      esc(AMBITO_12453.anteriores)+'» Eso no exime de la obligación de que la puerta sea segura, pero sí cambia '+
+      'qué se le puede exigir y con qué fundamento.</p>'+
       '<div class="tabla-wrap"><table class="tabla"><thead><tr><th style="width:190px">Cómo se acciona</th>'+
       '<th style="width:170px">Quién la usa</th><th style="width:90px">Mínimo</th>'+
       '<th>Protección exigida</th></tr></thead><tbody>';
@@ -10127,8 +10147,14 @@ const EXP_SIT_AYUDA = {
     'Somos fabricante: emitimos declaración de prestaciones, declaración de conformidad y marcado CE propios.',
   nueva_instalador: 'Montamos un kit completo de un único fabricante siguiendo sus instrucciones. '+
     'Somos mero instalador: no emitimos declaraciones, las recopilamos y transmitimos.',
+  /* La frase de la norma sobre la maquinaria anterior va aquí y no en otro sitio:
+     la adecuación es el caso en que se tiene delante una puerta vieja y hay que
+     decidir qué se le puede exigir. (13-11-2026) */
   adecuacion: 'Ponemos seguridades en una puerta existente sin tocar la lógica del cuadro. '+
-    'El documento es el informe de riesgos y deficiencias y la certificación en el libro de mantenimiento.',
+    'El documento es el informe de riesgos y deficiencias y la certificación en el libro de mantenimiento. '+
+    'Ojo con lo que se le exige a una puerta antigua: la UNE-EN 12453 dice que «no es aplicable a la '+
+    'maquinaria fabricada antes de su fecha de publicación». Eso no la exime de ser segura, pero sí cambia '+
+    'con qué fundamento se le exige cada cosa.',
   modificacion: 'Motorizamos una puerta manual o cambiamos el cuadro por otro de tipo distinto. '+
     'Es modificación sustancial: pasamos a ser fabricante de la máquina.',
 };
@@ -10291,9 +10317,9 @@ const informeAplicaA = familia => INFORME_MINISTERIO.familias.includes(familia);
 const EXP_NORMAS = {
   industrial: [
     ['UNE-EN 13241:2004+A2:2017',    'Norma de producto armonizada. Base de la declaración de prestaciones y del marcado CE por el Reglamento de Productos de Construcción.'],
-    ['UNE-EN 12453:2018+A1:2022',    'Seguridad en el uso de puertas motorizadas: requisitos y métodos de ensayo de fuerzas. Absorbió la EN 12445.'],
+    ['UNE-EN 12453:2018+A1:2022',    'Seguridad en el uso de puertas motorizadas: requisitos y métodos de ensayo de fuerzas. Absorbió la EN 12445. El nivel mínimo de protección del lado principal de cierre está en su apartado 5.1.3; las fuerzas admisibles, en el anexo A.2; el método de medición, en el anexo C.'],
     ['UNE-EN 12604:2018+A1:2021',    'Aspectos mecánicos: requisitos y métodos de ensayo. Absorbió la EN 12605.'],
-    ['UNE-EN 12978:2025',            'Dispositivos de protección para puertas motorizadas: requisitos y métodos de ensayo.'],
+    ['UNE-EN 12978:2025',            'Dispositivos de protección para puertas motorizadas: requisitos y métodos de ensayo. Es la edición vigente, pero la UNE-EN 12453 remite con fecha a la EN 12978:2003+A1:2009 y advierte que, para las referencias con fecha, solo se aplica la edición citada.'],
     ['UNE 85635:2012',               'Norma española de requisitos de instalación, uso, mantenimiento y modificación.'],
   ],
   peatonal: [
@@ -10304,14 +10330,14 @@ const EXP_NORMAS = {
   ],
   barrera: [
     ['UNE-EN 13241:2004+A2:2017',    'Norma de producto armonizada. Cubre las barreras instaladas en zonas accesibles a personas; las de uso exclusivo para tráfico de vehículos quedan excluidas de su ámbito.'],
-    ['UNE-EN 12453:2018+A1:2022',    'Seguridad en el uso: limitación de fuerzas y detección de presencia.'],
-    ['UNE-EN 12978:2025',            'Dispositivos de protección.'],
+    ['UNE-EN 12453:2018+A1:2022',    'Seguridad en el uso: limitación de fuerzas y detección de presencia. Cubre las «barreras motorizadas destinadas a instalarse en zonas accesibles para las personas» y excluye las «barreras destinadas solo a vehículos en vías de automoción». El nivel mínimo de protección está en su apartado 5.1.3; las fuerzas admisibles, en el anexo A.2.'],
+    ['UNE-EN 12978:2025',            'Dispositivos de protección. Es la edición vigente, pero la UNE-EN 12453 remite con fecha a la EN 12978:2003+A1:2009 y advierte que, para las referencias con fecha, solo se aplica la edición citada.'],
     ['UNE 85635:2012',               'Requisitos de instalación, uso, mantenimiento y modificación.'],
   ],
   cortafuegos: [
     ['UNE-EN 16034:2015',            'Prestaciones de resistencia al fuego y control de humos. Solo se aplica junto a la UNE-EN 13241 o la UNE-EN 14351-1, nunca sola. Sistema 1: la declaración la emite el fabricante con certificado de organismo notificado.'],
     ['UNE-EN 13241:2004+A2:2017',    'Norma de producto, cuando se trata de puerta industrial, comercial o de garaje.'],
-    ['UNE-EN 12453:2018+A1:2022',    'Seguridad en el uso, si es motorizada.'],
+    ['UNE-EN 12453:2018+A1:2022',    'Seguridad en el uso, si es motorizada. El nivel mínimo de protección del lado principal de cierre está en su apartado 5.1.3; las fuerzas admisibles, en el anexo A.2.'],
   ],
 };
 
@@ -10344,13 +10370,21 @@ const EXP_REGIMEN = {
   barrera: {
     ddp: true, sistema: '3', norma: 'UNE-EN 13241:2004+A2:2017',
     depende: 'puerta.acceso_personas',
+    /* Confirmado el 13-11-2026 contra el campo de aplicación de la UNE-EN 12453,
+       extracto oficial de UNE: la norma cubre «barreras motorizadas destinadas a
+       instalarse en zonas accesibles para las personas», y excluye expresamente
+       las «barreras destinadas solo a vehículos en vías de automoción». La
+       pregunta que hace la aplicación es, palabra por palabra, la que decide. */
     nota: 'Igual que una puerta industrial, siempre que la barrera esté en una zona '+
-          'accesible a personas.',
+          'accesible a personas. La UNE-EN 12453 cubre las «barreras motorizadas '+
+          'destinadas a instalarse en zonas accesibles para las personas».',
     sinDdp: {
       ddp: false, sistema: null, norma: null,
       nota: 'Barrera de uso exclusivo para tráfico de vehículos: queda fuera del ámbito '+
             'de la UNE-EN 13241, así que no lleva declaración de prestaciones. Solo '+
-            'declaración de conformidad como máquina y compatibilidad electromagnética.',
+            'declaración de conformidad como máquina y compatibilidad electromagnética. '+
+            'La UNE-EN 12453 también la excluye: entre lo que no cubre enumera las '+
+            '«barreras destinadas solo a vehículos en vías de automoción».',
     },
   },
   peatonal: {
@@ -10600,6 +10634,15 @@ const BASE_NORMAS = {
     familia: ['industrial','barrera','peatonal','cortafuegos'], funcion: 'dispositivos de protección',
     armonizada: 'sin_verificar',
     sustituye: 'UNE-EN 12978:2003+A1:2010',
+    /* ---- Cuidado con esta edición (13-11-2026) ----
+       Es la vigente, pero NO es la que exige la UNE-EN 12453. En su capítulo 2,
+       «Normas para consulta», la 12453 remite con fecha a la EN 12978:2003+A1:2009,
+       y advierte: «Para las referencias con fecha, solo se aplica la edición
+       citada». O sea: un dispositivo que cumpla la de 2009 cumple lo que la 12453
+       le pide, aunque exista una edición posterior.
+       Verificado en el extracto oficial de UNE de la UNE-EN 12453:2018+A1. */
+    ojo: 'La UNE-EN 12453 remite con fecha a la edición EN 12978:2003+A1:2009, no a esta. '+
+         'Para lo que exige la 12453 manda aquella; esta es la vigente por su cuenta.',
     fuente: 'une.org', verificada: '2026-10-06',
   },
   'UNE-EN 16005+A1:2024': {
@@ -11686,7 +11729,26 @@ function porQueSinPeligros(e){
    Por eso la tabla es editable y cada expediente deja constancia de su origen.
 
    La propia norma no se ha podido consultar: es de pago. Lo que aquí hay sirve para
-   trabajar y para discutirlo con la norma delante, no para darlo por bueno sin más. */
+   trabajar y para discutirlo con la norma delante, no para darlo por bueno sin más.
+
+   ---- Qué se ha contrastado desde entonces (13-11-2026) ----
+   Dos cosas, y conviene no confundirlas con tener la norma:
+
+   1. Una SEGUNDA fuente independiente, aportada por la empresa el 13-11-2026, da
+      las mismas doce casillas que esta tabla. Coinciden una a una. Son dos
+      lecturas que concuerdan, no el texto original.
+
+   2. El EXTRACTO OFICIAL de la norma (el que publica UNE, con el índice y el
+      campo de aplicación) confirma la estructura:
+        · el apartado 5.1.3 se titula «Nivel mínimo de protección del lado
+          principal de cierre» y está en la página 18: ahí vive esta tabla;
+        · el anexo D separa D.3, «ensayo de dispositivos adicionales a usar CON
+          limitación de fuerzas», de D.4, «ensayo del sistema de detección de
+          presencia a usar SIN la limitación de la fuerza». Es exactamente la
+          relación C+D frente a E que esta tabla aplica.
+
+   Lo que sigue faltando es el contenido de la página 18. Hasta tenerlo, lo que
+   sale de aquí es recordatorio, no exigencia acreditada. */
 const NIVELES_PROTECCION = {
   A: { nombre:'A · Hombre presente',
        detalle:'Pulsador mantenido. Al soltarlo, el movimiento debe detenerse.' },
@@ -11738,8 +11800,44 @@ const MATRIZ_PROTECCION_FABRICA = {
 
 
 /* Las puertas exclusivamente peatonales no se evalúan con esta matriz: su norma de
-   seguridad de uso es la UNE-EN 16005+A1:2024, con su propio método. */
+   seguridad de uso es la UNE-EN 16005+A1:2024, con su propio método.
+
+   Desde el 13-11-2026 esto ya no es criterio nuestro: lo dice el campo de
+   aplicación de la propia UNE-EN 12453:2018+A1:2022, que entre lo que NO cubre
+   enumera «puertas motorizadas de movimiento horizontal previstas principalmente
+   para el uso por parte de peatones» y «barreras destinadas solo a ser usadas por
+   peatones». Verificado en el extracto oficial publicado por UNE. */
 const MATRIZ_NO_APLICA_A = ['peatonal'];
+
+/* ---- El campo de aplicación de la norma, en sus palabras (13-11-2026) ----
+   Se guarda aquí, literal, porque es lo que decide si a una puerta le toca esta
+   norma o no, y porque en un informe vale más la frase de la norma que nuestro
+   resumen de ella. Sale del extracto oficial de UNE del documento
+   UNE-EN 12453:2018+A1, que es público. */
+const AMBITO_12453 = {
+  cubre: 'Puertas y portones industriales, comerciales y de garaje, y barreras '+
+         'motorizadas destinadas a instalarse en zonas accesibles para las personas, '+
+         'cuyo uso previsto principal es permitir el acceso seguro de mercancías y de '+
+         'vehículos acompañados o conducidos por personas, en instalaciones '+
+         'industriales, comerciales o residenciales.',
+  /* Solo las exclusiones que se cruzan con el trabajo de la casa. La lista de la
+     norma es más larga (esclusas, ascensores, vehículos, acorazadas, telones de
+     teatro, barreras ferroviarias…), pero esas no las tocamos nunca. */
+  excluye: [
+    'Puertas motorizadas de movimiento horizontal previstas principalmente para el uso '+
+      'por parte de peatones.',
+    'Barreras destinadas solo a ser usadas por peatones.',
+    'Barreras destinadas solo a vehículos en vías de automoción.',
+    'Puertas fuera del alcance de las personas.',
+  ],
+  /* La frase que más se olvida al adecuar una puerta vieja, y la que más se
+     agradece tener escrita cuando alguien pregunta por qué un portón de 1998 no
+     lleva marcado CE. */
+  anteriores: 'Esta norma no es aplicable a la maquinaria fabricada antes de su fecha '+
+              'de publicación.',
+  fuente: 'Campo de aplicación de la UNE-EN 12453:2018+A1:2022, extracto oficial de UNE, '+
+          'consultado el 13 de noviembre de 2026.',
+};
 
 /* Lo que la empresa haya registrado para esta combinación. Vacío mientras no se
    rellene en Equipo, y entonces la aplicación lo dice en vez de suponer. */
@@ -17023,7 +17121,16 @@ function libroMantenimiento(expId, conHistorial){
 
     '<h2>Registro de asistencias y revisiones</h2>'+
     '<p style="margin:0 0 2px;font-size:10px;color:#6B6560">Cada intervención sobre la puerta se anota aquí. '+
-    'Contenido conforme a la UNE-EN 12453:2018+A1:2022, que desde el 20 de octubre de 2022 recoge lo que antes estaba en la UNE-EN 12635, hoy anulada. Conservación mínima recomendada: diez años.</p>'+
+    /* ---- Qué se puede afirmar aquí, y qué no (13-11-2026) ----
+       Hasta hoy esta línea decía que la UNE-EN 12453 «recoge lo que antes
+       estaba en la UNE-EN 12635, hoy anulada». Eso venía de una ficha de
+       catálogo, no de la norma. El extracto oficial de la propia UNE-EN
+       12453:2018+A1:2022 dice solo: «Esta norma anula y sustituye a la Norma
+       UNE-EN 12453:2018». De la 12635 no dice nada.
+       Puede que sea cierto y puede que no, pero esto va impreso en el libro
+       de mantenimiento del cliente: mientras no esté verificado con la norma
+       delante, se afirma lo que consta y nada más. */
+    'Contenido conforme a la UNE-EN 12453:2018+A1:2022. Conservación mínima recomendada: diez años.</p>'+
     '<table class="reg"><thead><tr>'+
       '<th class="n">Nº</th><th style="width:20mm">Fecha</th><th style="width:28mm">Tipo</th>'+
       '<th>Trabajo realizado</th><th style="width:26mm">Técnico</th><th style="width:24mm">Firma</th>'+
