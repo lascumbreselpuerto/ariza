@@ -226,6 +226,7 @@ pintar peligrosDe cerrarDlg
 puertaDeEtiqueta arrancarLectorPuerta cerrarLectorPuerta LECTORES
 dlgConversacion dlgConversacionPuerta enviarMensaje fijarMensaje traerMensajes
 contarMensajes botonConversacion hiloHTML ordenMensajes pintarFijadosFicha
+AMBITO_12453 EXP_NORMAS EXP_SIT_AYUDA FUERZA_12453 MATRIZ_NO_APLICA_A libroMantenimiento
 S sb
 """.split()
 
