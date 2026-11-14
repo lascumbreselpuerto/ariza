@@ -1,0 +1,529 @@
+# ARIZA SAT · Manual de oficina
+
+Versión 2026.11.14-1
+
+Este manual es para quien lleva la oficina: los avisos, los presupuestos, la
+facturación y la documentación de las puertas.
+
+Da por supuesto que conoces la empresa, a los clientes y el oficio. Lo que
+explica es **la aplicación**, y el porqué de cada cosa cuando ese porqué cambia
+lo que hay que hacer.
+
+---
+
+## La regla de oro de este puesto
+
+Antes de nada, la regla que gobierna todo lo demás:
+
+> **La oficina prepara. David firma.**
+
+En la documentación normativa tú montas el expediente, reúnes los datos, pasas
+las comprobaciones y lo dejas listo. **Quien decide la situación del expediente
+y quien emite la documentación definitiva es David.**
+
+No es desconfianza ni burocracia. Es que algunas de esas decisiones cambian
+quién responde legalmente de esa puerta, y quien responde es él, que firma como
+administrador único.
+
+Por eso hay un capítulo entero, el 7, que se llama **«Cuándo parar y
+preguntar»**. Si de todo este manual solo lees un capítulo, que sea ese.
+
+---
+
+## Cómo moverse
+
+La aplicación tiene seis zonas. Arriba eliges la zona y debajo aparecen sus
+pantallas.
+
+| Zona | Qué hay dentro |
+|---|---|
+| **Mi trabajo** | Las visitas asignadas a ti. Si no eres técnico, estará casi vacía. |
+| **Clientes y trabajos** | El grueso de tu día: puertas, asistencias, realizadas, clientes, contratos, presupuestos y etiquetas. |
+| **Calendario** | Qué hay por delante y quién lo lleva. |
+| **Almacén** | Material, furgonetas y etiquetas de material. |
+| **Oficina** | Gestión y equipo. **Esto no lo ven los técnicos.** |
+| **Manuales** | Este manual y los otros dos, dentro de la aplicación. |
+
+**Lo que tú ves y el técnico no:** los precios, los costes, el margen de cada
+visita, lo pendiente de facturar y los resultados del mes. Un técnico que abra
+la aplicación no encuentra esa información por ningún lado, y es a propósito.
+
+---
+
+## 1. El día a día: de un aviso a una visita cerrada
+
+### Cómo entra un aviso
+
+Hay tres puertas de entrada, y conviene distinguirlas:
+
+**Por teléfono.** Lo de siempre. Llama el cliente y lo apuntas tú.
+
+**Por el QR de la puerta.** El cliente escanea la pegatina y rellena un
+formulario. Ese aviso llega **con la puerta ya identificada**: sabes de qué
+puerta es, de qué cliente, dónde está y qué se le hizo la última vez. No hay
+que preguntar «¿cuál de las tres?».
+
+**Como petición de presupuesto.** Desde ese mismo QR el cliente puede pedir
+oferta en vez de avisar de una avería. Esas caen en una lista aparte, dentro de
+Clientes y trabajos, para que no se mezclen con las averías.
+
+### Crear la asistencia
+
+Desde **Asistencias → Nueva asistencia**. Lo que pide, y lo que importa de cada
+cosa:
+
+**El tipo.** No es una etiqueta: **decide cómo se factura y qué se le pregunta
+al técnico**. Una correctiva se factura por horas y material; una preventiva va
+dentro de la cuota del contrato; una comercial no se cobra. Si te equivocas de
+tipo, el dinero sale mal al final.
+
+**El subtipo.** Dentro del tipo, qué se hace exactamente. En una instalación no
+es lo mismo montar una puerta completa que sustituir un motor. Esto es lo que el
+técnico lee para saber **qué cargar en la furgoneta**.
+
+**La puerta.** Toda asistencia necesita una puerta. Si la puerta no existe
+todavía, se crea aquí mismo con los datos básicos: tipo y poco más. No hace
+falta tener la ficha completa, eso lo remata el técnico allí.
+
+> **Ojo con esto:** al crear una puerta desde aquí hay que asignarle una
+> etiqueta QR, y es obligatorio. Sin etiqueta la puerta no se puede escanear, y
+> una puerta que no se escanea no entra nunca en el circuito. Si no quedan
+> etiquetas libres, genera un rollo nuevo desde **Etiquetas**.
+
+**El técnico y la fecha.** Se pueden dejar en blanco y asignar después, desde el
+Calendario.
+
+**La prioridad.** Urgente sube la visita arriba del todo en la pantalla del
+técnico y se pinta en rojo. Úsala con cuidado: si todo es urgente, nada lo es.
+
+**Las notas de oficina.** Esto es importante y se usa poco: lo que escribas aquí
+**lo lee el técnico en la tarjeta, antes de salir de casa**. El horario del
+portero, dónde está la llave, que el cliente es delicado, que la última vez no
+pudieron entrar. Todo lo que evite un viaje perdido va aquí.
+
+### Mientras la visita está abierta
+
+Desde **Asistencias** ves en qué estado está cada una. Cuando el técnico pulsa
+«He llegado» se sella la hora, y al grupo de Telegram le llega el aviso.
+
+Si necesitas decirle algo cuando ya va de camino, usa la **Conversación** de esa
+asistencia. Lo que escribas ahí le suena en el grupo y queda pegado a la puerta
+para siempre. Lo que se habla por WhatsApp no.
+
+---
+
+## 2. Cuando la visita vuelve: valorar y facturar
+
+Este es el capítulo que más dinero mueve.
+
+### Qué es valorar
+
+Cuando el técnico cierra el parte, la visita queda **cerrada pero sin valorar**.
+Valorar es decir cuánto se cobra por ella.
+
+Se hace desde **Realizadas**, abriendo la visita. La aplicación calcula sola:
+
+- Las **horas**, al precio de técnico o de equipo de dos
+- El **desplazamiento**, según la ruta del cliente
+- Los **kilómetros**, si procede
+- El **material**, con su margen
+
+Tú revisas, corriges lo que haga falta y confirmas.
+
+### Lo pactado contra lo calculado
+
+Si ese trabajo venía de un **presupuesto aceptado**, arriba del todo verás el
+precio que el cliente firmó, **antes del cálculo**. Y la diferencia entre los
+dos.
+
+Eso está puesto a propósito: la aplicación no decide por ti cuál de los dos
+cobrar. Te enseña los dos y decides tú, que para eso conoces al cliente. Lo que
+no puede pasar es que factures sin haber visto el otro número.
+
+### Las trampas, que son tres
+
+**Un trabajo vendido que se valora en cero.** Pasa cuando el tipo de la
+asistencia no cobra (una comercial, una garantía, un remate) pero detrás había un
+presupuesto aceptado. La aplicación te lo avisa en grande y te dice qué cambiar.
+Si lo pasas por alto, **desaparece el importe entero de una venta**.
+
+**Cobrar no es facturar.** El técnico cobra en obra, pero la factura la haces tú
+después. Esas visitas salen en «pendiente de facturar» **con su etiqueta de que
+ya se cobró**. No las vuelvas a cobrar, pero factúralas: dinero cobrado sin
+factura es un problema de IVA, no un descuido.
+
+**Las visitas a cero euros.** Una visita cerrada sin horas se valora en cero y
+parece que no hay nada que hacer con ella. Salen en la lista igualmente, porque
+una visita cerrada, firmada y sin cobrar es justo la que hay que mirar.
+
+### La propuesta de factura
+
+Cuando la visita está valorada, sale la **propuesta de factura**: todo el detalle
+calculado, listo para la gestoría. Y un fichero que se le puede pasar
+directamente.
+
+**La aplicación no emite facturas con validez fiscal, y es a propósito.** En
+cuanto un programa emite facturas entra en el reglamento antifraude, con registro
+inalterable y una declaración responsable que firma quien hace el programa. Eso
+se queda donde está: la factura la emite quien ya la emitía.
+
+---
+
+## 3. Clientes, centros y puertas
+
+### El cliente
+
+Lo normal. Nombre, NIF, dirección, teléfono, correo. Dos cosas que conviene
+rellenar siempre:
+
+- **El correo**, porque es a donde va el parte firmado.
+- **La ruta**, porque de ella sale el importe del desplazamiento. Un cliente sin
+  ruta se valora sin desplazamiento, y el viaje lo paga la empresa sin que nadie
+  se entere.
+
+**Los contactos** son las personas de ese cliente: el presidente de la comunidad,
+el encargado de la nave, el administrador. Cada uno con su teléfono. Sirve para
+que el técnico llame a quien abre, no a quien paga.
+
+### Los centros
+
+Un centro es **un sitio con varias puertas**: una comunidad con tres portales,
+una nave con cinco muelles.
+
+Agrupar las puertas en un centro sirve para dos cosas muy prácticas: los datos de
+acceso se escriben una vez (cómo se entra, el horario, con quién hablar allí) y
+el técnico los lee antes de salir, y las puertas del mismo sitio dejan de
+aparecer como si fueran de clientes distintos.
+
+### Las puertas sin ficha
+
+En **Puertas** verás a veces un aviso de puertas «sin ficha de cliente». Son
+puertas que tienen el nombre del cliente escrito pero no están enlazadas con su
+ficha.
+
+Eso las deja fuera de todo: no salen en el listado del cliente, ni en sus
+contratos, ni en su historial. **Arréglalas en cuanto las veas**, se hace en dos
+clics desde la ficha de la puerta.
+
+---
+
+## 4. Presupuestos
+
+### Los tres formatos, y cuándo usar cada uno
+
+El mismo presupuesto sale de tres maneras, y la elección es comercial:
+
+**Valorado.** Cada línea con su precio. Para cuando el cliente tiene que
+justificar el gasto, como una comunidad que lo aprueba en junta.
+
+**Sin valorar.** Dice qué se hace y con qué, sin precios por línea. Para cuando
+lo que importa es que entienda el alcance y no se pierda comparando precios
+unitarios con una oferta que lleva material peor.
+
+**Resumen.** Solo el conjunto y el total. Para el cliente que no se va a leer
+tres páginas.
+
+> **Lo que no sale en ninguno de los tres: el coste y el margen.** Nunca. No hay
+> forma de que se impriman en un documento que sale de la empresa.
+
+### Del presupuesto al trabajo
+
+Un presupuesto aceptado se convierte en asistencia sin volver a teclear nada. Y
+cuando esa visita se valore, verás lo pactado al lado de lo calculado.
+
+### El seguimiento
+
+Cada presupuesto guarda cuándo se envió y si se abrió. Si llevas tres sin
+respuesta del mismo cliente, eso es información, no mala suerte.
+
+---
+
+## 5. Contratos de mantenimiento
+
+Un contrato dice qué puertas cubre, con qué periodicidad se revisan, qué entra en
+el precio y qué no. Lo firma el cliente igual que un parte, en la pantalla.
+
+**Lo que más vale del contrato dentro de la aplicación:** las revisiones se
+programan solas. Si el contrato dice dos al año, esas visitas aparecen en el
+calendario sin que nadie se acuerde de crearlas.
+
+La revisión que no se hace porque nadie se acordó es el agujero clásico de los
+contratos de mantenimiento. Y es exactamente lo que se mira si algún día hay un
+problema con esa puerta.
+
+---
+
+## 6. La documentación normativa
+
+Aquí empieza la parte seria. Léela entera aunque no la necesites hoy.
+
+### Qué es un expediente
+
+Un expediente **no es un documento**: es la carpeta de la que salen los
+documentos. Recoge todo lo que se sabe y se ha comprobado sobre una intervención
+concreta en una puerta concreta.
+
+Dentro va la puerta, el cliente, las fotos, las medidas, los ensayos de fuerzas,
+los componentes con su fabricante y referencia, los documentos que ha aportado el
+fabricante, las deficiencias y las actuaciones propuestas.
+
+### Lo primero que hay que decidir: la situación
+
+Y esto **no es administrativo, es legal**. De aquí depende qué obligaciones tiene
+la empresa.
+
+**Puerta nueva que montamos nosotros.** Se ensambla combinando componentes de
+distintos proveedores. La empresa **es el fabricante** de esa máquina y emite
+declaración de prestaciones, declaración de conformidad y marcado CE propios. Es
+la situación de más responsabilidad.
+
+**Puerta nueva de kit completo.** Se monta un kit de un solo fabricante,
+siguiendo sus instrucciones y sin sustituir nada. La empresa es **mero
+instalador**: no emite declaraciones, las recopila y se las entrega al cliente.
+
+**Adecuación a normativa.** Se ponen seguridades a una puerta que ya existía, sin
+tocar la lógica del cuadro. No nace máquina nueva, así que no hay declaración
+nueva. Sale el informe de riesgos y deficiencias y la certificación en el libro
+de mantenimiento.
+
+**Motorización o modificación sustancial.** Se motoriza una puerta manual o se
+cambia el cuadro por otro de tipo distinto. Esto tiene una consecuencia que mucha
+gente del sector desconoce: **la empresa pasa a ser el fabricante de la máquina**,
+con todas las obligaciones. No es una reparación: es poner una máquina nueva en el
+mercado.
+
+> **Esta decisión no la tomas tú.** Prepara el expediente, y si tienes la menor
+> duda entre adecuación y modificación, pregunta. Es la diferencia entre un
+> informe y asumir la responsabilidad de fabricante.
+
+### Lo segundo: la familia
+
+Cada familia tiene su propio régimen legal, y aquí es donde se equivocan las
+plantillas que circulan por el sector.
+
+**Industrial, comercial o de garaje.** La cubre la UNE-EN 13241, que está
+armonizada. **Sí lleva declaración de prestaciones.**
+
+**Peatonal automática.** Aquí está la trampa. Su norma de producto, la UNE-EN
+16361, **no está citada como norma armonizada**, así que de una peatonal
+automática **no sale declaración de prestaciones**. Su marcado CE viene de otro
+sitio. Y su seguridad la gobierna la UNE-EN 16005, no la 12453: la matriz de
+protección que vale para las industriales **no se aplica aquí**.
+
+**Barrera de vehículos.** Depende de una sola cosa: si está al alcance de
+personas. Si lo está, se trata como industrial. Si es de uso exclusivo para
+tráfico de vehículos, queda fuera de esa norma y solo lleva declaración de
+conformidad como máquina. La aplicación te lo pregunta expresamente.
+
+**Resistente al fuego.** **Con una cortafuegos no se puede autocertificar,
+nunca.** Están en un régimen que exige certificado de organismo notificado e
+inspección de fábrica. Solo cabe actuar como instalador de un kit completo del
+fabricante, sin sustituir ningún componente. La aplicación no deja elegir la vía
+de fabricante en esta familia: no es que lo desaconseje, es que no deja.
+
+### Las comprobaciones
+
+Cada familia tiene su lista de puntos a comprobar, y cada punto se contesta con
+un resultado. **Hay una diferencia que cuesta al principio y es la más
+importante:**
+
+- **Conforme**: se ha comprobado y está bien.
+- **No conforme / deficiencia**: se ha comprobado y está mal.
+- **Sin resultado**: no se ha podido comprobar.
+
+«Sin resultado» **no es lo mismo que conforme**. Un punto que nadie ha mirado no
+acredita nada, y la aplicación lo cuenta aparte precisamente por eso.
+
+### Las tres salidas: qué documento sale, y por qué
+
+Cuando le das a **Emitir**, la aplicación no te pregunta qué quieres sacar. Mira
+cómo está el expediente y te dice **qué documento procede**. Son tres:
+
+**1. Informe técnico de situación y deficiencias.** Cuando hay puntos sin
+resolver y no ha habido trabajo nuestro. Recoge el estado observado en esa fecha.
+**No acredita conformidad y lo dice impreso.**
+
+**2. Informe de intervención, pendiente de verificación.** Cuando sí hemos hecho
+trabajo pero quedan comprobaciones. Recoge lo hecho y dice que falta por
+verificar. Tampoco acredita.
+
+**3. Documentación de conformidad.** Cuando está todo resuelto y sin bloqueos.
+Esta sí acredita.
+
+> **La idea que hay que entender:** siempre se puede emitir algo. La aplicación
+> **nunca te impide documentar lo que te has encontrado**. Lo que impide es que un
+> expediente a medias se presente como una declaración de conformidad.
+>
+> Dicho de otro modo: **no se fuerza una conformidad**. Se completa el expediente
+> hasta que la conformidad es lo que procede. Si sale un informe de situación en
+> vez de una conformidad, no es que la aplicación esté estropeada: es que el
+> expediente todavía no da para más.
+
+### Lo que la aplicación te va a decir al emitir
+
+En la pantalla de emitir verás dos listas:
+
+- **Lo que impide acreditar conformidad.** No te impide documentar, pero impide
+  titular el documento como conforme.
+- **Advertencias.** Cosas que conviene mirar, pero que no bloquean.
+
+Léelas. Casi siempre te dicen exactamente qué dato falta.
+
+---
+
+## 7. Cuándo parar y preguntar
+
+**Este es el capítulo importante del manual.**
+
+Tu trabajo es dejar los expedientes preparados. Lo que no es tu trabajo es
+decidir en los casos de abajo. Cuando te encuentres uno, para, déjalo preparado
+y pregunta.
+
+**Para siempre, sin excepción, cuando:**
+
+1. **Haya que decidir entre adecuación y modificación sustancial.** Es la
+   diferencia entre emitir un informe y que la empresa pase a ser fabricante de
+   esa máquina.
+
+2. **La puerta sea cortafuegos y alguien plantee tocarla.** Cambiar una pieza por
+   otra «equivalente» en una cortafuegos invalida el ensayo del conjunto.
+
+3. **Se vaya a emitir una declaración de prestaciones.** Comprueba antes que la
+   familia la lleva. Las peatonales no.
+
+4. **Una puerta antigua lleve a discusión** sobre qué se le puede exigir. La
+   norma no se aplica a maquinaria fabricada antes de su publicación, y eso
+   cambia el fundamento de lo que se exige, aunque no exima de que sea segura.
+
+5. **El cliente presione para que un informe diga que su puerta cumple.** Esa
+   frase no la decide el cliente, ni tú, ni la prisa.
+
+6. **La aplicación diga que no puede determinar la naturaleza de la
+   intervención.** Cuando se para, se para por algo.
+
+7. **Vaya a salir un documento a nombre de la empresa y tengas dudas.** La duda
+   es gratis. El papel firmado no.
+
+**Cómo preguntar bien:** deja el expediente guardado, escribe lo que has visto en
+la conversación de esa puerta y dile a David cuál es tu duda concreta. Así lo
+mira con todo delante y queda escrito para quien venga después.
+
+---
+
+## 8. El almacén desde la oficina
+
+**El catálogo.** La lista de material con su precio, su margen y su proveedor.
+Lo gobierna la oficina: un técnico no puede dar de alta material.
+
+**Las entradas.** Cuando llega un pedido, se mete como entrada. **Mientras no
+haya entradas, el almacén está a cero y los márgenes de las visitas salen
+mal**, porque el material entra sin coste real.
+
+**Las peticiones de los técnicos.** Cuando un técnico se encuentra material que
+no está en el catálogo, lo pide desde el parte con una foto de la caja. Esas
+peticiones te llegan a una lista. Al aceptarlas, el material se da de alta con su
+foto y vuelve al parte del técnico.
+
+Ciérralas cuando las resuelvas: una petición a medias se queda ahí para siempre.
+
+**Las furgonetas.** Cada furgoneta es un almacén. El material se descuenta del
+almacén que corresponda cuando el técnico lo escanea en el parte.
+
+---
+
+## 9. Las etiquetas QR
+
+Las etiquetas son los códigos de las puertas. Se generan por rollos desde
+**Etiquetas**.
+
+Una etiqueta existe primero y se asigna a una puerta después. Por eso hay
+etiquetas «libres»: impresas o generadas, pero todavía sin puerta.
+
+Se pueden imprimir de dos maneras: una a una en la impresora térmica de la
+furgoneta, o en plancha para mandar a una imprenta, que sale más barato por
+unidad si se hacen muchas.
+
+**Vigila que no se acaben.** Si no quedan etiquetas libres, no se pueden crear
+puertas nuevas desde una asistencia, y eso para al técnico en casa del cliente.
+
+---
+
+## 10. Gestión: los números del mes
+
+En **Oficina → Gestión** está lo que no ve nadie más:
+
+- **Facturable, coste y margen** del mes que elijas.
+- **Pendiente de facturar**, que es la lista que hay que dejar a cero.
+- **Cobradas en obra**, que hay que facturar aunque el dinero ya esté.
+- **Sin valorar**, que son visitas cerradas que todavía no sabes cuánto valen.
+
+Y arriba del todo, si falta algo por instalar en la base de datos, sale un aviso.
+Si ves que pone menos de lo que debería, avisa: significa que hay funciones de la
+aplicación que no están disponibles.
+
+---
+
+## 11. Diez errores que cuestan dinero
+
+1. **Tipo de asistencia equivocado.** Decide cómo se factura. Una avería metida
+   como comercial se valora en cero.
+2. **Cliente sin ruta.** El desplazamiento no se cobra y lo paga la empresa.
+3. **No facturar lo cobrado en obra.** El dinero está, la factura no.
+4. **Dejar visitas sin valorar.** Lo que no se valora no se factura.
+5. **No mirar lo pactado al valorar.** Se factura menos de lo que el cliente
+   firmó, o más, y entonces llama.
+6. **Puertas sin ficha de cliente.** Quedan fuera del cliente, de sus contratos y
+   de su historial.
+7. **Almacén a cero.** Todos los márgenes salen mal y no se nota hasta fin de mes.
+8. **Peticiones de material sin cerrar.** El técnico espera y la oficina cree que
+   está hecho.
+9. **Quedarse sin etiquetas libres.** Para al técnico en casa del cliente.
+10. **Notas de oficina vacías.** El técnico llega y no puede entrar. Un viaje
+    perdido cuesta más que escribir dos líneas.
+
+---
+
+## 12. Lo que nunca debes hacer
+
+- **Emitir una documentación de conformidad que David no haya revisado.**
+- **Contestar «sí» a una comprobación que nadie ha mirado.** Para eso está «sin
+  resultado».
+- **Cambiar el tipo de una asistencia solo para que salga un número mejor.**
+- **Enseñar a un cliente un documento con costes o márgenes.** No debería ser
+  posible, pero si alguna vez ves uno, no lo mandes y avisa.
+- **Borrar un cliente o una puerta para «limpiar».** Se lleva por delante su
+  historial, sus avisos y sus expedientes. Si sobra, se archiva.
+- **Tocar las tarifas o los roles.** Eso es del administrador.
+
+---
+
+## 13. Si algo no cuadra
+
+**Un botón que debería estar y no está.** Mira en Oficina → Gestión si falta
+algo por instalar. Casi siempre es eso.
+
+**La aplicación no se actualiza.** Ciérrala del todo y reábrela. Abajo se ve la
+versión.
+
+**Un documento sale con huecos.** No es un fallo: la aplicación nunca se inventa
+un dato. Escribe **qué clase de hueco** es, y son cuatro cosas distintas:
+
+| Lo que pone | Qué significa |
+|---|---|
+| **pendiente** | Se va a conseguir, pero todavía no se tiene. |
+| **no aportado** | Se pidió al cliente o al fabricante y no lo han dado. |
+| **no identificado** | Se miró y no se pudo averiguar: la placa estaba borrada, o no había placa. |
+| **no verificado** | Figura en algún sitio, pero nadie lo ha comprobado en la puerta. |
+
+Esas cuatro palabras protegen a la empresa, y no por capricho. Un informe donde
+falta la marca del cuadro no vale lo mismo según por qué falte: si no se pudo
+identificar porque la etiqueta estaba quemada, eso es una observación técnica;
+si no lo aportó el cliente después de pedírselo dos veces, eso es otra cosa muy
+distinta, y es la que te defiende si algún día alguien pregunta.
+
+**Algo que no entiendes de normativa.** El **Manual de formación**, que está en
+la misma pestaña, explica el oficio: las normas, los peligros, el ensayo de
+fuerzas y qué se documenta en cada caso. Está escrito para leerlo entero alguna
+vez, no solo para consultarlo.
+
+**Cualquier duda sobre qué firmar.** Capítulo 7. Para y pregunta.
