@@ -286,6 +286,40 @@ paso('y cuántos mensajes hay',                  boton.cuenta === true, boton.to
 paso('y avisa si alguno va con chincheta',      boton.avisaFijado === true);
 paso('sin la tabla en la base, no sale el botón', boton.sinTabla === '');
 
+
+/* ================================================================
+   7. La foto del mensaje, con enlace firmado
+   ================================================================
+   El 12-11-2026 esto salió con un enlace de los públicos. El almacén
+   de fotos es PRIVADO, así que ese enlace no abre nada: la foto de un
+   mensaje daba error. No lo cazó el banco porque el simulador no
+   tiene almacén de ficheros de verdad, y apareció mirando a mano qué
+   almacenes eran públicos. Esto vigila que no vuelva.
+   ================================================================ */
+bloque('7. La foto va con enlace firmado, no público');
+
+const laFoto = await T(() => {
+  const g = window.__T;
+  const html = g.filaMensaje
+    ? g.filaMensaje({ id:'m-x', texto:'con foto', quien:'Dani',
+                      foto_ruta:'mensajes/x/1.jpg', foto_url:'https://ejemplo/firmada?token=abc' })
+    : '';
+  const sinFirmar = g.filaMensaje
+    ? g.filaMensaje({ id:'m-y', texto:'sin firmar', quien:'Dani', foto_ruta:'mensajes/x/2.jpg' })
+    : '';
+  return {
+    usaLaFirmada: /firmada\?token=abc/.test(html),
+    NOusaPublico: !/object\/public\/fotos/.test(html),
+    siNoSePuede: /no se ha podido abrir/i.test(sinFirmar),
+    sinEnlaceMuerto: !/<a[^>]*href="">/.test(sinFirmar),
+  };
+});
+paso('la foto se abre con la URL firmada', laFoto.usaLaFirmada === true);
+paso('Y NO con un enlace del almacén público', laFoto.NOusaPublico === true);
+paso('si no se pudo firmar, se dice en vez de dar un enlace muerto',
+  laFoto.siNoSePuede === true);
+paso('y no queda un enlace vacío', laFoto.sinEnlaceMuerto === true);
+
 /* ================================================================
    Final
    ================================================================ */

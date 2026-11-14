@@ -519,9 +519,17 @@ const dosManuales = await T(async () => {
   g.S.manual = null; g.pintar();
   return r;
 });
-paso('hay dos manuales en la aplicación', dosManuales.n === 2, dosManuales.n);
+/* TRES desde el 14-11-2026: entró el manual de oficina. David: «necesito hacer
+   el curso de oficina, para que el que gestione los partes, los presupuestos y
+   la normativa sepa cómo hacerlo con el programa». Había manual del técnico y
+   manual del oficio, y ninguno explicaba la mitad de la aplicación que usa la
+   oficina. El número se escribe a mano a propósito, para que añadir o perder un
+   manual sin querer salte en rojo. */
+paso('hay tres manuales en la aplicación', dosManuales.n === 3, dosManuales.n);
 paso('con botones para pasar de uno a otro',
-  dosManuales.botones.length === 2, dosManuales.botones.join(' | '));
+  dosManuales.botones.length === 3, dosManuales.botones.join(' | '));
+paso('y el de oficina está entre ellos',
+  dosManuales.botones.some(b => /oficina/i.test(b)));
 paso('y el de formación se abre y se lee',
   /Una puerta automática es una máquina/.test(dosManuales.texto));
 paso('con sus tablas de límites dentro',
@@ -907,6 +915,68 @@ paso('si no hay nada, lo dice en vez de dejar la lista vacía',
   /Nada con esa palabra/.test(indice.vacio));
 paso('y al borrar la búsqueda vuelve el índice entero',
   indice.vuelve === indice.n, indice.vuelve);
+
+/* ================================================================
+   El manual de oficina                                14-11-2026
+
+   No se comprueba que "exista un manual": se comprueba que diga las
+   cosas que protegen a la empresa. Un manual de oficina que no
+   explique cuándo hay que parar es peor que no tenerlo, porque da
+   confianza para seguir.
+   ================================================================ */
+bloque('El manual de oficina');
+
+const ofi = await T(async () => {
+  const g = window.__T;
+  g.S.tab = 'manual'; g.S.manual = 'oficina'; g.pintar();
+  await new Promise(r => setTimeout(r, 1500));
+  const t = document.getElementById('vista').innerText;
+  g.S.manual = null; g.pintar();
+  return t;
+});
+
+paso('el manual de oficina se abre y se lee', ofi.length > 6000, ofi.length+' caracteres');
+
+/* La regla que gobierna el puesto */
+paso('dice la regla de oro: la oficina prepara, David firma',
+  /oficina prepara/i.test(ofi) && /firma/i.test(ofi));
+
+/* El capítulo que de verdad protege */
+paso('tiene un capítulo sobre cuándo parar y preguntar',
+  /Cuándo parar y preguntar/i.test(ofi));
+paso('y manda parar ante adecuación o modificación sustancial',
+  /adecuación y modificación sustancial/i.test(ofi));
+paso('y ante una cortafuegos',
+  /cortafuegos/i.test(ofi) && /invalida el ensayo/i.test(ofi));
+paso('y si el cliente presiona para que un informe diga que cumple',
+  /presione/i.test(ofi) && /cumple/i.test(ofi));
+
+/* Lo que más se equivoca el sector */
+paso('avisa de que las peatonales NO llevan declaración de prestaciones',
+  /peatonal/i.test(ofi) && /no sale declaración de prestaciones/i.test(ofi));
+paso('y de que con una cortafuegos no se puede autocertificar',
+  /no se puede autocertificar/i.test(ofi));
+
+/* La idea de fondo de la emisión */
+paso('explica que nunca se fuerza una conformidad',
+  /no se fuerza una conformidad/i.test(ofi));
+paso('y las tres salidas documentales',
+  /situación y deficiencias/i.test(ofi) && /pendiente de verificación/i.test(ofi) &&
+  /Documentación de conformidad/i.test(ofi));
+paso('y que «sin resultado» no es lo mismo que conforme',
+  /no es lo mismo que conforme/i.test(ofi));
+
+/* El dinero */
+paso('avisa de que cobrar no es facturar', /Cobrar no es facturar/i.test(ofi));
+paso('y del trabajo vendido que se valora en cero',
+  /se valora en cero/i.test(ofi));
+paso('y de que el coste y el margen no salen en ningún presupuesto',
+  /coste y el margen/i.test(ofi) && /Nunca/.test(ofi));
+
+/* Que no invente: las cuatro palabras de los huecos */
+paso('explica las cuatro clases de hueco',
+  /pendiente/i.test(ofi) && /no aportado/i.test(ofi) &&
+  /no identificado/i.test(ofi) && /no verificado/i.test(ofi));
 
 console.log('\n'+ok+' bien, '+mal+' mal.');
 const graves = errores.filter(x => !/fonts\.googleapis|ERR_TUNNEL|ERR_NAME|net::ERR|provocado por la prueba/.test(x));
