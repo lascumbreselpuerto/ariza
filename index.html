@@ -2102,7 +2102,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.13-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.14-1';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -2288,7 +2288,24 @@ async function traerMensajes(op){
   q = op.avisoId ? q.eq('aviso_id', op.avisoId) : q.eq('puerta_id', op.puertaId);
   const { data, error } = await q.order('creado');
   if (error){ fallo(error); return []; }
-  return data || [];
+  const ms = data || [];
+  /* ---- Las fotos van firmadas, no por enlace público (14-11-2026) ----
+     El almacén de fotos es PRIVADO: el resto de la aplicación las abre con
+     enlaces firmados que caducan, y ahí dentro están las fotos de las puertas
+     de los clientes. El 12-11-2026 esto salió con un enlace de los públicos,
+     que en un almacén privado no abre nada: la foto de un mensaje daba error.
+     No lo cazó el banco porque el simulador no tiene almacén de ficheros de
+     verdad; apareció al preparar el proyecto de pruebas, mirando qué almacenes
+     eran públicos y cuáles no. */
+  const conFoto = ms.filter(m => m.foto_ruta);
+  if (conFoto.length){
+    const firmas = await Promise.all(conFoto.map(m =>
+      sb.storage.from('fotos').createSignedUrl(m.foto_ruta, 3600).catch(() => null)));
+    conFoto.forEach((m, i) => {
+      m.foto_url = firmas[i] && firmas[i].data ? firmas[i].data.signedUrl : '';
+    });
+  }
+  return ms;
 }
 
 /* Cuántos mensajes tiene cada asistencia, para el número del botón. Se cuenta
@@ -2325,10 +2342,13 @@ function botonConversacion(avisoId){
 function filaMensaje(m, op){
   const o = op || {};
   const cuando = m.creado ? fechaHora(m.creado) : '';
+  /* La URL viene firmada de traerMensajes. Si por lo que sea no se pudo firmar,
+     se dice en vez de dejar un enlace que no abre nada. */
   const foto = m.foto_ruta
-    ? '<a class="msj-foto" target="_blank" rel="noopener" href="'+
-      esc(SUPA_URL + '/storage/v1/object/public/fotos/' +
-        String(m.foto_ruta).split('/').map(encodeURIComponent).join('/'))+'">Ver la foto</a>'
+    ? (m.foto_url
+        ? '<a class="msj-foto" target="_blank" rel="noopener" href="'+esc(m.foto_url)+'">Ver la foto</a>'
+        : '<span class="msj-foto" style="color:var(--muted)">Lleva una foto, pero ahora mismo no se '+
+          'ha podido abrir. Inténtalo en un momento.</span>')
     : '';
   /* De qué asistencia viene, solo en el hilo de la puerta: ahí se mezclan los
      mensajes de todas sus visitas y sin esto no se sabe de cuál habla cada uno. */
@@ -4121,6 +4141,17 @@ const MANUALES = [
     resumen:'Lo que hace falta para salir a la calle y cerrar una visita.' },
   { clave:'formacion', nombre:'Manual de formación', fichero:'./manuales/formacion.md',
     resumen:'El oficio y el porqué: normas, peligros, ensayo de fuerzas y qué se documenta.' },
+  /* ---- El manual de oficina (14-11-2026) ----
+     David: «necesito hacer el curso de oficina, para que el que gestione los
+     partes, los presupuestos y la normativa sepa cómo hacerlo con el programa».
+     Faltaba: había manual del técnico y manual del oficio, y ninguno explicaba
+     la mitad de la aplicación que usa la oficina.
+     Va para quien ya conoce la empresa y no la aplicación, y con la normativa
+     metida en la decisión donde hace falta, no en un bloque aparte: una norma
+     pegada a la decisión que hay que tomar se recuerda; un capítulo de normas
+     suelto, no. */
+  { clave:'oficina', nombre:'Manual de oficina', fichero:'./manuales/oficina.md',
+    resumen:'Avisos, presupuestos, facturación y documentación normativa. Y cuándo parar y preguntar.' },
 ];
 const manualDisponible = () => MANUALES;
 
