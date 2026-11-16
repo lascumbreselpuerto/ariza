@@ -1420,6 +1420,9 @@ function tipoAsis(x){
 /* Listas que el administrador puede cambiar desde la app; si no hay nada guardado, valen las de fábrica. */
 const lista = (clave, defecto) => (Array.isArray(S.ajustes[clave]) && S.ajustes[clave].length) ? S.ajustes[clave] : defecto;
 const esAdmin = () => !!(S.perfil && S.perfil.rol === 'admin');
+/* Cómo se llama cada papel cuando hay que escribirlo en un documento o en una
+   línea de registro. En la pantalla de equipo se escribían a mano. */
+const NOMBRE_ROL = { admin:'administrador', oficina:'oficina', tecnico:'técnico' };
 /* Administrador y oficina: los dos ven precios, costes y lo pendiente de facturar.
    Cambiar roles y tarifas sigue siendo solo del administrador. */
 const esGestion = () => !!(S.perfil && (S.perfil.rol === 'admin' || S.perfil.rol === 'oficina'));
@@ -2102,7 +2105,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.14-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.16-1';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -4610,6 +4613,38 @@ function vistaGestion(){
     h += '<div class="panel"><p class="muted" style="margin:0">No se han podido leer las tarifas. '+
          'Si acabas de instalar esta parte, ejecuta el SQL de la fase 4 y vuelve a entrar.</p></div>';
     return h + '</div>';
+  }
+
+  /* ---- Expedientes esperando firma (16-11-2026) ----
+     Va arriba, antes de los números del mes, porque es lo único de esta
+     pantalla que tiene a alguien esperando. Lo ven los dos papeles: el
+     administrador, para firmar; la oficina, para saber qué mandó y cuándo. */
+  {
+    const esperan = expsEnRevision();
+    if (esperan.length){
+      h += '<div class="panel"><div class="panel-h"><h3>Listos para revisar y emitir</h3>'+
+           '<span class="chip aviso sin">'+esperan.length+'</span></div>'+
+           '<p class="mini" style="margin:0 0 10px">'+
+           (esAdmin()
+             ? 'La oficina los ha terminado y esperan tu firma. La documentación de conformidad '+
+               'la emites tú: es la que afirma que la puerta cumple.'
+             : 'Los has pasado a revisión. La documentación de conformidad la emite el '+
+               'administrador.')+'</p><div class="lista">';
+      esperan.forEach(x => {
+        const r = revisionDe(x) || {};
+        const pu = puertaDe(x.puerta_id) || {};
+        h += '<button class="item" data-act="exp-abrir" data-id="'+x.id+'">'+
+          '<span class="qr">DOC</span>'+
+          '<span><span class="tit">'+esc(x.referencia||'Expediente')+'</span>'+
+          '<span class="sub">'+
+          esc([pu.codigo, pu.cliente || (clienteDe(x.cliente_id)||{}).nombre || '',
+               EXP_FAMILIA[x.familia] || ''].filter(Boolean).join(' · '))+'</span>'+
+          '<span class="sub">Preparado por '+esc(r.quien||'alguien')+' el '+
+          esc(fechaHora(r.pedida_el))+(r.nota ? ' · «'+esc(r.nota)+'»' : '')+'</span></span>'+
+          '<span class="chip aviso sin">Esperando</span></button>';
+      });
+      h += '</div></div>';
+    }
   }
 
   // --- Cifras del mes ---
@@ -10435,6 +10470,33 @@ const EXP_REGIMEN = {
   },
 };
 
+/* ---- Qué se puede documentar en cada familia (16-11-2026) ----
+
+   POR QUÉ ESTO
+   David: «sobre las cortafuegos, ya que estas no se pueden autocertificar, lo
+   que valoro que debería hacer la app es la documentación completa y nunca la
+   autocertificación.»
+
+   Y tiene razón. Hasta hoy la aplicación DEJABA elegir «puerta nueva que
+   montamos nosotros» en una cortafuegos y después sacaba un recuadro rojo
+   diciendo que esa declaración no se puede firmar. O sea: dejaba cometer el
+   error y luego avisaba.
+
+   Avisar de un error que podías haber impedido es peor que impedirlo. Desde hoy
+   esa vía NO APARECE en una cortafuegos: solo caben las dos que son legales ahí,
+   instalar un kit completo del fabricante o adecuar una puerta existente.
+
+   El sistema 1 de evaluación exige certificado de organismo notificado,
+   inspección inicial de la fábrica y vigilancia continua. No hay vía simplificada
+   que alcance a ese sistema, así que no es una cuestión de criterio: con una
+   cortafuegos solo cabe ser instalador. */
+function situacionesPara(familia){
+  const reg = EXP_REGIMEN[familia] || {};
+  const todas = Object.keys(EXP_SITUACION);
+  if (!reg.bloqueaFabricante) return todas;
+  return todas.filter(s => !EXP_ES_FABRICANTE(s));
+}
+
 /* El régimen que toca, mirando también la respuesta a la pregunta de la que depende
    (hoy solo las barreras: cambia según estén o no al alcance de personas). */
 /* Reparte las normas del expediente entre europeas y nacionales. Que una norma
@@ -13964,6 +14026,44 @@ function salidaDocumental(e){
   };
 }
 
+/* ---- Quién emite qué (16-11-2026) ----
+
+   «La oficina prepara. David firma.» Esa regla estaba escrita en el manual de
+   oficina y NO estaba en el programa: hasta hoy, cualquiera con perfil de
+   oficina podía emitir una documentación de conformidad, que es el papel que
+   dice que una puerta cumple y que lleva la firma de la empresa.
+
+   Desde hoy la regla la hace cumplir la aplicación, y la raya está donde tiene
+   que estar: en si el documento ACREDITA o solo DESCRIBE.
+
+     · Informe de situación y deficiencias ....... lo emite también la oficina
+     · Informe de intervención, pendiente ........ lo emite también la oficina
+     · Documentación de conformidad .............. solo el administrador
+
+   Los dos informes describen lo que hay delante y por eso puede firmarlos quien
+   lo ha preparado. La documentación de conformidad afirma algo sobre la puerta
+   frente a terceros, y de eso responde la empresa. */
+const puedeEmitirSalida = sd => !sd || !sd.acredita || esAdmin();
+
+/* ---- Listo para revisar ----
+   El paso que faltaba entre «la oficina lo ha terminado» y «David lo firma».
+   Sin esto, un expediente acabado se quedaba quieto sin que nadie supiera que
+   estaba esperando. Vive en datos.revision y no necesita tabla nueva. */
+const revisionDe = e => (((e||{}).datos||{}).revision) || null;
+function expEnRevision(e){
+  const r = revisionDe(e);
+  return !!(r && r.pedida_el && !r.resuelta_el);
+}
+const expsEnRevision = () => (S.expedientes || []).filter(expEnRevision)
+  .sort((a,b) => (revisionDe(a).pedida_el < revisionDe(b).pedida_el ? -1 : 1));
+
+/* ---- Quién eligió la situación, y cuándo ----
+   La primera decisión del expediente es la que más pesa: elegir entre adecuar y
+   modificar sustancialmente es elegir si esta empresa es el fabricante de esa
+   máquina. Desde el 16-11-2026 queda escrito quién la tomó. Los expedientes
+   anteriores no lo tienen, y entonces esto no dice nada en vez de inventárselo. */
+const altaDe = e => (((e||{}).datos||{}).alta) || null;
+
 /* ---- Historial de versiones del expediente ----
    Cada emisión añade una línea y no borra ninguna. Un expediente cerrado
    con deficiencias se reabre y vuelve a emitirse como versión siguiente. */
@@ -14646,8 +14746,15 @@ function vistaExpediente(id){
          ? '<button class="btn sm plana" data-act="exp-acta" data-v="'+
            entregasDe(e).length+'" data-id="'+e.id+'">Acta de entrega</button>' : '')+
        '<button class="btn" data-act="exp-libro" data-id="'+e.id+'">Ver el libro</button>'+
+       /* Si lo que procede acredita conformidad y quien mira no es el
+          administrador, el botón no es «Emitir» sino «Listo para revisar»: la
+          oficina termina el expediente y lo pasa, no lo firma. (16-11-2026) */
        (esGestion() && e.estado !== 'emitido'
-         ? '<button class="btn pri" data-act="exp-emitir" data-id="'+e.id+'">Emitir</button>' : '')+
+         ? (puedeEmitirSalida(salidaDocumental(e))
+             ? '<button class="btn pri" data-act="exp-emitir" data-id="'+e.id+'">Emitir</button>'
+             : '<button class="btn pri" data-act="exp-revisar" data-id="'+e.id+'">'+
+               (expEnRevision(e) ? 'Ya está en revisión' : 'Listo para revisar')+'</button>')
+         : '')+
        '</div>';
 
   h += '<div class="panel"><div class="panel-h"><h2>'+esc(e.referencia||'Expediente')+'</h2>'+
@@ -14657,6 +14764,27 @@ function vistaExpediente(id){
        esc(EXP_FAMILIA[e.familia]||'')+' · '+esc(c.nombre || p.cliente || 'Sin cliente')+
        (p.codigo ? ' · '+esc(p.codigo) : '')+'</p>'+
        '<p class="mini" style="margin:6px 0 0">'+esc(EXP_SIT_AYUDA[e.situacion]||'')+'</p>';
+
+  /* Quién eligió qué se estaba documentando. Es la decisión que marca si esta
+     empresa es el fabricante de la máquina, así que lleva nombre y fecha.
+     (16-11-2026) */
+  {
+    const al = altaDe(e);
+    if (al && al.quien)
+      h += '<p class="mini" style="margin:6px 0 0">Situación elegida por <b>'+esc(al.quien)+'</b>'+
+           (al.rol ? ' ('+esc(NOMBRE_ROL[al.rol] || al.rol)+')' : '')+
+           ' el '+esc(fechaHora(al.fecha))+'.</p>';
+  }
+
+  /* Esperando que lo firme el administrador */
+  if (expEnRevision(e)){
+    const r = revisionDe(e);
+    h += '<div class="nota-oficina" style="margin-top:12px"><b>Preparado y esperando revisión.</b><br>'+
+         esc(r.quien || 'Alguien')+' lo dejó listo el '+esc(fechaHora(r.pedida_el))+'.'+
+         (r.nota ? '<br>«'+esc(r.nota)+'»' : '')+
+         (esAdmin() ? '<br>Repasa el expediente y emite tú la documentación.'
+                    : '<br>La documentación de conformidad la firma el administrador.')+'</div>';
+  }
 
   /* Qué sale y qué no sale de esta familia, a la vista desde el primer momento.
      Si alguien abrió un expediente de cortafuegos como fabricante antes de que esto
@@ -16086,12 +16214,15 @@ function dlgExpedienteNuevo(puertaId){
   const p = puertaDe(puertaId) || {};
   const sug = /peatonal/i.test(p.tipo||'') ? 'peatonal'
             : /barrera/i.test(p.tipo||'')  ? 'barrera' : 'industrial';
+  /* El desplegable de situaciones depende de la familia: en una cortafuegos no
+     aparecen las vías de fabricante, porque ahí no son legales. */
+  const sitIni = situacionesPara(sug);
   const h = '<h3>Nueva documentación de normativa</h3>'+
     '<p class="mini" style="margin:0 0 12px">'+esc([p.codigo, p.cliente, p.direccion].filter(Boolean).join(' · '))+'</p>'+
     '<div class="campos">'+
     '<div class="campo full"><label for="xp-sit">Qué estamos documentando</label><select id="xp-sit">'+
-      Object.entries(EXP_SITUACION).map(([k,v]) => '<option value="'+k+'">'+esc(v)+'</option>').join('')+
-      '</select><span class="pista" id="xp-ayuda">'+esc(EXP_SIT_AYUDA.nueva_fabricante)+'</span></div>'+
+      sitIni.map(k => '<option value="'+k+'">'+esc(EXP_SITUACION[k])+'</option>').join('')+
+      '</select><span class="pista" id="xp-ayuda">'+esc(EXP_SIT_AYUDA[sitIni[0]] || '')+'</span></div>'+
     '<div class="campo full"><label for="xp-fam">Familia de puerta</label><select id="xp-fam">'+
       Object.entries(EXP_FAMILIA).map(([k,v]) => '<option value="'+k+'"'+(k===sug?' selected':'')+'>'+esc(v)+'</option>').join('')+
       '</select><span class="pista">Decide las normas y el cuestionario. Una peatonal automática no va por la '+
@@ -16117,14 +16248,22 @@ function dlgExpedienteNuevo(puertaId){
          la ficha lo dice: es el mismo dato y no hay por qué preguntarlo otra vez.
          Se puede cambiar dentro del expediente, que es su foto del momento. */
       const pf = puertaDe(puertaId);
-      if (pf && pf.modo && pf.usuarios){
-        try {
-          const { data: ex } = await sb.from('expedientes').select('datos').eq('id', data.id).maybeSingle();
-          const dd = (ex && ex.datos) || {};
+      try {
+        const { data: ex } = await sb.from('expedientes').select('datos').eq('id', data.id).maybeSingle();
+        const dd = (ex && ex.datos) || {};
+        if (pf && pf.modo && pf.usuarios)
           dd.puerta = Object.assign({}, dd.puerta || {}, { modo: pf.modo, usuarios: pf.usuarios });
-          await sb.from('expedientes').update({ datos: dd }).eq('id', data.id);
-        } catch(_){ /* si falla, el expediente lo pregunta como siempre */ }
-      }
+        /* Quién tomó la primera decisión y cuándo. Se escribe al abrir el
+           expediente y no se vuelve a tocar: es la decisión original, no la
+           última vez que alguien pasó por aquí. (16-11-2026) */
+        dd.alta = {
+          situacion: val('xp-sit'), familia: val('xp-fam'),
+          quien: yo(), perfil_id: S.perfil ? S.perfil.id : null,
+          rol: S.perfil ? S.perfil.rol : '',
+          fecha: new Date().toISOString(),
+        };
+        await sb.from('expedientes').update({ datos: dd }).eq('id', data.id);
+      } catch(_){ /* si falla, el expediente sigue valiendo y lo pregunta como siempre */ }
       cerrarDlg(); await cargar();
       S.exp = data.id; S.expPaso = 'intervencion'; S.ficha = null;
       await cargarFotosExp(data.id); await cargarDocsExp(data.id);
@@ -16134,6 +16273,22 @@ function dlgExpedienteNuevo(puertaId){
   });
   const sel = document.getElementById('xp-sit');
   const fam = document.getElementById('xp-fam');
+  const ayuda = () => { const a = document.getElementById('xp-ayuda');
+    if (a) a.textContent = EXP_SIT_AYUDA[sel.value] || ''; };
+  /* Al cambiar de familia, el desplegable de situaciones se rehace: las vías que
+     esa familia no admite desaparecen en vez de quedarse para que alguien las
+     elija y se encuentre el aviso rojo después. Si la que estaba elegida sigue
+     valiendo, se conserva; si no, se pasa a la primera que sí vale. */
+  const pintarSituaciones = () => {
+    if (!sel || !fam) return;
+    const posibles = situacionesPara(fam.value);
+    const ahora = Array.from(sel.options).map(o => o.value);
+    if (posibles.join('|') === ahora.join('|')) return;
+    const antes = sel.value;
+    sel.innerHTML = posibles.map(k => '<option value="'+k+'">'+esc(EXP_SITUACION[k])+'</option>').join('');
+    sel.value = posibles.includes(antes) ? antes : posibles[0];
+    ayuda();
+  };
   /* Avisa antes de empezar de qué sale y qué no sale de esta combinación, para que
      nadie rellene un expediente entero y se lleve el chasco al final. */
   const pintarRegimen = () => {
@@ -16143,8 +16298,12 @@ function dlgExpedienteNuevo(puertaId){
     const esFab = EXP_ES_FABRICANTE(sel.value);
     let clase = 'aviso-caja', txt = reg.nota || '';
     if (reg.bloqueaFabricante && esFab){
+      /* Red de seguridad: por el desplegable ya no se puede llegar aquí. */
       clase = 'mal-caja';
       txt = 'No se puede autocertificar. ' + reg.nota;
+    } else if (reg.bloqueaFabricante){
+      txt = 'Aquí solo cabe actuar como instalador: la documentación se recopila del '+
+            'fabricante y se transmite, no se declara. ' + reg.nota;
     } else if (!reg.ddp && esFab && reg.sistema !== '1'){
       txt = 'De esta puerta no sale declaración de prestaciones. ' + reg.nota;
     }
@@ -16155,13 +16314,85 @@ function dlgExpedienteNuevo(puertaId){
      queda en pantalla un «no se puede autocertificar» que ya no es cierto. */
   const limpiarErr = () => { const p = document.querySelector('#dlg .err');
     if (p) p.textContent = ''; };
-  if (sel) sel.addEventListener('change', () => {
-    const a = document.getElementById('xp-ayuda');
-    if (a) a.textContent = EXP_SIT_AYUDA[sel.value] || '';
-    limpiarErr(); pintarRegimen();
+  if (sel) sel.addEventListener('change', () => { ayuda(); limpiarErr(); pintarRegimen(); });
+  if (fam) fam.addEventListener('change', () => {
+    limpiarErr(); pintarSituaciones(); pintarRegimen();
   });
-  if (fam) fam.addEventListener('change', () => { limpiarErr(); pintarRegimen(); });
-  pintarRegimen();
+  pintarSituaciones(); pintarRegimen();
+}
+
+/* ---- Listo para revisar (16-11-2026) ----
+   Lo que hace la oficina cuando ha terminado un expediente cuya documentación
+   solo puede firmar el administrador. No emite nada: deja dicho que está
+   listo, deja su nota, y lo anuncia en la conversación de la puerta, que es
+   donde el equipo lee las cosas. Así no hace falta ni tabla nueva ni avisos
+   nuevos: el mensaje fijado ya suena en el grupo. */
+function dlgPedirRevision(id){
+  const e = expDe(id); if (!e) return;
+  const p = puertaDe(e.puerta_id) || {};
+  const sd = salidaDocumental(e);
+  const ya = expEnRevision(e) ? revisionDe(e) : null;
+
+  const h = '<h3>Pasarlo a revisión</h3>'+
+    '<div class="nota-oficina" style="margin:0 0 12px">'+
+    '<b>Este expediente ya da para documentación de conformidad.</b>'+
+    '<p class="mini" style="margin:6px 0 0">Ese documento lo firma el administrador, porque afirma '+
+    'frente a terceros que la puerta cumple. Lo que haces aquí es decir que, por tu parte, está '+
+    'terminado y listo para que lo repase y lo emita.</p></div>'+
+    '<p class="mini" style="margin:0 0 12px">'+
+    esc([e.referencia, p.codigo, p.cliente].filter(Boolean).join(' · '))+'<br>'+
+    sd.cuenta.conformes+' conforme(s) · '+sd.cuenta.no_conformes+' no conforme(s) · '+
+    sd.cuenta.abiertas+' sin resultado'+
+    (sd.cuenta.no_aplica ? ' · '+sd.cuenta.no_aplica+' no aplica' : '')+'</p>'+
+    (ya ? '<div class="aviso-caja" style="margin:0 0 12px">Ya estaba en revisión desde el '+
+          esc(fechaHora(ya.pedida_el))+', pedida por '+esc(ya.quien||'alguien')+
+          '. Si lo vuelves a mandar, se queda la nota nueva y suena otra vez.</div>' : '')+
+    '<div class="campos">'+
+    '<div class="campo full"><label for="xr-nota">Qué quieres que mire</label>'+
+      '<input id="xr-nota" type="text" placeholder="Ej.: falta que confirmes la fecha de puesta en servicio">'+
+      '<span class="pista">Opcional. Sale en el aviso y queda guardado en el expediente.</span></div>'+
+    '</div><p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Pasarlo a revisión</button></div>';
+
+  abrirDlg(h, async () => {
+    try {
+      const nota = val('xr-nota');
+      e.datos = e.datos || {};
+      e.datos.revision = {
+        pedida_el: new Date().toISOString(),
+        quien: yo(), perfil_id: S.perfil ? S.perfil.id : null,
+        nota: nota || '', salida: sd.clave,
+        resuelta_el: null, resuelta_por: '',
+      };
+      const { error } = await sb.from('expedientes')
+        .update({ datos: e.datos, actualizado: new Date().toISOString() }).eq('id', id);
+      if (error) throw error;
+
+      /* El aviso al grupo. Va por la conversación de la puerta, fijado con
+         chincheta: un mensaje fijado suena siempre, lo escriba quien lo
+         escriba, y además se queda visible en la ficha de la puerta. Si la
+         conversación no está instalada, el expediente queda igualmente en
+         revisión y sale en la lista de Oficina: el aviso es un extra, no la
+         manera de enterarse. */
+      if (!S.sinMensajes){
+        try {
+          await sb.from('mensajes').insert({
+            aviso_id: e.aviso_id || null,
+            puerta_id: e.puerta_id || null,
+            texto: 'Expediente '+(e.referencia||'')+' listo para revisar y emitir.'+
+                   (nota ? ' '+nota : ''),
+            fijado: true,
+            perfil_id: S.perfil ? S.perfil.id : null,
+            quien: yo(),
+          });
+          await contarMensajes();
+        } catch(_){ /* sin aviso, pero en revisión */ }
+      }
+      cerrarDlg(); await cargar(); pintar();
+      toast('Pasado a revisión. Sale en Oficina y queda fijado en la conversación de la puerta.');
+    } catch(err){ setErr(err.message); }
+  });
 }
 
 function dlgEmitirExpediente(id){
@@ -16173,6 +16404,11 @@ function dlgEmitirExpediente(id){
   /* Ya no hay botón deshabilitado: siempre se puede emitir algo. Lo que decide
      el estado del expediente es QUÉ documento sale. */
   const sd = salidaDocumental(e);
+
+  /* Red de seguridad: si lo que procede acredita conformidad y quien lo intenta
+     no es el administrador, esto no se emite, se pasa a revisión. El botón ya lo
+     impide, pero la acción podría llegar por otro camino. (16-11-2026) */
+  if (!puedeEmitirSalida(sd)) return dlgPedirRevision(id);
 
   let h = '<h3>Emitir el expediente</h3>'+
     '<div class="'+(sd.acredita ? 'nota-oficina' : 'aviso-caja')+'" style="margin:0 0 12px">'+
@@ -16231,6 +16467,11 @@ function dlgEmitirExpediente(id){
       e.datos.versiones = nuevaVersion(e, val('xe-motivo'), sd.salida.estado, val('xe-firm'));
       e.datos.estado_doc = sd.salida.estado;
       e.datos.salida_doc = sd.clave;
+      /* Si estaba esperando revisión, ya está revisado: deja de salir en la
+         lista de Oficina, pero la petición no se borra. (16-11-2026) */
+      if (expEnRevision(e))
+        e.datos.revision = Object.assign({}, revisionDe(e),
+          { resuelta_el: new Date().toISOString(), resuelta_por: yo() });
       /* La copia congelada de los componentes ya la tiene el propio expediente en
          e.datos.comp, que es lo que imprime el documento y no cambia cuando luego
          se sustituya una banda. No se guarda otra copia aparte: dos sitios
@@ -30749,6 +30990,7 @@ raiz.addEventListener('click', async e => {
   else if (a === 'exp-informe') informeSituacion(b.dataset.id);
   else if (a === 'exp-propuesta') propuestaActuaciones(b.dataset.id);
   else if (a === 'exp-emitir') dlgEmitirExpediente(b.dataset.id);
+  else if (a === 'exp-revisar') dlgPedirRevision(b.dataset.id);
   else if (a === 'vida-puerta') vidaPuerta(b.dataset.id, b.dataset.v);
   else if (a === 'exp-nueva-entrega') dlgRegistrarEntrega(S.exp);
   else if (a === 'exp-acta') actaEntrega(S.exp, b.dataset.v);
