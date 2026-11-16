@@ -944,12 +944,35 @@ paso('dice la regla de oro: la oficina prepara, David firma',
 /* El capítulo que de verdad protege */
 paso('tiene un capítulo sobre cuándo parar y preguntar',
   /Cuándo parar y preguntar/i.test(ofi));
-paso('y manda parar ante adecuación o modificación sustancial',
-  /adecuación y modificación sustancial/i.test(ofi));
+/* ---- Tres comprobaciones cambiadas el 16-11-2026 ----
+   Estaban en rojo por un cambio deliberado, no por un fallo: David repasó los
+   siete puntos del capítulo 7 uno por uno y lo reescribimos con seis.
+
+     · «parar ante adecuación o modificación sustancial» → ahora el punto
+       manda parar cuando EL CUESTIONARIO de la intervención da D o E. El
+       cuestionario ya existía en la aplicación y el manual no lo contaba: no
+       se pide a nadie que adivine lo que el programa ya calcula.
+
+     · «ante una cortafuegos» → la frase «invalida el ensayo» sigue ahí, pero
+       lo primero que dice el punto es que la aplicación ya no deja elegir la
+       vía de fabricante en esa familia. Lo que queda por vigilar es lo físico:
+       cambiar una pieza por otra «equivalente».
+
+     · «si el cliente presiona» → ese punto SE FUE del capítulo 7, por decisión
+       de David: «que la puerta cumpla o no cumpla normativa no es una decisión
+       del cliente, sino una decisión técnica». Ya no es un caso en el que haya
+       que preguntar nada. Vive en el capítulo 6, con apartado propio, y se
+       comprueba ahí abajo.
+   La suite revision.mjs vigila los seis puntos uno por uno. */
+paso('manda parar cuando el cuestionario de la intervención da D o E',
+  /cuestionario de la intervención dé D o E/i.test(ofi));
 paso('y ante una cortafuegos',
   /cortafuegos/i.test(ofi) && /invalida el ensayo/i.test(ofi));
-paso('y si el cliente presiona para que un informe diga que cumple',
-  /presione/i.test(ofi) && /cumple/i.test(ofi));
+paso('explica que la conformidad no se negocia, y por qué',
+  /La conformidad no se negocia/i.test(ofi) &&
+  /no es una decisión/i.test(ofi));
+paso('y que esa documentación la emite solo el administrador',
+  /solo el administrador/i.test(ofi));
 
 /* Lo que más se equivoca el sector */
 paso('avisa de que las peatonales NO llevan declaración de prestaciones',
