@@ -1,6 +1,6 @@
 # ARIZA SAT · Manual de oficina
 
-Versión 2026.11.14-1
+Versión 2026.11.16-1
 
 Este manual es para quien lleva la oficina: los avisos, los presupuestos, la
 facturación y la documentación de las puertas.
@@ -18,12 +18,17 @@ Antes de nada, la regla que gobierna todo lo demás:
 > **La oficina prepara. David firma.**
 
 En la documentación normativa tú montas el expediente, reúnes los datos, pasas
-las comprobaciones y lo dejas listo. **Quien decide la situación del expediente
-y quien emite la documentación definitiva es David.**
+las comprobaciones y lo dejas listo. **La documentación que acredita que una
+puerta cumple la emite David**, y la aplicación no te deja emitirla a ti: ahí el
+botón dice «Listo para revisar».
 
-No es desconfianza ni burocracia. Es que algunas de esas decisiones cambian
-quién responde legalmente de esa puerta, y quien responde es él, que firma como
-administrador único.
+No es desconfianza ni burocracia. Es que ese papel cambia quién responde
+legalmente de esa puerta, y quien responde es él, que firma como administrador
+único.
+
+Las decisiones del expediente sí son tuyas, y quedan a tu nombre: la aplicación
+guarda quién eligió qué se estaba documentando y cuándo. Lo que se te pide es que
+las tomes con el expediente delante y que pares en los seis casos del capítulo 7.
 
 Por eso hay un capítulo entero, el 7, que se llama **«Cuándo parar y
 preguntar»**. Si de todo este manual solo lees un capítulo, que sea ese.
@@ -292,9 +297,43 @@ gente del sector desconoce: **la empresa pasa a ser el fabricante de la máquina
 con todas las obligaciones. No es una reparación: es poner una máquina nueva en el
 mercado.
 
-> **Esta decisión no la tomas tú.** Prepara el expediente, y si tienes la menor
-> duda entre adecuación y modificación, pregunta. Es la diferencia entre un
-> informe y asumir la responsabilidad de fabricante.
+### No tienes que adivinar entre adecuación y modificación
+
+Esto es lo que casi nadie del sector tiene resuelto, y aquí **no se decide de
+oído**. El primer apartado del expediente, el que la aplicación te pone antes que
+cualquier otro, se llama **Naturaleza de la intervención**, y funciona así:
+
+1. **Eliges el tipo de intervención.** Es la decisión previa, y hasta que no está
+   tomada la aplicación no genera ningún documento.
+2. Si la puerta **se pone nueva en el mercado**, ahí se acaba: no hay nada que
+   evaluar, porque no existía una máquina anterior.
+3. Si se ha intervenido en una puerta que ya existía, salen **doce preguntas**
+   sobre lo que se ha hecho. Algunas te las contesta la propia aplicación con
+   datos que ya constan en el expediente, y te dice de dónde las ha sacado. El
+   resto las contestas tú.
+
+De ahí sale un resultado **de la A a la E**, con el razonamiento escrito al lado,
+y ese razonamiento se imprime después en el documento. Así la decisión no es una
+opinión de nadie: es una conclusión que se puede leer, discutir y defender.
+
+Tres cosas que tienes que saber de ese cuestionario:
+
+- **Las preguntas son obligatorias.** Una en blanco deja el cuestionario
+  incompleto y no se clasifica nada.
+- **«No se sabe» no es una respuesta cómoda.** En las preguntas críticas, marcar
+  que no se sabe lleva el resultado a **E**, que significa que no puede decidirse.
+- **Sustituir una pieza por otra «equivalente» hay que justificarlo.** Si dices
+  que lo es, la aplicación te pide en qué te basas; si dices que no lo es, el
+  caso sube a modificación sustancial.
+
+Lo que te corresponde: contesta **con lo que el técnico ha hecho de verdad**, no
+con lo que estaba previsto hacer. Lee el resultado y su razonamiento. Y si sale
+**D (modificación sustancial)** o **E (no puede determinarse)**, para y pregunta
+antes de seguir.
+
+> La aplicación resuelve la parte técnica de la decisión. Lo que no puede
+> resolver es si la empresa quiere asumir ser fabricante de esa máquina, y eso
+> sí es de David.
 
 ### Lo segundo: la familia
 
@@ -369,6 +408,63 @@ En la pantalla de emitir verás dos listas:
 
 Léelas. Casi siempre te dicen exactamente qué dato falta.
 
+### Quién emite qué
+
+La regla de la primera página se cumple aquí, y la aplicación la hace cumplir
+sola:
+
+| Documento | Quién lo emite |
+|---|---|
+| Informe de situación y deficiencias | oficina o administrador |
+| Informe de intervención, pendiente de verificación | oficina o administrador |
+| Documentación de conformidad | **solo el administrador** |
+
+Los dos informes describen lo que hay delante, y los puede firmar quien lo ha
+preparado. La documentación de conformidad afirma algo sobre la puerta frente a
+terceros, y de eso responde la empresa.
+
+Cuando un expediente ya da para documentación de conformidad y entras desde
+oficina, el botón no dice **Emitir** sino **Listo para revisar**. Al pulsarlo:
+
+1. El expediente queda marcado como preparado, con tu nombre y la fecha.
+2. Puedes dejar una nota diciendo qué quieres que se mire.
+3. Se queda fijado un mensaje en la conversación de esa puerta, que suena en el
+   grupo.
+4. Y sale en **Oficina**, arriba, en la lista «Listos para revisar y emitir»,
+   hasta que se emita.
+
+Eso es todo lo que tienes que hacer. No hay que llamar por teléfono ni recordarlo
+al día siguiente: el expediente ya está pidiendo turno por sí mismo.
+
+### La conformidad no se negocia
+
+Esto merece capítulo propio porque es la presión más habitual del oficio.
+
+Antes o después un cliente va a pedir, con buenas o con malas palabras, que un
+informe diga que su puerta cumple. Puede pedirlo porque se lo exige su seguro,
+porque se lo pide una inspección, porque le vence una licencia o porque tiene
+prisa.
+
+**Que una puerta cumpla o no cumpla no es una decisión.** Es un hecho técnico
+sobre la puerta, que se comprueba, se mide y se documenta. No lo decide el
+cliente, no lo decides tú, no lo decide David y no lo decide la prisa.
+
+Por eso la aplicación está hecha como está: **siempre te deja documentar lo que
+te has encontrado**, y nunca te deja titular como conforme un expediente que no
+lo es. Si el expediente no da para una conformidad, lo que hay que hacer no es
+discutir el documento, es **completar la puerta**: arreglar lo que esté mal,
+comprobar lo que falte por comprobar y volver a emitir. Para eso existe el
+historial de versiones.
+
+Lo que se le dice al cliente, y se le puede decir con tranquilidad, es esto:
+
+> Lo que hoy puede documentarse es el estado en que está la puerta. Si quieres el
+> certificado de conformidad, estas son las actuaciones que faltan; se hacen, se
+> verifican, y entonces sale.
+
+La propuesta de actuaciones existe precisamente para eso: para que la
+conversación no sea «fírmame esto» sino «qué falta y cuánto cuesta».
+
 ---
 
 ## 7. Cuándo parar y preguntar
@@ -376,37 +472,65 @@ Léelas. Casi siempre te dicen exactamente qué dato falta.
 **Este es el capítulo importante del manual.**
 
 Tu trabajo es dejar los expedientes preparados. Lo que no es tu trabajo es
-decidir en los casos de abajo. Cuando te encuentres uno, para, déjalo preparado
-y pregunta.
+decidir en los seis casos de abajo. Cuando te encuentres uno, para, déjalo
+preparado y pregunta.
+
+Antes de la lista, dos avisos que ahorran tiempo:
+
+- **No estás sola decidiendo.** En varios de estos casos la aplicación ya ha
+  hecho el trabajo técnico y te da el resultado escrito. Lo que se te pide no es
+  que lo resuelvas: es que no lo pases por alto.
+- **Parar no es quedarse quieta.** Parar es dejar el expediente completo hasta
+  donde llega, dejar la nota, y mandarlo. Mientras se revisa, el trabajo sigue:
+  la asistencia se factura igual, la propuesta de actuaciones se puede mandar
+  igual. Lo único que espera es el papel que acredita.
 
 **Para siempre, sin excepción, cuando:**
 
-1. **Haya que decidir entre adecuación y modificación sustancial.** Es la
-   diferencia entre emitir un informe y que la empresa pase a ser fabricante de
-   esa máquina.
+**1. El cuestionario de la intervención dé D o E.**
+D es modificación sustancial: la empresa pasaría a ser **fabricante** de esa
+máquina. E es que no puede determinarse. En los dos casos la aplicación te lo
+escribe con todas las letras y te explica por qué. No lo fuerces, no cambies
+respuestas para que salga otra cosa y no sigas rellenando el expediente como si
+no hubiera pasado nada: para ahí y pásalo. Es la diferencia entre emitir un
+informe y asumir la responsabilidad de fabricante.
 
-2. **La puerta sea cortafuegos y alguien plantee tocarla.** Cambiar una pieza por
-   otra «equivalente» en una cortafuegos invalida el ensayo del conjunto.
+**2. La puerta sea cortafuegos y alguien plantee tocarla.**
+La aplicación ya no te deja autocertificar una cortafuegos: en esa familia las
+vías de fabricante **ni aparecen**. Pero eso solo cierra el camino documental, no
+el físico. Cambiar una pieza por otra «equivalente» en una cortafuegos
+invalida el ensayo del conjunto, y el conjunto es lo que está certificado, no la
+pieza. Si alguien propone sustituir algo que no sea el recambio exacto del
+fabricante, para y pregunta antes de que se monte.
 
-3. **Se vaya a emitir una declaración de prestaciones.** Comprueba antes que la
-   familia la lleva. Las peatonales no.
+**3. Vaya a salir una declaración de prestaciones.**
+Comprueba antes que la familia la lleva. Las **peatonales automáticas no la
+llevan**, y una barrera de uso exclusivo para vehículos tampoco. La aplicación lo
+avisa en la cabecera del expediente, pero este es un papel que va al cliente con
+el nombre de la empresa: míralo tú también.
 
-4. **Una puerta antigua lleve a discusión** sobre qué se le puede exigir. La
-   norma no se aplica a maquinaria fabricada antes de su publicación, y eso
-   cambia el fundamento de lo que se exige, aunque no exima de que sea segura.
+**4. La aplicación diga que no puede determinar algo.**
+Cuando se para, se para por algo. Normalmente porque falta un dato que nadie ha
+preguntado todavía en la puerta: la fecha de puesta en servicio, cómo se acciona,
+quién la usa, qué pone el manual del fabricante. Apunta qué falta, pídelo, y
+hasta entonces no fuerces el documento.
 
-5. **El cliente presione para que un informe diga que su puerta cumple.** Esa
-   frase no la decide el cliente, ni tú, ni la prisa.
+**5. El expediente ya dé para documentación de conformidad.**
+Ese papel lo firma David. Tú lo dejas terminado y le das a **Listo para
+revisar**. No es un trámite de cortesía: es el punto en el que la empresa pasa de
+describir a afirmar.
 
-6. **La aplicación diga que no puede determinar la naturaleza de la
-   intervención.** Cuando se para, se para por algo.
-
-7. **Vaya a salir un documento a nombre de la empresa y tengas dudas.** La duda
-   es gratis. El papel firmado no.
+**6. Vaya a salir un documento a nombre de la empresa y tengas dudas.**
+Cualquiera, por pequeña que parezca. **La duda es gratis. El papel firmado no.**
 
 **Cómo preguntar bien:** deja el expediente guardado, escribe lo que has visto en
-la conversación de esa puerta y dile a David cuál es tu duda concreta. Así lo
-mira con todo delante y queda escrito para quien venga después.
+la conversación de esa puerta y di cuál es tu duda concreta. Así se mira con todo
+delante y queda escrito para quien venga después. Un «llámame» por teléfono no
+deja rastro; un mensaje en la puerta sí, y dentro de dos años seguirá ahí.
+
+**Lo que no es parar:** dejar el expediente a medias sin avisar, mandarlo sin
+nota, o escribir «mira esto» sin decir qué. Eso no es pedir ayuda, es mover el
+problema de mesa.
 
 ---
 
@@ -485,7 +609,9 @@ aplicación que no están disponibles.
 
 ## 12. Lo que nunca debes hacer
 
-- **Emitir una documentación de conformidad que David no haya revisado.**
+- **Cambiar respuestas del cuestionario de intervención para que salga otro
+  resultado.** Eso no arregla la puerta: lo único que hace es poner por escrito,
+  firmado y con tu nombre, algo que no es cierto.
 - **Contestar «sí» a una comprobación que nadie ha mirado.** Para eso está «sin
   resultado».
 - **Cambiar el tipo de una asistencia solo para que salga un número mejor.**
