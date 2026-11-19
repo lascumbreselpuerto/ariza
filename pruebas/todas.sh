@@ -77,6 +77,25 @@ if [ -z "${1:-}" ] && [ -x "$AQUI/sql.sh" ]; then
   fi
 fi
 
+# Y la siembra del día de ejemplo de los manuales, que también levanta su
+# propio Postgres. Si se rompe, las capturas de los manuales no se pueden
+# rehacer, y un manual que no se puede rehacer envejece hasta que engaña.
+if [ -z "${1:-}" ] && [ -x "$AQUI/siembra.sh" ]; then
+  echo "── siembra ─────────────────────────────"
+  SALIDA_SI="$("$AQUI/siembra.sh" 2>&1)"
+  CODIGO_SI=$?
+  echo "$SALIDA_SI" | grep -aE "FALLA|bien, [0-9]+ mal" || true
+  N_SI="$(echo "$SALIDA_SI" | grep -acE '^  ok ')"
+  TOTAL=$((TOTAL + ${N_SI:-0}))
+  if [ "$CODIGO_SI" = "0" ]; then
+    echo "siembra: ${N_SI:-0} bien" >> "$RESUMEN"
+  else
+    M_SI="$(echo "$SALIDA_SI" | grep -acE '^ FALLA')"
+    FALLOS=$((FALLOS + ${M_SI:-1}))
+    echo "siembra: ${M_SI:-1} fallos" >> "$RESUMEN"
+  fi
+fi
+
 echo
 echo "═══════════════════════════════════════"
 cat "$RESUMEN"
