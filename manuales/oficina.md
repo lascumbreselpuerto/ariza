@@ -1,6 +1,6 @@
 # ARIZA SAT · Manual de oficina
 
-Versión 2026.11.19-1
+Versión 2026.11.19-2
 
 Este manual es para quien lleva la oficina: los avisos, los presupuestos, la
 facturación y la documentación de las puertas.
