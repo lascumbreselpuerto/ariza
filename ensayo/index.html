@@ -87,7 +87,18 @@ html{scroll-padding-top:104px}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px}
 .panel-h{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between;margin-bottom:12px}
 .panel-h h2,.panel-h h3{font-size:20px}
-.stack{display:grid;gap:16px;padding-top:16px}
+/* ---- Por qué la rejilla lleva minmax(0,1fr) y los bloques min-width:0 ----
+   Sin esas dos cosas, una rejilla no deja que sus bloques se encojan por
+   debajo de lo que mide su contenido más ancho. En las listas no se nota,
+   porque no hay nada ancho. En la ficha de una puerta sí: en un móvil de 375
+   el contenido se ponía a 540 y se quedaban FUERA DE LA PANTALLA el chip del
+   estado, el botón de editar la ficha, el final de los mensajes de oficina y
+   el teléfono del cliente. Y la página no se desplaza a lo ancho, así que no
+   había manera de llegar a ellos: no estaban escondidos, estaban perdidos.
+   Lo encontré el 19-11-2026 haciendo las capturas del manual del técnico, que
+   es justo quien lleva el móvil. (19-11-2026) */
+.stack{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;padding-top:16px}
+.stack>*{min-width:0}
 .fila{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .sp{flex:1}
 .muted{color:var(--muted)}
@@ -2117,7 +2128,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.16-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.19-2';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -8091,6 +8102,15 @@ function vistaEquipo(){
                 partes, en las bajas de material y en el almacén. */
              '<button class="btn sm plana" data-act="equipo-nombre" data-id="'+t.id+'">Cambiar el nombre</button>'+
              (t.rol==='admin'?'':'<button class="btn sm" data-act="equipo-activo" data-id="'+t.id+'" data-v="'+(t.activo?'0':'1')+'">'+(t.activo?'Quitar acceso':'Dar acceso')+'</button>')+
+             /* ---- Borrar del todo (19-11-2026) ----
+                David: «quiero poder eliminar definitivamente al usuario que
+                necesite». Quitar el acceso cierra la puerta pero la persona
+                sigue en la lista para siempre, y una empresa tiene bajas.
+                Solo sale cuando ya está sin acceso: para borrar a alguien hay
+                que haberle quitado el acceso antes, que es un paso que da
+                tiempo a pensarlo. Y nunca sobre un administrador. */
+             (t.rol==='admin' || t.activo ? ''
+               : '<button class="btn sm plana" data-act="equipo-borrar" data-id="'+t.id+'">Eliminar</button>')+
            '</div></td></tr>';
     });
     h += '</tbody></table></div>';
@@ -27598,6 +27618,67 @@ const MOTIVOS_ANULAR = [
   'La puerta ya no es de este cliente',
   'Se ha sustituido por otra asistencia',
 ];
+/* ---- Borrar del todo a alguien del equipo (19-11-2026) ----
+
+   POR QUÉ PIDE ESCRIBIR EL NOMBRE
+   Porque es lo único de toda la aplicación que no tiene vuelta atrás y que
+   además afecta a una persona. Un «¿seguro?» con un botón al lado se pulsa sin
+   leerlo; escribir el nombre obliga a mirar a quién estás borrando.
+
+   Y porque el botón vive en una tabla con una fila por persona: pulsar el de
+   la fila de al lado es un error de un píxel. Escribiendo el nombre, ese error
+   no llega a ninguna parte. */
+async function dlgBorrarDelEquipo(id){
+  const t = (S.equipo || []).find(x => x.id === id);
+  if (!t) return;
+  if (t.rol === 'admin'){ toast('A un administrador no se le borra desde aquí.'); return; }
+  if (S.perfil && S.perfil.id === t.id){ toast('No puedes borrarte a ti mismo.'); return; }
+
+  const nombre = (t.nombre || '').trim();
+  /* Lo que esa persona deja detrás, contado con números y no en abstracto:
+     es la diferencia entre entender lo que vas a romper y suponerlo. */
+  const visitas = (S.avisos || []).filter(a => a.tecnico_id === t.id).length;
+  const furgos  = (S.ubicaciones || []).filter(u => u.perfil_id === t.id);
+
+  const h = '<h3>Eliminar del equipo</h3>'+
+    '<div class="mal-caja" style="margin:0 0 12px"><b>'+esc(nombre || 'Esta persona')+
+    '</b> desaparece de la lista y su cuenta deja de existir. <b>No tiene vuelta atrás.</b>'+
+    '<p class="mini" style="margin:6px 0 0">Si algún día vuelve, hay que darle de alta otra vez '+
+    'y entrará como alguien nuevo.</p></div>'+
+    '<p class="mini" style="margin:0 0 6px"><b>Lo que NO se pierde:</b> su trabajo. Los partes llevan '+
+    'su nombre escrito, no un enlace, así que seguirás viendo quién hizo cada visita. Lo mismo con '+
+    'los mensajes que escribió y con las firmas de los partes.</p>'+
+    '<p class="mini" style="margin:0 0 12px"><b>Lo que sí se suelta:</b> '+
+    (visitas ? '<b>'+visitas+'</b> visita(s) suya(s) se quedan sin técnico asignado. ' : '')+
+    (furgos.length ? '<b>'+esc(furgos.map(f => f.nombre).join(', '))+'</b> se queda sin dueño y hay '+
+      'que reasignarla. ' : '')+
+    'Y su foto se borra.</p>'+
+    '<div class="campos">'+
+    '<div class="campo full"><label for="bt-nombre">Escribe <b>'+esc(nombre)+'</b> para confirmar</label>'+
+      '<input id="bt-nombre" type="text" autocomplete="off" placeholder="'+esc(nombre)+'">'+
+      '<span class="pista">Tal cual está escrito arriba. Es a propósito: así no se borra a nadie '+
+      'de un clic mal dado.</span></div>'+
+    '</div><p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Dejarlo como está</button>'+
+    '<button type="submit" class="btn armado">Eliminar a '+esc(nombre.split(' ')[0] || 'esta persona')+'</button></div>';
+
+  abrirDlg(h, async () => {
+    if (normTxt(val('bt-nombre')) !== normTxt(nombre))
+      return setErr('El nombre no coincide. Escríbelo tal cual sale arriba.');
+    try {
+      const { data, error } = await sb.functions.invoke('borrar-tecnico', { body: { id: t.id } });
+      if (error) throw error;
+      if (!data || !data.ok) return setErr((data && data.error) ||
+        'No se ha podido borrar. Comprueba que la función borrar-tecnico está desplegada.');
+      cerrarDlg(); await cargar(); pintar();
+      toast((data.nombre || 'La cuenta') + ' ya no existe.');
+    } catch(err){
+      setErr('No se ha podido borrar: ' + (err.message || err) +
+             '. Si pone que no se encuentra la función, falta desplegar borrar-tecnico en Supabase.');
+    }
+  });
+}
+
 function dlgAnular(id){
   const a = S.avisos.find(x => x.id === id);
   if (!a) return;
@@ -31807,6 +31888,7 @@ raiz.addEventListener('click', async e => {
     try { const { error } = await sb.from('perfiles').update({ activo: b.dataset.v === '1' }).eq('id', b.dataset.id); if (error) throw error; await cargar(); }
     catch(err){ fallo(err); }
   }
+  else if (a === 'equipo-borrar') dlgBorrarDelEquipo(b.dataset.id);
 });
 raiz.addEventListener('input', e => {
   if (e.target.dataset.act === 'busca'){ S.busca = e.target.value; pintar(); }
