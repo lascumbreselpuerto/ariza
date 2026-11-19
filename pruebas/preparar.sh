@@ -228,6 +228,7 @@ dlgConversacion dlgConversacionPuerta enviarMensaje fijarMensaje traerMensajes
 contarMensajes botonConversacion hiloHTML ordenMensajes pintarFijadosFicha filaMensaje
 AMBITO_12453 EXP_NORMAS EXP_SIT_AYUDA FUERZA_12453 MATRIZ_NO_APLICA_A libroMantenimiento
 situacionesPara puedeEmitirSalida revisionDe expEnRevision expsEnRevision altaDe
+dlgBorrarDelEquipo
 dlgPedirRevision dlgExpedienteNuevo dlgEmitirExpediente EXP_REGIMEN NOMBRE_ROL esAdmin
 S sb
 """.split()
