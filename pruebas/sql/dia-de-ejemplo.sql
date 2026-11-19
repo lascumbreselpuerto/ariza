@@ -20,9 +20,10 @@
 -- manuales se puedan repartir sin que salga ni un cliente de verdad.
 --
 -- ANTES DE EJECUTARLO HACE FALTA
--- Que exista el usuario del técnico de pruebas y que haya entrado UNA VEZ en
--- la aplicación, porque la ficha del equipo se crea al entrar. Si no, este
--- fichero se para y te lo dice.
+-- Solo una cosa: que exista el usuario  tecnico@prueba.es  en Authentication
+-- -> Users, con «Auto Confirm User» marcado. No hace falta haber entrado con
+-- él: si le falta la ficha del equipo, este fichero se la crea. Si el usuario
+-- no existe, se para y te lo dice.
 --
 -- SE PUEDE EJECUTAR DOS VECES. La segunda no duplica nada. Y si lo lanzas otro
 -- día, mueve las dos visitas al día que sea, para que sigan saliendo en «Hoy».
@@ -47,22 +48,28 @@ declare
   v_hoy   date := current_date;
 begin
   -- ---- El técnico de pruebas ----
-  select p.id into v_tec
-    from public.perfiles p
-    join auth.users u on u.id = p.id
+  -- Basta con que exista la credencial. La ficha del equipo la crea la
+  -- aplicación la primera vez que alguien entra, pero si ese alta falla, la
+  -- aplicación sigue con una ficha que solo existe en la memoria del navegador
+  -- y no avisa de nada: se entra, se ve todo normal, y en la base no hay nada.
+  -- Así que aquí no se da por hecho: si la ficha falta, se crea. (19-11-2026)
+  select u.id into v_tec
+    from auth.users u
    where lower(u.email) = 'tecnico@prueba.es';
 
   if v_tec is null then
-    raise exception E'\n\nNo encuentro al técnico de pruebas.\n'
-      'Antes de ejecutar esto hay que:\n'
-      '  1. Crear el usuario  tecnico@prueba.es  en Authentication -> Users,\n'
-      '     con «Auto Confirm User» marcado.\n'
-      '  2. Entrar UNA VEZ con él en arizapa.es/ensayo/, para que la aplicación\n'
-      '     le cree la ficha del equipo.\n'
+    raise exception E'\n\nNo encuentro al usuario del técnico de pruebas.\n'
+      'Antes de ejecutar esto hay que crear el usuario  tecnico@prueba.es\n'
+      'en Authentication -> Users, con «Auto Confirm User» marcado.\n'
       'Y entonces volver aquí.\n';
   end if;
 
-  update public.perfiles set nombre = 'Dani Ruiz' where id = v_tec;
+  insert into public.perfiles (id, nombre, rol, activo)
+  select v_tec, 'Dani Ruiz', 'tecnico', true
+   where not exists (select 1 from public.perfiles where id = v_tec);
+
+  update public.perfiles set nombre = 'Dani Ruiz', rol = 'tecnico', activo = true
+   where id = v_tec;
 
   -- ---- Los dos clientes ----
   -- «tipo» sale de la lista CLIENTES de la aplicación.
