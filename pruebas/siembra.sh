@@ -55,24 +55,35 @@ psql -h $SOCK -p $PUERTO -U ariza -d siembra -v ON_ERROR_STOP=1 -q \
 
 echo "── La siembra del día de ejemplo ───────────────"
 
-# 1. Sin el técnico, se para y lo cuenta.
+# 1. Sin el usuario, se para y lo cuenta.
 SAL=$(psql -h $SOCK -p $PUERTO -U ariza -d siembra -v ON_ERROR_STOP=1 -q \
         -f "$AQUI/sql/dia-de-ejemplo.sql" 2>&1)
-echo "$SAL" | grep -q "No encuentro al técnico" \
-  && ok "sin técnico se para y dice qué falta" \
-  || no "sin técnico NO avisa"
-echo "$SAL" | grep -qiE "Authentication|arizapa.es/ensayo" \
-  && ok "y dice dónde crearlo y dónde entrar" \
+echo "$SAL" | grep -q "No encuentro al usuario" \
+  && ok "sin el usuario se para y dice qué falta" \
+  || no "sin el usuario NO avisa"
+echo "$SAL" | grep -qi "Authentication" \
+  && ok "y dice dónde crearlo" \
   || no "el aviso no dice dónde hacerlo"
 [ "$(q 'select count(*) from clientes')" = "0" ] \
   && ok "y no deja nada a medias" \
   || no "ha dejado filas pese a pararse"
 
-# 2. El técnico, como lo deja Supabase más el primer acceso.
+# 2. Solo la credencial, SIN ficha de equipo. Es el caso que se dio de verdad
+#    el 19-11-2026: el usuario estaba creado, se había entrado con él, y en
+#    perfiles no había nada. La aplicación, si ese alta le falla, sigue con una
+#    ficha que solo existe en la memoria del navegador y no avisa. Así que la
+#    siembra no da por hecha la ficha: si falta, la crea.
 psql -h $SOCK -p $PUERTO -U ariza -d siembra -q >/dev/null 2>&1 <<EOF
 insert into auth.users (id, email) values ('$TEC','tecnico@prueba.es');
-insert into public.perfiles (id, nombre, rol, activo) values ('$TEC','Dani','tecnico',true);
 EOF
+psql -h $SOCK -p $PUERTO -U ariza -d siembra -v ON_ERROR_STOP=1 -q \
+  -f "$AQUI/sql/dia-de-ejemplo.sql" >/dev/null 2>&1
+[ "$(q "select count(*) from perfiles where id='$TEC' and rol='tecnico' and activo")" = "1" ] \
+  && ok "con la credencial pero sin ficha, se la crea como técnico activo" \
+  || no "no crea la ficha que falta"
+[ "$(q "select nombre from perfiles where id='$TEC'")" = "DaniRuiz" ] \
+  && ok "y le pone el nombre del ejemplo" \
+  || no "la ficha no se llama Dani Ruiz"
 
 # 3. Primera vuelta.
 psql -h $SOCK -p $PUERTO -U ariza -d siembra -v ON_ERROR_STOP=1 -q \
