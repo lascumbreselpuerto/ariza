@@ -2128,7 +2128,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.19-2';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.19-3';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -2216,7 +2216,22 @@ async function entrar(sesion){
   if (!per){
     const nombre = (S.user.email||'').split('@')[0];
     const ins = await sb.from('perfiles').insert({ id:S.user.id, nombre, rol: (S.user.email===ADMIN?'admin':'tecnico') }).select().maybeSingle();
+    /* ---- Si el alta de la ficha falla, HAY QUE DECIRLO (19-11-2026) ----
+       Antes esto seguía con una ficha inventada aquí mismo, sin avisar. El
+       resultado: esa persona entra, lo ve todo normal, y para la base de datos
+       NO EXISTE. No se le pueden asignar visitas, no sale en Equipo, y nadie
+       entiende por qué, porque por su lado todo parecía ir bien.
+       Nos pasó el 19-11-2026 montando la aplicación de pruebas, y costó un
+       rato largo averiguarlo porque la aplicación no dijo ni una palabra.
+       La ficha de memoria se mantiene, para que se pueda seguir mirando y no
+       quedarse con la pantalla en blanco, pero ahora el aviso sale y se queda
+       hasta que alguien lo lea. */
     per = ins.data || { id:S.user.id, nombre, rol:(S.user.email===ADMIN?'admin':'tecnico'), activo:true };
+    if (!ins.data){
+      S.altaFichaFallida = true;
+      S.altaFichaMotivo = (ins.error && (ins.error.message || ins.error.hint)) || 'no se ha podido guardar';
+      console.error('ARIZA SAT · el alta de la ficha del equipo no ha entrado:', ins.error);
+    }
   }
   S.perfil = per;
   $('#quien').innerHTML = '<span class="dot"></span>' + esc(per.nombre || S.user.email) + (per.rol==='admin' ? ' · admin' : '');
@@ -2771,6 +2786,12 @@ function render(){
   else if (S.tab === 'equipo') h = vistaEquipo();
   else if (S.tab === 'manual') h = vistaManual();
   else h = vistaPuertas();
+  /* ---- El aviso de que la ficha del equipo no se guardó (19-11-2026) ----
+     Va delante de TODO, en todas las pantallas y sin manera de quitarlo,
+     porque mientras eso siga así esta persona no existe para la empresa: no se
+     le pueden asignar visitas y no sale en Equipo. Y por su lado la aplicación
+     se ve normal, que es justo lo que hace el fallo difícil de encontrar. */
+  if (S.altaFichaFallida) h = avisoFichaSinGuardar() + h;
   raiz.innerHTML = h;
   /* El índice va en cualquier pantalla larga, no solo en Equipo. No se pone
      sobre una ficha abierta (puerta, cliente o expediente): ahí el índice es el
@@ -2789,6 +2810,23 @@ function render(){
   } else if (!mismoSitio){
     try { window.scrollTo(0, 0); } catch(_){}
   }
+}
+
+/* ---- El cartel de la ficha que no se guardó ----
+   Dice las tres cosas que hacen falta para arreglarlo: qué ha pasado, qué
+   significa para quien lo está leyendo, y a quién avisar. Un aviso que solo
+   dice «ha habido un error» no sirve de nada en una furgoneta. */
+function avisoFichaSinGuardar(){
+  return '<div class="stack"><div class="panel mal-caja">'+
+    '<b>Tu ficha del equipo no se ha guardado.</b>'+
+    '<p class="mini" style="margin:6px 0 0">Puedes mirar la aplicación, pero para la '+
+    'empresa todavía no estás dado de alta: no se te pueden asignar visitas y no '+
+    'sales en la lista del equipo.</p>'+
+    '<p class="mini" style="margin:6px 0 0">Avisa a la oficina y di que hay que darte '+
+    'de alta a mano. No es culpa tuya y no se arregla volviendo a entrar.</p>'+
+    '<p class="mini" style="margin:6px 0 0;opacity:.7">Motivo técnico: '+
+    esc(S.altaFichaMotivo || 'desconocido')+'</p>'+
+    '</div></div>';
 }
 
 /* ---- Puertas ---- */
@@ -4247,7 +4285,16 @@ async function cargarManual(clave){
   S.manuales = S.manuales || {};
   if (S.manuales[clave] !== undefined) return;
   try {
-    const r = await fetch(m.fichero);
+    /* ---- Por qué el manual se pide con la versión pegada (19-11-2026) ----
+       Sin eso, el navegador guarda el manual y lo sigue sirviendo después de
+       haberlo cambiado. Y como el manual lleva dentro la versión que describe,
+       la aplicación comparaba el manual VIEJO con la versión NUEVA y sacaba el
+       cartel de «este manual describe otra versión, avisa a la oficina».
+       O sea: el aviso daba la alarma por un desajuste que ya no existía, y la
+       manera de quitarlo era un cartel que nadie sabe cómo se quita.
+       Con la versión en la dirección, cada versión de la aplicación se trae su
+       manual una vez y luego lo guarda, que es lo que se quiere. */
+    const r = await fetch(m.fichero + '?v=' + ARIZA_VERSION);
     S.manuales[clave] = r.ok ? await r.text() : null;
   } catch(_){ S.manuales[clave] = null; }
   pintar();
