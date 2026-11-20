@@ -126,7 +126,17 @@ Este es el capítulo que más dinero mueve.
 Cuando el técnico cierra el parte, la visita queda **cerrada pero sin valorar**.
 Valorar es decir cuánto se cobra por ella.
 
-Se hace desde **Realizadas**, abriendo la visita. La aplicación calcula sola:
+Se hace desde **Oficina → Gestión**, no desde Realizadas. Las visitas que esperan
+están en dos listas de esa pantalla: **Pendiente de facturar** y las que todavía
+no tienen valoración. Se pulsa encima de una y se abre.
+
+> **Hasta el 20 de noviembre de 2026 este manual decía que se valoraba desde
+> Realizadas, y no es así.** En Realizadas se ve el histórico de lo cerrado, con
+> su parte y su puerta, pero no se valora desde ahí. Se encontró haciendo las
+> capturas del manual en papel: la pantalla no tenía el botón que el manual
+> decía.
+
+La aplicación calcula sola:
 
 - Las **horas**, al precio de técnico o de equipo de dos
 - El **desplazamiento**, según la ruta del cliente
