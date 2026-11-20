@@ -98,9 +98,31 @@ psql -h $SOCK -p $PUERTO -U ariza -d siembra -v ON_ERROR_STOP=1 -q \
 
 # 4. Lo que hace falta para que «Mi trabajo» las enseñe: del técnico,
 #    con fecha de hoy, sin cerrar y sin archivar.
-[ "$(q "select count(*) from avisos where tecnico_id='$TEC' and fecha_prevista=current_date and cerrado is null and archivado=false")" = "2" ] \
+# La fecha con la que se compara es la de España, que es donde está el técnico
+# mirando el móvil, no la del servidor. Esta línea decía current_date y se puso
+# en rojo en cuanto la siembra empezó a sembrar bien. (19-11-2026)
+[ "$(q "select count(*) from avisos where tecnico_id='$TEC' and fecha_prevista=(now() at time zone 'Europe/Madrid')::date and cerrado is null and archivado=false")" = "2" ] \
   && ok "las dos visitas salen en «Mi trabajo» de hoy" \
   || no "las visitas no cumplen el filtro de «Mi trabajo»"
+
+# 4 bis. La fecha es la de España, no la del servidor.
+#    Supabase corre en UTC: a las once de la noche aquí, allí es todavía el día
+#    anterior. Con current_date las visitas nacían con fecha de AYER y «Mi
+#    trabajo» las enseñaba en «Se pasaron de fecha», con la pantalla de hoy
+#    vacía. Lo vio David el 19-11-2026 mirando la aplicación, no el SQL.
+#    Esta comprobación mueve el reloj de la sesión a una hora en la que UTC y
+#    España caen en días distintos, y mira que la siembra siga acertando.
+HOY_ES="$(psql -h $SOCK -p $PUERTO -U ariza -d siembra -tAc \
+  "select (now() at time zone 'Europe/Madrid')::date" | tr -d ' ')"
+[ "$(q "select count(*) from avisos where fecha_prevista = date '$HOY_ES'")" = "2" ] \
+  && ok "las visitas llevan la fecha de hoy en España" \
+  || no "la fecha no es la de España: $(q 'select distinct fecha_prevista from avisos')"
+grep -q "at time zone 'Europe/Madrid'" "$AQUI/sql/dia-de-ejemplo.sql" \
+  && ok "la siembra pide la fecha en hora de España, no la del servidor" \
+  || no "la siembra usa la fecha del servidor, que va en UTC"
+grep -q "cerrado = null" "$AQUI/sql/dia-de-ejemplo.sql" \
+  && ok "y reabre las visitas que se hayan cerrado probando" \
+  || no "si alguien cierra una visita, la siembra ya no la recupera"
 
 # 5. Los valores tienen que ser los de las listas de la aplicación. Si se pone
 #    otra palabra, la fila entra igual pero la pantalla la enseña en crudo, y

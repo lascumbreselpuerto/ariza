@@ -991,6 +991,15 @@ paso('y que «sin resultado» no es lo mismo que conforme',
 
 /* El dinero */
 paso('avisa de que cobrar no es facturar', /Cobrar no es facturar/i.test(ofi));
+
+/* ---- Dónde se valora (20-11-2026) ----
+   El manual decía que se valoraba desde Realizadas, y no es así: se valora
+   desde Gestión. Se encontró haciendo las capturas del manual en papel, porque
+   la pantalla no tenía el botón que el manual decía. Un manual que manda a la
+   pantalla equivocada hace perder más tiempo que no tener manual. */
+paso('dice que se valora desde Gestión, no desde Realizadas',
+     /valorar[\s\S]{0,400}Oficina → Gestión/i.test(ofi) &&
+     !/Se hace desde \*\*Realizadas\*\*/.test(ofi));
 paso('y del trabajo vendido que se valora en cero',
   /se valora en cero/i.test(ofi));
 paso('y de que el coste y el margen no salen en ningún presupuesto',
