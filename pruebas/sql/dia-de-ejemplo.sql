@@ -45,7 +45,13 @@ declare
   v_furgo uuid;
   v_nave  uuid;
   v_av1   uuid;
-  v_hoy   date := current_date;
+  -- ---- Hoy, pero el de El Puerto, no el del servidor ----
+  -- Supabase corre en UTC. A las once de la noche en España allí todavía es
+  -- el día anterior, así que current_date sembraba las visitas con fecha de
+  -- AYER y «Mi trabajo» las enseñaba en «Se pasaron de fecha» en vez de en
+  -- «Hoy». Lo encontró David el 19-11-2026, mirando la pantalla, cuando
+  -- llevábamos un rato dándole vueltas a por qué no salían. (19-11-2026)
+  v_hoy   date := (now() at time zone 'Europe/Madrid')::date;
 begin
   -- ---- El técnico de pruebas ----
   -- Basta con que exista la credencial. La ficha del equipo la crea la
@@ -194,8 +200,11 @@ begin
 
   -- Si el fichero se lanza otro día, las visitas se mueven a hoy. Así las
   -- capturas siempre salen en el bloque «Hoy» y no en «Se pasaron de fecha».
-  update public.avisos set fecha_prevista = v_hoy
-   where puerta_id in (v_pue1, v_pue2) and cerrado is null;
+  -- Y se reabren, por si se cerró alguna haciendo pruebas: una visita cerrada
+  -- desaparece de «Mi trabajo» y deja la pantalla vacía.
+  update public.avisos
+     set fecha_prevista = v_hoy, cerrado = null, estado = 'asignado'
+   where puerta_id in (v_pue1, v_pue2);
 
   -- ---- Una conversación, para la pantalla del hilo ----
   insert into public.mensajes (aviso_id, puerta_id, texto, fijado, quien)
@@ -221,7 +230,8 @@ union all select 'componentes',    count(*) from public.componentes
 union all select 'material',       count(*) from public.articulos
 union all select 'movimientos',    count(*) from public.movimientos_material
 union all select 'mensajes',       count(*) from public.mensajes
-union all select 'visitas de hoy', count(*) from public.avisos where fecha_prevista = current_date
+union all select 'visitas de hoy', count(*) from public.avisos
+   where fecha_prevista = (now() at time zone 'Europe/Madrid')::date
 order by 1;
 
 
