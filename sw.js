@@ -1,4 +1,4 @@
-/* ARIZA SAT: guarda la app en el móvil para que abra rápido y sin cobertura.
+/* Safe2door: guarda la app en el móvil para que abra rápido y sin cobertura.
 
    EL NOMBRE DE LA CACHÉ LLEVA LA VERSIÓN DENTRO, Y NO ES UN DETALLE.
    Hasta el 15-10-2026 se llamaba 'ariza-sat-v3' y no cambiaba nunca. Como el
@@ -13,7 +13,7 @@
    LA VERSIÓN DE AQUÍ TIENE QUE SER LA MISMA QUE LA DE index.html. El banco de
    pruebas lo comprueba y se pone en rojo si se despistan: si no coincidieran,
    la caché no se renovaría al entregar y volveríamos al mismo problema. */
-const VERSION = '2026.11.19-3';
+const VERSION = '2026.11.22-1';
 const CACHE = 'ariza-sat-' + VERSION;
 const SHELL = ['./index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 

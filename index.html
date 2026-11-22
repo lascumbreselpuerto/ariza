@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>ARIZA SAT</title>
+<title>Safe2door</title>
 <meta name="theme-color" content="#1C1817">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Ariza SAT">
+<meta name="apple-mobile-web-app-title" content="Safe2door">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -46,7 +46,7 @@ img{max-width:100%}
 .top{background:var(--negro);color:#fff;position:sticky;top:0;z-index:5}
 .top-in{max-width:1000px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .marca{display:flex;align-items:center;gap:9px;font-family:var(--cond);font-size:22px;font-weight:700;letter-spacing:.02em}
-.marca i{width:26px;height:22px;background:var(--amarillo);clip-path:polygon(50% 0,100% 100%,72% 100%,50% 44%,28% 100%,0 100%);display:block}
+.marca i{width:26px;height:22px;background:var(--amarillo);clip-path:polygon(2% 38%,36% 70%,98% 0,98% 26%,36% 96%,2% 64%);display:block}
 .marca b{color:var(--amarillo);font-weight:700}
 .top .sp{flex:1}
 .top .quien{font-size:13px;color:#CFC9C4;display:flex;align-items:center;gap:8px}
@@ -579,7 +579,7 @@ dialog::backdrop{background:rgba(20,18,17,.55)}
   </div>
   <header class="top">
     <div class="top-in">
-      <span class="marca"><i></i>ARIZA <b>SAT</b></span>
+      <span class="marca"><i></i>safe<b>2</b>door</span>
       <span class="sp"></span>
       <span class="quien" id="quien"></span>
       <button class="btn sm plana" id="btn-salir" style="color:#fff;border-color:#4A4442;background:transparent">Salir</button>
@@ -609,7 +609,7 @@ dialog::backdrop{background:rgba(20,18,17,.55)}
 <!-- Login -->
 <form id="login" class="login" hidden>
   <div class="panel">
-    <h2 style="font-size:22px">Entrar en ARIZA SAT</h2>
+    <h2 style="font-size:22px">Entrar en Safe2door</h2>
     <div class="campo"><label for="l-mail">Correo</label><input id="l-mail" type="email" autocomplete="username" inputmode="email"></div>
     <div class="campo"><label for="l-pass">Contraseña</label><input id="l-pass" type="password" autocomplete="current-password"></div>
     <p class="err" id="l-err" role="alert"></p>
@@ -629,7 +629,7 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 /* ================= Configuración ================= */
 const SUPA_URL = 'https://dgxoiuvuidawovpoewwl.supabase.co';
 const SUPA_KEY = 'sb_publishable_26cGPRb06Y3tNEU0Hw6Zrw_rF3gquaN';
-const BASE_QR  = 'https://arizapa.es/#';
+const BASE_QR  = 'https://safe2door.es/#';
 const ADMIN    = 'arizapuertasautomaticas@gmail.com';
 
 const sb = createClient(SUPA_URL, SUPA_KEY);
@@ -1463,7 +1463,7 @@ async function vistaContratoPublico(token){
   if (error || !data){
     cont.innerHTML = '<div class="tarjeta"><h1>Contrato no encontrado</h1>'+
       '<p>Este código no corresponde a ningún contrato en vigor.</p>'+
-      '<a class="btn sec" href="./" style="text-align:center;text-decoration:none;display:block">Ir a ARIZA SAT</a></div>';
+      '<a class="btn sec" href="./" style="text-align:center;text-decoration:none;display:block">Ir a Safe2door</a></div>';
     return;
   }
   const cada = data.a_peticion ? 'Revisiones a petición'
@@ -1649,7 +1649,7 @@ async function vistaPublica(ref){
   cont.innerHTML = '<p class="pie">Consultando…</p>';
   const { data, error } = await sb.rpc('ficha_publica', { p_codigo: ref.codigo, p_token: ref.token });
   if (error || !data){
-    cont.innerHTML = '<div class="tarjeta"><h1>Etiqueta no encontrada</h1><p>Esta etiqueta todavía no está asignada a ninguna puerta, o el código no es correcto.</p><p class="mini">Si eres técnico de Ariza, entra en la aplicación para darla de alta.</p><a class="btn sec" href="./" style="text-align:center;text-decoration:none;display:block">Ir a ARIZA SAT</a></div>';
+    cont.innerHTML = '<div class="tarjeta"><h1>Etiqueta no encontrada</h1><p>Esta etiqueta todavía no está asignada a ninguna puerta, o el código no es correcto.</p><p class="mini">Si eres técnico de Ariza, entra en la aplicación para darla de alta.</p><a class="btn sec" href="./" style="text-align:center;text-decoration:none;display:block">Ir a Safe2door</a></div>';
     return;
   }
   const est = ESTADOS[data.estado] || ESTADOS.operativa;
@@ -2116,7 +2116,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.19-3';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.22-1';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -2141,7 +2141,7 @@ async function comprobarVersion(){
   S.versionNueva = v;
   const barra = document.getElementById('barra-version');
   const txt = document.getElementById('barra-version-txt');
-  if (txt) txt.textContent = 'Hay una versión nueva de ARIZA SAT (' + v + '). '+
+  if (txt) txt.textContent = 'Hay una versión nueva de Safe2door (' + v + '). '+
     'Tienes la ' + ARIZA_VERSION + '. Recarga para tenerla.';
   if (barra) barra.hidden = false;
 }
@@ -2218,7 +2218,7 @@ async function entrar(sesion){
     if (!ins.data){
       S.altaFichaFallida = true;
       S.altaFichaMotivo = (ins.error && (ins.error.message || ins.error.hint)) || 'no se ha podido guardar';
-      console.error('ARIZA SAT · el alta de la ficha del equipo no ha entrado:', ins.error);
+      console.error('Safe2door · el alta de la ficha del equipo no ha entrado:', ins.error);
     }
   }
   S.perfil = per;
@@ -2600,7 +2600,7 @@ async function dlgConversacionPuerta(puertaId){
 function puertaDeEtiqueta(txt){
   let s = String(txt || '').trim();
   if (!s) return null;
-  /* Lo que lee la cámara es la URL entera (https://arizapa.es/#AR-0001-KJ47),
+  /* Lo que lee la cámara es la URL entera (https://safe2door.es/#AR-0001-KJ47),
      pero el campo de escribir a mano recibe solo el código. Lo que vale es
      siempre lo que va detrás de la almohadilla. */
   const alm = s.lastIndexOf('#');
@@ -9546,7 +9546,7 @@ async function copiaSeguridad(conFicheros){
     aviso('Preparando el fichero…');
     const sello = fechaHora(resumen.fecha);
     let sql = '-- ================================================================\n'+
-      '-- RESTAURACIÓN DE ARIZA SAT\n'+
+      '-- RESTAURACIÓN DE Safe2door\n'+
       '-- Copia del '+sello+'\n'+
       '-- Empresa: '+(em.razon_social||'')+'\n'+
       '--\n'+
@@ -9566,7 +9566,7 @@ async function copiaSeguridad(conFicheros){
 
     const total = Object.values(resumen.tablas).reduce((a, b) => a + b, 0);
     const manifiesto =
-      'COPIA DE SEGURIDAD DE ARIZA SAT\n'+
+      'COPIA DE SEGURIDAD DE Safe2door\n'+
       '================================\n\n'+
       'Fecha de la copia: '+sello+'\n'+
       'Empresa: '+(em.razon_social||'')+(em.nif ? ' · '+em.nif : '')+'\n'+
@@ -9606,7 +9606,7 @@ async function copiaSeguridad(conFicheros){
         : 'Sin avisos: todo lo que se ha intentado copiar se ha copiado.\n');
 
     const leeme =
-      'CÓMO RESTAURAR ARIZA SAT\n'+
+      'CÓMO RESTAURAR Safe2door\n'+
       '========================\n\n'+
       'Esta copia es del '+sello+'.\n\n'+
       'QUÉ HAY EN ESTE ZIP\n'+
@@ -9636,7 +9636,7 @@ async function copiaSeguridad(conFicheros){
       '    volver a invitar a cada técnico.\n'+
       '  - La estructura de las tablas y los permisos. Están en los .sql de\n'+
       '    creación, no aquí.\n'+
-      '  - La aplicación en sí, que está en GitHub y en arizapa.es.\n\n'+
+      '  - La aplicación en sí, que está en GitHub y en safe2door.es.\n\n'+
       'CADA CUÁNTO HACERLA\n'+
       '-------------------\n'+
       'Una vez a la semana la copia completa, y guardarla en dos sitios\n'+
@@ -16922,7 +16922,7 @@ function documentoCPF(){
     '<h2>7. Tratamiento de lo que no cumple</h2>'+lista(c.noconforme)+
 
     '<h2>8. Registros</h2>'+
-    '<p>El registro de cada puerta es su expediente de documentación, generado por la aplicación ARIZA SAT, '+
+    '<p>El registro de cada puerta es su expediente de documentación, generado por la aplicación Safe2door, '+
     'que recoge la identificación del producto, los elementos instalados con su fotografía, las comprobaciones '+
     'de cumplimiento, el ensayo de fuerzas y la documentación de los fabricantes de los componentes.</p>'+
     '<p>Los expedientes y la documentación técnica se conservan <b>diez años</b> desde la fabricación de la '+
@@ -17136,7 +17136,7 @@ function etiquetaCE(expId){
         '<div class="leg">Reglamento (UE) 305/2011'+
         (motor && M ? '<br>'+esc(M.nombre.split(',')[0]) : '')+
         (motor ? '<br>Directiva 2014/30/UE' : '')+
-        '<br>'+esc(em.web || 'arizapa.es')+'</div></div></div>'+
+        '<br>'+esc(em.web || 'safe2door.es')+'</div></div></div>'+
     '</div></body></html>');
   w.document.close();
 }
@@ -18491,7 +18491,7 @@ async function libroExpediente(id){
       (em.telefono?(esc(em.telefono)+'<br>'):'')+
       (em.email?(esc(em.email)+'<br>'):'')+
       (em.web?esc(em.web):'')+'</div>'+
-    '<p class="min pie-legal">Documento generado por ARIZA SAT. '+
+    '<p class="min pie-legal">Documento generado por Safe2door. '+
     'La conservación de este expediente corresponde al titular de la instalación. '+
     'La empresa conserva su expediente técnico durante diez años.</p>'+
     '</section>';
@@ -20105,7 +20105,7 @@ let alGuardar = null;
    deduce lector/laboratorio.py. Las pruebas están en lector/probar.mjs y
    lector/probar-duro.mjs. ===== */
 /* ===========================================================================
-   Descifrador de QR escrito para ARIZA SAT · 08-11-2026
+   Descifrador de QR escrito para Safe2door · 08-11-2026
    ---------------------------------------------------------------------------
    Por qué está escrito a mano y no es una librería de fuera:
    Safari no trae lector de códigos (BarcodeDetector), así que en el iPhone de
@@ -20885,7 +20885,7 @@ raiz.__qrInterno = { binarizar: binarizar, buscarOjos: buscarOjos, corregir: cor
    lector/barras.py, comprobadas por OpenCV. Las pruebas están en
    lector/probar-barras.mjs y en pruebas/codigos.mjs. ===== */
 /* ===========================================================================
-   Lector de códigos de barras del fabricante · ARIZA SAT · 08-11-2026
+   Lector de códigos de barras del fabricante · Safe2door · 08-11-2026
    ---------------------------------------------------------------------------
    Lee EAN-13, EAN-8, UPC-A y Code 128 de un fotograma de la cámara. Va junto
    al lector de QR, dentro del index.html, para que funcione sin cobertura.
@@ -26858,7 +26858,7 @@ function hojaEtiquetasMaterial(){
       '<div class="desc">'+esc(corto)+'</div></div>';
   }).join('');
   w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8">'+
-    '<title>Etiquetas de material · ARIZA SAT</title><style>'+
+    '<title>Etiquetas de material · Safe2door</title><style>'+
     '@page{size:A4;margin:8mm}body{margin:0;font-family:system-ui,sans-serif;background:#fff;color:#000}'+
     '.hoja-grid{display:grid;grid-template-columns:repeat(4,45mm);gap:4mm;padding:4mm}'+
     '.etq{width:45mm;height:52mm;border:.2mm dashed #bbb;padding:2mm;display:flex;flex-direction:column;'+
@@ -30648,7 +30648,7 @@ async function hojaParte(avisoId){
       'display:flex;align-items:center;justify-content:center;font:700 18px sans-serif;border:1px solid #ddd}'+
     '@media print{body{padding:0}}</style></head><body>'+
     '<div class="cab"><div><h1>Parte de asistencia</h1><div>'+esc(tipoAsis(a))+' · '+fechaHora(a.creado)+'</div></div>'+
-    '<div style="text-align:right"><b>ARIZA</b> puertas automáticas<br><span style="color:#6B6560">arizapa.es</span></div></div>'+
+    '<div style="text-align:right"><b>ARIZA</b> puertas automáticas<br><span style="color:#6B6560">safe2door.es</span></div></div>'+
     (nomTec ? ('<div class="quien">'+
       (caraUrl ? '<img src="'+caraUrl+'" alt="'+esc(nomTec)+'">'
                : '<div class="ini">'+esc(inicialesTec(nomTec))+'</div>')+
@@ -30748,7 +30748,7 @@ async function hojaContrato(id){
   const cuerpo =
     '<div class="cab"><div><h1>Contrato de mantenimiento</h1>'+
       '<div class="ref">'+esc(k.referencia||'')+'</div></div>'+
-      '<div class="marca"><b>ARIZA</b> puertas automáticas<br><span>arizapa.es'+
+      '<div class="marca"><b>ARIZA</b> puertas automáticas<br><span>safe2door.es'+
         (S.ajustes.telefono_avisos ? ' · '+esc(S.ajustes.telefono_avisos) : '')+'</span></div></div>'+
 
     '<h2>Las partes</h2><table>'+
@@ -30993,7 +30993,7 @@ function etiquetaTermica(codigo){
       '<div class="cod">'+esc(codigo)+'</div>'+
       '<div class="pie">'+
         (tel ? '<div class="tel"><small>O llámanos</small>'+esc(tel)+'</div>' : '')+
-        '<div class="web">arizapa.es</div>'+
+        '<div class="web">safe2door.es</div>'+
       '</div>'+
     '</div></body></html>');
   w.document.close();
@@ -31013,9 +31013,9 @@ function hojaImprimible(){
        (10-11-2026) */
     return '<div class="etq"><div class="logo">ARIZA <span style="color:#C98F08">puertas automáticas</span></div>'+
            '<div class="lema">'+LEMA_QR[0]+'</div>'+
-           svgQR(url, '30mm')+'<div class="cod">'+e.codigo+'</div><div class="url">arizapa.es</div></div>';
+           svgQR(url, '30mm')+'<div class="cod">'+e.codigo+'</div><div class="url">safe2door.es</div></div>';
   }).join('');
-  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Etiquetas ARIZA SAT</title>'+
+  w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Etiquetas Safe2door</title>'+
     '<style>@page{size:1000mm 500mm;margin:5mm}body{margin:0;font-family:system-ui,sans-serif;background:#fff;color:#000}'+
     '.hoja-grid{display:grid;grid-template-columns:repeat(auto-fill,50mm);gap:5mm;padding:5mm}'+
     '.etq{width:50mm;height:65mm;border:.2mm dashed #bbb;padding:3mm;display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-align:center;page-break-inside:avoid}'+

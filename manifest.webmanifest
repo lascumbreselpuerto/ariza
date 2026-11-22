@@ -1,7 +1,7 @@
 {
-  "name": "ARIZA SAT",
-  "short_name": "Ariza SAT",
-  "description": "Puertas, avisos y mantenimiento de Ariza Puertas y Automatismos.",
+  "name": "Safe2door",
+  "short_name": "Safe2door",
+  "description": "Seguridad en puertas automáticas. Puertas, avisos y mantenimiento.",
   "lang": "es",
   "start_url": "./",
   "scope": "./",
