@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.11.19-3**
+> **Versión de la aplicación que describe este manual: 2026.11.22-1**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -987,7 +987,7 @@ cliente.
 
 ### Lo que esta aplicación no hace, y por qué
 
-ARIZA SAT **no emite facturas ni las numera**. La factura se emite con el
+Safe2door **no emite facturas ni las numera**. La factura se emite con el
 programa de facturación, y aquí se apunta su número y sus fechas para poder
 seguir el cobro.
 
@@ -1001,7 +1001,7 @@ determinado. Para las sociedades, desde el **1 de enero de 2027**.
 
 Y la conformidad no la da la Agencia Tributaria: la acredita una **declaración
 responsable del fabricante del programa**. En un programa de desarrollo propio,
-el fabricante es la propia empresa. Es decir, que si ARIZA SAT emitiera
+el fabricante es la propia empresa. Es decir, que si Safe2door emitiera
 facturas, sería David quien declara que cumple, con su nombre.
 
 Por eso la aplicación llega hasta el borde y se para ahí: calcula qué hay que
@@ -1283,7 +1283,7 @@ adecuación que nadie ha pedido todavía.
 
 ---
 
-## 9. Cómo se registra todo esto en ARIZA SAT
+## 9. Cómo se registra todo esto en Safe2door
 
 La aplicación no es un cuaderno bonito: está construida sobre lo que acabas de leer.
 
@@ -1365,4 +1365,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.19-3 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.22-1 de Safe2door*

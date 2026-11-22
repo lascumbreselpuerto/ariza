@@ -1,6 +1,6 @@
-# ARIZA SAT · Manual de oficina
+# Safe2door · Manual de oficina
 
-Versión 2026.11.19-3
+Versión 2026.11.22-1
 
 Este manual es para quien lleva la oficina: los avisos, los presupuestos, la
 facturación y la documentación de las puertas.

@@ -1,4 +1,4 @@
-# ARIZA SAT · Manual del técnico
+# Safe2door · Manual del técnico
 
 **Para el equipo de Ariza Puertas y Automatismos.**
 Esto no explica el oficio: explica la aplicación. Da por hecho que sabes de puertas.
@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.19-3**
+> **Versión de la aplicación que describe este manual: 2026.11.22-1**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -281,7 +281,7 @@ cliente, no la de dentro, por muy registrado que estés.
 
 **Lo que tienes que hacer:**
 
-1. Abre **ARIZA SAT** (el icono, no el navegador).
+1. Abre **Safe2door** (el icono, no el navegador).
 2. En **Mi trabajo** o en **Puertas**, dale a **«Leer etiqueta»**.
 3. Pon el QR dentro del recuadro verde y acerca hasta que lo llene.
 4. Se abre la **ficha de dentro** de esa puerta, con lo que le falta.
@@ -1450,4 +1450,4 @@ que mire ahí antes de nada. Puede ser eso.
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.19-3 de ARIZA SAT*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.22-1 de Safe2door*
