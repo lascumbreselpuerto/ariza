@@ -441,6 +441,70 @@ else
   echo "  OK   todas las pruebas de la carpeta se lanzan"
 fi
 
+# ---- El instalador, contra una base de verdad vacía (17-11-2026) ----
+# POR QUÉ ESTÁ ESTO AQUÍ
+# El instalador del 14-11-2026 se dio por probado y estaba incompleto: le
+# faltaban 18 tablas y 15 funciones. Pasó porque se probó CONTRA EL ANDAMIO, y
+# el andamio crea a mano justo las tablas que al instalador le faltaban.
+#
+# Así que esta prueba no usa el andamio. Usa supabase-minimo.sql, que monta
+# SOLO lo que pone Supabase: los roles, auth y storage. Si al instalador le
+# falta algo, aquí se cae.
+#
+# Y lo ejecuta DOS VECES, porque un instalador que no se puede relanzar deja la
+# base en un sitio del que no se sale cuando falla a mitad.
+INST="$SRV/instalar-ariza-sat.sql"
+if [ -f "$INST" ]; then
+  echo ""
+  echo "── El instalador, sobre una base de verdad vacía ──"
+  psql -h $SOCK -p $PUERTO -U ariza -d postgres -c "drop database if exists ariza_nueva" >/dev/null 2>&1
+  psql -h $SOCK -p $PUERTO -U ariza -d postgres -c "create database ariza_nueva" >/dev/null 2>&1
+  PSQLN="psql -h $SOCK -p $PUERTO -U ariza -d ariza_nueva -v ON_ERROR_STOP=1 --quiet"
+  if ! $PSQLN -f "$AQUI/sql/supabase-minimo.sql" > /tmp/supa-min.log 2>&1; then
+    echo " FALLA el mínimo de Supabase:"; grep -m3 -E "ERROR" /tmp/supa-min.log | sed 's/^/         /'
+    fallos=$((fallos+1))
+  else
+    echo "  OK   lo que pone Supabase, y nada más"
+    for v in 1 2; do
+      if $PSQLN -f "$INST" > "/tmp/instalador-$v.log" 2>&1; then
+        echo "  OK   el instalador, vuelta $v"
+      else
+        echo " FALLA el instalador, vuelta $v"
+        grep -m3 -E "^psql:|ERROR" "/tmp/instalador-$v.log" | sed 's/^/         /'
+        fallos=$((fallos+1))
+      fi
+    done
+    # Y lo que de verdad importa: que no falte nada de lo que la aplicación usa.
+    FALTA=$(psql -h $SOCK -p $PUERTO -U ariza -d ariza_nueva -t -A -c "
+      select string_agg(x, ', ') from (
+        select unnest(array['clientes','puertas','avisos','perfiles','expedientes',
+                            'tarifas','valoraciones','materiales','ajustes','etiquetas']) as x
+      ) t where not exists (
+        select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
+         where n.nspname = 'public' and c.relname = t.x)" 2>/dev/null)
+    if [ -z "$FALTA" ]; then
+      echo "  OK   las tablas troncales están todas"
+    else
+      echo " FALLA faltan tablas troncales: $FALTA"; fallos=$((fallos+1))
+    fi
+    FALTAF=$(psql -h $SOCK -p $PUERTO -U ariza -d ariza_nueva -t -A -c "
+      select string_agg(x, ', ') from (
+        select unnest(array['crear_expediente','emitir_expediente','valorar_aviso',
+                            'ficha_publica','es_equipo','es_gestion']) as x
+      ) t where not exists (
+        select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+         where n.nspname = 'public' and p.proname = t.x)" 2>/dev/null)
+    if [ -z "$FALTAF" ]; then
+      echo "  OK   las funciones que la aplicación llama están todas"
+    else
+      echo " FALLA faltan funciones: $FALTAF"; fallos=$((fallos+1))
+    fi
+  fi
+else
+  echo ""
+  echo " FALLA no existe $INST"; fallos=$((fallos+1))
+fi
+
 echo ""
 echo "═══════════════════════════════════════"
 if [ "$fallos" -eq 0 ]; then
