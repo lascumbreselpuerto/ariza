@@ -2,6 +2,11 @@
 
 Versión 2026.11.22-1
 
+> **Las fotos de este manual son de antes del cambio de nombre.** La aplicación
+> se llamaba ARIZA SAT y así aparece en la barra de arriba de cada pantalla.
+> En tu móvil esa barra dice **safe2door**. Todo lo demás es igual: los mismos
+> botones, en el mismo sitio y con el mismo nombre. (22-11-2026)
+
 Este manual es para quien lleva la oficina: los avisos, los presupuestos, la
 facturación y la documentación de las puertas.
 

@@ -8,6 +8,11 @@ Explica el oficio y cómo se documenta. No da por sabido nada.
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
 
+> **Las fotos de este manual son de antes del cambio de nombre.** La aplicación
+> se llamaba ARIZA SAT y así aparece en la barra de arriba de cada pantalla.
+> En tu móvil esa barra dice **safe2door**. Todo lo demás es igual: los mismos
+> botones, en el mismo sitio y con el mismo nombre. (22-11-2026)
+
 ---
 
 ## 1. Una puerta automática es una máquina

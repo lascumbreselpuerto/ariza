@@ -36,6 +36,11 @@ abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
 
+> **Las fotos de este manual son de antes del cambio de nombre.** La aplicación
+> se llamaba ARIZA SAT y así aparece en la barra de arriba de cada pantalla.
+> En tu móvil esa barra dice **safe2door**. Todo lo demás es igual: los mismos
+> botones, en el mismo sitio y con el mismo nombre. (22-11-2026)
+
 ---
 
 ## 1. Lo que haces el 90 % de los días
