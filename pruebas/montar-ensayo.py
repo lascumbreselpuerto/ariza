@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ============================================================================
-# ARIZA SAT · Monta la aplicación de ENSAYO a partir de la de producción
+# Safe2door · Monta la aplicación de ENSAYO a partir de la de producción
 #
 # POR QUÉ ES UN GUION Y NO UNA COPIA A MANO
 # Porque la aplicación de ensayo tiene que ser la MISMA que la buena, salvo
@@ -67,17 +67,17 @@ cambia("const SUPA_KEY = '%s'" % k.group(1),
        "const SUPA_KEY = '%s'" % KEY_ENSAYO, 'la clave de la base')
 
 # ---- 2. Que se note ----
-cambia('<title>ARIZA SAT</title>',
-       '<title>ARIZA SAT · PRUEBAS</title>', 'el título de la pestaña')
-cambia('<meta name="apple-mobile-web-app-title" content="Ariza SAT">',
-       '<meta name="apple-mobile-web-app-title" content="Ariza PRUEBAS">',
+cambia('<title>Safe2door</title>',
+       '<title>Safe2door · PRUEBAS</title>', 'el título de la pestaña')
+cambia('<meta name="apple-mobile-web-app-title" content="Safe2door">',
+       '<meta name="apple-mobile-web-app-title" content="Safe2door PRUEBAS">',
        'el nombre en el móvil')
 cambia('<meta name="theme-color" content="#1C1817">',
        '<meta name="theme-color" content="#7A1F1F">', 'el color del navegador')
 
 # La cabecera, que es lo único que se ve SIEMPRE, esté donde esté la pantalla.
-cambia('<span class="marca"><i></i>ARIZA <b>SAT</b></span>',
-       '<span class="marca"><i></i>ARIZA <b>SAT</b>'
+cambia('<span class="marca"><i></i>safe<b>2</b>door</span>',
+       '<span class="marca"><i></i>safe<b>2</b>door'
        '<span class="ens-eti">PRUEBAS</span></span>',
        'la marca de la cabecera')
 

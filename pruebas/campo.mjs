@@ -26,6 +26,15 @@
    que nadie ha mirado. Por eso lo copiado se enseña, y lo que es de
    una puerta y solo de una no se copia nunca.
    ================================================================ */
+
+/* ---- El dominio cambió el 22-11-2026 ----
+   La aplicación pasó a llamarse Safe2door y el QR de las etiquetas dejó de
+   apuntar a arizapa.es para apuntar a safe2door.es. Estas comprobaciones
+   llevaban el dominio viejo escrito y se pusieron rojas, que es lo que tenían
+   que hacer. Se cambian aquí porque el cambio fue a propósito, no porque
+   molestaran. Se hizo con cero etiquetas pegadas en la calle, que fue el
+   motivo de hacerlo entonces y no más tarde. */
+
 import { chromium } from 'playwright';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -157,7 +166,7 @@ bloque('3. La etiqueta del material, desde el parte');
 const lee = await T(() => {
   const g = window.__T;
   return {
-    qr: g.articuloDeEtiqueta('https://arizapa.es/#M-MAT0001-A3K9'),
+    qr: g.articuloDeEtiqueta('https://safe2door.es/#M-MAT0001-A3K9'),
     soloCod: g.articuloDeEtiqueta('M-MAT0002-B4L0'),
     aMano: g.articuloDeEtiqueta('MAT-0001'),
     sinGuion: g.articuloDeEtiqueta('mat0002'),

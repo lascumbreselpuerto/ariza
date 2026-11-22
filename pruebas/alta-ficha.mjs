@@ -72,7 +72,7 @@ paso('el código mira si el alta devolvió fila y enciende el aviso',
 paso('y guarda el motivo que da la base, para poder arreglarlo',
      /altaFichaMotivo\s*=\s*\(ins\.error/.test(src));
 paso('y lo deja también en la consola del navegador',
-     /console\.error\('ARIZA SAT · el alta de la ficha del equipo no ha entrado:/.test(src));
+     /console\.error\('Safe2door · el alta de la ficha del equipo no ha entrado:/.test(src));
 
 /* Y en pantalla: el cartel se pinta delante de todo, en cualquier pestaña. */
 paso('el cartel se pone por delante de la pantalla que toque',

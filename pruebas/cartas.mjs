@@ -1,7 +1,7 @@
 // ================================================================
 // Cartas de presentación del envío a revisión + cuestionario común.
 //
-// Para qué: mandar los documentos que emite ARIZA SAT a quien pueda
+// Para qué: mandar los documentos que emite Safe2door a quien pueda
 // revisarlos (asociaciones del sector, Administración, laboratorio) y
 // recibir respuestas que se puedan cargar en la aplicación.
 //

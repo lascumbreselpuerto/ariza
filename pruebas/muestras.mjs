@@ -1,5 +1,5 @@
 // ================================================================
-// Generador de muestras en PDF de TODOS los documentos de ARIZA SAT.
+// Generador de muestras en PDF de TODOS los documentos de Safe2door.
 //
 // Para qué: para poder revisarlos con calma, enseñárselos a un
 // técnico de confianza, a una asociación del sector o a la
@@ -12,6 +12,15 @@
 //
 //   Uso:  ./preparar.sh && node muestras.mjs [carpeta-de-salida]
 // ================================================================
+
+/* ---- El dominio cambió el 22-11-2026 ----
+   La aplicación pasó a llamarse Safe2door y el QR de las etiquetas dejó de
+   apuntar a arizapa.es para apuntar a safe2door.es. Estas comprobaciones
+   llevaban el dominio viejo escrito y se pusieron rojas, que es lo que tenían
+   que hacer. Se cambian aquí porque el cambio fue a propósito, no porque
+   molestaran. Se hizo con cero etiquetas pegadas en la calle, que fue el
+   motivo de hacerlo entonces y no más tarde. */
+
 import { chromium } from 'playwright';
 import { readFileSync, mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -28,7 +37,7 @@ const EMPRESA = {
   razon_social:'Ariza Puertas y Automatismos S.L.U.', nif:'B72004849',
   domicilio:'Calle Orilla 19', cp:'11500', poblacion:'El Puerto de Santa María',
   provincia:'Cádiz', telefono:'661 352 795',
-  email:'arizapuertasautomaticas@gmail.com', web:'arizapa.es',
+  email:'arizapuertasautomaticas@gmail.com', web:'safe2door.es',
   representante:'David Ariza Arana', cargo_firmante:'Administrador único',
   responsable_tecnico:'David Ariza Arana',
 };
@@ -676,7 +685,7 @@ const QUE_ES = {
     'ul{margin:4px 0 0;padding-left:18px}li{margin-bottom:3px}'+
     '</style></head><body>'+
     '<div class="marca">ARIZA <span>puertas automáticas</span></div>'+
-    '<h1>Documentos que genera ARIZA SAT</h1>'+
+    '<h1>Documentos que genera Safe2door</h1>'+
     '<p>Muestras de todos los documentos que la aplicación produce, para revisión '+
     'técnica. Generadas el '+new Date().toLocaleDateString('es-ES',
       { day:'numeric', month:'long', year:'numeric' })+'.</p>'+

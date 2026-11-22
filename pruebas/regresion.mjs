@@ -1,5 +1,5 @@
 // ================================================================
-// Suite de regresión de ARIZA SAT.
+// Suite de regresión de Safe2door.
 //
 // Reconstruye las comprobaciones de las fases 1 a 5, que se perdieron
 // cuando se recicló el entorno de trabajo el 11-10-2026.

@@ -17,6 +17,15 @@
    un iPhone de verdad entregue fotogramas aprovechables. Eso no lo puede
    hacer un navegador sin cámara.
    =========================================================================== */
+
+/* ---- El dominio cambió el 22-11-2026 ----
+   La aplicación pasó a llamarse Safe2door y el QR de las etiquetas dejó de
+   apuntar a arizapa.es para apuntar a safe2door.es. Estas comprobaciones
+   llevaban el dominio viejo escrito y se pusieron rojas, que es lo que tenían
+   que hacer. Se cambian aquí porque el cambio fue a propósito, no porque
+   molestaran. Se hizo con cero etiquetas pegadas en la calle, que fue el
+   motivo de hacerlo entonces y no más tarde. */
+
 import { chromium } from 'playwright';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -160,7 +169,7 @@ const mete = await T(async () => {
   await new Promise(r => setTimeout(r, 1500));
   const art = (g.S.catalogo || []).find(x => x.codigo && x.token);
   if (!art) return { error: 'el catálogo del simulador no trae materiales con etiqueta' };
-  const etiqueta = 'https://arizapa.es/#M-' + String(art.codigo).replace('-', '') + '-' + art.token;
+  const etiqueta = 'https://safe2door.es/#M-' + String(art.codigo).replace('-', '') + '-' + art.token;
   const antes = document.querySelectorAll('#mats .mat-fila').length;
   const puesto = g.usarEtiqueta(etiqueta);
   await new Promise(r => setTimeout(r, 300));
@@ -174,7 +183,7 @@ const mete = await T(async () => {
   }) || {}).querySelector ? null : null : null;
   const fila = filas2.find(f => { const s = f.querySelector('.mat-art'); return s && s.value === art.id; });
   /* y una etiqueta con el código de seguridad cambiado NO debe entrar */
-  const falsa = 'https://arizapa.es/#M-' + String(art.codigo).replace('-', '') + '-XXXX';
+  const falsa = 'https://safe2door.es/#M-' + String(art.codigo).replace('-', '') + '-XXXX';
   const antesFalsa = document.querySelectorAll('#mats .mat-fila').length;
   g.usarEtiqueta(falsa);
   await new Promise(r => setTimeout(r, 300));

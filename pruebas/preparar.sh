@@ -1,10 +1,10 @@
 #!/bin/bash
 # ================================================================
-# Prepara el banco de pruebas de ARIZA SAT.
+# Prepara el banco de pruebas de Safe2door.
 #
 # Lo que hace:
 #   1. Consigue el index.html que se va a probar: el de la carpeta de
-#      arriba si existe, y si no lo descarga de arizapa.es.
+#      arriba si existe, y si no lo descarga de safe2door.es.
 #   2. Hace una copia para pruebas con tres cambios, y SOLO en la copia:
 #        · el Supabase de internet se cambia por el simulador local
 #        · la librería de QR de internet se cambia por la local
@@ -15,7 +15,7 @@
 # El index.html de producción NO se toca nunca.
 #
 #   Uso:  ./preparar.sh            (usa ../index.html, o descarga)
-#         ./preparar.sh --bajar    (fuerza la descarga de arizapa.es)
+#         ./preparar.sh --bajar    (fuerza la descarga de safe2door.es)
 # ================================================================
 set -e
 AQUI="$(cd "$(dirname "$0")" && pwd)"
@@ -26,14 +26,14 @@ if [ "$1" != "--bajar" ] && [ -f "../index.html" ]; then
   ORIGEN="../index.html"
   echo "Origen: ../index.html (copia de trabajo)"
 else
-  echo "Origen: https://arizapa.es/index.html (descargando)"
-  if ! curl -fsS "https://arizapa.es/index.html?v=$(date +%s)" -o index-descargado.html; then
+  echo "Origen: https://safe2door.es/index.html (descargando)"
+  if ! curl -fsS "https://safe2door.es/index.html?v=$(date +%s)" -o index-descargado.html; then
     echo
     echo "No se ha podido descargar el index.html publicado."
     echo "Suele ser que no hay internet, o que la red por la que sales lo bloquea."
     echo "Salidas:"
     echo "  · ./preparar.sh          usa ../index.html, la copia del repositorio"
-    echo "  · o guarda a mano el fichero de https://arizapa.es/index.html"
+    echo "  · o guarda a mano el fichero de https://safe2door.es/index.html"
     echo "    en esta carpeta como index-descargado.html y vuelve a lanzarlo"
     exit 1
   fi

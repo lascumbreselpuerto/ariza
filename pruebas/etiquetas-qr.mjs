@@ -33,6 +33,15 @@
      5. Que la cuenta de etiquetas libres sea la misma en todas las
         pantallas, ahora que hay una sola función.
    ================================================================ */
+
+/* ---- El dominio cambió el 22-11-2026 ----
+   La aplicación pasó a llamarse Safe2door y el QR de las etiquetas dejó de
+   apuntar a arizapa.es para apuntar a safe2door.es. Estas comprobaciones
+   llevaban el dominio viejo escrito y se pusieron rojas, que es lo que tenían
+   que hacer. Se cambian aquí porque el cambio fue a propósito, no porque
+   molestaran. Se hizo con cero etiquetas pegadas en la calle, que fue el
+   motivo de hacerlo entonces y no más tarde. */
+
 import { chromium } from 'playwright';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -260,7 +269,7 @@ const url = await T(() => {
   const et = g.S.etiquetas.find(e => e.codigo === p.codigo);
   const delHash = g.puertaDeEtiqueta(u);
   return { url: u, llevaCodigo: u.indexOf(p.codigo.replace('-','')) > 0,
-           llevaToken: u.length > ('https://arizapa.es/#'+p.codigo.replace('-','')).length,
+           llevaToken: u.length > ('https://safe2door.es/#'+p.codigo.replace('-','')).length,
            vuelveCodigo: delHash && delHash.codigo === p.codigo,
            vuelveToken: delHash && delHash.token === (et ? et.token : null) };
 });
@@ -474,7 +483,7 @@ const conQR = await T(() => {
   return {
     pideElQR: /<svg/.test(h),
     alTamano: /style="width:40mm;height:40mm"/.test(h),
-    conLaDireccion: h.indexOf('arizapa.es/#') > 0 || /qr/i.test(h),
+    conLaDireccion: h.indexOf('safe2door.es/#') > 0 || /qr/i.test(h),
     noDiceQueFalla: !/No se pudo cargar el generador/.test(h),
   };
 });
@@ -521,7 +530,7 @@ const lee = await T(() => {
   const bueno = { codigo: et.codigo, token: et.token };
   const igual = r => !!r && r.codigo === bueno.codigo && r.token === bueno.token;
   return {
-    deLaURL:        igual(g.puertaDeEtiqueta('https://arizapa.es/#'+et.codigo.replace('-','')+et.token)),
+    deLaURL:        igual(g.puertaDeEtiqueta('https://safe2door.es/#'+et.codigo.replace('-','')+et.token)),
     conGuiones:     igual(g.puertaDeEtiqueta(et.codigo+'-'+et.token)),
     aManoSinGuion:  igual(g.puertaDeEtiqueta(et.codigo+et.token)),
     enMinusculas:   igual(g.puertaDeEtiqueta((et.codigo+'-'+et.token).toLowerCase())),
@@ -529,7 +538,7 @@ const lee = await T(() => {
     vacio:          g.puertaDeEtiqueta('') === null,
     cualquierCosa:  g.puertaDeEtiqueta('hola que tal') === null,
     /* La etiqueta de un MATERIAL no es la de una puerta: empieza por M- */
-    noEsMaterial:   g.puertaDeEtiqueta('https://arizapa.es/#M-MAT0012-KJ47') === null,
+    noEsMaterial:   g.puertaDeEtiqueta('https://safe2door.es/#M-MAT0012-KJ47') === null,
   };
 });
 paso('lee el QR entero tal y como lo da la cámara', lee.deLaURL === true);

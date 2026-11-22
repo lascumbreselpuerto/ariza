@@ -15,6 +15,15 @@
    descuenta AL CERRAR la visita, una sola vez, aunque se guarde el
    avance diez veces o se reabra y se vuelva a cerrar.
    ================================================================ */
+
+/* ---- El dominio cambió el 22-11-2026 ----
+   La aplicación pasó a llamarse Safe2door y el QR de las etiquetas dejó de
+   apuntar a arizapa.es para apuntar a safe2door.es. Estas comprobaciones
+   llevaban el dominio viejo escrito y se pusieron rojas, que es lo que tenían
+   que hacer. Se cambian aquí porque el cambio fue a propósito, no porque
+   molestaran. Se hizo con cero etiquetas pegadas en la calle, que fue el
+   motivo de hacerlo entonces y no más tarde. */
+
 import { chromium } from 'playwright';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -152,14 +161,14 @@ const qr = await T(() => {
            hoja: typeof g.hojaEtiquetasMaterial === 'function' };
 });
 paso('el enlace lleva el código y el código de seguridad',
-  qr.enlace === 'https://arizapa.es/#M-MAT0001-A3K9', qr.enlace);
+  qr.enlace === 'https://safe2door.es/#M-MAT0001-A3K9', qr.enlace);
 paso('un material viejo sin etiqueta no finge tenerla',
   /#M--$/.test(qr.viejo) || !/A3K9/.test(qr.viejo), qr.viejo);
 
 const leerQr = await T(url => {
   const g = window.__T;
   const antes = location.hash;
-  location.hash = url.replace('https://arizapa.es/','');
+  location.hash = url.replace('https://safe2door.es/','');
   const r = g.materialDeURL();
   const falso1 = (() => { location.hash = '#M-MAT0001'; return g.materialDeURL(); })();
   const falso2 = (() => { location.hash = '#AR0001ABCD'; return g.materialDeURL(); })();

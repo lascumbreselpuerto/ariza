@@ -1,5 +1,5 @@
 /* ===========================================================================
-   ARIZA SAT · El lector contra cajas de verdad                   08-11-2026
+   Safe2door · El lector contra cajas de verdad                   08-11-2026
    ---------------------------------------------------------------------------
    DE DÓNDE SALE ESTO
 
