@@ -231,6 +231,8 @@ situacionesPara puedeEmitirSalida revisionDe expEnRevision expsEnRevision altaDe
 dlgBorrarDelEquipo
 dlgPedirRevision dlgExpedienteNuevo dlgEmitirExpediente EXP_REGIMEN NOMBRE_ROL esAdmin
 S sb
+asignadosDe estaAsignado hayAsignado textoAsignados
+cogerParte QUE_HACE_FALTA
 """.split()
 
 # ---- Agujero tapado el 05-11-2026 ----

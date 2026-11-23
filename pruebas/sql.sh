@@ -47,7 +47,7 @@ ORDEN="componentes.sql centros.sql parte-por-correo.sql obra.sql ficha.sql \
 almacen.sql presupuestos.sql presupuestos2.sql comercial.sql anexos.sql \
 tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos3.sql valoracion.sql \
 parado.sql factura.sql rutas.sql ruta-cliente.sql telegram.sql subtipo.sql urgencia.sql \
-medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql perifericos.sql ficha4.sql urgencia2.sql falso.sql fotos-aviso.sql barras.sql almacenes.sql nombre-equipo.sql sitio-material.sql conformidad-visita.sql mensajes.sql"
+medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql perifericos.sql ficha4.sql urgencia2.sql falso.sql fotos-aviso.sql barras.sql almacenes.sql nombre-equipo.sql sitio-material.sql conformidad-visita.sql mensajes.sql tecnicos.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -407,6 +407,18 @@ if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/conformidad-visita-pruebas.sql" ]; the
   fi
 fi
 
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/tecnicos-pruebas.sql" ]; then
+  echo ""
+  echo "── Varios tecnicos en una asistencia ───────────"
+  if $PSQL -f "$AQUI/sql/tecnicos-pruebas.sql" > /tmp/tecnicos-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/tecnicos-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA los varios tecnicos:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/tecnicos-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
 if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/mensajes-pruebas.sql" ]; then
   echo ""
   echo "── El hilo de conversación ─────────────────────"
@@ -478,7 +490,7 @@ if [ -f "$INST" ]; then
     FALTA=$(psql -h $SOCK -p $PUERTO -U ariza -d ariza_nueva -t -A -c "
       select string_agg(x, ', ') from (
         select unnest(array['clientes','puertas','avisos','perfiles','expedientes',
-                            'tarifas','valoraciones','materiales','ajustes','etiquetas']) as x
+                            'tarifas','valoraciones','materiales','ajustes','etiquetas','aviso_tecnicos']) as x
       ) t where not exists (
         select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
          where n.nspname = 'public' and c.relname = t.x)" 2>/dev/null)
@@ -490,7 +502,7 @@ if [ -f "$INST" ]; then
     FALTAF=$(psql -h $SOCK -p $PUERTO -U ariza -d ariza_nueva -t -A -c "
       select string_agg(x, ', ') from (
         select unnest(array['crear_expediente','emitir_expediente','valorar_aviso',
-                            'ficha_publica','es_equipo','es_gestion']) as x
+                            'ficha_publica','es_equipo','es_gestion','tecnicos_de_aviso']) as x
       ) t where not exists (
         select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
          where n.nspname = 'public' and p.proname = t.x)" 2>/dev/null)

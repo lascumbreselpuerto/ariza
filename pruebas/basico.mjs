@@ -454,16 +454,45 @@ await pag.evaluate(id => {
   if (b) b.click();
 }, avId);
 await esperar(700);
+/* ---- El 22-11-2026 asignar pasó de un desplegable a casillas ----
+   A una instalación van dos técnicos, y un desplegable solo deja elegir a uno.
+   Esta comprobación buscaba «#as-tec», que era el id del desplegable, y se
+   puso roja. Se cambia porque el cambio fue a propósito: ahora hay una casilla
+   por técnico, todas con la clase «as-tec», y se pide que haya al menos una. */
 paso('la asistencia se puede asignar a un técnico y ponerle fecha',
-  await pag.locator('#as-tec').count() === 1 && await pag.locator('#as-fecha').count() === 1);
+  await pag.locator('.as-tec').count() >= 1 && await pag.locator('#as-fecha').count() === 1);
 await pag.click('[data-act="as-dia"][data-n="1"]'); await esperar(300);
 paso('«Mañana» pone la fecha sin tener que teclearla',
   !!(await T(() => document.getElementById('as-fecha').value)));
-await pag.selectOption('#as-tec', { index: 1 }); await esperar(250);
+await pag.locator('.as-tec').first().check(); await esperar(250);
 await pag.click('#dlg button[type="submit"]'); await esperar(1300);
 const asig = await T(() => window.__T.S.avisos[0] || {});
 paso('y queda asignada con su fecha', !!asig.tecnico_id && !!asig.fecha_prevista, asig.fecha_prevista);
 paso('con el nombre del técnico guardado, no solo su identificador', !!asig.tecnico, asig.tecnico);
+
+/* Y lo que trae el cambio: que quepan dos. Se vuelve a abrir, se marca otro y
+   se comprueba que los dos quedan asignados y que el principal NO cambia, que
+   es lo que hace que todo lo que lee tecnico_id siga diciendo lo mismo. */
+const principalAntes = asig.tecnico_id;
+await pag.evaluate(id => {
+  const b = document.querySelector('[data-act="asignar"][data-id="'+id+'"]');
+  if (b) b.click();
+}, avId);
+await esperar(700);
+const cuantos = await pag.locator('.as-tec').count();
+if (cuantos > 1){
+  await pag.locator('.as-tec').nth(1).check(); await esperar(250);
+  await pag.click('#dlg button[type="submit"]'); await esperar(1500);
+  const dos = await T(() => {
+    const a = window.__T.S.avisos[0];
+    return { principal: a.tecnico_id, cuantos: window.__T.asignadosDe(a).length };
+  });
+  paso('se pueden asignar dos técnicos a la misma asistencia', dos.cuantos === 2, dos.cuantos);
+  paso('y el principal sigue siendo el mismo', dos.principal === principalAntes);
+} else {
+  paso('se pueden asignar dos técnicos a la misma asistencia', true, 'solo hay un técnico en el simulador');
+  paso('y el principal sigue siendo el mismo', true, 'no aplica');
+}
 
 await pag.evaluate(id => {
   const b = document.querySelector('[data-act="cerrar-asistencia"][data-id="'+id+'"]');

@@ -61,10 +61,22 @@ function semilla(){
     id: 'usuario-admin', nombre: 'David Ariza Arana',
     rol: 'admin', activo: true, creado: ahora(),
   };
+  /* ---- Un segundo técnico (22-11-2026) ----
+     Hasta hoy el simulador tenía una sola ficha de equipo, y con una no se
+     puede probar lo que se hace entre dos: asignar una instalación a los dos,
+     que al segundo le salga en su pantalla, o que el parte cambie de dueño.
+
+     La prueba de asignar en basico.mjs daba verde con una sola ficha porque no
+     había a quién más marcar, o sea que decía «OK» sin haber probado nada. Con
+     este segundo técnico esa comprobación pasa a probarse de verdad. */
+  const perfil2 = {
+    id: 'usuario-tecnico2', nombre: 'Dani Segundo',
+    rol: 'tecnico', activo: true, creado: ahora(),
+  };
   return {
     clientes: [cliente, cliente2],
     puertas: [puerta, puerta2],
-    perfiles: [perfil],
+    perfiles: [perfil, perfil2],
     /* Doce etiquetas, de las que dos están ya puestas en las puertas de arriba.
        Eran tres hasta el 09-11-2026, y con tres bastaba porque nadie las
        gastaba. Ese día la etiqueta pasó a ser obligatoria al crear una puerta
