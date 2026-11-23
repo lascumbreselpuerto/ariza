@@ -47,6 +47,13 @@ img{max-width:100%}
 .marca{display:flex;align-items:center;gap:9px;font-family:var(--cond);font-size:22px;font-weight:700;letter-spacing:.02em}
 .marca i{width:26px;height:22px;background:var(--amarillo);clip-path:polygon(2% 38%,36% 70%,98% 0,98% 26%,36% 96%,2% 64%);display:block}
 .marca b{color:var(--amarillo);font-weight:700}
+/* Las casillas de asignar técnicos. Cuadradas y grandes a propósito: se marcan
+   con el dedo, de pie y con guantes, no con el ratón. */
+.tecs-asignar{display:grid;gap:6px}
+.tec-cas{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);
+  border-radius:8px;cursor:pointer;min-height:44px}
+.tec-cas input{width:20px;height:20px;flex:none;margin:0}
+.tec-cas:has(input:checked){border-color:var(--amarillo);background:rgba(252,191,1,.08)}
 .top .sp{flex:1}
 .top .quien{font-size:13px;color:#CFC9C4;display:flex;align-items:center;gap:8px}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block}
@@ -1452,6 +1459,38 @@ const esGestion = () => !!(S.perfil && (S.perfil.rol === 'admin' || S.perfil.rol
 const activos = () => S.equipo.filter(t => t.activo);
 const nombreTec = id => { const t = S.equipo.find(x => x.id === id); return t ? (t.nombre || '') : ''; };
 
+/* ---- Los técnicos asignados a una asistencia (22-11-2026) ----
+   A una instalación van dos técnicos y los dos tienen que ver el trabajo en su
+   pantalla. Los asignados viven en «aviso_tecnicos», y el de siempre, el de
+   avisos.tecnico_id, es el principal y cuenta como asignado.
+
+   Se juntan los dos sitios y se quitan los repetidos, porque el principal
+   también está en la tabla y si no saldría dos veces en la pantalla.
+
+   El principal va SIEMPRE EL PRIMERO: es el que sale cuando solo cabe un
+   nombre, en la tarjeta estrecha del móvil y en el aviso al grupo. */
+function asignadosDe(a){
+  if (!a) return [];
+  const fuera = new Set();
+  const ids = [];
+  if (a.tecnico_id){ ids.push(a.tecnico_id); fuera.add(a.tecnico_id); }
+  (S.avisoTecnicos || []).forEach(x => {
+    if (x.aviso_id === a.id && !fuera.has(x.tecnico_id)){ ids.push(x.tecnico_id); fuera.add(x.tecnico_id); }
+  });
+  return ids;
+}
+const estaAsignado = (a, id) => !!id && asignadosDe(a).indexOf(id) >= 0;
+const hayAsignado  = a => asignadosDe(a).length > 0;
+/* Los nombres, para pintar. Quien ya no esté en el equipo no se pinta: su
+   ficha pudo borrarse, y pintar un hueco es peor que no pintarlo. */
+const nombresAsignados = a => asignadosDe(a).map(nombreTec).filter(n => n);
+function textoAsignados(a){
+  const n = nombresAsignados(a);
+  if (!n.length) return '';
+  if (n.length === 1) return n[0];
+  return n.slice(0, -1).join(', ') + ' y ' + n[n.length - 1];
+}
+
 /* ================= Vista pública por QR ================= */
 function codigoDeURL(){
   const h = (location.hash||'').replace(/^#/,'').trim();
@@ -1797,6 +1836,19 @@ async function cargar(){
   const cp2 = await sb.from('componentes').select('*').order('nombre').range(0, 19999);
   S.componentes = cp2.error ? [] : (cp2.data || []);
   S.sinComponentes = !!cp2.error;
+  /* ---- Quién está asignado a cada asistencia (22-11-2026) ----
+     Hasta hoy una asistencia tenía UN técnico, en avisos.tecnico_id. A una
+     instalación van dos, y al segundo no le salía el trabajo en su pantalla.
+
+     La tabla «aviso_tecnicos» guarda todos los asignados. El campo de siempre
+     se queda y significa EL PRINCIPAL, así que todo lo que ya lo leía sigue
+     funcionando sin enterarse.
+
+     Si la tabla todavía no está creada, la aplicación sigue: se queda vacía y
+     cada asistencia tiene el técnico de siempre, que es como estaba ayer. */
+  const at = await sb.from('aviso_tecnicos').select('*').range(0, 19999);
+  S.avisoTecnicos = at.error ? [] : (at.data || []);
+  S.sinAvisoTecnicos = !!at.error;
   /* Los centros: el sitio donde están las puertas. Lo que el técnico necesita
      saber antes de salir (cómo se entra, a qué horas, con quién hablar allí y
      qué avisos de seguridad tiene el sitio) es del sitio, no de cada puerta, y
@@ -2128,7 +2180,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.22-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.23-1';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -3098,7 +3150,7 @@ function vistaFicha(id){
              : '<button class="btn sm" data-act="aviso-editar" data-id="'+a.id+'">Editar</button>'+
                '<button class="btn sm pri" data-act="cerrar-asistencia" data-id="'+a.id+'">Cerrar visita</button>')+'</div>'+
            (a.descripcion ? '<p style="margin:0">'+esc(a.descripcion)+'</p>' : '')+
-           '<p class="mini" style="margin:0">'+esc('Técnico: '+((a.tecnico_id?nombreTec(a.tecnico_id):a.tecnico)||'sin asignar'))+
+           '<p class="mini" style="margin:0">'+esc((asignadosDe(a).length > 1 ? 'Técnicos: ' : 'Técnico: ')+(textoAsignados(a)||a.tecnico||'sin asignar'))+
              (a.fecha_prevista ? esc(' · Previsto: '+fechaCorta(a.fecha_prevista)) : '')+
              (cto ? ' · '+cto : '')+'</p>'+
            '</div>';
@@ -3155,7 +3207,7 @@ function contactoAviso(a){
 }
 /* A cada técnico, un color fijo, para reconocerlo de un vistazo en las listas */
 function chipTecnico(a){
-  if (!a.tecnico_id) return '<span class="chip mal">Sin asignar</span>';
+  if (!hayAsignado(a)) return '<span class="chip mal">Sin asignar</span>';
   const nom = nombreTec(a.tecnico_id) || a.tecnico || 'Asignada';
   const i = Math.max(0, S.equipo.findIndex(t => t.id === a.tecnico_id)) % 6;
   return '<span class="chip tec t'+i+'">'+esc(nom)+'</span>';
@@ -3187,13 +3239,21 @@ function chipsEstadoAsis(a){
 function dlgAsignar(id){
   const a = S.avisos.find(x => x.id === id);
   if (!a) return;
+  const yaAsignados = asignadosDe(a);
   const h = '<h3>Asignar asistencia</h3>'+
     '<p class="mini" style="margin:0 0 12px">'+esc(tipoAsis(a))+' · '+esc(nombreCliente(a))+
     (dondeAsistencia(a) ? ' · '+esc(dondeAsistencia(a)) : '')+'</p><div class="campos">'+
-    '<div class="campo full"><label for="as-tec">Técnico</label><select id="as-tec"><option value="">Sin asignar</option>'+
-      activos().map(t => '<option value="'+t.id+'"'+(a.tecnico_id===t.id?' selected':'')+'>'+
-        esc(t.nombre||'—')+(t.rol==='admin'?' (admin)':'')+'</option>').join('')+
-      '</select><span class="pista">Le llega un correo y le aparece en «Mi trabajo»</span></div>'+
+    /* ---- Casillas, no un desplegable (22-11-2026) ----
+       Un desplegable solo deja elegir a uno, y a una instalación van dos. Y en
+       el móvil un desplegable con cinco nombres se abre en una rueda que tapa
+       media pantalla: con casillas se ven todos de una vez y se marcan con el
+       dedo sin desplegar nada. */
+    '<div class="campo full"><label>Técnicos</label><div class="tecs-asignar">'+
+      activos().map(t => '<label class="tec-cas"><input type="checkbox" class="as-tec" value="'+t.id+'"'+
+        (yaAsignados.indexOf(t.id) >= 0 ? ' checked' : '')+'><span>'+
+        esc(t.nombre||'—')+(t.rol==='admin'?' (admin)':'')+'</span></label>').join('')+
+      '</div><span class="pista">Les aparece en «Mi trabajo» a todos los que marques. '+
+      'El primero que marcaste es el principal: es el que sale cuando solo cabe un nombre.</span></div>'+
     '<div class="campo full"><label for="as-fecha">Visita prevista</label>'+
       '<input id="as-fecha" type="date" value="'+esc(a.fecha_prevista||'')+'">'+
       '<div class="fila" style="margin-top:8px;gap:6px">'+
@@ -3206,7 +3266,11 @@ function dlgAsignar(id){
     '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
     '<button type="submit" class="btn pri">Asignar</button></div>';
   abrirDlg(h, async () => {
-    const tid = val('as-tec') || null;
+    const marcados = [...document.querySelectorAll('.as-tec:checked')].map(x => x.value);
+    /* El principal es el primero: si el que ya lo era sigue marcado, se queda;
+       si no, el primero de los que queden. Así cambiar de equipo no le cambia
+       el principal a una asistencia por el camino. */
+    const tid = (a.tecnico_id && marcados.indexOf(a.tecnico_id) >= 0) ? a.tecnico_id : (marcados[0] || null);
     const o = { tecnico_id: tid, tecnico: tid ? nombreTec(tid) : '',
                 fecha_prevista: val('as-fecha') || null,
                 actualizado: new Date().toISOString() };
@@ -3214,11 +3278,32 @@ function dlgAsignar(id){
     try {
       const { error } = await sb.from('avisos').update(o).eq('id', a.id);
       if (error) throw error;
+      /* Los asignados: se borran los que ya no están y se meten los nuevos. Se
+         hace DESPUÉS de guardar el aviso, para que si algo falla aquí la
+         asistencia siga teniendo a su principal y no se quede sin nadie. */
+      if (!S.sinAvisoTecnicos){
+        const antes = asignadosDe(a);
+        const quitar = antes.filter(x => marcados.indexOf(x) < 0);
+        const poner  = marcados.filter(x => antes.indexOf(x) < 0);
+        if (quitar.length)
+          await sb.from('aviso_tecnicos').delete().eq('aviso_id', a.id).in('tecnico_id', quitar);
+        if (poner.length)
+          await sb.from('aviso_tecnicos').upsert(
+            poner.map(x => ({ aviso_id: a.id, tecnico_id: x, creado_por: yo() })),
+            { onConflict:'aviso_id,tecnico_id', ignoreDuplicates:true });
+        /* El principal también va en la tabla: así «quién está asignado» se
+           contesta mirando un solo sitio cuando haga falta. */
+        if (tid && antes.indexOf(tid) < 0 && poner.indexOf(tid) < 0)
+          await sb.from('aviso_tecnicos').upsert([{ aviso_id: a.id, tecnico_id: tid, creado_por: yo() }],
+            { onConflict:'aviso_id,tecnico_id', ignoreDuplicates:true });
+      }
       if (a.puerta_id && o.estado === 'asignado' && !SIN_COBRO.includes(a.tipo))
         await sb.from('puertas').update({ estado:'tecnico_asignado', estado_desde: new Date().toISOString() })
                 .eq('id', a.puerta_id);
       cerrarDlg(); await cargar();
-      toast(tid ? ('Asignada a ' + nombreTec(tid) + '.') : 'Asistencia sin asignar.');
+      const nom = marcados.map(nombreTec).filter(n => n);
+      toast(nom.length ? ('Asignada a ' + (nom.length > 1 ? nom.join(', ') : nom[0]) + '.')
+                       : 'Asistencia sin asignar.');
     } catch(e){ setErr(e.message); }
   });
 }
@@ -3454,7 +3539,7 @@ function tarjetaTrabajo(a){
 
 function vistaMiTrabajo(){
   const yoId = S.perfil ? S.perfil.id : null;
-  const mias = S.avisos.filter(a => !a.cerrado && !a.archivado && a.tecnico_id === yoId);
+  const mias = S.avisos.filter(a => !a.cerrado && !a.archivado && estaAsignado(a, yoId));
   const hoyISO = iso(new Date());
   const manana = iso(sumaDias(new Date(), 1));
   const finSemana = iso(sumaDias(new Date(), 7));
@@ -3540,7 +3625,7 @@ function vistaMiTrabajo(){
    Cada cara es también el filtro, así que se ve y se usa en el mismo sitio. */
 function tiraTecnicos(abiertos){
   const cuenta = id => abiertos.filter(a => a.tecnico_id === id).length;
-  const sinAsignar = abiertos.filter(a => !a.tecnico_id).length;
+  const sinAsignar = abiertos.filter(a => !hayAsignado(a)).length;
   const vencidas = id => abiertos.filter(a => a.tecnico_id === id && a.fecha_prevista && dias(a.fecha_prevista) < 0).length;
   const sel = v => S.filtroTec === v ? ' pri' : ' plana';
   let h = '<div class="panel"><div class="panel-h"><h2>Reparto del trabajo</h2>'+
@@ -3568,11 +3653,11 @@ function tiraTecnicos(abiertos){
 function vistaAvisos(){
   const abiertos = S.avisos.filter(a => !a.cerrado && !a.archivado);
   const yoId = S.perfil ? S.perfil.id : null;
-  const pasa = a => !S.filtroTec || (S.filtroTec === 'sin' ? !a.tecnico_id : a.tecnico_id === S.filtroTec);
+  const pasa = a => !S.filtroTec || (S.filtroTec === 'sin' ? !hayAsignado(a) : estaAsignado(a, S.filtroTec));
   const vistos = abiertos.filter(pasa);
-  const mios = vistos.filter(a => a.tecnico_id === yoId).sort(porFecha);
-  const comerciales = vistos.filter(a => a.tipo === 'comercial' && a.tecnico_id !== yoId).sort(porFecha);
-  const resto = vistos.filter(a => a.tecnico_id !== yoId && a.tipo !== 'comercial').sort(porFecha);
+  const mios = vistos.filter(a => estaAsignado(a, yoId)).sort(porFecha);
+  const comerciales = vistos.filter(a => a.tipo === 'comercial' && !estaAsignado(a, yoId)).sort(porFecha);
+  const resto = vistos.filter(a => !estaAsignado(a, yoId) && a.tipo !== 'comercial').sort(porFecha);
   let h = '<div class="stack">';
   h += '<div class="fila"><span class="sp"></span><button class="btn pri" data-act="asistencia-nueva">Nueva asistencia</button></div>';
 
@@ -3620,7 +3705,7 @@ function vistaRealizadas(){
   if (!S.histArchivadas) filas = filas.filter(a => !a.archivado);
   // Un técnico solo ve lo suyo; administración y oficina lo ven todo.
   if (!esGestion()) filas = filas.filter(a => a.tecnico_id === (S.perfil ? S.perfil.id : null));
-  if (S.histTec)   filas = filas.filter(a => S.histTec === 'sin' ? !a.tecnico_id : a.tecnico_id === S.histTec);
+  if (S.histTec)   filas = filas.filter(a => S.histTec === 'sin' ? !hayAsignado(a) : estaAsignado(a, S.histTec));
   if (S.histTipo)  filas = filas.filter(a => S.histTipo === 'anuladas' ? a.anulada
                                            : (!a.anulada && a.tipo === S.histTipo));
   if (S.histDesde) filas = filas.filter(a => diaCierre(a) >= S.histDesde);
@@ -3819,7 +3904,7 @@ function agendaPorDia(desde, hasta){
     if (k < iso(desde) || k > iso(hasta)) return; (dias_[k] = dias_[k] || []).push(x); };
 
   S.avisos.filter(a => !a.cerrado && !a.archivado && a.fecha_prevista)
-    .filter(a => !S.calTec || (S.calTec === 'sin' ? !a.tecnico_id : a.tecnico_id === S.calTec))
+    .filter(a => !S.calTec || (S.calTec === 'sin' ? !hayAsignado(a) : estaAsignado(a, S.calTec)))
     .forEach(a => meter(a.fecha_prevista, { clase:'asis', aviso:a }));
 
   // revisiones que vencen y todavía no tienen asistencia abierta
@@ -4574,6 +4659,8 @@ const QUE_HACE_FALTA = [
     pierdes:'No se lleva lo pendiente de facturar ni los impagados.' },
   { marca:'sinFotoAviso', fichero:'fotos-aviso.sql', que:'Fotos de antes y después',
     pierdes:'Las fotos de la visita no se separan en antes y después.' },
+  { marca:'sinAvisoTecnicos', fichero:'tecnicos.sql', que:'Varios técnicos en una asistencia',
+    pierdes:'Solo se puede asignar a uno. A una instalación van dos y al segundo no le sale el trabajo en su pantalla.' }
 ];
 
 /* Lo que la aplicación sabe AHORA MISMO de su servidor. */
@@ -5976,7 +6063,7 @@ function loQueSeQuedoParado(){
      Un aviso sin técnico no es de nadie. Los urgentes entran desde el primer
      día: si es urgente y nadie lo ha cogido, el mismo día ya es tarde. */
   {
-    const filas = abiertos.filter(a => !a.tecnico_id)
+    const filas = abiertos.filter(a => !hayAsignado(a))
       .map(a => ({ a, dias: diasQuieto(a), urgente: a.prioridad === 'urgente' }))
       .filter(x => x.urgente || x.dias >= PARADO.sinAsignar)
       .map(x => Object.assign(x, { rojo: x.urgente ? x.dias >= 1 : esRojo(x.dias, PARADO.sinAsignar) }))
@@ -28413,6 +28500,26 @@ function dlgMaterialJornada(jornadaId, avisoId){
 }
 
 let CIERRE_AVISO = null;
+/* Coge el parte para quien lo abre, y avisa si lo llevaba otro.
+   Solo lo coge quien está asignado: si lo abre oficina para mirarlo, no le
+   quita el parte al técnico que lo tiene a medias. */
+async function cogerParte(a){
+  const yoId = S.perfil && S.perfil.id;
+  if (!yoId || !a) return;
+  if (!estaAsignado(a, yoId)) return;
+  if (a.parte_lo_lleva === yoId) return;
+  const antes = a.parte_lo_lleva ? nombreTec(a.parte_lo_lleva) : '';
+  if (antes) toast('Este parte lo llevaba ' + antes + '. Ahora lo llevas tú: habladlo antes de escribir.');
+  const o = { parte_lo_lleva: yoId, parte_lo_lleva_desde: new Date().toISOString() };
+  a.parte_lo_lleva = yoId; a.parte_lo_lleva_desde = o.parte_lo_lleva_desde;
+  try {
+    const { error } = await sb.from('avisos').update(o).eq('id', a.id);
+    /* Si la columna no existe todavía, no pasa nada: el parte se rellena igual.
+       Esto es un cartel, no una pieza de la que dependa cerrar. */
+    if (error) console.warn('Safe2door · no se ha podido apuntar quién lleva el parte:', error.message);
+  } catch(e){ console.warn('Safe2door · no se ha podido apuntar quién lleva el parte:', e.message); }
+}
+
 function dlgCierre(avisoId){
   const a = S.avisos.find(x => x.id === avisoId);
   if (!a) return;
@@ -28420,6 +28527,16 @@ function dlgCierre(avisoId){
      petición de material quede colgada de la visita en la que se gastó, aunque
      se pida sin haber pasado por el botón de leer la etiqueta. */
   CIERRE_AVISO = a.id;
+  /* ---- Quién lleva el parte (22-11-2026) ----
+     A una instalación van dos técnicos y los dos pueden rellenarlo. Abrir el
+     parte es cogerlo: el que lo abre pasa a llevarlo, y al siguiente que lo
+     abra se le dice quién lo llevaba, para que hablen antes de escribir los
+     dos encima.
+
+     No es un cerrojo. Un cerrojo en una puerta sin cobertura deja el trabajo
+     a medias y a nadie pudiendo cerrarlo, que es peor que el problema que
+     resuelve. Es un cartel. */
+  cogerParte(a);
   const p = a.puerta_id ? puertaDe(a.puerta_id) : null;
   const cli = a.cliente_id ? clienteDe(a.cliente_id) : (p && p.cliente_id ? clienteDe(p.cliente_id) : null);
   const conCobro = !SIN_COBRO.includes(a.tipo);
