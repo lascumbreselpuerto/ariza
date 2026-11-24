@@ -233,6 +233,7 @@ dlgPedirRevision dlgExpedienteNuevo dlgEmitirExpediente EXP_REGIMEN NOMBRE_ROL e
 S sb
 asignadosDe estaAsignado hayAsignado textoAsignados
 cogerParte QUE_HACE_FALTA
+cargar POSICIONES sitioActual
 """.split()
 
 # ---- Agujero tapado el 05-11-2026 ----
