@@ -669,26 +669,38 @@ const sb = createClient(SUPA_URL, SUPA_KEY);
    decide qué peligros y qué componentes le tocan a una puerta NO es esta lista,
    sino formaDePuerta(), que reconoce también lo que se escriba a mano. */
 const TIPOS = [
-  // De vehículos, industriales, comerciales y de garaje
-  'Corredera autoportante', 'Corredera con guía en el suelo',
-  'Batiente', 'Plegable',
-  'Seccional', 'Basculante',
-  'Enrollable industrial', 'Cierre enrollable de local',
-  'Enrollable de garaje',
-  'Rápida de lona', 'Guillotina o vertical',
-  'Cortafuegos',
-  // Batientes automatizadas, que no es lo mismo una hoja que dos
+  /* ---- La lista que David revisó el 24-11-2026 ----
+     Eran 23 y pasan a 28. No es una ampliación: es una SUSTITUCIÓN, decidida
+     por él. «Rápida de lona» se parte en apilable y enrollable, «Cortafuegos»
+     a secas se parte en sus cuatro formas reales, la corredera gana la
+     telescópica y la curva, y desaparecen «Batiente» y «Batiente de dos
+     hojas», que él mismo señaló como mal puestas: en esta casa una batiente
+     siempre lleva automatismo, así que las dos automáticas las cubren.
+
+     Las puertas que ya estuvieran dadas de alta con un nombre viejo se
+     cambian a mano. David: «si hay alguna dada de alta se le cambia de
+     manera manual». */
+  // Correderas de vehículos
+  'Corredera autoportante', 'Corredera telescópica', 'Corredera curva',
+  'Corredera con guía en el suelo',
+  // De garaje e industriales
+  'Plegable', 'Seccional', 'Basculante',
+  'Enrollable industrial', 'Cierre enrollable de local', 'Enrollable de garaje',
+  'Rápida apilable', 'Rápida enrollable',
+  'Guillotina o vertical',
+  // Cortafuegos, por su forma
+  'Cortafuegos guillotina', 'Cortafuegos corredera',
+  'Cortafuegos batiente peatonal de una hoja', 'Cortafuegos batiente peatonal de dos hojas',
+  // Batientes automatizadas
   'Batiente automática de una hoja', 'Batiente automática de dos hojas',
   // Peatonales automáticas
   'Peatonal automática corredera', 'Peatonal automática batiente',
-  'Peatonal automática telescópica',
-  'Peatonal automática giratoria', 'Peatonal automática curva',
+  'Peatonal automática telescópica', 'Peatonal automática giratoria',
+  'Peatonal automática curva',
   /* ---- Peatonales SIN automatismo (06-11-2026) ----
-     Pedidas por David para poder ofertarlas y mantenerlas. Van al final y con
-     el nombre bien claro porque no son puertas automáticas: no llevan
-     automatismo, así que no les toca el régimen de la UNE-EN 16005, que es para
-     puertas peatonales motorizadas. Por dentro se clasifican como BATIENTE, que
-     es lo que son mecánicamente: ver FORMAS_PUERTA. */
+     No llevan automatismo, así que no les toca el régimen de la UNE-EN 16005,
+     que es para puertas peatonales motorizadas. Por dentro se clasifican como
+     BATIENTE, que es lo que son mecánicamente: ver FORMAS_PUERTA. */
   'Peatonal manual', 'Peatonal de chalet',
   // Vehículos
   'Barrera',
@@ -2194,7 +2206,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.24-3';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.24-4';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -12336,24 +12348,44 @@ const COMPONENTES_POR_NIVEL = {
    una puerta cuyo tipo no se reconoce se queda sin sus peligros propios, y eso
    tiene que verse, no quedarse callado. */
 const FORMAS_PUERTA = [
-  /* ---- Las peatonales SIN automatismo, primero (06-11-2026) ----
-     Esta regla va DELANTE de la de «peatonal» a propósito, porque la lista se
-     recorre en orden y la primera que casa manda. Una «peatonal manual» o una
-     «peatonal de chalet» llevan la palabra peatonal, pero no llevan
-     automatismo: si cayeran en la familia de las peatonales automáticas se les
-     aplicaría el guion de los sensores de apertura y presencia, el modo de baja
-     energía y el régimen de la UNE-EN 16005, que es para puertas peatonales
-     MOTORIZADAS. El técnico estaría comprobando lo que no existe y el papel
-     diría que se revisó.
-     Mecánicamente son una batiente, así que van a batiente. Decisión de David
-     el 06-11-2026, sobre las tres opciones que se le pusieron.
-     Ojo al escribirla: tiene que casar «peatonal manual» y «peatonal de
-     chalet», y NO «peatonal automática telescópica» ni una corredera que
-     alguien describa como «de chalet». */
-  ['batiente',    'Batiente',             /peatonal\s*(manual|de\s*chalet)/i],
-  ['peatonal',    'Peatonal automática',  /peatonal|autom[áa]tica de paso|giratoria|curva/i],
-  ['barrera',     'Barrera',              /barrera|m[áa]stil|talanquera/i],
+  /* ---- EL ORDEN MANDA: la primera regla que casa decide ----
+
+     ---- Cortafuegos, la primera de todas (24-11-2026) ----
+     Antes iba la cuarta, y con la lista de tipos nueva eso rompía dos: una
+     «Cortafuegos batiente peatonal de una hoja» lleva la palabra «peatonal»
+     dentro, así que la pillaba la regla de las peatonales automáticas y se
+     revisaba con SU guion: sensores de apertura y de presencia, modo de baja
+     energía, régimen de la UNE-EN 16005.
+
+     Una cortafuegos no tiene nada de eso. El técnico estaría comprobando lo
+     que no existe y el papel diría que se revisó, que es peor que no revisar.
+
+     Una puerta cortafuegos es cortafuegos ANTES que cualquier otra cosa: su
+     razón de ser es sectorizar, y de ahí sale todo lo que hay que mirarle.
+     Así que va primera. */
   ['cortafuegos', 'Cortafuegos',          /cortafuego|corta ?fuego|resistente al fuego|sectorizaci[óo]n/i],
+
+  /* ---- Las peatonales SIN automatismo (06-11-2026) ----
+     Van antes que las peatonales automáticas a propósito. Una «peatonal
+     manual» o una «peatonal de chalet» llevan la palabra peatonal, pero no
+     llevan automatismo: si cayeran en la familia de las automáticas se les
+     aplicaría el régimen de la UNE-EN 16005, que es para puertas peatonales
+     MOTORIZADAS. Mecánicamente son una batiente, así que van a batiente.
+     Decisión de David el 06-11-2026. */
+  ['batiente',    'Batiente',             /peatonal\s*(manual|de\s*chalet)/i],
+
+  /* ---- "curva" ya no basta para ser peatonal (24-11-2026) ----
+     La regla decía /peatonal|autom[áa]tica de paso|giratoria|curva/. Ese
+     «curva» suelto estaba para cazar descripciones escritas a mano, y con la
+     lista nueva se volvió en contra: una «Corredera curva», que David confirmó
+     que es DE VEHÍCULOS, se iba a peatonal automática.
+
+     Se quita «curva». No hace falta para la lista: «Peatonal automática curva»
+     ya lleva la palabra peatonal. «Giratoria» se queda, porque una puerta
+     giratoria es siempre de paso de personas. */
+  ['peatonal',    'Peatonal automática',  /peatonal|autom[áa]tica de paso|giratoria/i],
+
+  ['barrera',     'Barrera',              /barrera|m[áa]stil|talanquera/i],
   ['rapida',      'Rápida',               /r[áa]pid/i],
   ['guillotina',  'Guillotina o vertical',/guillotina/i],
   ['seccional',   'Seccional',            /seccional/i],
