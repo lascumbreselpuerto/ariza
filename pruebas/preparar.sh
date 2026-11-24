@@ -234,6 +234,7 @@ S sb
 asignadosDe estaAsignado hayAsignado textoAsignados
 cogerParte QUE_HACE_FALTA
 cargar POSICIONES sitioActual
+filaAvisoPuerta puertasDeAviso
 """.split()
 
 # ---- Agujero tapado el 05-11-2026 ----
