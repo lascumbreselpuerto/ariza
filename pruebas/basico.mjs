@@ -442,9 +442,60 @@ paso('la asistencia se crea', await T(() => window.__T.S.avisos.length) === 1,
 const av = await T(() => window.__T.S.avisos[0] || {});
 paso('con su puerta', !!av.puerta_id);
 paso('con su cliente', !!av.cliente_id);
-paso('y nace asignada, no suelta', av.estado === 'asignado' && !!av.tecnico_id, av.estado);
+/* ---- El 24-11-2026 esto se dio la vuelta, a propósito ----
+   Hasta hoy una asistencia nueva nacía asignada al administrador «para que no
+   se quede sin dueño», y esta comprobación lo daba por bueno.
+
+   En cuanto la empresa empezó a usarla de verdad se vio el efecto: a David se
+   le llenaba «Mi trabajo» de avisos que no iba a hacer él, y esa pantalla dejó
+   de significar «lo que tengo que hacer hoy».
+
+   David: «si esta asistencia ha sido recibida pero aún no asignada, que se
+   quede en asistencias en sin asignar».
+
+   Así que ahora nace SIN asignar y en «recibido». El miedo de que se quede sin
+   dueño sigue cubierto, y mejor: «Sin asignar» tiene su pastilla con su cuenta
+   en la tira de arriba. */
+paso('nace sin asignar, esperando a que la oficina decida quién va',
+  av.estado === 'recibido' && !av.tecnico_id, av.estado + (av.tecnico_id ? ' · con técnico' : ' · sin técnico'));
 
 /* ---- Asignar, cerrar la visita con firma y sacar el parte ---- */
+/* ---- El buscador de asistencias (24-11-2026) ----
+   David: «echamos en falta un buscador de asistencias para buscar por
+   clientes, dirección, teléfono, etc.». Con treinta abiertas, encontrar la del
+   taller de Jerez era bajar leyendo. */
+bloque('7 bis. El buscador de asistencias');
+await irAPestana(pag, 'avisos'); await esperar(600);
+paso('la pantalla de asistencias trae su buscador',
+  await pag.locator('#busca-asis').count() === 1);
+
+const unAviso = await T(() => {
+  const g = window.__T, S = g.S;
+  const a = S.avisos.find(x => !x.cerrado && !x.archivado);
+  return a ? { id:a.id, cliente: g.nombreCliente(a) || '' } : null;
+});
+if (unAviso && unAviso.cliente.length > 3){
+  const trozo = unAviso.cliente.slice(0, 5);
+  await pag.fill('#busca-asis', trozo); await esperar(500);
+  const salen = await T(() => document.querySelectorAll('.avisos .aviso').length);
+  paso('buscando por el nombre del cliente, la asistencia sale', salen >= 1, trozo + ' → ' + salen);
+
+  await pag.fill('#busca-asis', 'zzzqqqxxx'); await esperar(500);
+  const ninguna = await T(() => document.querySelectorAll('.avisos .aviso').length);
+  paso('y buscando algo que no existe, no sale ninguna', ninguna === 0, ninguna);
+  paso('y lo dice, en vez de dejar la pantalla muda',
+    await T(() => /Ninguna asistencia abierta dice/.test(document.querySelector('#vista').textContent)));
+
+  await pag.locator('[data-act="busca-asis-quitar"]').first().click(); await esperar(500);
+  const tras = await T(() => document.querySelectorAll('.avisos .aviso').length);
+  paso('«Quitar la búsqueda» las devuelve todas', tras >= 1, tras);
+} else {
+  paso('buscando por el nombre del cliente, la asistencia sale', true, 'sin asistencias en el simulador');
+  paso('y buscando algo que no existe, no sale ninguna', true, 'no aplica');
+  paso('y lo dice, en vez de dejar la pantalla muda', true, 'no aplica');
+  paso('«Quitar la búsqueda» las devuelve todas', true, 'no aplica');
+}
+
 bloque('8. Asignar, cerrar la visita y sacar el parte');
 
 const avId = await T(() => window.__T.S.avisos[0].id);

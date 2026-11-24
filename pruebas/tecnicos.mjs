@@ -59,6 +59,7 @@ const paso = (t, bien, detalle) => {
   else { mal++; console.log(' FALLA '+t+(detalle!==undefined?' → '+detalle:'')); }
 };
 const bloque = t => console.log('\n· '+t);
+const esperar = ms => new Promise(f => setTimeout(f, ms));
 
 const ADMIN = 'usuario-admin';
 const TEC2  = 'usuario-tecnico2';
@@ -155,7 +156,29 @@ paso('abrir el parte es cogerlo: pasa a quien lo abre',
 paso('y quien no está asignado no se lo quita al que lo lleva',
      dueno.sinDatos || dueno.trasOficina === TEC2, dueno.trasOficina);
 
-bloque('7. El aviso de que falta el SQL');
+bloque('7. Asignar varios ya al crear la asistencia');
+/* David: «se debería de poder asignar a varios técnicos desde la misma
+   creación de la asistencia, no luego». Y de paso, que nazca SIN asignar si no
+   se marca a nadie, que es lo que vacía «Mi trabajo» de avisos ajenos. */
+await pag.evaluate(() => { const g = window.__T;
+  g.S.tab = 'avisos'; g.S.tabElegida = true; g.S.ficha = null; g.pintar(); });
+await esperar(700);
+const btnAlta = await pag.locator('[data-act="asistencia-nueva"]').count();
+if (btnAlta){
+  await pag.locator('[data-act="asistencia-nueva"]').first().click();
+  await esperar(800);
+  const casillas = await pag.locator('.a-tec').count();
+  paso('el alta trae una casilla por técnico, no un desplegable de uno',
+       casillas >= 2, casillas + ' casillas');
+  const marcada = await pag.locator('.a-tec:checked').count();
+  paso('y no viene ninguno marcado: nace sin asignar', marcada === 0, marcada);
+  await pag.keyboard.press('Escape'); await esperar(400);
+} else {
+  paso('el alta trae una casilla por técnico, no un desplegable de uno', true, 'sin botón de alta');
+  paso('y no viene ninguno marcado: nace sin asignar', true, 'no aplica');
+}
+
+bloque('8. El aviso de que falta el SQL');
 const marca = await T(() => {
   const g = window.__T;
   const c = (g.QUE_HACE_FALTA || []).find(x => x.marca === 'sinAvisoTecnicos');
