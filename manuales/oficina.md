@@ -1,6 +1,6 @@
 # Safe2door · Manual de oficina
 
-Versión 2026.11.22-1
+Versión 2026.11.23-1
 
 > **Las fotos de este manual son de antes del cambio de nombre.** La aplicación
 > se llamaba ARIZA SAT y así aparece en la barra de arriba de cada pantalla.
@@ -102,6 +102,20 @@ falta tener la ficha completa, eso lo remata el técnico allí.
 
 **El técnico y la fecha.** Se pueden dejar en blanco y asignar después, desde el
 Calendario.
+
+**Se puede asignar a más de un técnico.** Desde el 22 de noviembre de 2026, la
+pantalla de asignar lleva una casilla por cada uno, en vez de un desplegable de
+uno solo. Marca a todos los que vayan: a una instalación suelen ir dos, y a cada
+uno le aparece la visita en su **Mi trabajo**.
+
+El primero que marques es el **principal**. Es el que sale cuando solo cabe un
+nombre, en la tarjeta estrecha del móvil, y el que se queda si luego cambias el
+equipo. Si quitas a los demás, el principal sigue siendo el mismo.
+
+El parte lo puede rellenar cualquiera de los asignados. Lo lleva **quien lo abre
+el último**: si Dani lo abrió y lo dejó a medias, cuando lo abra Christian le
+sale un aviso de que lo llevaba Dani, para que lo hablen antes de escribir los
+dos encima. Lo escrito no se pierde: el parte es un solo documento.
 
 **La prioridad.** Urgente sube la visita arriba del todo en la pantalla del
 técnico y se pinta en rojo. Úsala con cuidado: si todo es urgente, nada lo es.
