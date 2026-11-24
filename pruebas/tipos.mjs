@@ -66,8 +66,23 @@ bloque('1. El desplegable');
 
 const lista = await T(() => window.__T.TIPOS);
 paso('hay más de los ocho de antes', lista.length >= 15, lista.length);
-['Rápida de lona','Plegable','Guillotina o vertical','Cortafuegos'].forEach(t =>
-  paso('se puede elegir «'+t+'», que antes no estaba', lista.includes(t)));
+/* ---- Dos de estos nombres cambiaron el 24-11-2026 ----
+   David revisó la lista entera y la dejó en 28 tipos. Dos de los que se
+   comprobaban aquí se partieron en sus formas reales, porque a efectos de
+   revisión no son la misma puerta:
+
+     «Rápida de lona»  ->  «Rápida apilable» y «Rápida enrollable»
+     «Cortafuegos»     ->  guillotina, corredera, y batiente peatonal de una
+                           y de dos hojas
+
+   Lo que esta comprobación vigila no es el nombre, sino que esas CLASES de
+   puerta se puedan elegir, que es lo que antes no se podía. Así que se mira
+   que haya al menos una de cada. */
+[['rápida','Rápida'], ['plegable','Plegable'], ['guillotina','Guillotina'],
+ ['cortafuegos','Cortafuegos']].forEach(([busca, et]) =>
+  paso('se puede elegir una '+et+', que antes no estaba',
+    lista.some(t => new RegExp(busca,'i').test(t)),
+    lista.filter(t => new RegExp(busca,'i').test(t)).join(' · ')));
 ['Corredera autoportante','Corredera con guía en el suelo'].forEach(t =>
   paso('la corredera se puede precisar: «'+t+'»', lista.includes(t)));
 paso('las peatonales van separadas por su mecanismo',
@@ -98,9 +113,11 @@ const casos = [
   ['persiana metálica del escaparate',  'enrollable'],
   ['Plegable',                          'plegable'],
   ['puerta de acordeón',                'plegable'],
-  ['Rápida de lona',                    'rapida'],
+  ['Rápida apilable',                   'rapida'],
+  ['Rápida enrollable',                 'rapida'],
   ['Guillotina o vertical',             'guillotina'],
-  ['Cortafuegos',                       'cortafuegos'],
+  ['Cortafuegos guillotina',            'cortafuegos'],
+  ['Cortafuegos batiente peatonal de una hoja', 'cortafuegos'],
   ['Barrera',                           'barrera'],
   ['Peatonal automática corredera',     'peatonal'],
   ['Peatonal automática batiente',      'peatonal'],
@@ -150,8 +167,8 @@ const pelig = await T(() => {
   const g = window.__T;
   const f = t => { const p = g.peligrosDe({ datos:{ puerta:{ tipo:t } } }); return p ? p.clave : null; };
   return {
-    rapida: f('Rápida de lona'), plegable: f('Plegable'),
-    guillotina: f('Guillotina o vertical'), cortafuegos: f('Cortafuegos'),
+    rapida: f('Rápida apilable'), plegable: f('Plegable'),
+    guillotina: f('Guillotina o vertical'), cortafuegos: f('Cortafuegos guillotina'),
     nGuillotina: (g.PELIGROS_POR_TIPO.guillotina||[]).length,
     nCorta: (g.PELIGROS_POR_TIPO.cortafuegos||[]).length,
     textosCorta: (g.PELIGROS_POR_TIPO.cortafuegos||[]).map(x => x[1]+' | '+x[2]).join(' ~ '),
@@ -188,7 +205,7 @@ const fam = await T(() => {
   const g = window.__T;
   const f = t => g.familiaDePuerta({ id:'z-'+t, tipo:t });
   return { peatonal: f('Peatonal automática giratoria'), barrera: f('Barrera'),
-           corta: f('Cortafuegos'), seccional: f('Seccional') };
+           corta: f('Cortafuegos guillotina'), seccional: f('Seccional') };
 });
 paso('una peatonal giratoria cae en la familia peatonal', fam.peatonal === 'peatonal', fam.peatonal);
 paso('una barrera, en barrera', fam.barrera === 'barrera');
@@ -338,10 +355,10 @@ const gu = await T(() => {
     vieja:        txt('Corredera'),
     generico:     txt('Otro'),
     peatCurva:    txt('Peatonal automática curva'),
-    rapida:       txt('Rápida de lona'),
+    rapida:       txt('Rápida apilable'),
     plegable:     txt('Plegable'),
     guillotina:   txt('Guillotina o vertical'),
-    cortafuegos:  txt('Cortafuegos'),
+    cortafuegos:  txt('Cortafuegos guillotina'),
     nAuto:        g.guionDe('Corredera autoportante').length,
     nGenerico:    g.guionDe('Otro').length,
   };
@@ -407,12 +424,12 @@ const tapada = await T(async () => {
   return { enUso: g.lista('tipos', g.TIPOS), panel: g.panelLista('tipos','Tipos de puerta',g.TIPOS,'') };
 });
 paso('con una lista guardada, la aplicación usa la guardada: mandas tú',
-  tapada.enUso.includes('Un tipo mío') && !tapada.enUso.includes('Rápida de lona'),
+  tapada.enUso.includes('Un tipo mío') && !tapada.enUso.includes('Rápida apilable'),
   tapada.enUso.length + ' tipos');
 paso('PERO LO DICE: el panel avisa de los que trae la aplicación y tú no tienes',
   /no tiene \d+ elementos? que sí trae la aplicación/.test(tapada.panel));
 paso('nombrándolos, para que se vea qué te estás perdiendo',
-  /Rápida de lona/.test(tapada.panel) && /Guillotina o vertical/.test(tapada.panel));
+  /Rápida apilable/.test(tapada.panel) && /Guillotina o vertical/.test(tapada.panel));
 paso('y ofrece añadirlos de un clic', /data-act="lista-faltan"/.test(tapada.panel));
 
 const anadidos = await T(async () => {
@@ -425,7 +442,7 @@ const anadidos = await T(async () => {
   return { antes, despues, panel: g.panelLista('tipos','Tipos de puerta',g.TIPOS,'') };
 });
 paso('al añadirlos, están todos los de fábrica',
-  anadidos.despues.includes('Rápida de lona') && anadidos.despues.includes('Cortafuegos'));
+  anadidos.despues.includes('Rápida apilable') && anadidos.despues.includes('Cortafuegos guillotina'));
 paso('LO TUYO NO SE PIERDE: «Un tipo mío» sigue ahí',
   anadidos.despues.includes('Un tipo mío'));
 paso('y en el mismo sitio en que estaba: no se reordena nada',

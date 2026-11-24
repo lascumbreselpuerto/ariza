@@ -108,8 +108,13 @@ const clasif = await T(ns => {
   const g = window.__T;
   const out = {};
   ns.forEach(n => { out[n] = { esta: g.TIPOS.includes(n), forma: g.formaDePuerta(n) }; });
-  /* Y los de siempre, que no se pueden haber movido de sitio */
-  ['Seccional','Corredera autoportante','Peatonal automática corredera','Barrera','Batiente']
+  /* Y los de siempre, que no se pueden haber movido de sitio.
+     «Batiente» a secas salía aquí hasta el 24-11-2026. Ese día David revisó la
+     lista entera y la mandó quitar: «Batiente y batiente de dos hojas están
+     mal, elimínalas». En esta casa una batiente siempre lleva automatismo, así
+     que las dos automáticas la cubren. La FAMILIA batiente no se va a ninguna
+     parte: la siguen usando las automáticas y las peatonales sin motor. */
+  ['Seccional','Corredera autoportante','Peatonal automática corredera','Barrera']
     .forEach(n => { out[n] = { esta: g.TIPOS.includes(n), forma: g.formaDePuerta(n) }; });
   return out;
 }, NUEVOS.map(x => x[0]));
@@ -126,7 +131,55 @@ paso('la corredera autoportante sigue siendo corredera',
 paso('y la peatonal automática corredera sigue siendo peatonal automática',
   clasif['Peatonal automática corredera'].forma === 'peatonal');
 paso('la barrera, barrera', clasif['Barrera'].forma === 'barrera');
-paso('y la batiente, batiente', clasif['Batiente'].forma === 'batiente');
+
+/* ---- La lista entera, uno por uno (24-11-2026) ----
+   David revisó los tipos y pasaron de 23 a 28, con nombres nuevos que llevan
+   dentro palabras de OTRAS familias: «Cortafuegos batiente peatonal de una
+   hoja», «Corredera curva». Con las reglas de antes, tres de ellos acababan en
+   la familia equivocada, y la familia decide QUÉ GUION DE REVISIÓN se aplica:
+   una cortafuegos revisada con el guion de una peatonal automática es un papel
+   que dice que se comprobó lo que no existe.
+
+   Así que no basta con probar los nuevos: se comprueban LOS 28, para que el día
+   que alguien añada una regla no se lleve otra puerta por delante sin querer. */
+const TODOS = await T(() => {
+  const g = window.__T;
+  return g.TIPOS.map(t => [t, g.formaDePuerta(t)]);
+});
+const esperada = t =>
+  t === 'Otro' ? '' :
+  /^Cortafuegos/i.test(t) ? 'cortafuegos' :
+  /^Peatonal (manual|de chalet)/i.test(t) ? 'batiente' :
+  /^Peatonal/i.test(t) ? 'peatonal' :
+  /^Corredera/i.test(t) ? 'corredera' :
+  /^R[áa]pida/i.test(t) ? 'rapida' :
+  /^(Enrollable|Cierre enrollable)/i.test(t) ? 'enrollable' :
+  /^Batiente/i.test(t) ? 'batiente' :
+  /^Guillotina/i.test(t) ? 'guillotina' :
+  /^Seccional/i.test(t) ? 'seccional' :
+  /^Basculante/i.test(t) ? 'basculante' :
+  /^Plegable/i.test(t) ? 'plegable' :
+  /^Barrera/i.test(t) ? 'barrera' : '?';
+const falla = TODOS.filter(([t, f]) => f !== esperada(t));
+paso('la lista tiene los 28 tipos que David revisó', TODOS.length === 28, TODOS.length);
+paso('y los 28 caen en la familia que les toca', falla.length === 0,
+     falla.map(([t,f]) => t+' → '+f).join(' · ') || 'todos');
+
+/* Las cuatro que estaban mal antes del arreglo, nombradas una por una: si
+   alguien vuelve a mover el orden de las reglas, aquí se ve cuál se rompió. */
+const mapa = Object.fromEntries(TODOS);
+paso('«Corredera curva» es de vehículos, no peatonal',
+     mapa['Corredera curva'] === 'corredera', mapa['Corredera curva']);
+paso('una cortafuegos batiente peatonal es CORTAFUEGOS, no peatonal automática',
+     mapa['Cortafuegos batiente peatonal de una hoja'] === 'cortafuegos',
+     mapa['Cortafuegos batiente peatonal de una hoja']);
+paso('y la de dos hojas también',
+     mapa['Cortafuegos batiente peatonal de dos hojas'] === 'cortafuegos',
+     mapa['Cortafuegos batiente peatonal de dos hojas']);
+paso('«Cortafuegos corredera» es cortafuegos, no corredera',
+     mapa['Cortafuegos corredera'] === 'cortafuegos', mapa['Cortafuegos corredera']);
+paso('y «Peatonal automática curva» sigue siendo peatonal',
+     mapa['Peatonal automática curva'] === 'peatonal', mapa['Peatonal automática curva']);
 
 /* El efecto de la clasificación: qué guión recibe cada una */
 const guiones = await T(() => {
