@@ -49,6 +49,10 @@ img{max-width:100%}
 .marca b{color:var(--amarillo);font-weight:700}
 /* Las casillas de asignar técnicos. Cuadradas y grandes a propósito: se marcan
    con el dedo, de pie y con guantes, no con el ratón. */
+/* Cada puerta del parte, en su caja, para que a las ocho de la tarde no se
+   escriba el diagnóstico de la segunda en la casilla de la primera. */
+.puerta-parte{border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:12px}
+.puerta-parte h4{margin:0 0 10px;font-size:15px}
 .tecs-asignar{display:grid;gap:6px}
 .tec-cas{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);
   border-radius:8px;cursor:pointer;min-height:44px}
@@ -2099,6 +2103,16 @@ async function cargar(){
        aplicación sigue funcionando con una puerta por asistencia, que es lo
        que hacía antes. */
     S.avisoPuertas = ap.error ? [] : (ap.data || []);
+    /* ---- ¿Está el SQL del parte multipuerta? (24-11-2026) ----
+       Una columna que falta NO hace fallar un select('*'): simplemente no
+       viene, y la aplicación se quedaría tan ancha enseñando los campos de
+       cada puerta y perdiendo lo que el técnico escribiera en ellos.
+
+       Así que se pregunta por la columna a propósito. Si no está, el parte se
+       queda como el de siempre, con un solo diagnóstico, y el aviso de arriba
+       dice qué fichero falta por ejecutar. */
+    const mp = await sb.from('aviso_puertas').select('id,diagnostico').limit(1);
+    S.sinMultiPuerta = !!mp.error;
     S.sinAvisoPuertas = !!ap.error;
     /* Las jornadas y las entregas son de esta entrega: si todavía no se ha
        ejecutado su SQL, la aplicación sigue funcionando sin ellas. */
@@ -2180,7 +2194,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.24-2';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.24-3';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -4738,6 +4752,8 @@ const QUE_HACE_FALTA = [
     pierdes:'No se lleva lo pendiente de facturar ni los impagados.' },
   { marca:'sinFotoAviso', fichero:'fotos-aviso.sql', que:'Fotos de antes y después',
     pierdes:'Las fotos de la visita no se separan en antes y después.' },
+  { marca:'sinMultiPuerta', fichero:'multipuerta.sql', que:'Un parte con varias puertas',
+    pierdes:'En una visita de varias puertas no se puede escribir el diagnóstico y el trabajo de cada una por separado.' },
   { marca:'sinAvisoTecnicos', fichero:'tecnicos.sql', que:'Varios técnicos en una asistencia',
     pierdes:'Solo se puede asignar a uno. A una instalación van dos y al segundo no le sale el trabajo en su pantalla.' }
 ];
@@ -28118,6 +28134,11 @@ const entregasObraDePuerta = (avisoId, puertaId) => entregasObraDe(avisoId)
    principal, que es la que sale en la tarjeta y en los documentos. Si todavía
    no se ha ejecutado obra3.sql, puertasDeAviso devuelve esa sola puerta y la
    aplicación se porta como antes. */
+/* La fila que enlaza una asistencia con una puerta. Es donde viven, desde el
+   24-11-2026, el diagnóstico y el trabajo de ESA puerta. */
+function filaAvisoPuerta(avisoId, puertaId){
+  return (S.avisoPuertas || []).find(x => x.aviso_id === avisoId && x.puerta_id === puertaId) || null;
+}
 function puertasDeAviso(avisoId){
   const a = S.avisos.find(x => x.id === avisoId);
   const filas = (S.avisoPuertas || []).filter(x => x.aviso_id === avisoId)
@@ -28786,7 +28807,43 @@ function dlgCierre(avisoId){
      propia visita (el guion, los huecos medidos, el remate). Los campos van en
      oculto para que el resto del parte, que los lee, siga funcionando igual y
      para no perder lo que ya hubiera escrito. */
-  if (pideDiagnostico(a))
+  /* ---- Una puerta o varias (24-11-2026) ----
+     David: «en una misma asistencia puede que se toquen varias puertas, y
+     hacer varias asistencias implicaría varios desplazamientos. Sería útil un
+     parte multipuerta en el que a cada puerta se le pongan sus comentarios».
+
+     Con una puerta, el parte es el de siempre. Con dos o más, cada una tiene
+     su diagnóstico y su trabajo, con su código delante, y los campos de
+     siempre pasan a ser el RESUMEN de la visita: se rellenan solos al guardar,
+     juntando lo de cada puerta.
+
+     Lo de rellenarlos solos no es un adorno. Los lee media aplicación: el
+     parte impreso, el expediente de la puerta, el correo al cliente, la
+     propuesta de factura y el histórico. Si se quedaran vacíos, el cliente
+     recibiría un parte sin decir qué se le hizo. */
+  const puertasParte = puertasDeAviso(a.id);
+  const multi = pideDiagnostico(a) && puertasParte.length > 1 && !S.sinMultiPuerta;
+  if (multi){
+    h += '<div class="grupo"><h3>Qué has encontrado y qué has hecho, puerta por puerta</h3>'+
+      '<p class="mini" style="margin:0 0 10px">Son '+puertasParte.length+' puertas en esta visita. '+
+      'Lo que escribas en cada una va a su ficha y sale en el parte del cliente.</p>';
+    puertasParte.forEach((pu, i) => {
+      const fila = filaAvisoPuerta(a.id, pu.id) || {};
+      const titulo = [pu.codigo, pu.ubicacion || pu.direccion].filter(Boolean).join(' · ') || ('Puerta '+(i+1));
+      h += '<div class="puerta-parte"><h4>'+esc(titulo)+'</h4><div class="campos">'+
+        '<div class="campo full"><label for="zp-diag-'+pu.id+'">Diagnóstico</label>'+
+        '<textarea id="zp-diag-'+pu.id+'" class="zp-diag" data-puerta="'+pu.id+'" rows="2" '+
+        'placeholder="Qué le pasaba a esta puerta.">'+esc(fila.diagnostico||'')+'</textarea></div>'+
+        '<div class="campo full"><label for="zp-trab-'+pu.id+'">Trabajo realizado</label>'+
+        '<textarea id="zp-trab-'+pu.id+'" class="zp-trab" data-puerta="'+pu.id+'" rows="2" '+
+        'placeholder="Qué le has hecho a esta puerta.">'+esc(fila.trabajo||'')+'</textarea></div>'+
+        '</div></div>';
+    });
+    /* Los de siempre siguen existiendo, ocultos: el resto del parte los lee. */
+    h += '<div hidden><textarea id="z-diag">'+esc(a.diagnostico||'')+'</textarea>'+
+         '<textarea id="z-trab">'+esc(a.trabajo||'')+'</textarea></div></div>';
+  }
+  else if (pideDiagnostico(a))
     h += '<div class="grupo"><h3>Qué has encontrado y qué has hecho</h3><div class="campos">'+
       '<div class="campo full"><label for="z-diag">Diagnóstico</label><textarea id="z-diag" rows="2" placeholder="Ej.: banda de seguridad cortada por roce con el marco">'+esc(a.diagnostico||'')+'</textarea>'+
         frasesDe('frases_diag', FRASES_DIAG, 'z-diag')+'</div>'+
@@ -30211,6 +30268,30 @@ async function guardarCierre(a, cerrando){
      bien y las horas se guardaban con el valor viejo. Lo cazó la prueba del
      reloj el 06-11-2026, y es el fallo que esto venía a arreglar. */
   const finReal = horaFinDelCierre();
+  /* ---- El resumen de una visita de varias puertas (24-11-2026) ----
+     Si el parte traía un apartado por puerta, los campos de siempre se
+     rellenan juntando lo de cada una, con su código delante. Así el parte que
+     firma el cliente, el expediente y el correo dicen lo que se hizo en LAS
+     DOS, en vez de quedarse vacíos. */
+  const trozosParte = [...document.querySelectorAll('.zp-diag')].map(t => t.dataset.puerta);
+  if (trozosParte.length){
+    const nombre = pid => { const pu = puertaDe(pid) || {};
+      return pu.codigo || pu.ubicacion || pu.direccion || 'Puerta'; };
+    const junta = clase => trozosParte.map(pid => {
+      const el = document.getElementById((clase === 'diag' ? 'zp-diag-' : 'zp-trab-') + pid);
+      const txt = (el && el.value || '').trim();
+      return txt ? (nombre(pid) + ': ' + txt) : '';
+    }).filter(Boolean).join('\n');
+    const resDiag = junta('diag'), resTrab = junta('trab');
+    /* Solo se pisa el resumen si hay algo escrito por puerta. Mi primera
+       versión lo pisaba siempre, y eso borraba lo que ya hubiera en el parte
+       cuando el técnico no usaba las casillas de cada puerta: un parte que ya
+       decía qué se hizo se quedaba mudo al volver a guardarlo. Lo cazó la
+       suite de obra. (24-11-2026) */
+    const dg = document.getElementById('z-diag'), tb = document.getElementById('z-trab');
+    if (dg && resDiag) dg.value = resDiag;
+    if (tb && resTrab) tb.value = resTrab;
+  }
   const o = {
     diagnostico: val('z-diag') || null,
     trabajo: val('z-trab') || null,
@@ -30655,6 +30736,28 @@ async function guardarCierre(a, cerrando){
     if (a.tipo === 'comercial' && !S.sinMedidas) await rehacer('medidas', medidas.map(x => x.m));
     const { error } = await sb.from('avisos').update(o).eq('id', a.id);
     if (error) throw error;
+    /* ---- Lo de cada puerta, a su fila (24-11-2026) ----
+       Va DESPUÉS de guardar el parte, y en su propio try. Si esto fallara, el
+       parte ya está guardado con el resumen de las dos puertas dentro: lo que
+       se perdería es el detalle separado, no el trabajo del técnico. Al revés
+       (tirar el parte entero porque no se pudo guardar el detalle) sería
+       cambiar un problema pequeño por uno grande, con el cliente delante
+       esperando para firmar. */
+    if (trozosParte.length && !S.sinMultiPuerta){
+      try {
+        for (const pid of trozosParte){
+          const dg = document.getElementById('zp-diag-'+pid);
+          const tb = document.getElementById('zp-trab-'+pid);
+          await sb.from('aviso_puertas')
+            .update({ diagnostico: (dg && dg.value || '').trim() || null,
+                      trabajo:     (tb && tb.value || '').trim() || null })
+            .eq('aviso_id', a.id).eq('puerta_id', pid);
+        }
+      } catch(err){
+        console.error('Safe2door · no se ha podido guardar el detalle por puerta:', err);
+        toast('El parte se ha guardado. El detalle de cada puerta no: está dentro del resumen.');
+      }
+    }
     // estado de la puerta según cómo queda
     if (a.puerta_id && cerrando){
       const mapa = { 'Operativa':'operativa', 'Operativa con reservas':'operativa', 'Fuera de servicio':'fuera_servicio', 'Esperando repuesto':'esperando_repuesto' };
