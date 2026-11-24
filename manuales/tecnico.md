@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.24-2**
+> **Versión de la aplicación que describe este manual: 2026.11.24-3**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -305,6 +305,21 @@ de corrido, con guiones o sin ellos, y en minúsculas.
 ---
 
 ## 3. Cerrar visita, apartado por apartado
+
+### Si la visita lleva varias puertas
+
+Cuando en una misma visita se tocan dos o más puertas, el parte sale con **un
+apartado por puerta**, cada uno con su código delante y con su propio
+diagnóstico y su propio trabajo.
+
+Rellena cada uno con lo de esa puerta. No mezcles: lo que escribas en el
+apartado de la AR-0001 va a la ficha de la AR-0001 y ahí se queda para siempre.
+
+Al cerrar, el parte que firma el cliente lleva las dos, una debajo de otra con
+su código. No hay que escribir ningún resumen: se hace solo.
+
+Esto evita tener que abrir una asistencia por puerta, que además contaría un
+desplazamiento por cada una.
 
 Se abre con el botón **Cerrar visita**. Tiene estos apartados, en este orden.
 
@@ -1455,4 +1470,4 @@ que mire ahí antes de nada. Puede ser eso.
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.24-2 de Safe2door*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.24-3 de Safe2door*
