@@ -1701,7 +1701,9 @@ create table if not exists public.aviso_puertas (
   puerta_id uuid not null,
   orden integer,
   creado timestamp with time zone not null default now(),
-  creado_por text default ''::text
+  creado_por text default ''::text,
+  diagnostico text,
+  trabajo text
 );
 
 create table if not exists public.aviso_tecnicos (
@@ -5121,6 +5123,8 @@ grant execute on function public.valorar_aviso(p_aviso uuid) to service_role;
 -- ==========================================================================
 
 comment on table public.aviso_puertas is 'Las puertas de una obra. Una instalación de varios días suele llevar más de una, y antes solo cabía la de avisos.puerta_id: al dar de alta la segunda, la primera se soltaba sin avisar.';
+comment on column public.aviso_puertas.diagnostico is 'Qué se encontró en ESTA puerta de la visita. El resumen de toda la visita sigue en avisos.diagnostico.';
+comment on column public.aviso_puertas.trabajo is 'Qué se hizo en ESTA puerta de la visita. El resumen de toda la visita sigue en avisos.trabajo.';
 comment on table public.aviso_tecnicos is 'Los técnicos asignados a una asistencia. El principal sigue estando en avisos.tecnico_id, y también aparece aquí.';
 
 comment on view public.avisos_sin_subtipo is 'Asistencias de un tipo con subtipos que no lo tienen puesto. Lo anterior al 04-11-2026 sale aquí y es normal.';
