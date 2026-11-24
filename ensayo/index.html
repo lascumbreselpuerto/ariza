@@ -2180,7 +2180,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.24-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.24-2';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -3668,7 +3668,10 @@ function vistaMiTrabajo(){
 /* Reparto del trabajo: quién lleva qué, de un vistazo y en un toque.
    Cada cara es también el filtro, así que se ve y se usa en el mismo sitio. */
 function tiraTecnicos(abiertos){
-  const cuenta = id => abiertos.filter(a => a.tecnico_id === id).length;
+  /* Mira a TODOS los asignados, no solo al principal. Se me quedó así al meter
+     los varios técnicos el 23-11-2026: el segundo de una instalación no se
+     contaba en su propia pastilla. (24-11-2026) */
+  const cuenta = id => abiertos.filter(a => estaAsignado(a, id)).length;
   const sinAsignar = abiertos.filter(a => !hayAsignado(a)).length;
   const vencidas = id => abiertos.filter(a => a.tecnico_id === id && a.fecha_prevista && dias(a.fecha_prevista) < 0).length;
   const sel = v => S.filtroTec === v ? ' pri' : ' plana';
@@ -3698,12 +3701,44 @@ function vistaAvisos(){
   const abiertos = S.avisos.filter(a => !a.cerrado && !a.archivado);
   const yoId = S.perfil ? S.perfil.id : null;
   const pasa = a => !S.filtroTec || (S.filtroTec === 'sin' ? !hayAsignado(a) : estaAsignado(a, S.filtroTec));
-  const vistos = abiertos.filter(pasa);
+  /* ---- El buscador de asistencias (24-11-2026) ----
+     David: «echamos en falta un buscador de asistencias para buscar por
+     clientes, dirección, teléfono, etc.»
+
+     Con treinta asistencias abiertas, encontrar la del taller de Jerez era
+     bajar leyendo. Busca por lo que uno recuerda cuando llama un cliente: su
+     nombre, la calle, el teléfono que aparece en la pantalla del móvil, o el
+     código de la pegatina si lo tiene delante.
+
+     También busca en el texto del aviso y en las notas de oficina: muchas
+     veces lo que se recuerda es «el de la puerta que no cierra», no el nombre
+     del cliente. */
+  const q = (S.buscaAsis || '').trim().toLowerCase();
+  const encaja = a => {
+    if (!q) return true;
+    const p = a.puerta_id ? (puertaDe(a.puerta_id) || {}) : {};
+    return [nombreCliente(a), a.direccion_libre, a.contacto, a.contacto_nombre,
+            a.contacto_telefono, a.contacto_email, a.descripcion, a.notas_oficina,
+            p.codigo, p.direccion, p.ubicacion, p.cliente, tipoAsis(a), textoAsignados(a)]
+      .filter(Boolean).join(' ').toLowerCase().includes(q);
+  };
+  const vistos = abiertos.filter(pasa).filter(encaja);
   const mios = vistos.filter(a => estaAsignado(a, yoId)).sort(porFecha);
   const comerciales = vistos.filter(a => a.tipo === 'comercial' && !estaAsignado(a, yoId)).sort(porFecha);
   const resto = vistos.filter(a => !estaAsignado(a, yoId) && a.tipo !== 'comercial').sort(porFecha);
   let h = '<div class="stack">';
-  h += '<div class="fila"><span class="sp"></span><button class="btn pri" data-act="asistencia-nueva">Nueva asistencia</button></div>';
+  h += '<div class="fila"><div class="buscador sp"><input id="busca-asis" type="search" '+
+       'placeholder="Buscar por cliente, dirección, teléfono, puerta o lo que diga el aviso" '+
+       'value="'+esc(S.buscaAsis || '')+'" data-act="busca-asis" autocomplete="off"></div>'+
+       '<button class="btn pri" data-act="asistencia-nueva">Nueva asistencia</button></div>';
+  if (q){
+    const n = vistos.length;
+    h += '<p class="mini" style="margin:0">'+
+         (n ? n+' asistencia'+(n===1?'':'s')+' con «'+esc(S.buscaAsis.trim())+'»'
+            : 'Ninguna asistencia abierta dice «'+esc(S.buscaAsis.trim())+'». '+
+              'Si ya está cerrada, búscala en Realizadas.')+
+         ' <button class="btn sm plana" data-act="busca-asis-quitar">Quitar la búsqueda</button></p>';
+  }
 
   if (esGestion()) h += tiraTecnicos(abiertos);
 
@@ -24549,12 +24584,25 @@ function dlgEstado(id){
 
 function dlgAviso(puertaId, avisoId, clienteId, fecha){
   const a = avisoId ? S.avisos.find(x => x.id === avisoId) : null;
-  // Una avería nueva nace asignada al administrador, para que no se quede sin
-  // dueño. Se puede cambiar aquí mismo antes de guardar.
-  const admin = (S.equipo.find(t => t.rol === 'admin' && t.activo) || {}).id || null;
-  const d = a || { tipo:'averia', estado: admin ? 'asignado' : 'recibido', prioridad:'normal', origen:'Teléfono',
+  /* ---- Una asistencia nueva nace SIN asignar (24-11-2026) ----
+     Hasta hoy nacía asignada al administrador «para que no se quede sin dueño».
+     La intención era buena y el efecto, malo: a David se le llenaba «Mi
+     trabajo» de avisos que no iba a hacer él, y entonces esa pantalla dejaba de
+     significar «lo que tengo que hacer hoy», que es para lo único que sirve.
+
+     David: «si esta asistencia ha sido recibida pero aún no asignada, que se
+     quede en asistencias en sin asignar».
+
+     El miedo de quedarse sin dueño ya está cubierto, y mejor: «Sin asignar»
+     tiene su pastilla con su cuenta en la tira de arriba, y la oficina ve de un
+     vistazo cuántas esperan. Un aviso sin dueño se ve; uno metido en la lista
+     de alguien que no va a ir, no. */
+  const d = a || { tipo:'averia', estado:'recibido', prioridad:'normal', origen:'Teléfono',
                    puerta_id: puertaId || null, cliente_id: clienteId || null,
-                   tecnico_id: admin, fecha_prevista: fecha || null };
+                   tecnico_id: null, fecha_prevista: fecha || null };
+  /* Quién viene marcado: al editar, los que ya estén asignados; al crear,
+     nadie. (24-11-2026) */
+  const yaAsignados = a ? asignadosDe(a) : [];
   const tipos = lista('tipos_asistencia', Object.keys(ASISTENCIAS));
   const puertasOrd = S.puertas.slice().sort((x,y)=> (x.codigo||'') < (y.codigo||'') ? -1 : 1);
   let h = '<h3>'+(a ? 'Asistencia '+esc(tipoAsis(d)) : 'Nueva asistencia')+'</h3>';
@@ -24786,9 +24834,23 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
       '</select><span class="pista">La asistencia se cierra con el parte, desde «Cerrar visita»</span></div>'+
     '<div class="campo"><label for="a-prio">Prioridad</label><select id="a-prio">'+
       PRIORIDADES.map(x => '<option value="'+x+'"'+(d.prioridad===x?' selected':'')+'>'+(x==='normal'?'Normal':(x==='urgente'?'Urgente':'Programada'))+'</option>').join('')+'</select></div>'+
-    '<div class="campo"><label for="a-tec">Técnico asignado</label><select id="a-tec"><option value="">Sin asignar</option>'+
-      activos().map(t => '<option value="'+t.id+'"'+(d.tecnico_id===t.id?' selected':'')+'>'+esc(t.nombre||'—')+(t.rol==='admin'?' (admin)':'')+'</option>').join('')+
-      '</select><span class="pista">Le llega un correo y lo ve en «Mis asistencias»</span></div>'+
+    /* ---- Varios técnicos ya desde el alta (24-11-2026) ----
+       David: «se debería de poder asignar a varios técnicos desde la misma
+       creación de la asistencia, no luego».
+
+       Tenía razón: a una instalación se sabe desde el principio que van dos, y
+       obligar a crearla, guardarla y volver a abrirla para asignar al segundo
+       es un paso de más en el momento en que menos tiempo hay.
+
+       Se puede dejar sin marcar a nadie. Una asistencia recibida y todavía sin
+       asignar tiene su sitio en «Sin asignar», que es donde debe estar hasta
+       que alguien decida quién va. */
+    '<div class="campo full"><label>Técnicos asignados</label><div class="tecs-asignar">'+
+      activos().map(t => '<label class="tec-cas"><input type="checkbox" class="a-tec" value="'+t.id+'"'+
+        (yaAsignados.indexOf(t.id) >= 0 ? ' checked' : '')+'><span>'+
+        esc(t.nombre||'—')+(t.rol==='admin'?' (admin)':'')+'</span></label>').join('')+
+      '</div><span class="pista">Lo ven en «Mis asistencias» todos los que marques. '+
+      'Sin marcar a nadie, queda en «Sin asignar».</span></div>'+
     '<div class="campo"><label for="a-fecha">Visita prevista</label><input id="a-fecha" type="date" value="'+esc(d.fecha_prevista||'')+'"></div>'+
     /* ---- La ruta, desde la oficina (02-11-2026) ----
        Quien crea el aviso suele saber a qué zona va esa visita mejor que quien
@@ -24823,7 +24885,10 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
   else if (!String(a.ruta || '').trim()) setTimeout(rutaDelAviso, 0);
   if (a) setTimeout(() => { pintarPuertasAviso(a.id); pintarRemate(a.id); pintarPerifericos(); }, 0);
   abrirDlg(h, async () => {
-    const tid = val('a-tec') || null;
+    const marcadosTec = [...document.querySelectorAll('.a-tec:checked')].map(x => x.value);
+    /* El principal, igual que al reasignar: si el que ya lo era sigue marcado se
+       queda, y si no, el primero de los que queden. */
+    const tid = (d.tecnico_id && marcadosTec.indexOf(d.tecnico_id) >= 0) ? d.tecnico_id : (marcadosTec[0] || null);
     const nom = val('a-cnom'), tel = val('a-ctel'), mail = val('a-cmail');
     const pid = val('a-puerta') || null;
     let cid = val('a-cliente') || null;
@@ -24960,6 +25025,31 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
         const { data, error } = await sb.from('avisos').insert(o).select().maybeSingle();
         if (error) throw error;
         avisoId = data ? data.id : null;
+      }
+      /* ---- Los técnicos asignados (24-11-2026) ----
+         Igual que las puertas: después de guardar, porque hasta entonces la
+         asistencia no tiene número al que colgarlos. Se ponen los marcados y se
+         sueltan los que se hayan desmarcado al editar.
+
+         Va dentro de su propio try: si esto fallara, la asistencia ya está
+         guardada con su principal y no se pierde. Un fallo aquí deja a un
+         técnico sin ver su trabajo, que se arregla asignando otra vez; tirar la
+         asistencia entera no lo arregla, lo empeora. */
+      if (avisoId && !S.sinAvisoTecnicos){
+        try {
+          const antesTec = a ? asignadosDe(a) : [];
+          const quitar = antesTec.filter(x => marcadosTec.indexOf(x) < 0);
+          const poner  = marcadosTec.filter(x => antesTec.indexOf(x) < 0);
+          if (quitar.length)
+            await sb.from('aviso_tecnicos').delete().eq('aviso_id', avisoId).in('tecnico_id', quitar);
+          if (poner.length)
+            await sb.from('aviso_tecnicos').upsert(
+              poner.map(x => ({ aviso_id: avisoId, tecnico_id: x, creado_por: yo() })),
+              { onConflict:'aviso_id,tecnico_id', ignoreDuplicates:true });
+        } catch(err){
+          console.error('Safe2door · no se han podido guardar los técnicos asignados:', err);
+          toast('La asistencia se ha guardado, pero los técnicos no. Asígnalos desde la tarjeta.');
+        }
       }
       /* ---- Las puertas de la preventiva (04-11-2026) ----
          Se enganchan DESPUÉS de guardar, porque hasta entonces la asistencia no
@@ -31361,6 +31451,7 @@ raiz.addEventListener('click', async e => {
     } catch(err){ fallo(err); }
   }
   else if (a === 'filtra-tec'){ S.filtroTec = b.dataset.v || ''; pintar(); }
+  else if (a === 'busca-asis-quitar'){ S.buscaAsis = ''; pintar(); }
   else if (a === 'cli-archivados'){ S.cliArchivados = !S.cliArchivados; S.buscaCli = ''; pintar(); }
   else if (a === 'hist-archivadas'){ S.histArchivadas = !S.histArchivadas; pintar(); }
   else if (a === 'hist-limpiar'){
@@ -32100,6 +32191,7 @@ raiz.addEventListener('click', async e => {
 });
 raiz.addEventListener('input', e => {
   if (e.target.dataset.act === 'busca'){ S.busca = e.target.value; pintar(); }
+  if (e.target.dataset.act === 'busca-asis'){ S.buscaAsis = e.target.value; pintar(); }
   if (e.target.dataset.act === 'busca-cli'){ S.buscaCli = e.target.value; pintar(); }
   if (e.target.dataset.act === 'busca-mat'){ S.buscaMat = e.target.value; pintar(); }
   if (e.target.dataset.act === 'busca-presu'){ S.buscaPresu = e.target.value; pintar(); }
