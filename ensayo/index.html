@@ -2131,7 +2131,7 @@ async function cargar(){
      botón «Conversación»: contarlos por tarjeta sería una consulta por cada
      visita del día. (12-11-2026) */
   await contarMensajes();
-  S.cargando = false; pintar();
+  S.cargando = false; S.huboDatos = true; pintar();
 }
 
 /* Enlaces firmados de las fotos del equipo. El cubo es privado: la foto de un
@@ -2180,7 +2180,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.23-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.24-1';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -2776,6 +2776,24 @@ function pintar(){ if (pend) return; pend = requestAnimationFrame(()=>{ pend=0; 
    que volver a buscar la línea que se estaba rellenando. Así que la pantalla
    se queda donde estaba, salvo cuando el sitio ha cambiado de verdad. */
 let SITIO = '';
+/* ---- Por qué la posición se guarda en un armario y no en una variable suelta
+   (23-11-2026) ----
+   Antes se leía la posición al empezar a repintar y se volvía a poner al
+   acabar. Eso vale cuando el repintado enseña lo mismo de otra manera, pero no
+   cuando por el medio la pantalla se queda en una sola línea.
+
+   Y eso pasaba en cada guardado: la aplicación recargaba los datos, ponía
+   «Cargando datos…» (dos centímetros de alto), y el navegador, al no haber nada
+   que desplazar, se iba al principio. Cuando volvía a dibujarse entera, la
+   posición que se leía ya era cero, así que se restauraba el cero.
+
+   Resultado: Christian veía la pantalla saltando arriba todo el día y lo
+   llamaba «se recarga sola», y quien rellenaba una puerta volvía al principio
+   de la ficha después de cada componente.
+
+   Ahora la última posición buena de cada pantalla se guarda aquí, y una página
+   que se ha quedado corta no la pisa. (David, 23-11-2026) */
+const POSICIONES = Object.create(null);
 const sitioActual = () => [S.tab, S.ficha || '', S.fichaCliente || '', S.exp || ''].join('|');
 /* Las dos barras: arriba los seis grupos, debajo las pestañas del grupo en el
    que estás. Se repinta en cada render porque el rol puede cambiar las pestañas
@@ -2805,7 +2823,29 @@ function render(){
      quiere uno es empezar a leer, no seguir donde estaba en otra pantalla. */
   const sitio = sitioActual();
   const mismoSitio = sitio === SITIO;
-  const scroll = window.scrollY || document.documentElement.scrollTop || 0;
+  const ahora = window.scrollY || document.documentElement.scrollTop || 0;
+  /* La posición que se lee ahora es de la pantalla que se DEJA, no de la que se
+     va a pintar. Guardarla con el nombre de la nueva fue mi primer intento y
+     dejaba la vuelta sin funcionar: al salir del manual, sus 700 píxeles se
+     apuntaban a nombre de la pantalla a la que ibas.
+
+     Un cero mientras se cargan los datos tampoco es «estaba arriba»: es que la
+     pantalla se ha quedado sin alto. Ese cero no borra lo que había. */
+  if (!(ahora === 0 && S.cargando)) POSICIONES[SITIO] = ahora;
+  /* ---- Volver es volver (23-11-2026) ----
+     Antes, cambiar de pantalla llevaba arriba SIEMPRE, también al volver. La
+     idea era buena para abrir algo nuevo (uno quiere empezar a leer) y mala
+     para la vuelta: cierras la ficha de una puerta, vuelves a la lista de
+     cincuenta y tienes que buscar otra vez por dónde ibas.
+
+     David: «al volver a esa pantalla, que esté en el mismo sitio en la que la
+     dejamos, de esa manera no tenemos que estar buscando dónde estábamos».
+
+     Ahora manda lo que se recuerda: si de esa pantalla hay una posición
+     guardada, se vuelve a ella; si es la primera vez que se entra, arriba. Y
+     como la clave lleva dentro QUÉ ficha es, abrir otra puerta distinta sigue
+     empezando por el principio, que es lo que se quiere. */
+  const scroll = POSICIONES[sitio] || 0;
   SITIO = sitio;
   /* Una cámara encendida cuyo recuadro ya no está en pantalla se queda
      encendida: el repintado se lleva el div, no el stream. En la furgoneta eso
@@ -2821,7 +2861,11 @@ function render(){
   } catch(_){}
   pintarBarras();
   let h = '';
-  if (S.cargando) h = '<p class="cargando">Cargando datos…</p>';
+  /* «Cargando datos…» solo la PRIMERA vez, cuando de verdad no hay nada que
+     enseñar. En las recargas de después la pantalla se queda puesta y los datos
+     se cambian cuando llegan: si no, cada guardado borraba lo que estabas
+     mirando y te devolvía al principio. (23-11-2026) */
+  if (S.cargando && !S.huboDatos) h = '<p class="cargando">Cargando datos…</p>';
   else if (S.exp) h = vistaExpediente(S.exp);
   else if (S.ficha) h = vistaFicha(S.ficha);
   else if (S.fichaCliente) h = vistaFichaCliente(S.fichaCliente);
@@ -2857,7 +2901,7 @@ function render(){
   if (keep){ const el = document.getElementById(keep.id); if (el){ if(keep.txt) el.value = keep.v; el.focus(); if(keep.txt){ try{ el.setSelectionRange(keep.s,keep.e); }catch(_){} } } }
   /* Volver a la altura de antes. Se hace después de pintar, porque hasta que no
      está el contenido la página no es tan alta como para poder bajar. */
-  if (mismoSitio && scroll > 0){
+  if (scroll > 0){
     try { window.scrollTo(0, scroll); } catch(_){ /* navegador raro, se queda arriba */ }
   } else if (!mismoSitio){
     try { window.scrollTo(0, 0); } catch(_){}
