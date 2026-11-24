@@ -1,6 +1,6 @@
 # Safe2door · Manual de oficina
 
-Versión 2026.11.24-1
+Versión 2026.11.24-2
 
 > **Las fotos de este manual son de antes del cambio de nombre.** La aplicación
 > se llamaba ARIZA SAT y así aparece en la barra de arriba de cada pantalla.
@@ -103,9 +103,15 @@ falta tener la ficha completa, eso lo remata el técnico allí.
 **El técnico y la fecha.** Se pueden dejar en blanco y asignar después, desde el
 Calendario.
 
-**Se puede asignar a más de un técnico.** Desde el 22 de noviembre de 2026, la
-pantalla de asignar lleva una casilla por cada uno, en vez de un desplegable de
-uno solo. Marca a todos los que vayan: a una instalación suelen ir dos, y a cada
+**Las asistencias nuevas nacen SIN asignar.** Hasta el 24 de noviembre de 2026
+nacían asignadas al administrador, y eso le llenaba «Mi trabajo» de avisos que
+no iba a hacer él. Ahora una asistencia recién creada se queda en **Sin
+asignar**, con su cuenta en la tira de arriba, hasta que decidís quién va.
+
+**Se puede asignar a más de un técnico, y ya desde el alta.** La pantalla de
+asignar lleva una casilla por cada uno, en vez de un desplegable de uno solo, y
+esas mismas casillas están también al crear la asistencia: si sabes que van dos,
+los marcas de entrada y no hay que volver a abrirla. Marca a todos los que vayan: a una instalación suelen ir dos, y a cada
 uno le aparece la visita en su **Mi trabajo**.
 
 El primero que marques es el **principal**. Es el que sale cuando solo cabe un
@@ -116,6 +122,15 @@ El parte lo puede rellenar cualquiera de los asignados. Lo lleva **quien lo abre
 el último**: si Dani lo abrió y lo dejó a medias, cuando lo abra Christian le
 sale un aviso de que lo llevaba Dani, para que lo hablen antes de escribir los
 dos encima. Lo escrito no se pierde: el parte es un solo documento.
+
+**El buscador de asistencias.** Arriba de la pantalla de Asistencias hay una
+caja de búsqueda. Busca por el nombre del cliente, la dirección, el teléfono, el
+código de la puerta, el tipo de asistencia, el nombre del técnico y también por
+lo que diga el texto del aviso y las notas de oficina. Es para cuando llama un
+cliente y lo que recuerdas es «el de la puerta que no cierra», no su nombre.
+
+Solo busca entre las **abiertas**. Si ya está cerrada, te lo dice y te manda a
+Realizadas, que tiene su propio buscador.
 
 **La prioridad.** Urgente sube la visita arriba del todo en la pantalla del
 técnico y se pinta en rojo. Úsala con cuidado: si todo es urgente, nada lo es.
