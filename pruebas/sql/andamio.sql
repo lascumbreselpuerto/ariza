@@ -206,13 +206,36 @@ create table if not exists public.componentes (
   actualizado timestamptz
 );
 
+/* ---- Los expedientes, con las columnas de verdad (25-11-2026) ----
+   Esta tabla estaba aquí a medias: solo puerta, cliente, familia y datos.
+   Valía mientras ningún SQL de servidor/ la tocara, igual que pasaba con las
+   fotos hasta el 07-11-2026. Desde elementos-unificados.sql sí se toca: añade
+   la columna «catalogo» y reescribe crear_expediente, que inserta la
+   referencia, el número correlativo del año, la situación y el autor.
+   Son las mismas columnas y la misma restricción de unicidad que en
+   producción, para que lo que se prueba aquí valga allí. */
 create table if not exists public.expedientes (
   id         uuid primary key default gen_random_uuid(),
+  referencia text unique,
+  numero     integer,
   puerta_id  uuid references public.puertas(id) on delete set null,
   cliente_id uuid references public.clientes(id) on delete set null,
+  aviso_id   uuid,
+  situacion  text not null default 'nueva_fabricante',
   familia    text,
+  fecha_apertura date not null default ((now() at time zone 'Europe/Madrid'))::date,
+  fecha_puesta_servicio date,
+  estado     text not null default 'borrador',
   datos      jsonb not null default '{}'::jsonb,
-  creado     timestamptz not null default now()
+  notas      text,
+  emitido_el timestamptz,
+  emitido_por text,
+  firmante   text,
+  firmante_cargo text,
+  archivado  boolean not null default false,
+  creado     timestamptz not null default now(),
+  actualizado timestamptz not null default now(),
+  autor      text
 );
 
 /* Las fotos. Existen en producción desde el principio, con la puerta como
