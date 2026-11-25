@@ -1,6 +1,6 @@
 # Safe2door · Manual de oficina
 
-Versión 2026.11.24-4
+Versión 2026.11.24-5
 
 > **Las fotos de este manual son de antes del cambio de nombre.** La aplicación
 > se llamaba ARIZA SAT y así aparece en la barra de arriba de cada pantalla.
@@ -253,6 +253,30 @@ ficha.
 Eso las deja fuera de todo: no salen en el listado del cliente, ni en sus
 contratos, ni en su historial. **Arréglalas en cuanto las veas**, se hace en dos
 clics desde la ficha de la puerta.
+
+### La ficha pregunta lo de cada familia de puerta
+
+Desde el 24 de noviembre de 2026 la ficha de puerta **no pregunta lo mismo a
+todas**. Al elegir el tipo se queda solo con lo que esa familia lleva de verdad:
+una barrera pregunta veintitrés campos de cuarenta y una seccional treinta y
+cinco.
+
+Lo que esto cambia para la oficina:
+
+- Si completas la ficha de una puerta y echas en falta un campo, **mira primero
+  el tipo**. Un tipo mal elegido esconde los campos buenos y enseña los que no
+  son. Se corrige cambiando el tipo, y los campos vuelven.
+- Cambiar el tipo **no borra** lo que ya estaba medido. Si una puerta se dio de
+  alta como seccional con sus muelles anotados y alguien corrige el tipo, el
+  dato se queda guardado.
+- Los campos marcados **(si la lleva)** son opcionales en esa familia: dejarlos
+  en blanco no deja la ficha a medias.
+- El **alta rápida** desde oficina no cambia: sigue pidiendo lo mínimo, tipo,
+  ubicación y etiqueta. Lo demás se completa en la ficha o lo rellena el técnico
+  en la visita.
+
+Y «Baliza» ahora se llama **«Luz de maniobra»**. Es el mismo elemento, con el
+nombre que se usa en obra. Las puertas que la tenían marcada siguen marcadas.
 
 ---
 

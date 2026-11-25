@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.11.24-4**
+> **Versión de la aplicación que describe este manual: 2026.11.24-5**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -301,8 +301,43 @@ anotan con media vuelta de precisión porque así se trabaja.
 
 No estaba en la ficha, y es un buen ejemplo de lo contrario al caso anterior: un
 dato que el técnico sí tiene delante, que cuesta diez segundos anotar, y cuya
-ausencia obliga a volver con el flexómetro y el medidor. Se pide solo en las
-seccionales: en una corredera no decide nada.
+ausencia obliga a volver con el flexómetro y el medidor.
+
+Se piden en las puertas de muelles, junto con el **diámetro del muelle**, que es
+el del alambre: seccional, basculante, enrollable y guillotina. En una corredera
+no deciden nada y no se piden.
+
+### Preguntar a cada puerta lo suyo
+
+Esto es un criterio general, no un detalle de esa pantalla, y merece pararse en
+él porque es de los que más tiempo ahorran en la calle.
+
+Un formulario que pregunta lo mismo a todas las puertas obliga a leer cuarenta
+campos para rellenar veinte. El coste no es solo el tiempo: un campo que no
+decide nada se rellena mal, por costumbre o por no dejarlo en blanco, y un dato
+inventado es peor que un hueco, porque el hueco se ve y el dato inventado no.
+
+La forma de resolverlo no es acortar la lista para todos, que sería perder
+datos, sino **decidir por familia de puerta qué se le pregunta**. Eso exige una
+tabla: por cada familia y cada campo, si se pide siempre, si es opcional o si no
+se pide.
+
+Esa tabla no la puede escribir quien programa. La tiene que rellenar quien ha
+montado esas puertas, porque la pregunta es técnica: ¿tiene sentido el diámetro
+del eje en una corredera? La de esta aplicación la rellenó David familia por
+familia, y el resultado está a la vista: una barrera pregunta veintitrés campos
+de cuarenta, y una seccional treinta y cinco.
+
+Dos reglas de oficio que salieron de hacerla:
+
+- **Marcar que un elemento está no es haberlo comprobado.** La ficha dice qué
+  lleva la puerta; que funcione se mide en la revisión, con su guion y sus
+  números. Confundir las dos cosas es lo que convierte un inventario en un
+  certificado falso.
+- **Lo que no se pregunta, no se borra.** Si una puerta se dio de alta como
+  seccional con sus muelles anotados y luego alguien corrige el tipo a
+  corredera, el dato se queda guardado. Un tipo mal elegido se corrige en diez
+  segundos; un dato borrado obliga a volver a la puerta.
 
 ### Por qué la puerta se trata como un todo
 
@@ -1303,7 +1338,10 @@ La aplicación no es un cuaderno bonito: está construida sobre lo que acabas de
 - Una ficha de una puerta con un parte **firmado** solo la pueden completar la oficina y el administrador, y queda anotado quién y cuándo.
 - Un punto del ensayo de fuerzas con menos de sus cuatro magnitudes **no dictamina**: el documento lo imprime como ensayo incompleto y nombra las que faltan.
 - En **instalación la puerta se da de alta cuando está montada**, no al llegar. Antes no hay medidas que tomar ni placa que leer. Por eso la aplicación lo exige al cerrar y no al empezar, y mientras se monta dice que está bien que todavía no exista.
-- El **dintel** se pide solo en las puertas que suben. En las demás el campo no sale. Las **vueltas de los muelles**, solo en las seccionales.
+- La ficha **pregunta a cada familia de puerta lo suyo y nada más**, según una tabla que David rellenó familia por familia con sí, opcional o no. Al cambiar el tipo, los campos aparecen y desaparecen solos. Una barrera pregunta veintitrés campos de cuarenta; una seccional, treinta y cinco. Lo que una familia no pregunta tampoco se guarda, pero lo que ya estuviera guardado **no se borra** al cambiar el tipo.
+- Los datos van en bloques: identificación, la puerta y sus medidas, motorización, cómo se acciona, seguridades y control de acceso.
+- El **dintel** se pide en lo que sube, y desde el 24 de noviembre de 2026 también en cortafuegos y peatonal automática. Las **vueltas y el diámetro de los muelles**, en seccional, basculante, enrollable y guillotina.
+- **«Baliza» pasó a llamarse «Luz de maniobra»**, que es como se dice en obra. Las puertas que la tenían marcada siguen marcadas.
 - El **peso de la hoja** ya no se pide: en su lugar, el **arrastre máximo del motor**, que viene en su placa. El peso que estuviera anotado de antes se conserva y se sigue imprimiendo.
 - En vez de desglosar herrajes, un apartado libre, **más elementos a identificar**, que rellena el técnico en su inspección.
 - Desde el ordenador, los ficheros se pueden **soltar encima** del recuadro donde van. Cada recuadro acepta lo suyo: un PDF soltado en las fotos no se cuela y lo dice.
@@ -1370,4 +1408,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.24-4 de Safe2door*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.24-5 de Safe2door*

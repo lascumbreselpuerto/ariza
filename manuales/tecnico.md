@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.24-4**
+> **Versión de la aplicación que describe este manual: 2026.11.24-5**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -1207,6 +1207,13 @@ historial, ni expediente, y no se le puede sacar una hoja de campo.
 
 **El cuadro y el motor se escriben una vez.** En la ficha pones marca y modelo de cada uno, y con eso quedan dados de alta en **Componentes**. Allí ya solo tienes que ponerles el número de serie, la foto de la placa y el papel, que es lo que la ficha no guarda. Si los cambias en el componente, la ficha cambia también: es el mismo dato.
 
+**La foto de la placa, antes de guardar (24 de noviembre de 2026).** Hasta ahora
+la pantalla del componente decía «guarda primero el componente y luego podrás
+ponerle la foto»: había que guardar, buscarlo otra vez y volver a entrar, y con
+la placa delante eso no lo hace nadie. Ahora **haces la foto cuando la tienes
+delante** y la aplicación la sube ella sola en cuanto guardas. Si el guardado
+falla, la foto sigue esperando: no has perdido el viaje.
+
 **Cuando un dato no se sabe, se dice (7 de noviembre de 2026).** El **año** y
 **quién la instaló** llevan al lado una casilla **«No se sabe»**. Márcala cuando
 hayas preguntado y nadie lo sepa, que en puertas viejas es lo normal. No es lo
@@ -1244,15 +1251,54 @@ La matrícula vale tomada de tres sitios, y cualquiera de los tres sirve:
 2. El número de serie del motor o del cuadro, dándolos de alta como componentes.
 3. Si no hay placa o está ilegible: lo escribes en **«Si no tiene placa»**. Eso también es un dato. Dejarlo en blanco, no.
 
+### La ficha te pregunta lo de TU puerta, y nada más
+
+Desde el 24 de noviembre de 2026 la ficha **no pregunta lo mismo a todas las
+puertas**. Al elegir el tipo, la pantalla se queda solo con lo que esa familia
+de puerta lleva de verdad.
+
+A una barrera ya no se le pide el dintel ni las vueltas de los muelles. A una
+corredera ya no se le pide el diámetro del eje. De cuarenta datos posibles, una
+barrera pregunta veintitrés y una seccional treinta y cinco.
+
+Cambia el tipo y lo verás: **los campos aparecen y desaparecen solos**. Lo que
+ya tuvieras escrito no se pierde al cambiar, y lo que esa familia no pregunta no
+se guarda.
+
+Los datos van en bloques, en este orden:
+
+1. **De quién es la puerta** y **dónde está**.
+2. **Identificación**: etiqueta, matrícula o placa, marcado CE.
+3. **La puerta**: tipo, uso, marca, modelo, año, instalador y sus medidas.
+4. **Motorización**: motor, cuadro, cuántos motores, desbloqueo manual.
+5. **Cómo se acciona y quién la usa**.
+6. **Seguridades**: lo que lleva puesto.
+7. **Control de acceso**: mandos, teclado, portero, bucle, radar.
+8. **Revisiones y notas**.
+
+Algunos campos salen con la nota **(si la lleva)**: significa que en esa familia
+ese dato es opcional. Se pregunta porque puede estar, pero dejarlo en blanco no
+deja la ficha a medias. Los que no llevan esa nota sí hacen falta.
+
+Y una advertencia que vale para todo:
+**marcar una casilla no es haberlo comprobado**. «Fotocélulas» marcada quiere
+decir que la puerta las lleva puestas, no que funcionen. Eso se mide en la
+revisión, y va en su guion.
+
 ### El dintel, en todo lo que sube
 
-En las puertas que suben (seccional, enrollable, vertical, rápida y basculante) la
-ficha pide además el **dintel**: la altura libre que queda entre el hueco y el
-techo, en milímetros.
+En las puertas que suben la ficha pide el **dintel**: la altura libre que queda
+entre el hueco y el techo, en milímetros.
 
 Es el dato que decide si la puerta entra o no entra, y el que hay que volver a
-medir cuando no se anotó. En una corredera o una batiente no se pide, porque ahí
-no decide nada, y el campo no sale.
+medir cuando no se anotó.
+
+Se pide en seccional, enrollable, vertical, rápida, basculante, **cortafuegos** y
+**peatonal automática**, y es opcional en plegable. Las dos últimas las añadió
+David el 24 de noviembre de 2026, al repasar la tabla familia por familia.
+
+En una corredera, una batiente o una barrera no se pide, porque ahí no decide
+nada, y el campo no sale.
 
 ### Los tres atajos del parte
 
@@ -1272,14 +1318,31 @@ sobrado o justo para esa hoja. Es un dato que se copia, no que se mide.
 > Si en alguna puerta ya había un peso anotado, **no se ha borrado**. Sigue
 > saliendo en la ficha y en los documentos, en gris, diciendo que ya no se pide.
 
-### Las vueltas de los muelles, en las seccionales
+### Las vueltas de los muelles, y su diámetro
 
-En una seccional la ficha pide las **vueltas de los muelles**, con media vuelta
-de precisión, que es como se trabaja. Es el dato que hace falta para equilibrar
-la hoja y para pedir un muelle de repuesto sin volver a medirlo.
+En una puerta de muelles la ficha pide las **vueltas de los muelles**,
+con media vuelta de precisión, que es como se trabaja, y el **diámetro del
+muelle**, que es el del alambre. Con las dos cosas se pide el repuesto correcto
+sin volver a la puerta a medirlo.
+
+Hasta el 24 de noviembre de 2026 solo se pedían en las seccionales. Ahora
+también en **basculante**, **enrollable** y **guillotina o vertical**, que es
+donde David dijo que hacían la misma falta.
 
 En el resto de puertas el campo no sale, igual que el dintel: un campo que no
 decide nada solo sirve para dejarlo en blanco.
+
+### «Baliza» ahora se llama «Luz de maniobra»
+
+El mismo elemento, el nombre que se usa en obra. «Baliza» se confundía con la
+señalización de obra. Las puertas que ya la tenían marcada siguen marcadas: solo
+ha cambiado cómo se llama.
+
+### Los mandos entregados, apuntados
+
+En el bloque de control de acceso hay un campo para **cuántos mandos se le han
+entregado al cliente**. Apúntalo: es la pregunta que más se repite meses
+después, y la que nadie sabe contestar.
 
 ### Más elementos a identificar
 
@@ -1470,4 +1533,4 @@ que mire ahí antes de nada. Puede ser eso.
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.24-4 de Safe2door*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.24-5 de Safe2door*
