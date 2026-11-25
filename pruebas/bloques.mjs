@@ -119,8 +119,15 @@ paso('todas las familias que la aplicación reconoce están en la tabla',
 paso('y no hay familias en la tabla que la aplicación no reconozca',
      tabla.sobran.length === 0, tabla.sobran.join(' '));
 paso('ningún campo tiene la clave repetida', tabla.repes.length === 0, tabla.repes.join(' '));
-paso('son 16 medidas y 24 elementos, los de su hoja',
-     tabla.nMed === 16 && tabla.nEle === 24, tabla.nMed+' y '+tabla.nEle);
+/* ---- 24 elementos pasaron a ser 47 (25-11-2026) ----
+   David, al ver la pantalla en uso: «los componentes no coinciden con los
+   seleccionados en función de la familia de puerta que seleccionamos en el
+   excel». Había dos listas que no se hablaban, esta de 24 y la del expediente
+   de otros 24. Se unificaron en una de 47, y de ella viven las dos pantallas.
+   De los 47, 23 se preguntan en la ficha y 24 solo al documentar: eso lo
+   vigila pruebas/elementos.mjs. */
+paso('son 16 medidas y 47 elementos, los de su hoja repasada',
+     tabla.nMed === 16 && tabla.nEle === 47, tabla.nMed+' y '+tabla.nEle);
 paso('y once familias', tabla.nFam === 11, tabla.nFam);
 
 /* ================================================================
@@ -152,7 +159,10 @@ const casos = [
   ['Guillotina o vertical',                'muelle',     'si'],
   ['Rápida enrollable',                    'muelle',     'no'],
   // elementos
-  ['Cortafuegos batiente peatonal de una hoja', 'incendios', 'si'],
+  /* Era 'si'. David lo pasó a OPCIONAL el 25-11-2026 al repasar la tabla: no
+     toda cortafuegos va conectada a la central de detección, y la que no lo
+     está no tiene por eso la ficha incompleta. */
+  ['Cortafuegos batiente peatonal de una hoja', 'incendios', 'op'],
   ['Corredera autoportante',               'incendios',  'no'],
   ['Peatonal automática corredera',        'sensorap',   'si'],
   ['Barrera',                              'bucle',      'op'],
@@ -164,18 +174,26 @@ casos.forEach((c, i) => {
 });
 
 bloque('3. Lo que se pregunta de más y de menos');
+/* ---- Se cuenta lo de LA FICHA, no los 47 (25-11-2026) ----
+   Esta prueba contaba medidas más TODOS los elementos. Desde que la tabla es
+   una sola y sirve para las dos pantallas, eso ya no es «lo que pide el alta»:
+   24 de los 47 son solo de documentar. Contarlos aquí daba 63 campos y la
+   prueba decía que el alta había engordado, cuando no había engordado nada.
+   Ahora se cuenta lo que el alta pregunta de verdad: las medidas más los
+   elementos de ficha. */
 const cuentas = await T(() => {
   const g = window.__T;
-  const todas = g.MEDIDAS_PUERTA.map(m => m.c).concat(g.ELEMENTOS_PUERTA.map(x => x.c));
-  const cuenta = t => todas.filter(c => g.seAplica(t, c)).length;
+  const deFicha = g.MEDIDAS_PUERTA.map(m => m.c)
+    .concat(g.ELEMENTOS_PUERTA.filter(x => x.donde !== 'exp').map(x => x.c));
+  const cuenta = t => deFicha.filter(c => g.seAplica(t, c)).length;
   return { barrera: cuenta('Barrera'), seccional: cuenta('Seccional'),
            sinReconocer: cuenta('Portón de los años ochenta sin más datos'),
-           total: todas.length };
+           total: deFicha.length };
 });
-paso('a una barrera se le preguntan 23 de 40, no 40',
-     cuentas.barrera === 23, cuentas.barrera+' de '+cuentas.total);
-paso('a una seccional, 35: es la que más lleva',
-     cuentas.seccional === 35, cuentas.seccional);
+paso('a una barrera el alta le pregunta 22 de 39, no 39',
+     cuentas.barrera === 22, cuentas.barrera+' de '+cuentas.total);
+paso('a una seccional, 34: sigue siendo la que más lleva',
+     cuentas.seccional === 34, cuentas.seccional);
 paso('y a una puerta que no se reconoce no se le esconde NADA',
      cuentas.sinReconocer === cuentas.total, cuentas.sinReconocer);
 

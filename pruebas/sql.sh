@@ -48,7 +48,7 @@ almacen.sql presupuestos.sql presupuestos2.sql comercial.sql anexos.sql \
 tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos3.sql valoracion.sql \
 parado.sql factura.sql rutas.sql ruta-cliente.sql telegram.sql subtipo.sql urgencia.sql \
 medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql perifericos.sql ficha4.sql urgencia2.sql falso.sql fotos-aviso.sql barras.sql almacenes.sql nombre-equipo.sql sitio-material.sql conformidad-visita.sql mensajes.sql tecnicos.sql multipuerta.sql \
-alta-por-bloques.sql"
+alta-por-bloques.sql elementos-unificados.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -197,6 +197,21 @@ if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/alta-por-bloques-pruebas.sql" ]; then
     fallos=$((fallos+1))
     echo " FALLA el alta por bloques:"
     grep -a -m3 -E "ERROR|EXCEPTION" /tmp/bloques-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
+# El catálogo de elementos del expediente. Lo que se vigila: que un expediente
+# nuevo nazca con el catálogo de las once familias, que uno de antes NO cambie, y
+# que el número correlativo por año siga intacto después de reescribir la función.
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/elementos-unificados-pruebas.sql" ]; then
+  echo ""
+  echo "── El catálogo del expediente ──────────────────"
+  if $PSQL -f "$AQUI/sql/elementos-unificados-pruebas.sql" > /tmp/eu-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/eu-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA el catálogo del expediente:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/eu-pruebas.log | sed 's/^/         /'
   fi
 fi
 

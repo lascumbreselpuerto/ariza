@@ -622,6 +622,36 @@ paso('«Baliza» renombrada a «Luz de maniobra» está dicha',
   /Luz de maniobra/i.test(M) && /Baliza/.test(M));
 paso('y que la foto del componente ya se puede hacer antes de guardar',
   /antes de guardar/i.test(M) && /no has perdido el viaje/i.test(M));
+
+/* ---- Lo unificado y la norma aparte (25-11-2026) ----
+   David: «siempre el técnico tiene la última palabra a la hora de decidir qué
+   elementos de seguridad debe contener una puerta, pero siempre una vez
+   cumplidos los mínimos exigidos por la normativa vigente».
+
+   Lo que se vigila aquí es que el manual no se quede en «rellena los
+   elementos». Lo delicado de la norma son las VÍAS: un nivel «C+D o E» NO pide
+   tres elementos, pide una de dos vías. Un manual que no lo diga manda al
+   técnico a vender material que la norma no exige, o a dar por incumplida una
+   puerta que cumple por la otra vía. */
+paso('el manual del técnico distingue la ficha del expediente',
+  /La ficha no es el expediente/.test(M) &&
+  /La ficha identifica/.test(M) && /El expediente documenta/.test(M));
+paso('y dice que hay puertas que solo van a tener ficha',
+  /solo van a tener ficha/.test(M));
+paso('explica los tres grupos de elementos del expediente',
+  /exige la norma para esa puerta/.test(M) &&
+  /Lo propio de esa puerta/.test(M) && /lo decides tú/.test(M));
+paso('y avisa de que con UNA vía de la norma basta',
+  /Con una vía basta/.test(M) && /no hace falta poner las dos/i.test(M));
+paso('y de que la marca no es obligatoria en ninguno',
+  /marca no es obligatoria/.test(M) && /cerrajería/.test(M));
+
+paso('el manual de formación separa el mínimo de la norma del criterio del instalador',
+  /El suelo lo pone la norma/.test(F) && /Por encima del suelo manda el instalador/.test(F));
+paso('y explica el error de leer «C+D o E» como tres elementos',
+  /vías alternativas/.test(F) && /se da por incumplida una/.test(F));
+paso('y que documentar no es obligatorio para todo',
+  /hay que asistir igual/.test(F) && /Una ficha no acredita nada/.test(F));
 paso('y el apartado libre, con el motivo de no desglosar herrajes',
   /[Mm]ás elementos a identificar/.test(M) && /un todo/.test(M));
 paso('arrastrar y soltar está explicado, con lo que hace solo',
