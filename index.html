@@ -1178,7 +1178,7 @@ const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etique
             expedientes:[], expFotos:[], expDocs:[], exp:null, expPaso:'obra', expSucio:false,
             fotosEquipo:{}, histBusca:'', histTec:'', histTipo:'', histDesde:'', histHasta:'', histArchivadas:false,
             cliArchivados:false, centros:[], sinCentros:false, versionNueva:null, versionAvisada:null,
-            manual:null, manuales:null, sinObra:false, sinModo:false, sinFicha3:false, sinBloques:false,
+            manual:null, manuales:null, sinObra:false, sinModo:false, sinFicha3:false, sinBloques:false, sinCatalogo:false,
             compEspera:null,
             sinPresuAviso:false, matSinPrecio:null, fotosCuenta:{}, sinFactura:false,
             sinRutas:false, sinRutaCliente:false, sinSubtipo:false, sinUrgencia:false,
@@ -1898,6 +1898,11 @@ async function cargar(){
      seguridad y sin los campos nuevos, y no se pierde nada de lo guardado. */
   const ab = await sb.from('puertas').select('elementos').limit(1);
   S.sinBloques = !!ab.error;
+  /* El catálogo de elementos del expediente: servidor/elementos-unificados.sql.
+     Sin esa columna, todo expediente sigue con el catálogo de cuatro familias de
+     antes, que funciona pero no es el que marcó David en su hoja. */
+  const eu = await sb.from('expedientes').select('catalogo').limit(1);
+  S.sinCatalogo = !!eu.error;
   /* El plazo de pago del cliente y el vencimiento de la factura:
      servidor/factura.sql. Sin esas columnas, la ficha del cliente no enseña el
      plazo, el vencimiento no se puede guardar y el panel de impagados dice que
@@ -2209,7 +2214,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.24-5';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.25-1';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -4751,6 +4756,12 @@ const QUE_HACE_FALTA = [
             'libre, el fondo, el mástil, el eje, los paneles, el diámetro del muelle, el '+
             'tipo de guía, los carriles, el paso libre, los motores, los mandos entregados '+
             'ni el control de acceso.' },
+  { marca:'sinCatalogo', fichero:'elementos-unificados.sql',
+    que:'Que el expediente pida los mismos elementos que la ficha',
+    pierdes:'El expediente sigue con el catálogo de cuatro familias de antes: marcas '+
+            'una cosa en el alta de la puerta y el expediente te pide otra. Y no se '+
+            'pueden distinguir los elementos que exige la norma de los que añade el '+
+            'instalador por su criterio.' },
   { marca:'sinNoSeSabe', fichero:'ficha4.sql', que:'Poder decir «no se sabe»',
     pierdes:'Hay que inventarse el año o el instalador de una puerta que no se conoce.' },
   { marca:'sinMedidas', fichero:'medidas.sql', que:'Medidas de la puerta',
@@ -12251,6 +12262,83 @@ function exigenciaProteccion(e){
   };
 }
 
+/* =================================================================
+   LO QUE EXIGE LA NORMA, Y LO QUE DECIDE EL INSTALADOR
+                                                       25-11-2026
+
+   David: «al realizar la documentación nos tenemos que basar en la
+   conformidad que da la normativa; siempre el técnico tiene la
+   última palabra a la hora de decidir qué elementos de seguridad
+   debe contener una puerta, pero siempre una vez cumplidos los
+   mínimos exigidos por la normativa vigente».
+
+   Eso son dos cosas distintas y hasta hoy iban en la misma lista:
+
+     · el SUELO, que lo pone la matriz de la UNE-EN 12453 cruzando el
+       modo de accionamiento con el tipo de usuario. No se negocia.
+     · lo que el instalador AÑADE por encima, porque, como dice
+       David, «no todas las puertas son iguales ni están instaladas
+       en sitios idílicos».
+
+   POR QUÉ ESTO NO ES UNA LISTA PLANA
+
+   La matriz no pide «limitador y fotocélula y banda». Pide una de
+   varias VÍAS: para un nivel «C+D o E», o se pone limitación de
+   fuerza MÁS detección de presencia, o se pone un sistema de nivel
+   E. Con una de las dos basta.
+
+   Hasta hoy el código hacía niveles.includes('C') y por tanto daba
+   por pedidos los tres elementos a la vez. Como aquello solo se
+   enseñaba de recordatorio, pasaba. En una pantalla que dice «esto
+   es lo que exige la norma» sería mentira, y de las caras: exigiría
+   material que la norma no exige, o daría por incumplida una puerta
+   que cumple por la otra vía.
+
+   SIGUE PENDIENTE DE VALIDAR
+   La matriz de fábrica es una lectura nuestra de la norma, no la
+   norma. Mientras no se compre el ejemplar y se repase, todo lo que
+   sale de aquí es un recordatorio, y la aplicación lo dice en cada
+   sitio donde aparece. No acredita cumplimiento.
+   ================================================================= */
+
+/* Las vías de la norma para esta puerta. Devuelve una lista: con cumplir
+   UNA basta. Vacía = la norma no pide elementos (nivel A o B), o no se
+   sabe porque falta el modo o el usuario en la ficha. */
+function viasDeProteccion(e){
+  const ex = exigenciaProteccion(e);
+  const txt = String((ex && ex.niveles) || '').trim();
+  if (!txt) return [];
+  /* «C+D o E» → dos vías: [C,D] y [E]. El separador es « o », y dentro de
+     cada vía los niveles van con «+». */
+  return txt.split(/\s+o\s+/i).map(v => {
+    const niveles = v.split('+').map(x => x.trim()).filter(Boolean);
+    const claves = [];
+    niveles.forEach(n => (COMPONENTES_POR_NIVEL[n] || []).forEach(c => {
+      if (claves.indexOf(c) < 0) claves.push(c);
+    }));
+    return { niveles, claves };
+  }).filter(v => v.claves.length);
+}
+
+/* Todas las claves que aparecen en alguna vía. Sirve para saber qué
+   elementos de la lista son «de norma» y hay que enseñar aparte. NO
+   significa que haya que ponerlos todos: eso lo dicen las vías. */
+function clavesDeNorma(e){
+  const out = [];
+  viasDeProteccion(e).forEach(v => v.claves.forEach(c => {
+    if (out.indexOf(c) < 0) out.push(c);
+  }));
+  return out;
+}
+
+/* Cuál de las vías queda cumplida con lo que hay contestado en el
+   expediente. Devuelve la primera que se cumple, o null. */
+function viaCumplida(e){
+  const d = ((e || {}).datos || {}).comp || {};
+  return viasDeProteccion(e).find(v =>
+    v.claves.every(c => (d[c] || {}).estado === 'si')) || null;
+}
+
 const EXP_COMPONENTES = {
   industrial: [
     ['hoja',        'Hoja de la puerta',            'Paneles o bastidor. Retrata la puerta entera desde fuera.', 1],
@@ -12524,145 +12612,266 @@ const MEDIDAS_PUERTA = [
     p:'Lo que queda libre con la puerta abierta del todo' , desde:'bloques' },
 ];
 
-/* Los elementos, repartidos en los bloques que pidió David. Tres clases:
+/* ---- LOS 47 ELEMENTOS, segunda vuelta (25-11-2026) ----
+   David, al ver la pantalla en uso: «los componentes no coinciden con los
+   seleccionados en función de la familia de puerta que seleccionamos en el
+   excel». Tenía razón, y era mío: había DOS listas de elementos que no se
+   hablaban. Esta, de 24, y la del expediente (EXP_COMPONENTES), que era de
+   antes: solo cuatro familias y otros 24 elementos distintos, los de cerrajería
+   y mecánica. Marcabas una cosa en el alta y el expediente te pedía otra.
+
+   Ahora hay UNA tabla. Los 47 elementos salen de la hoja que David rellenó
+   familia por familia, y de ella viven la ficha y el expediente.
+
+   QUÉ SIGNIFICAN AHORA LOS VALORES, Y ESTO ES LO IMPORTANTE
+
+   En la primera vuelta casi todas las seguridades estaban en SÍ. David las
+   pasó a OPCIONAL y explicó por qué: «en función del uso, usuario, sitio de
+   instalación etc las seguridades obligatorias son diferentes». O sea que la
+   familia de puerta NO puede decidir si una banda de seguridad es obligatoria.
+   Eso lo decide la matriz de protección de la UNE-EN 12453, con el modo de
+   accionamiento y el tipo de usuario.
+
+   Así que:
+     si  → toda puerta de esta familia lo lleva: es parte del producto
+     op  → puede llevarlo. Si es OBLIGATORIO lo dice la norma, no la familia
+     no  → en esta familia no existe, y no se pregunta
+
+   DÓNDE SE PREGUNTA CADA UNO
+
+     donde:'ficha'  → en el alta de la puerta y también en el expediente
+     donde:'exp'    → SOLO en el expediente
+
+   Los 24 de estructura y mecánica (hoja, guías, equilibrado, paracaídas,
+   topes, marco, juntas…) son de documentar, no de identificar, y por eso no
+   entran en el alta: el alta se acortó a propósito el 24-11-2026 y meterlos
+   sería deshacerlo. Mover cualquiera de los dos lados es cambiar una palabra.
+
+   LAS CLASES
      campo  → no es una casilla, son los campos de marca y modelo que ya existían
      col    → es un número (cuántos motores, cuántos mandos)
      seg    → es una casilla, y además se guarda en «Seguridad instalada» con
-              ese nombre, que es lo que leen el parte, el informe y el expediente */
+              ese nombre, que es lo que leen el parte, el informe y el expediente
+     a      → qué es, para el técnico que lo está mirando en la puerta */
 const ELEMENTOS_PUERTA = [
-  { c:'ce',          e:'Marcado CE de la puerta',       bloque:'id' },
-  { c:'placa',       e:'Placa de características',      bloque:'id' },
-  { c:'motor',       e:'Motor: marca y modelo',         bloque:'motor', campo:true },
-  { c:'cuadro',      e:'Cuadro de maniobra',            bloque:'motor', campo:true },
-  { c:'motores',     e:'Nº de motores',                 bloque:'motor', col:'n_motores',
-    p:'Uno en casi todo; dos en las batientes de dos hojas' },
-  { c:'desbloqueo',  e:'Desbloqueo manual',             bloque:'motor', seg:'Desbloqueo manual' },
-  { c:'fotocelulas', e:'Fotocélulas',                   bloque:'seg', seg:'Fotocélulas' },
-  { c:'banda',       e:'Banda de seguridad',            bloque:'seg', seg:'Banda de seguridad' },
-  { c:'dedos',       e:'Protección de dedos',           bloque:'seg', seg:'Protección de dedos' },
-  { c:'limitador',   e:'Limitador de fuerza',           bloque:'seg', seg:'Limitador de fuerza' },
-  { c:'semaforo',    e:'Semáforo',                      bloque:'seg', seg:'Semáforo' },
-  { c:'luz',         e:'Luz de maniobra',               bloque:'seg', seg:'Luz de maniobra' },
-  { c:'pulsemerg',   e:'Pulsador de emergencia',        bloque:'seg', seg:'Pulsador de emergencia' },
-  { c:'seta',        e:'Seta de parada',                bloque:'seg', seg:'Seta de parada' },
-  { c:'incendios',   e:'Central de detección de incendios', bloque:'seg' },
-  { c:'bucle',       e:'Bucle magnético o espira',      bloque:'acceso' },
-  { c:'radar',       e:'Detector de presencia (radar)', bloque:'acceso' },
-  { c:'sensorap',    e:'Sensor de apertura',            bloque:'acceso' },
-  { c:'receptor',    e:'Receptor de mandos',            bloque:'acceso' },
-  { c:'mandos',      e:'Nº de mandos entregados',       bloque:'acceso', col:'n_mandos',
-    p:'Los que se le dejan al cliente. Queda escrito cuántos' },
-  { c:'teclado',     e:'Teclado o lector',              bloque:'acceso' },
-  { c:'portero',     e:'Portero o telefonillo',         bloque:'acceso' },
-  { c:'pulspared',   e:'Pulsador de pared',             bloque:'acceso' },
-  { c:'llave',       e:'Llave de emergencia',           bloque:'acceso' },
+  { c:'ce', e:'Marcado CE de la puerta', bloque:'id', donde:'ficha',
+    a:'Si la puerta lleva marcado CE' },
+  { c:'placa', e:'Placa de características', bloque:'id', donde:'ficha',
+    a:'La placa de la puerta, legible' },
+  { c:'motor', e:'Motor: marca y modelo', bloque:'motor', donde:'ficha',
+    campo:true, a:'El motorreductor o el operador' },
+  { c:'cuadro', e:'Cuadro de maniobra', bloque:'motor', donde:'ficha',
+    campo:true, a:'El cuadro o la central de control' },
+  { c:'motores', e:'Nº de motores', bloque:'motor', donde:'ficha',
+    col:'n_motores', a:'Uno en casi todo; dos en las batientes de dos hojas' },
+  { c:'desbloqueo', e:'Desbloqueo manual', bloque:'motor', donde:'ficha',
+    seg:'Desbloqueo manual', a:'La maniobra de emergencia y su señalización' },
+  { c:'fotocelulas', e:'Fotocélulas', bloque:'seg', donde:'ficha',
+    seg:'Fotocélulas', a:'Cada pareja instalada, con su altura respecto al suelo' },
+  { c:'banda', e:'Banda de seguridad', bloque:'seg', donde:'ficha',
+    seg:'Banda de seguridad', a:'La banda del canto de cierre y su cuadro de control' },
+  { c:'dedos', e:'Protección de dedos', bloque:'seg', donde:'ficha',
+    seg:'Protección de dedos', a:'Contra el atrapamiento entre paneles o junto a la bisagra' },
+  { c:'limitador', e:'Limitador de fuerza', bloque:'seg', donde:'ficha',
+    seg:'Limitador de fuerza', a:'El dispositivo o la función del cuadro que limita la fuerza' },
+  { c:'semaforo', e:'Semáforo', bloque:'seg', donde:'ficha',
+    seg:'Semáforo', a:'Semáforo de paso, si lo lleva' },
+  { c:'luz', e:'Luz de maniobra', bloque:'seg', donde:'ficha',
+    seg:'Luz de maniobra', a:'El destellante. Antes se llamaba baliza' },
+  { c:'seta', e:'Seta de parada', bloque:'seg', donde:'ficha',
+    seg:'Seta de parada', a:'La parada de emergencia, de centro de trabajo' },
+  { c:'bucle', e:'Bucle magnético o espira', bloque:'acceso', donde:'ficha',
+    a:'El detector de masa metálica y su central' },
+  { c:'radar', e:'Detector de presencia (radar)', bloque:'acceso', donde:'ficha',
+    a:'El que vigila el hueco de paso' },
+  { c:'sensorap', e:'Sensor de apertura', bloque:'acceso', donde:'ficha',
+    a:'El que abre al acercarse' },
+  { c:'receptor', e:'Receptor de mandos', bloque:'acceso', donde:'ficha',
+    a:'El receptor de radio' },
+  { c:'mandos', e:'Nº de mandos entregados', bloque:'acceso', donde:'ficha',
+    col:'n_mandos', a:'Los que se le dejan al cliente' },
+  { c:'teclado', e:'Teclado o lector', bloque:'acceso', donde:'ficha',
+    a:'Teclado, lector de tarjeta o de matrícula' },
+  { c:'portero', e:'Portero o telefonillo', bloque:'acceso', donde:'ficha',
+    a:'Portero o telefonillo que abre la puerta' },
+  { c:'pulspared', e:'Pulsador de pared', bloque:'acceso', donde:'ficha',
+    a:'El pulsador de obra, de subir y bajar' },
+  { c:'llave', e:'Llave de emergencia', bloque:'acceso', donde:'ficha',
+    a:'El bombín o la llave de desbloqueo' },
+  { c:'incendios', e:'Central de detección de incendios', bloque:'seg', donde:'ficha',
+    a:'La conexión con el sistema de detección' },
+  { c:'hoja', e:'Hoja de la puerta', bloque:'estructura', donde:'exp',
+    a:'Paneles o bastidor. Es la puerta en sí, y su foto la retrata entera' },
+  { c:'guias', e:'Guías, herrajes y rodamientos', bloque:'estructura', donde:'exp',
+    a:'Guías, carriles, poleas, carros y rodamientos. Es cerrajería: casi nunca tiene marca' },
+  { c:'equilibrado', e:'Muelles o contrapesos (el equilibrado)', bloque:'estructura', donde:'exp',
+    a:'El sistema que equilibra la hoja, de muelles o de contrapesos' },
+  { c:'paracaidas', e:'Paracaídas o antirrotura', bloque:'seg', donde:'exp',
+    a:'Contra la caída de la hoja por rotura de muelle o de cable' },
+  { c:'finales', e:'Finales de carrera', bloque:'motor', donde:'exp',
+    a:'Los finales eléctricos que dicen dónde está la hoja' },
+  { c:'trasera', e:'Seguridad trasera en apertura', bloque:'seg', donde:'exp',
+    a:'La que protege la zona de arrastre al abrir, por detrás de la hoja' },
+  { c:'topes', e:'Topes mecánicos', bloque:'estructura', donde:'exp',
+    a:'Los topes mecánicos de final de recorrido' },
+  { c:'electrico', e:'Protecciones eléctricas', bloque:'seg', donde:'exp',
+    a:'Cuadro de alimentación, diferencial y magnetotérmico' },
+  { c:'senal', e:'Señalización de peligro', bloque:'id', donde:'exp',
+    a:'Las señales de riesgo y de uso colocadas en la puerta' },
+  { c:'breakout', e:'Apertura antipánico o breakout', bloque:'seg', donde:'exp',
+    a:'Apertura manual en el sentido de evacuación' },
+  { c:'bateria', e:'Batería de emergencia', bloque:'motor', donde:'exp',
+    a:'Alimentación de apoyo para poder abrir si se va la luz' },
+  { c:'selectorprog', e:'Selector de programa o de modos', bloque:'acceso', donde:'exp',
+    a:'El mando que cambia el modo de funcionamiento' },
+  { c:'vinilos', e:'Señalización en el vidrio', bloque:'seg', donde:'exp',
+    a:'Marcas a la altura de la vista en superficies transparentes' },
+  { c:'vidrio', e:'Vidrio de seguridad', bloque:'estructura', donde:'exp',
+    a:'El marcado del vidrio donde se vea su clasificación' },
+  { c:'mastilel', e:'Mástil', bloque:'estructura', donde:'exp',
+    a:'El mástil, aparte de su longitud' },
+  { c:'cuerpo', e:'Cuerpo o armario', bloque:'estructura', donde:'exp',
+    a:'El conjunto motriz y su placa' },
+  { c:'reflectante', e:'Señalización reflectante del mástil', bloque:'id', donde:'exp',
+    a:'Las bandas reflectantes del mástil' },
+  { c:'marco', e:'Marco y sellado perimetral', bloque:'estructura', donde:'exp',
+    a:'Fijación al hueco y sellado perimetral' },
+  { c:'juntas', e:'Juntas intumescentes', bloque:'estructura', donde:'exp',
+    a:'Las juntas intumescentes del perímetro de la hoja' },
+  { c:'cierrapuertas', e:'Cierrapuertas', bloque:'estructura', donde:'exp',
+    a:'El mecanismo y su regulación' },
+  { c:'retenedor', e:'Retenedor electromagnético', bloque:'estructura', donde:'exp',
+    a:'El electroimán de retención' },
+  { c:'selectorcierre', e:'Selector de cierre (dos hojas)', bloque:'estructura', donde:'exp',
+    a:'El dispositivo de secuencia en puertas de dos hojas' },
+  { c:'antipanico', e:'Barra antipánico o manilla', bloque:'seg', donde:'exp',
+    a:'El herraje de apertura en sentido de evacuación' },
+  { c:'etiquetaei', e:'Etiqueta de clasificación EI', bloque:'id', donde:'exp',
+    a:'La etiqueta con la clase de resistencia al fuego' },
 ];
 
 /* La tabla de David, volcada de su hoja de cálculo. NO se edita a mano:
-   si hay que cambiar algo, se cambia la hoja y se vuelve a volcar. */
+   si hay que cambiar algo, se cambia la hoja y se vuelve a volcar.
+   Segunda vuelta, 25-11-2026: 47 elementos en vez de 24, y las seguridades
+   pasadas a OPCIONAL porque quien las exige es la norma, no la familia. */
 const CAMPOS_FAMILIA = {
   /* Corredera */
   corredera: {
     si: [
           'ancho', 'alto', 'peso', 'lateral', 'arrastre', 'guia', 'ce', 'placa',
-          'motor', 'cuadro', 'motores', 'desbloqueo', 'fotocelulas', 'banda',
-          'dedos', 'luz', 'receptor', 'mandos' ],
+          'motor', 'cuadro', 'motores', 'desbloqueo', 'fotocelulas', 'hoja',
+          'guias', 'topes', 'electrico' ],
     op: [
-          'hojas', 'carriles', 'limitador', 'semaforo', 'pulsemerg', 'seta',
-          'bucle', 'radar', 'sensorap', 'teclado', 'portero', 'pulspared', 'llave' ] },
+          'hojas', 'carriles', 'banda', 'dedos', 'limitador', 'semaforo', 'luz',
+          'seta', 'bucle', 'radar', 'sensorap', 'receptor', 'mandos', 'teclado',
+          'portero', 'pulspared', 'llave', 'paracaidas', 'finales', 'trasera',
+          'senal', 'bateria' ] },
   /* Batiente */
   batiente: {
     si: [
           'ancho', 'alto', 'hojas', 'peso', 'arrastre', 'ce', 'placa', 'motor',
-          'cuadro', 'motores', 'desbloqueo', 'fotocelulas', 'banda', 'dedos', 'luz',
-          'receptor', 'mandos' ],
+          'cuadro', 'motores', 'desbloqueo', 'fotocelulas', 'hoja', 'guias',
+          'topes', 'electrico' ],
     op: [
-          'lateral', 'fondo', 'limitador', 'semaforo', 'pulsemerg', 'seta', 'bucle',
-          'radar', 'sensorap', 'teclado', 'portero', 'pulspared', 'llave' ] },
+          'lateral', 'fondo', 'banda', 'dedos', 'limitador', 'semaforo', 'luz',
+          'seta', 'bucle', 'radar', 'sensorap', 'receptor', 'mandos', 'teclado',
+          'portero', 'pulspared', 'llave', 'paracaidas', 'finales', 'trasera',
+          'senal', 'bateria' ] },
   /* Plegable */
   plegable: {
     si: [
           'ancho', 'alto', 'hojas', 'peso', 'arrastre', 'guia', 'ce', 'placa',
-          'motor', 'cuadro', 'motores', 'desbloqueo', 'fotocelulas', 'banda',
-          'dedos', 'luz', 'receptor', 'mandos' ],
+          'motor', 'cuadro', 'motores', 'desbloqueo', 'fotocelulas', 'hoja',
+          'guias', 'equilibrado', 'topes', 'electrico' ],
     op: [
-          'dintel', 'lateral', 'fondo', 'paneles', 'carriles', 'limitador',
-          'semaforo', 'pulsemerg', 'seta', 'bucle', 'radar', 'sensorap', 'teclado',
-          'portero', 'pulspared', 'llave' ] },
+          'dintel', 'lateral', 'fondo', 'paneles', 'carriles', 'banda', 'dedos',
+          'limitador', 'semaforo', 'luz', 'seta', 'bucle', 'radar', 'sensorap',
+          'receptor', 'mandos', 'teclado', 'portero', 'pulspared', 'llave',
+          'paracaidas', 'finales', 'trasera', 'senal', 'bateria' ] },
   /* Seccional */
   seccional: {
     si: [
           'ancho', 'alto', 'peso', 'dintel', 'lateral', 'fondo', 'paneles',
           'muelle', 'muellediam', 'arrastre', 'guia', 'pasolibre', 'ce', 'placa',
-          'motor', 'cuadro', 'motores', 'desbloqueo', 'fotocelulas', 'banda',
-          'dedos', 'luz', 'receptor', 'mandos' ],
+          'motor', 'cuadro', 'motores', 'desbloqueo', 'fotocelulas', 'hoja',
+          'guias', 'equilibrado', 'paracaidas', 'electrico' ],
     op: [
-          'limitador', 'semaforo', 'pulsemerg', 'seta', 'bucle', 'radar',
-          'sensorap', 'teclado', 'portero', 'pulspared', 'llave' ] },
+          'banda', 'dedos', 'limitador', 'semaforo', 'luz', 'seta', 'bucle',
+          'radar', 'sensorap', 'receptor', 'mandos', 'teclado', 'portero',
+          'pulspared', 'llave', 'finales', 'topes', 'senal', 'bateria' ] },
   /* Basculante */
   basculante: {
     si: [
           'ancho', 'alto', 'peso', 'dintel', 'fondo', 'muelle', 'muellediam',
           'arrastre', 'pasolibre', 'ce', 'placa', 'motor', 'cuadro', 'motores',
-          'desbloqueo', 'fotocelulas', 'banda', 'dedos', 'luz', 'receptor',
-          'mandos' ],
+          'desbloqueo', 'fotocelulas', 'hoja', 'guias', 'equilibrado', 'paracaidas',
+          'electrico' ],
     op: [
-          'lateral', 'limitador', 'semaforo', 'pulsemerg', 'seta', 'bucle', 'radar',
-          'sensorap', 'teclado', 'portero', 'pulspared', 'llave' ] },
+          'lateral', 'banda', 'dedos', 'limitador', 'semaforo', 'luz', 'seta',
+          'bucle', 'radar', 'sensorap', 'receptor', 'mandos', 'teclado', 'portero',
+          'pulspared', 'llave', 'finales', 'topes', 'senal', 'bateria' ] },
   /* Enrollable */
   enrollable: {
     si: [
           'ancho', 'alto', 'peso', 'dintel', 'lateral', 'eje', 'muelle',
           'muellediam', 'arrastre', 'guia', 'pasolibre', 'ce', 'placa', 'motor',
-          'cuadro', 'motores', 'desbloqueo', 'fotocelulas', 'banda', 'luz',
-          'receptor', 'mandos' ],
+          'cuadro', 'motores', 'desbloqueo', 'fotocelulas', 'hoja', 'guias',
+          'equilibrado', 'finales', 'electrico' ],
     op: [
-          'limitador', 'semaforo', 'pulsemerg', 'seta', 'bucle', 'radar',
-          'sensorap', 'teclado', 'portero', 'pulspared', 'llave' ] },
+          'banda', 'limitador', 'semaforo', 'luz', 'seta', 'bucle', 'radar',
+          'sensorap', 'receptor', 'mandos', 'teclado', 'portero', 'pulspared',
+          'llave', 'paracaidas', 'topes', 'senal', 'bateria' ] },
   /* Rápida */
   rapida: {
     si: [
           'ancho', 'alto', 'dintel', 'lateral', 'eje', 'arrastre', 'guia',
           'pasolibre', 'ce', 'placa', 'motor', 'cuadro', 'motores', 'desbloqueo',
-          'fotocelulas', 'banda', 'luz', 'seta' ],
+          'fotocelulas', 'seta', 'hoja', 'guias', 'electrico' ],
     op: [
-          'peso', 'limitador', 'semaforo', 'pulsemerg', 'bucle', 'radar',
-          'sensorap', 'receptor', 'mandos', 'teclado', 'pulspared' ] },
+          'peso', 'banda', 'limitador', 'semaforo', 'luz', 'bucle', 'radar',
+          'sensorap', 'receptor', 'mandos', 'teclado', 'pulspared', 'equilibrado',
+          'paracaidas', 'finales', 'senal', 'bateria' ] },
   /* Guillotina o vertical */
   guillotina: {
     si: [
           'ancho', 'alto', 'peso', 'dintel', 'lateral', 'muelle', 'muellediam',
           'arrastre', 'guia', 'pasolibre', 'ce', 'placa', 'motor', 'cuadro',
-          'motores', 'desbloqueo', 'fotocelulas', 'banda', 'dedos', 'luz', 'seta' ],
+          'motores', 'desbloqueo', 'fotocelulas', 'dedos', 'seta', 'hoja', 'guias',
+          'equilibrado', 'paracaidas', 'topes', 'electrico' ],
     op: [
-          'limitador', 'semaforo', 'pulsemerg', 'bucle', 'radar', 'sensorap',
-          'receptor', 'mandos', 'teclado', 'pulspared', 'llave' ] },
+          'banda', 'limitador', 'semaforo', 'luz', 'bucle', 'radar', 'sensorap',
+          'receptor', 'mandos', 'teclado', 'pulspared', 'llave', 'finales', 'senal',
+          'bateria' ] },
   /* Cortafuegos */
   cortafuegos: {
     si: [
           'ancho', 'alto', 'peso', 'dintel', 'lateral', 'guia', 'pasolibre', 'ce',
-          'placa', 'desbloqueo', 'seta', 'incendios' ],
+          'placa', 'desbloqueo', 'hoja', 'cierrapuertas', 'retenedor', 'etiquetaei' ],
     op: [
           'hojas', 'fondo', 'eje', 'paneles', 'arrastre', 'motor', 'cuadro',
-          'motores', 'fotocelulas', 'banda', 'luz', 'pulsemerg', 'radar',
-          'sensorap', 'pulspared' ] },
+          'motores', 'fotocelulas', 'banda', 'luz', 'radar', 'sensorap',
+          'pulspared', 'incendios', 'breakout', 'marco', 'juntas', 'selectorcierre',
+          'antipanico' ] },
   /* Peatonal automática */
   peatonal: {
     si: [
           'ancho', 'alto', 'hojas', 'dintel', 'lateral', 'guia', 'ce', 'placa',
-          'motor', 'cuadro', 'motores', 'desbloqueo', 'fotocelulas', 'dedos',
-          'radar', 'sensorap', 'teclado', 'llave' ],
+          'motor', 'cuadro', 'motores', 'desbloqueo', 'fotocelulas', 'radar',
+          'sensorap', 'teclado', 'llave', 'hoja', 'topes', 'electrico', 'bateria',
+          'selectorprog' ],
     op: [
-          'peso', 'paneles', 'carriles', 'limitador', 'pulsemerg', 'receptor',
-          'mandos', 'portero', 'pulspared', 'incendios' ] },
+          'peso', 'paneles', 'carriles', 'dedos', 'limitador', 'receptor', 'mandos',
+          'portero', 'pulspared', 'incendios', 'trasera', 'senal', 'breakout',
+          'vinilos', 'vidrio' ] },
   /* Barrera */
   barrera: {
     si: [
           'ancho', 'mastil', 'ce', 'placa', 'motor', 'cuadro', 'motores',
-          'desbloqueo', 'fotocelulas', 'luz', 'receptor', 'mandos', 'teclado' ],
+          'desbloqueo', 'fotocelulas', 'receptor', 'mandos', 'teclado', 'electrico',
+          'senal', 'mastilel', 'cuerpo' ],
     op: [
-          'banda', 'semaforo', 'pulsemerg', 'seta', 'bucle', 'radar', 'sensorap',
-          'portero', 'pulspared', 'llave' ] },
+          'banda', 'semaforo', 'luz', 'seta', 'bucle', 'radar', 'sensorap',
+          'portero', 'pulspared', 'llave', 'finales', 'bateria', 'reflectante' ] },
 };
 
 /* 'si' | 'op' | 'no'. Una familia sin reconocer contesta 'op' a todo: no
@@ -12685,6 +12894,10 @@ const pideMuelle = tipo => seAplica(tipo, 'muelle');
    entera, y vale más que falte un campo que perder la puerta. */
 const hayCampo = x => x.desde === 'ficha3' ? !S.sinFicha3
                     : x.desde === 'bloques' ? !S.sinBloques : true;
+/* Los elementos que solo se preguntan al documentar no salen en el alta. Es lo
+   que mantiene corta la ficha: los 24 de estructura y mecánica son del
+   expediente. (25-11-2026) */
+const esDeFicha = x => x.donde !== 'exp';
 const MEDIDA = c => MEDIDAS_PUERTA.find(m => m.c === c) || null;
 const ELEMENTO = c => ELEMENTOS_PUERTA.find(x => x.c === c) || null;
 
@@ -12724,14 +12937,14 @@ function campoMedida(m, d, tipo){
    botón de añadir un elemento a mano y todo lo que lee «Seguridad instalada»
    funcionan sin cambiar una línea. */
 function campoElemento(x, d, tipo){
-  if (!hayCampo(x) || x.campo) return '';
+  if (!hayCampo(x) || x.campo || !esDeFicha(x)) return '';
   const est = pideCampo(tipo, x.c);
   const suelto = est === 'op' ? ' <span class="mini">(si la lleva)</span>' : '';
   if (x.col)
     return '<div class="campo" id="f-caja-'+x.c+'"'+(est === 'no' ? ' hidden' : '')+'>'+
       '<label for="f-'+x.c+'">'+esc(x.e)+suelto+'</label>'+
       '<input id="f-'+x.c+'" type="number" min="0" value="'+esc(d[x.col] || '')+'">'+
-      (x.p ? '<span class="pista">'+esc(x.p)+'</span>' : '')+'</div>';
+      (x.a ? '<span class="pista">'+esc(x.a)+'</span>' : '')+'</div>';
   const puestos = (d.elementos || []).map(nombreElemento);
   const nombre = x.seg || x.e;
   const marcado = puestos.indexOf(nombre) >= 0 ||
@@ -12746,7 +12959,8 @@ function campoElemento(x, d, tipo){
    «idChecks» existe para que el bloque de seguridades siga llamándose
    «f-segs», que es de donde lo lee media aplicación. */
 function bloqueElementos(bloque, titulo, d, tipo, pista, idChecks, cola){
-  const hay = ELEMENTOS_PUERTA.filter(x => x.bloque === bloque && !x.campo && hayCampo(x));
+  const hay = ELEMENTOS_PUERTA.filter(x => x.bloque === bloque && !x.campo &&
+    hayCampo(x) && esDeFicha(x));
   if (!hay.length) return '';
   const nums = hay.filter(x => x.col).map(x => campoElemento(x, d, tipo)).filter(Boolean);
   const chks = hay.filter(x => !x.col).map(x => campoElemento(x, d, tipo)).filter(Boolean);
@@ -12818,6 +13032,45 @@ const componentesDe = puertaId =>
     .sort((a,b) => (a.nombre||'').localeCompare(b.nombre||'', 'es'));
 
 const catalogoComponentes = familia => EXP_COMPONENTES[familia] || EXP_COMPONENTES.industrial;
+
+/* ---- El catálogo de elementos de UN expediente (25-11-2026) ----
+   Antes salía de EXP_COMPONENTES, que solo distinguía cuatro familias
+   (industrial, peatonal, barrera, cortafuegos). Ahora sale de la tabla que
+   David rellenó por las once formas de puerta, así que el expediente pide lo
+   mismo que la ficha marcó, que es lo que él echaba en falta.
+
+   DOS CASOS EN LOS QUE SE SIGUE USANDO EL CATÁLOGO VIEJO, y los dos a propósito:
+
+   1. Un expediente abierto ANTES de este cambio. Sus respuestas están guardadas
+      con las claves viejas, y hay claves que no se corresponden una a una: el
+      «mandos» de antes era el conjunto de emisores y pulsadores, y el de ahora
+      es cuántos mandos se entregaron. Cambiarle el catálogo a un expediente a
+      medias sería perderle respuestas, y a uno emitido, cambiar lo que dice un
+      documento firmado. Se marcan por expedientes.catalogo: los nuevos llevan
+      'familia47' y los de antes no llevan nada.
+
+   2. Una puerta cuyo tipo no se reconoce. Sin forma de puerta no hay fila en la
+      tabla, y preguntar los 47 a todo no es más riguroso, es solo más ruido.
+      Se usa el de siempre, que es menos fino pero no se inventa nada.
+
+   Devuelve el mismo formato de siempre, [clave, nombre, ayuda, pideDatos], para
+   que las ocho pantallas y documentos que lo leen no se enteren del cambio. */
+function componentesDeExpediente(e){
+  if (!e || e.catalogo !== 'familia47' || S.sinBloques)
+    return catalogoComponentes((e || {}).familia);
+  const p = puertaDe(e.puerta_id);
+  const tipo = (p && p.tipo) || '';
+  if (!CAMPOS_FAMILIA[formaDePuerta(tipo)]) return catalogoComponentes(e.familia);
+  return ELEMENTOS_PUERTA
+    .filter(x => pideCampo(tipo, x.c) !== 'no')
+    /* pideDatos: la marca, la referencia y el número de serie se preguntan en
+       todos menos en los que son una cuenta. Y NO son obligatorios en ninguno:
+       David, 25-11-2026, «hay elementos que no se pueden saber la marca o la
+       referencia al ser productos de cerrajería, como por ejemplo la guía de
+       una puerta corredera». Marcar que está y dejar la marca en blanco es una
+       respuesta válida, no un hueco pendiente. */
+    .map(x => [x.c, x.e, x.a || '', x.col ? 0 : 1]);
+}
 const nombreComponente = (familia, clave) => {
   const f = catalogoComponentes(familia).find(x => x[0] === clave);
   return f ? f[1] : clave;
@@ -15223,7 +15476,7 @@ function expPendientes(e){
     if (sinBase.length) falta.push('decir en qué se basa la equivalencia declarada en '+
       sinBase.length+' pregunta(s) del cuestionario de modificación');
   }
-  const comps = EXP_COMPONENTES[e.familia] || [];
+  const comps = componentesDeExpediente(e);
   const sinResponder = comps.filter(c => !((d.comp||{})[c[0]]||{}).estado);
   if (sinResponder.length) falta.push(sinResponder.length + ' elementos de la instalación sin contestar');
   const chk = EXP_COMPROBACIONES[e.familia] || [];
@@ -15897,7 +16150,7 @@ function datosHoja(e){
 }
 
 function expSecComponentes(e){
-  const comps = EXP_COMPONENTES[e.familia] || [];
+  const comps = componentesDeExpediente(e);
   const d = (e.datos||{}).comp || {};
   const hechos = comps.filter(c => (d[c[0]]||{}).estado).length;
   const faltanFotos = fotosQueFaltan();
@@ -15928,7 +16181,79 @@ function expSecComponentes(e){
         '<p class="mini" style="margin:4px 0 0">Puedes seguir sin ellas: lo que falte sale en el '+
         'informe como EVIDENCIA FOTOGRÁFICA PENDIENTE.</p></div>'
       : '<p class="nota-oficina" style="margin:0 0 14px">Están todas las fotos recomendadas.</p>');
-  comps.forEach(([k, nombre, ayuda, pideDatos]) => {
+  /* ---- Tres grupos, no una lista (25-11-2026) ----
+     David: «siempre el técnico tiene la última palabra a la hora de decidir
+     qué elementos de seguridad debe contener una puerta, pero siempre una vez
+     cumplidos los mínimos exigidos por la normativa vigente».
+
+     Hasta hoy los cuarenta y siete iban en una sola lista y no se distinguía
+     lo que pide la norma de lo que decide el instalador. Eso es justo lo que
+     hay que poder leer en un documento: qué era obligatorio y quién añadió el
+     resto. Así que van en tres grupos, con la norma primero. */
+  const pu = puertaDe(e.puerta_id);
+  const tipoPu = (pu && pu.tipo) || '';
+  const deNorma = clavesDeNorma(e);
+  const vias = viasDeProteccion(e);
+  const via = viaCumplida(e);
+  const prot = exigenciaProteccion(e);
+  const propio = comps.filter(c => deNorma.indexOf(c[0]) < 0 &&
+    pideCampo(tipoPu, c[0]) === 'si').map(c => c[0]);
+  const cabeceraNorma = (() => {
+    if (!vias.length)
+      return '<div class="aviso-caja" style="margin:18px 0 10px">'+
+        '<b>No se puede decir qué exige la norma para esta puerta.</b>'+
+        '<p class="mini" style="margin:4px 0 0">'+
+        (prot && prot.fuera
+          ? 'Esta familia no se rige por la matriz de protección de la UNE-EN 12453: '+
+            'sus elementos salen de su propia norma.'
+          : 'Falta decir en la ficha de la puerta <b>cómo se acciona</b> y <b>quién la '+
+            'usa</b>. Son dos datos que se ven mirando la puerta. Sin ellos no hay '+
+            'matriz de protección, y sin matriz no hay mínimo que exigir.')+
+        '</p></div>';
+    const nombres = cl => cl.map(c => {
+      const f = comps.find(x => x[0] === c);
+      return f ? f[1].toLowerCase() : c;
+    }).join(' + ');
+    return '<div class="grupo" style="margin:18px 0 10px"><h3>1. Lo que exige la norma para esta puerta</h3>'+
+      '<p class="mini" style="margin:0 0 8px">Se acciona por <b>'+
+        esc(((MODOS_ACCIONAMIENTO[prot.modo]||{}).nombre || prot.modo || '').toLowerCase())+
+        '</b> y la usan <b>'+esc(((TIPOS_USUARIO[prot.usuarios]||prot.usuarios||'')+'').toLowerCase())+
+        '</b>, así que le toca el nivel <b>'+esc(prot.niveles)+'</b>.</p>'+
+      (vias.length > 1
+        ? '<p class="mini" style="margin:0 0 8px"><b>Con cumplir UNA de estas vías basta</b>, '+
+          'no hay que poner las dos:</p>'+
+          '<ul class="mini" style="margin:0 0 8px 18px">'+
+          vias.map((v, i) => '<li>Vía '+(i+1)+': <b>'+esc(nombres(v.claves))+'</b>'+
+            (via === v ? ' <span class="chip ok">cumplida</span>' : '')+'</li>').join('')+
+          '</ul>'
+        : '<p class="mini" style="margin:0 0 8px">Pide: <b>'+esc(nombres(vias[0].claves))+'</b>'+
+          (via ? ' <span class="chip ok">cumplida</span>' : '')+'</p>')+
+      (via
+        ? '<p class="nota-oficina" style="margin:0">El mínimo de la norma queda cubierto.</p>'
+        : '<p class="mini" style="margin:0"><b>Todavía no está cubierto.</b> Si alguno de '+
+          'estos elementos no está puesto, contéstalo como «no lo lleva» y escribe por qué '+
+          'y qué consecuencia tiene: eso sale en el documento, no se queda callado.</p>')+
+      '<p class="mini" style="margin:8px 0 0">Esta matriz es nuestra lectura de la '+
+      'UNE-EN 12453 y está <b>pendiente de validar</b> con el ejemplar de la norma. '+
+      'Sirve de recordatorio: no acredita por sí sola que la puerta cumpla.</p></div>';
+  })();
+  const GRUPOS = [
+    { claves: deNorma, cab: cabeceraNorma },
+    { claves: propio,
+      cab: '<div class="grupo" style="margin:18px 0 10px"><h3>2. Lo propio de esta puerta</h3>'+
+        '<p class="mini" style="margin:0">Lo que lleva cualquier puerta de esta familia: es '+
+        'parte del producto, no una opción. Si falta alguno, es que no se ha documentado.</p></div>' },
+    { claves: comps.map(c => c[0]).filter(c => deNorma.indexOf(c) < 0 && propio.indexOf(c) < 0),
+      cab: '<div class="grupo" style="margin:18px 0 10px"><h3>3. Lo que puede llevar, y lo decides tú</h3>'+
+        '<p class="mini" style="margin:0">Por encima del mínimo de la norma manda tu criterio: '+
+        'no todas las puertas están en sitios idílicos. Lo que añadas queda escrito con tu '+
+        'nombre y la fecha, y sale en el documento como decisión del instalador.</p></div>' },
+  ];
+  GRUPOS.forEach(g => {
+    const items = comps.filter(c => g.claves.indexOf(c[0]) >= 0);
+    if (!items.length && !g.cab.includes('aviso-caja')) return;
+    h += g.cab;
+    items.forEach(([k, nombre, ayuda, pideDatos]) => {
     const v = (d[k]||{}).estado || '';
     h += '<div class="exp-item'+(v==='no'?' falta':'')+'">'+
       '<div class="fila" style="gap:8px;flex-wrap:wrap;align-items:baseline">'+
@@ -15967,6 +16292,7 @@ function expSecComponentes(e){
       h += '<div class="campos" style="margin-top:8px">'+
            expTxt('comp.'+k+'.nota', 'Por qué no lo lleva y qué consecuencia tiene', '', 1)+'</div>';
     h += '</div>';
+    });
   });
 
   /* Elementos que no están en la lista de fábrica: se añaden aquí mismo */
@@ -17545,7 +17871,7 @@ async function subirDocsExp(ficheros){
 }
 
 function expSecDocs(e){
-  const comps = EXP_COMPONENTES[e.familia] || [];
+  const comps = componentesDeExpediente(e);
   const extras = Object.entries(((e.datos||{}).compx) || {});
   const nombres = comps.map(c => c[1]).concat(extras.map(([, x]) => x.nombre || '').filter(Boolean));
   const docs = S.expDocs || [];
@@ -17788,7 +18114,7 @@ function hojaDeCampo(expId){
   const ex = exigenciaProteccion(e);
   const pel = peligrosDe(e);
   const chk = EXP_COMPROBACIONES[e.familia] || [];
-  const comps = EXP_COMPONENTES[e.familia] || [];
+  const comps = componentesDeExpediente(e);
   const m = MODOS_ACCIONAMIENTO[ex.modo] || {};
 
   const w = window.open('', '_blank');
@@ -18393,7 +18719,7 @@ async function libroExpediente(id){
     '</section>';
 
   /* ---------- 4. COMPONENTES ---------- */
-  const comps = EXP_COMPONENTES[e.familia] || [];
+  const comps = componentesDeExpediente(e);
   const cd = d.comp || {};
   H += abreSec('Elementos de la instalación')+
     '<p>Relación de los elementos que componen la puerta y de los dispositivos de seguridad instalados, '+
@@ -19426,7 +19752,7 @@ async function informeSituacion(id){
     '</table></section>';
 
   /* ---------- 11. COMPONENTES IDENTIFICADOS ---------- */
-  const comps = EXP_COMPONENTES[e.familia] || [];
+  const comps = componentesDeExpediente(e);
   const dc = d.comp || {};
   H += sec('Componentes identificados')+
     '<table class="datos chk"><thead><tr><th>Elemento</th><th>Estado</th>'+
@@ -23516,14 +23842,16 @@ dlgForm.addEventListener('change', e => {
       if (caja) caja.hidden = !vis;
     };
     MEDIDAS_PUERTA.forEach(m => { if (!m.soloLectura) mostrar(m.c, seAplica(t.value, m.c)); });
-    ELEMENTOS_PUERTA.forEach(x => { if (!x.campo) mostrar(x.c, seAplica(t.value, x.c)); });
+    ELEMENTOS_PUERTA.forEach(x => {
+      if (!x.campo && esDeFicha(x)) mostrar(x.c, seAplica(t.value, x.c));
+    });
     /* Y un bloque que se queda sin nada que preguntar desaparece entero, con su
        título: en una barrera no hay «Seguridades» que rellenar. */
     ['id','motor','seg','acceso'].forEach(b => {
       const caja = document.getElementById('f-bloque-'+b);
       if (!caja) return;
       caja.hidden = !ELEMENTOS_PUERTA.some(x => x.bloque === b && !x.campo &&
-        hayCampo(x) && seAplica(t.value, x.c));
+        hayCampo(x) && esDeFicha(x) && seAplica(t.value, x.c));
     });
     return;
   }
@@ -24964,7 +25292,7 @@ function dlgPuerta(id, avisoId, molde){
         o[m.col] = m.texto ? (v || null) : (v ? +v : null);
       });
       ELEMENTOS_PUERTA.forEach(x => {
-        if (!x.col || !seAplica(tp, x.c)) return;
+        if (!x.col || !esDeFicha(x) || !seAplica(tp, x.c)) return;
         const v = val('f-'+x.c);
         o[x.col] = v ? +v : null;
       });
@@ -25709,14 +26037,52 @@ function dlgComponente(id, puertaId, clave, volverAviso){
    expediente de la misma puerta había que teclearlo todo otra vez. Estas dos
    funciones son el puente, en los dos sentidos, y siempre a petición: la
    aplicación no cambia datos de un expediente firmado por su cuenta. */
+/* ---- Las claves de antes y las de ahora (25-11-2026) ----
+   El inventario de componentes de la puerta sigue guardando la clave del
+   catálogo viejo, y el expediente ya usa la tabla de las once familias. Hay
+   elementos que se llaman igual en los dos («fotocelulas», «banda») y otros
+   que no, porque el catálogo viejo los agrupaba de otra manera:
+
+     destellante → luz          era la baliza, hoy luz de maniobra
+     paro        → seta         la parada de emergencia
+     pulsador    → seta         en peatonal se llamaba así, y es lo mismo
+     presencia   → radar        detección de presencia
+     laterales   → dedos        protección lateral y de dedos
+     operador    → motor        en peatonal el motor se llama operador
+     radar_ext   → sensorap     los dos radares de apertura son el mismo
+     radar_int   → sensorap       elemento de la tabla nueva
+     mandos      → receptor     era «mandos y pulsadores», el conjunto
+     deteccion   → incendios    la conexión con la central
+     etiqueta    → etiquetaei   la de clasificación al fuego
+     mastil      → mastilel     el elemento, para no chocar con la medida
+
+   «selector» es el caso raro: en peatonal era el selector de PROGRAMA y en
+   cortafuegos el selector de CIERRE de dos hojas. Son cosas distintas con el
+   mismo nombre, así que se resuelve por la familia del expediente.
+
+   Sin esta traducción el puente se rompía callado: dabas a «traer del
+   inventario» y no traía la mitad, sin decir por qué. */
+const CLAVE_VIEJA_A_NUEVA = {
+  destellante:'luz', paro:'seta', pulsador:'seta', presencia:'radar',
+  laterales:'dedos', operador:'motor', radar_ext:'sensorap', radar_int:'sensorap',
+  mandos:'receptor', deteccion:'incendios', etiqueta:'etiquetaei', mastil:'mastilel',
+};
+function claveNueva(clave, familia){
+  if (clave === 'selector')
+    return familia === 'cortafuegos' ? 'selectorcierre' : 'selectorprog';
+  return CLAVE_VIEJA_A_NUEVA[clave] || clave;
+}
+
 async function expTraerComponentes(expId){
   const e = expDe(expId);
   if (!e) return;
-  const comps = EXP_COMPONENTES[e.familia] || [];
+  const comps = componentesDeExpediente(e);
   const inv = componentesDe(e.puerta_id).filter(c => c.activo !== false && c.clave);
   e.datos = e.datos || {}; e.datos.comp = e.datos.comp || {};
   let n = 0;
-  inv.forEach(c => {
+  inv.forEach(c0 => {
+    /* El inventario guarda la clave vieja; el expediente nuevo usa la nueva. */
+    const c = Object.assign({}, c0, { clave: claveNueva(c0.clave, e.familia) });
     if (!comps.some(x => x[0] === c.clave)) return;
     const d = e.datos.comp[c.clave] = e.datos.comp[c.clave] || {};
     // lo que ya esté contestado aquí no se pisa: puede haberse corregido en obra
@@ -25739,7 +26105,7 @@ async function expTraerComponentes(expId){
 async function expGuardarComponentes(expId){
   const e = expDe(expId);
   if (!e || !e.puerta_id) return;
-  const comps = EXP_COMPONENTES[e.familia] || [];
+  const comps = componentesDeExpediente(e);
   const d = (e.datos || {}).comp || {};
   const inv = componentesDe(e.puerta_id);
   const altas = [], cambios = [];
@@ -25747,7 +26113,10 @@ async function expGuardarComponentes(expId){
     const x = d[k] || {};
     if (x.estado !== 'si') return;                    // solo lo que está instalado
     if (!x.marca && !x.modelo && !x.serie) return;    // sin datos no hay nada que guardar
-    const ya = inv.find(c => c.clave === k);
+    /* Se busca por la clave traducida: un «destellante» guardado de antes es
+       la «luz de maniobra» de ahora, y si no se tradujera se daría de alta un
+       componente repetido en la misma puerta. */
+    const ya = inv.find(c => claveNueva(c.clave, e.familia) === k);
     if (ya){
       const o = {};
       if (!ya.marca && x.marca)      o.marca = x.marca;
