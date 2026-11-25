@@ -3,7 +3,7 @@
 **Material de la academia de Ariza Puertas y Automatismos.**
 Explica el oficio y cómo se documenta. No da por sabido nada.
 
-> **Versión de la aplicación que describe este manual: 2026.11.24-5**
+> **Versión de la aplicación que describe este manual: 2026.11.25-1**
 > Este manual enseña el trabajo, no solo la aplicación. Lo que diga de normas,
 > medidas y límites vale delante de cualquier puerta; lo que diga de pantallas y
 > botones vale para esta versión.
@@ -1384,6 +1384,53 @@ Mientras no estén cargados, en esos puntos la aplicación te da **el método de
 
 Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cruza el modo de accionamiento con el tipo de usuario: está en la aplicación como referencia de trabajo, **sin contrastar con el texto de la norma**, y así lo dice.
 
+### El mínimo de la norma y el criterio del instalador son dos cosas
+
+Esto es de oficio y conviene fijarlo, porque confundirlo es de donde salen los
+dos errores más caros de la documentación.
+
+**El suelo lo pone la norma.** Para una puerta concreta, la matriz de la UNE-EN
+12453 cruza cómo se acciona con quién la usa y de ahí sale un nivel de
+protección. Ese nivel exige unos elementos. No es opinable y no depende de la
+familia de puerta: la misma seccional, accionada a hombre presente en una nave
+privada o en automático en un acceso público, tiene mínimos distintos.
+
+**Por encima del suelo manda el instalador.** Una puerta en un patio de colegio,
+una barrera junto a una salida de camiones o una corredera en una cuesta piden
+más de lo que exige la tabla. Esa decisión es técnica, es del instalador, y
+tiene que quedar escrita como suya: no como exigencia de la norma, porque no lo
+es, y no como capricho, porque tiene un motivo.
+
+**Y hay un detalle de la norma que se malinterpreta constantemente.** La matriz
+casi nunca pide una lista cerrada de elementos: pide **vías alternativas**. Un
+nivel «C+D o E» significa limitación de fuerza **más** detección de presencia,
+**o bien** un sistema de nivel E. Con cumplir una de las dos basta.
+
+Leer eso como «hay que poner las tres cosas» tiene dos consecuencias, las dos
+malas: se vende material que la norma no exige, y se da por incumplida una
+puerta que cumple perfectamente por la otra vía. Por eso la aplicación las
+enseña numeradas como vías y dice cuál queda cubierta, en lugar de juntarlo todo
+en una lista.
+
+### Documentar no es obligatorio para todo, y hay que saber convivir con eso
+
+En el mercado real hay puertas que no cumplen y que hay que asistir igual,
+porque el cliente las tiene montadas y llama cuando se le rompen. Negarse a
+mirarlas no las hace cumplir.
+
+La forma honesta de llevarlo es separar dos cosas que se confunden:
+
+- **La ficha identifica.** Qué puerta es, dónde está, de quién es, qué lleva
+  montado. Se hace siempre, también en una puerta que no cumple nada.
+- **El expediente documenta.** Se abre cuando procede, y entonces se hace
+  **según la norma**, con su mínimo y con las decisiones del instalador
+  escritas.
+
+Lo que no se puede hacer nunca es lo del medio: dar por documentada una puerta
+porque tenga ficha, o firmar una conformidad que no se ha comprobado.
+Una ficha no acredita nada y no pretende acreditarlo. Un expediente sí, y por
+eso cuesta más.
+
 ---
 
 ## 11. Para practicar
@@ -1408,4 +1455,4 @@ Lo mismo con la **matriz de protección mínima** de la UNE-EN 12453, la que cru
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.24-5 de Safe2door*
+*Ariza Puertas y Automatismos S.L.U. · Material de formación · Describe la versión 2026.11.25-1 de Safe2door*

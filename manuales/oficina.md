@@ -1,6 +1,6 @@
 # Safe2door · Manual de oficina
 
-Versión 2026.11.24-5
+Versión 2026.11.25-1
 
 > **Las fotos de este manual son de antes del cambio de nombre.** La aplicación
 > se llamaba ARIZA SAT y así aparece en la barra de arriba de cada pantalla.
@@ -427,6 +427,63 @@ nunca.** Están en un régimen que exige certificado de organismo notificado e
 inspección de fábrica. Solo cabe actuar como instalador de un kit completo del
 fabricante, sin sustituir ningún componente. La aplicación no deja elegir la vía
 de fabricante en esta familia: no es que lo desaconseje, es que no deja.
+
+### Los elementos de la instalación: tres grupos, y el orden importa
+
+Desde el 25 de noviembre de 2026 el expediente pide **los mismos elementos que
+marcó la ficha de la puerta**, según la tabla que David rellenó familia por
+familia. Antes pedía otros: el expediente solo distinguía cuatro familias
+(industrial, peatonal, barrera y cortafuegos) y la ficha once, así que marcabas
+una cosa en el alta y el expediente te preguntaba otra.
+
+Y ahora van en **tres grupos separados**, que es lo que de verdad hay que poder
+leer en un documento: qué era obligatorio y quién decidió el resto.
+
+**1. Lo que exige la norma para esta puerta.** Sale de la matriz de la UNE-EN
+12453, cruzando el **modo de accionamiento** con el **tipo de usuario** de la
+ficha. Es el suelo y no se negocia.
+
+> **Ojo con una cosa, porque es la que más se malinterpreta.** La norma casi
+> nunca pide una lista cerrada: pide **vías alternativas**. Para un nivel
+> «C+D o E», o pones limitación de fuerza **más** detección de presencia, o
+> pones un sistema de nivel E. **Con cumplir una de las dos basta.** La
+> aplicación te las enseña numeradas y te dice cuál queda cumplida. Exigir las
+> dos sería pedir material que la norma no pide; dar por incumplida la puerta
+> que cumple por la otra vía sería lo contrario.
+
+Si falta el modo de accionamiento o el tipo de usuario en la ficha, la
+aplicación **no se inventa un mínimo**: dice que no se puede saber y qué falta
+por poner. Son dos datos que se ven mirando la puerta.
+
+**2. Lo propio de esta puerta.** Lo que lleva cualquier puerta de esa familia
+porque es parte del producto: una corredera tiene guías, una barrera tiene
+mástil. Si falta alguno, no es que la puerta no lo lleve: es que no se ha
+documentado.
+
+**3. Lo que puede llevar, y lo decide el instalador.** Por encima del mínimo
+manda el criterio del técnico, porque no todas las puertas están en sitios
+idílicos. Lo que se añada queda escrito con su nombre y la fecha, y sale en el
+documento como decisión del instalador, no como exigencia de la norma.
+
+**La marca, la referencia y el número de serie no son obligatorios en ninguno
+de los 47 elementos.** Hay elementos de cerrajería, como la guía de una
+corredera, que no tienen marca que poner. Marcar que está y dejar la marca en
+blanco es una respuesta válida, no un hueco pendiente.
+
+Y una advertencia que la aplicación repite en cada pantalla donde sale: **la
+matriz de protección es nuestra lectura de la norma y está pendiente de validar
+con el ejemplar.** Sirve de recordatorio; no acredita por sí sola que la puerta
+cumpla.
+
+### No toda puerta se documenta, y eso está contemplado
+
+Hay puertas que solo tendrán **ficha**, para identificarlas, sin expediente. Y
+hay puertas que no cumplen la normativa y que hay que asistir igual, porque el
+cliente las tiene y nos llama. **La aplicación no obliga a documentar.** La
+ficha identifica; el expediente documenta, y se abre cuando procede.
+
+Lo que no hace la aplicación, y es a propósito, es dar por documentada una
+puerta porque tenga ficha. Son dos cosas distintas y se ven distintas.
 
 ### Las comprobaciones
 

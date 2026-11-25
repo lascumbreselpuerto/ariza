@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.24-5**
+> **Versión de la aplicación que describe este manual: 2026.11.25-1**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -1344,6 +1344,43 @@ En el bloque de control de acceso hay un campo para **cuántos mandos se le han
 entregado al cliente**. Apúntalo: es la pregunta que más se repite meses
 después, y la que nadie sabe contestar.
 
+### La ficha no es el expediente
+
+Dos cosas distintas, y conviene no mezclarlas:
+
+- **La ficha identifica** la puerta: qué es, dónde está, de quién es, qué lleva
+  montado. Se hace **siempre**, también en una puerta vieja que no cumple nada.
+- **El expediente documenta** y se abre cuando procede. Ahí se va en serio: el
+  mínimo que exige la norma, los elementos con su marca y su número de serie, y
+  las fotos.
+
+Hay puertas que solo van a tener ficha, y está bien que sea así. Lo que no vale
+nunca es lo del medio: dar por documentada una puerta porque tenga ficha.
+
+**Desde el 25 de noviembre de 2026 el expediente te pide los mismos elementos
+que marcaste en la ficha**, según la familia de la puerta. Antes te pedía otros,
+porque el expediente solo distinguía cuatro familias y la ficha once: marcabas
+una cosa y te preguntaba otra. Eso ya no pasa.
+
+Y te los pide en **tres grupos**:
+
+1. **Lo que exige la norma para esa puerta.** Sale del modo de accionamiento y
+   del tipo de usuario de la ficha. Si alguno no está puesto, contéstalo como
+   «no lo lleva» y escribe por qué: eso sale en el documento, no se queda
+   callado.
+2. **Lo propio de esa puerta.** Lo que lleva cualquiera de su familia.
+3. **Lo que puede llevar, y lo decides tú.** Por encima del mínimo manda tu
+   criterio, y queda escrito con tu nombre.
+
+> **Con una vía basta.** La norma casi nunca pide una lista cerrada: para un
+> nivel «C+D o E» pide limitación de fuerza **más** detección, **o bien** un
+> sistema de nivel E. La aplicación te enseña las vías numeradas y te dice cuál
+> queda cumplida. No hace falta poner las dos.
+
+**Y la marca no es obligatoria en ninguno.** La guía de una corredera es
+cerrajería y no tiene marca que poner. Marcar que está y dejar la marca en
+blanco es una respuesta válida.
+
 ### Más elementos a identificar
 
 Un apartado libre al final de la ficha donde escribes **lo que tú veas** que hay
@@ -1533,4 +1570,4 @@ que mire ahí antes de nada. Puede ser eso.
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.24-5 de Safe2door*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.25-1 de Safe2door*
