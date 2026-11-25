@@ -695,7 +695,16 @@ const TIPOS = [
   'Otro'];
 const USOS = ['Residencial','Industrial','Retail'];
 const CLIENTES = ['Particular','Comunidad','Empresa de servicios','Industria','Administración'];
-const SEGURIDAD = ['Fotocélulas','Banda de seguridad','Semáforo','Baliza','Desbloqueo manual','Pulsador de emergencia','Protección de dedos','Limitador de fuerza'];
+/* ---- «Baliza» pasó a llamarse «Luz de maniobra» (24-11-2026) ----
+   Lo cambió David al revisar la tabla de elementos por familia. Es el nombre
+   que se usa en obra, y «baliza» se confunde con la señalización de obra.
+   Lo que ya estuviera guardado como «Baliza» se renombra en la base (ver
+   servidor/alta-por-bloques.sql) y, por si queda alguna suelta, también al
+   leerla: ver nombreElemento. */
+const SEGURIDAD = ['Fotocélulas','Banda de seguridad','Semáforo','Luz de maniobra','Desbloqueo manual','Pulsador de emergencia','Seta de parada','Protección de dedos','Limitador de fuerza'];
+/* Nombres que cambiaron. Clave: como se guardó; valor: como se llama ahora. */
+const ELEMENTOS_RENOMBRADOS = { 'Baliza': 'Luz de maniobra' };
+const nombreElemento = n => ELEMENTOS_RENOMBRADOS[n] || n;
 const ESTADOS = {
   operativa:        {t:'Operativa',              c:'ok',    b:'#2E7D46'},
   aviso_recibido:   {t:'Aviso recibido',         c:'aviso', b:'#E3AC4F'},
@@ -1169,7 +1178,8 @@ const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etique
             expedientes:[], expFotos:[], expDocs:[], exp:null, expPaso:'obra', expSucio:false,
             fotosEquipo:{}, histBusca:'', histTec:'', histTipo:'', histDesde:'', histHasta:'', histArchivadas:false,
             cliArchivados:false, centros:[], sinCentros:false, versionNueva:null, versionAvisada:null,
-            manual:null, manuales:null, sinObra:false, sinModo:false, sinFicha3:false,
+            manual:null, manuales:null, sinObra:false, sinModo:false, sinFicha3:false, sinBloques:false,
+            compEspera:null,
             sinPresuAviso:false, matSinPrecio:null, fotosCuenta:{}, sinFactura:false,
             sinRutas:false, sinRutaCliente:false, sinSubtipo:false, sinUrgencia:false,
             sinAlmacen:false, ubicaciones:[], existencias:[], movimientos:[], previstos:[],
@@ -1883,6 +1893,11 @@ async function cargar(){
      enseña y no los guarda, y el alta de puertas sigue funcionando igual. */
   const f3 = await sb.from('puertas').select('arrastre_kg').limit(1);
   S.sinFicha3 = !!f3.error;
+  /* Las medidas y los elementos por familia: servidor/alta-por-bloques.sql.
+     Sin esas columnas el alta vuelve a ser la de antes, con una sola lista de
+     seguridad y sin los campos nuevos, y no se pierde nada de lo guardado. */
+  const ab = await sb.from('puertas').select('elementos').limit(1);
+  S.sinBloques = !!ab.error;
   /* El plazo de pago del cliente y el vencimiento de la factura:
      servidor/factura.sql. Sin esas columnas, la ficha del cliente no enseña el
      plazo, el vencimiento no se puede guardar y el panel de impagados dice que
@@ -2194,7 +2209,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.24-4';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.24-5';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -3128,13 +3143,32 @@ function vistaFicha(id){
     ['Vueltas de muelle',p.vueltas_muelle?String(p.vueltas_muelle):''],
     /* El peso solo sale si alguien lo anotó cuando se pedía: ya no se pide */
     ['Peso hoja',p.peso_kg?(p.peso_kg+' kg'):''],
+    /* ---- Las medidas por familia (24-11-2026) ----
+       Salen de la misma tabla que las pregunta, no de una lista escrita otra
+       vez aquí: si no, un campo nuevo se podría pedir en el alta y no salir
+       nunca en la ficha, que es la forma más tonta de perder un dato.
+       Las que ya están arriba con su nombre de siempre no se repiten, y solo
+       sale lo que tiene valor: lo vacío no se enseña. */
+    ...MEDIDAS_PUERTA
+      .filter(m => m.desde === 'bloques' && p[m.col] != null && p[m.col] !== '')
+      .map(m => [m.e.replace(/\s*\(mm\)$/, '').replace(/^Nº/, 'Nº'),
+                 String(p[m.col])+(/\(mm\)$/.test(m.e) ? ' mm' : '')]),
+    ['Nº de motores', p.n_motores ? String(p.n_motores) : ''],
+    ['Mandos entregados', p.n_mandos ? String(p.n_mandos) : ''],
     ['Más elementos',p.otros_elementos],
     ['Matrícula',p.matricula],['Sin matrícula',p.sin_matricula],
     ['Accionamiento',(MODOS_ACCIONAMIENTO[p.modo]||{}).nombre||''],['Usuarios',TIPOS_USUARIO[p.usuarios]||''],
     ['Última revisión',p.ultima_revision?fechaCorta(p.ultima_revision):''],['Próxima revisión',p.proxima_revision?(fechaCorta(p.proxima_revision)+' · '+relativo(p.proxima_revision)):'']];
   d.forEach(x => { if (x[1]) h += '<div><dt>'+x[0]+'</dt><dd>'+esc(x[1])+'</dd></div>'; });
   h += '</dl>';
-  if ((p.seguridad||[]).length) h += '<div class="linea"><dt class="eti">Seguridad instalada</dt><p style="margin:6px 0 0">'+esc((p.seguridad||[]).join(' · '))+'</p></div>';
+  if ((p.seguridad||[]).length) h += '<div class="linea"><dt class="eti">Seguridad instalada</dt><p style="margin:6px 0 0">'+esc((p.seguridad||[]).map(nombreElemento).join(' · '))+'</p></div>';
+  /* Lo que lleva puesto y NO es de seguridad: identificación y control de
+     acceso. Se enseña aparte para no mezclarlo con lo de seguridad, que es lo
+     que se mira cuando se revisa la puerta. */
+  const otrosEle = (p.elementos || []).map(nombreElemento)
+    .filter(s => (p.seguridad || []).map(nombreElemento).indexOf(s) < 0);
+  if (otrosEle.length) h += '<div class="linea"><dt class="eti">Identificación y control de acceso</dt>'+
+    '<p style="margin:6px 0 0">'+esc(otrosEle.join(' · '))+'</p></div>';
   if (p.notas) h += '<div class="linea"><dt class="eti">Observaciones</dt><p style="margin:6px 0 0">'+esc(p.notas)+'</p></div>';
   h += '</div>';
 
@@ -4711,6 +4745,12 @@ const QUE_HACE_FALTA = [
     pierdes:'La ficha no dice si la puerta es automática, semiautomática o manual.' },
   { marca:'sinFicha3', fichero:'ficha3.sql', que:'Datos de arrastre y peso',
     pierdes:'La ficha no guarda el peso de la hoja ni el arrastre del motor.' },
+  { marca:'sinBloques', fichero:'alta-por-bloques.sql', que:'Preguntar solo lo de cada familia de puerta',
+    pierdes:'El alta pregunta lo mismo a todas las puertas: el dintel a una barrera y el '+
+            'diámetro del eje a una corredera. Y no se guarda el nº de hojas, el lateral '+
+            'libre, el fondo, el mástil, el eje, los paneles, el diámetro del muelle, el '+
+            'tipo de guía, los carriles, el paso libre, los motores, los mandos entregados '+
+            'ni el control de acceso.' },
   { marca:'sinNoSeSabe', fichero:'ficha4.sql', que:'Poder decir «no se sabe»',
     pierdes:'Hay que inventarse el año o el instalador de una puerta que no se conoce.' },
   { marca:'sinMedidas', fichero:'medidas.sql', que:'Medidas de la puerta',
@@ -12294,7 +12334,7 @@ const COMPONENTE_SEGURIDAD = {
   limitador:   'Limitador de fuerza',
   desbloqueo:  'Desbloqueo manual',
   paro:        'Pulsador de emergencia',
-  destellante: 'Baliza',
+  destellante: 'Luz de maniobra',
   semaforo:    'Semáforo',
   presencia:   'Fotocélulas',
   laterales:   'Protección de dedos',
@@ -12390,17 +12430,335 @@ const formaDePuerta = t => {
   return f ? f[0] : '';
 };
 const nombreForma = clave => (FORMAS_PUERTA.find(x => x[0] === clave) || [,''])[1];
-/* Dónde el dintel decide algo: en todo lo que sube. En una corredera o una
-   batiente no se pide, porque ahí no manda nada y solo estorbaría. */
-const FORMAS_CON_DINTEL = ['seccional', 'enrollable', 'guillotina', 'rapida', 'basculante'];
-const pideDintel = tipo => FORMAS_CON_DINTEL.includes(formaDePuerta(tipo));
-/* ---- Las vueltas de los muelles ----
-   Solo en las seccionales, que es donde David las echaba en falta: es el dato
-   que hace falta para equilibrar la hoja y para pedir un muelle de repuesto.
-   Si algún día hay que pedirlas también en basculante o en enrollable de
-   muelle, se añaden aquí y aparecen solas en la ficha. */
-const FORMAS_CON_MUELLE = ['seccional'];
-const pideMuelle = tipo => FORMAS_CON_MUELLE.includes(formaDePuerta(tipo));
+/* =================================================================
+   QUÉ SE LE PREGUNTA A CADA FAMILIA DE PUERTA
+                                                       24-11-2026
+
+   DE DÓNDE SALE
+
+   David, después de las primeras altas de verdad en la empresa:
+   «El dar de alta una puerta es lento y tedioso. Estructurarlo por
+   bloques: puerta, uso, motorización, seguridades y control de
+   acceso.»
+
+   El problema de fondo no era el orden de los campos, era la
+   cantidad: el formulario preguntaba lo mismo a todas las puertas.
+   A una barrera se le pedía el dintel y las vueltas de los muelles;
+   a una corredera, el diámetro del eje. Cuarenta campos, de los que
+   en cada puerta sobraban la mitad. Y un campo que no decide nada
+   no se queda en blanco: se rellena mal, o cansa al que lo ve
+   treinta veces al día.
+
+   CÓMO SE HA RESUELTO
+
+   Esta tabla la rellenó David familia por familia, en una hoja de
+   cálculo, marcando cada campo como SÍ, OPCIONAL o NO. Está volcada
+   aquí tal cual, sin interpretarla:
+
+     si: se pide siempre, y si falta, la ficha está incompleta
+     op: se pide, pero puede quedar en blanco sin que falte nada
+     lo que no está en ninguna de las dos listas: NO SE PREGUNTA
+
+   Una familia que no se reconoce no esconde nada: si no sabemos qué
+   puerta es, no podemos decidir qué no hace falta. Mejor preguntar
+   de más que dar por bueno que algo no aplica.
+
+   LO QUE ESTA TABLA CAMBIÓ RESPECTO A ANTES
+
+   El dintel se pedía en seccional, enrollable, guillotina, rápida y
+   basculante. David añade cortafuegos y peatonal automática (sí), y
+   plegable (opcional).
+
+   Las vueltas de los muelles se pedían SOLO en seccionales. David
+   las pide también en basculante, enrollable y guillotina, que es
+   justo lo que el código de antes dejaba escrito como pendiente.
+
+   Las dos cosas se notan fuera del alta: la lista de «lo que le
+   falta a esta ficha» ahora reclama los muelles en cuatro familias,
+   no en una.
+   ================================================================= */
+
+/* Las medidas. «col» es la columna de la base; «paso» solo donde no es 1. */
+const MEDIDAS_PUERTA = [
+  { c:'ancho',      col:'ancho_mm',       e:'Ancho del hueco (mm)',
+    p:'Del hueco, no de la hoja' },
+  { c:'alto',       col:'alto_mm',        e:'Alto del hueco (mm)',
+    p:'Del suelo al dintel' },
+  { c:'hojas',      col:'n_hojas',        e:'Nº de hojas',
+    p:'Las que tenga: una, dos, o las que sean' , desde:'bloques' },
+  /* ---- El peso de la hoja, el único campo de la tabla que NO se pregunta ----
+     David lo marcó SÍ en casi todas las familias, y mecánicamente tiene razón:
+     el peso de la hoja aplica a una seccional. Pero el 01-11-2026 él mismo lo
+     quitó del alta con otro argumento, que sigue siendo verdad: en obra no hay
+     báscula, así que no se rellenaba nunca, y en su lugar se pide el arrastre
+     del motor, que viene en la placa.
+     Las dos decisiones son suyas y las dos son razonables, porque contestan a
+     preguntas distintas: «¿aplica?» y «¿se puede tomar allí?». Mientras no diga
+     cuál manda, se queda como estaba: no se pregunta, y si alguna puerta lo
+     tiene anotado de antes, se enseña y no se borra. */
+  { c:'peso',       col:'peso_kg',        e:'Peso de la hoja (kg)',
+    p:'Anotado antes. Ya no se pide: en obra no hay báscula', soloLectura:true },
+  { c:'dintel',     col:'dintel_mm',      e:'Dintel (mm)',
+    p:'Del hueco al techo. Decide el tipo de guía' },
+  { c:'lateral',    col:'lateral_libre_mm', e:'Lateral libre (mm)',
+    p:'Lo que queda al lado para que la hoja se recoja' , desde:'bloques' },
+  { c:'fondo',      col:'fondo_mm',       e:'Fondo o recorrido (mm)',
+    p:'Lo que la puerta necesita hacia dentro' , desde:'bloques' },
+  { c:'mastil',     col:'mastil_mm',      e:'Longitud del mástil (mm)',
+    p:'Del eje de giro a la punta' , desde:'bloques' },
+  { c:'eje',        col:'eje_mm',         e:'Diámetro del eje (mm)',
+    p:'El del eje de enrollar. Va en la referencia del repuesto' , desde:'bloques' },
+  { c:'paneles',    col:'n_paneles',      e:'Nº de paneles o lamas',
+    p:'Los que forman la hoja' , desde:'bloques' },
+  { c:'muelle',     col:'vueltas_muelle', e:'Vueltas de los muelles',
+    p:'Con media vuelta vale. Para equilibrar y para pedir el repuesto', paso:'0.5' , desde:'ficha3' },
+  { c:'muellediam', col:'muelle_diam_mm', e:'Diámetro del muelle (mm)',
+    p:'El del alambre. Va en la referencia del repuesto' , desde:'bloques' },
+  { c:'arrastre',   col:'arrastre_kg',    e:'Arrastre máximo del motor (kg)',
+    p:'De la placa o la ficha del motor. Dice si va sobrado o justo' , desde:'ficha3' },
+  { c:'guia',       col:'tipo_guia',      e:'Tipo de guía',
+    p:'Tal y como se llame: estándar, baja, alta, vertical, a medida', texto:true , desde:'bloques' },
+  { c:'carriles',   col:'n_carriles',     e:'Nº de carriles',
+    p:'Los que tenga montados' , desde:'bloques' },
+  { c:'pasolibre',  col:'paso_libre_mm',  e:'Altura de paso libre (mm)',
+    p:'Lo que queda libre con la puerta abierta del todo' , desde:'bloques' },
+];
+
+/* Los elementos, repartidos en los bloques que pidió David. Tres clases:
+     campo  → no es una casilla, son los campos de marca y modelo que ya existían
+     col    → es un número (cuántos motores, cuántos mandos)
+     seg    → es una casilla, y además se guarda en «Seguridad instalada» con
+              ese nombre, que es lo que leen el parte, el informe y el expediente */
+const ELEMENTOS_PUERTA = [
+  { c:'ce',          e:'Marcado CE de la puerta',       bloque:'id' },
+  { c:'placa',       e:'Placa de características',      bloque:'id' },
+  { c:'motor',       e:'Motor: marca y modelo',         bloque:'motor', campo:true },
+  { c:'cuadro',      e:'Cuadro de maniobra',            bloque:'motor', campo:true },
+  { c:'motores',     e:'Nº de motores',                 bloque:'motor', col:'n_motores',
+    p:'Uno en casi todo; dos en las batientes de dos hojas' },
+  { c:'desbloqueo',  e:'Desbloqueo manual',             bloque:'motor', seg:'Desbloqueo manual' },
+  { c:'fotocelulas', e:'Fotocélulas',                   bloque:'seg', seg:'Fotocélulas' },
+  { c:'banda',       e:'Banda de seguridad',            bloque:'seg', seg:'Banda de seguridad' },
+  { c:'dedos',       e:'Protección de dedos',           bloque:'seg', seg:'Protección de dedos' },
+  { c:'limitador',   e:'Limitador de fuerza',           bloque:'seg', seg:'Limitador de fuerza' },
+  { c:'semaforo',    e:'Semáforo',                      bloque:'seg', seg:'Semáforo' },
+  { c:'luz',         e:'Luz de maniobra',               bloque:'seg', seg:'Luz de maniobra' },
+  { c:'pulsemerg',   e:'Pulsador de emergencia',        bloque:'seg', seg:'Pulsador de emergencia' },
+  { c:'seta',        e:'Seta de parada',                bloque:'seg', seg:'Seta de parada' },
+  { c:'incendios',   e:'Central de detección de incendios', bloque:'seg' },
+  { c:'bucle',       e:'Bucle magnético o espira',      bloque:'acceso' },
+  { c:'radar',       e:'Detector de presencia (radar)', bloque:'acceso' },
+  { c:'sensorap',    e:'Sensor de apertura',            bloque:'acceso' },
+  { c:'receptor',    e:'Receptor de mandos',            bloque:'acceso' },
+  { c:'mandos',      e:'Nº de mandos entregados',       bloque:'acceso', col:'n_mandos',
+    p:'Los que se le dejan al cliente. Queda escrito cuántos' },
+  { c:'teclado',     e:'Teclado o lector',              bloque:'acceso' },
+  { c:'portero',     e:'Portero o telefonillo',         bloque:'acceso' },
+  { c:'pulspared',   e:'Pulsador de pared',             bloque:'acceso' },
+  { c:'llave',       e:'Llave de emergencia',           bloque:'acceso' },
+];
+
+/* La tabla de David, volcada de su hoja de cálculo. NO se edita a mano:
+   si hay que cambiar algo, se cambia la hoja y se vuelve a volcar. */
+const CAMPOS_FAMILIA = {
+  /* Corredera */
+  corredera: {
+    si: [
+          'ancho', 'alto', 'peso', 'lateral', 'arrastre', 'guia', 'ce', 'placa',
+          'motor', 'cuadro', 'motores', 'desbloqueo', 'fotocelulas', 'banda',
+          'dedos', 'luz', 'receptor', 'mandos' ],
+    op: [
+          'hojas', 'carriles', 'limitador', 'semaforo', 'pulsemerg', 'seta',
+          'bucle', 'radar', 'sensorap', 'teclado', 'portero', 'pulspared', 'llave' ] },
+  /* Batiente */
+  batiente: {
+    si: [
+          'ancho', 'alto', 'hojas', 'peso', 'arrastre', 'ce', 'placa', 'motor',
+          'cuadro', 'motores', 'desbloqueo', 'fotocelulas', 'banda', 'dedos', 'luz',
+          'receptor', 'mandos' ],
+    op: [
+          'lateral', 'fondo', 'limitador', 'semaforo', 'pulsemerg', 'seta', 'bucle',
+          'radar', 'sensorap', 'teclado', 'portero', 'pulspared', 'llave' ] },
+  /* Plegable */
+  plegable: {
+    si: [
+          'ancho', 'alto', 'hojas', 'peso', 'arrastre', 'guia', 'ce', 'placa',
+          'motor', 'cuadro', 'motores', 'desbloqueo', 'fotocelulas', 'banda',
+          'dedos', 'luz', 'receptor', 'mandos' ],
+    op: [
+          'dintel', 'lateral', 'fondo', 'paneles', 'carriles', 'limitador',
+          'semaforo', 'pulsemerg', 'seta', 'bucle', 'radar', 'sensorap', 'teclado',
+          'portero', 'pulspared', 'llave' ] },
+  /* Seccional */
+  seccional: {
+    si: [
+          'ancho', 'alto', 'peso', 'dintel', 'lateral', 'fondo', 'paneles',
+          'muelle', 'muellediam', 'arrastre', 'guia', 'pasolibre', 'ce', 'placa',
+          'motor', 'cuadro', 'motores', 'desbloqueo', 'fotocelulas', 'banda',
+          'dedos', 'luz', 'receptor', 'mandos' ],
+    op: [
+          'limitador', 'semaforo', 'pulsemerg', 'seta', 'bucle', 'radar',
+          'sensorap', 'teclado', 'portero', 'pulspared', 'llave' ] },
+  /* Basculante */
+  basculante: {
+    si: [
+          'ancho', 'alto', 'peso', 'dintel', 'fondo', 'muelle', 'muellediam',
+          'arrastre', 'pasolibre', 'ce', 'placa', 'motor', 'cuadro', 'motores',
+          'desbloqueo', 'fotocelulas', 'banda', 'dedos', 'luz', 'receptor',
+          'mandos' ],
+    op: [
+          'lateral', 'limitador', 'semaforo', 'pulsemerg', 'seta', 'bucle', 'radar',
+          'sensorap', 'teclado', 'portero', 'pulspared', 'llave' ] },
+  /* Enrollable */
+  enrollable: {
+    si: [
+          'ancho', 'alto', 'peso', 'dintel', 'lateral', 'eje', 'muelle',
+          'muellediam', 'arrastre', 'guia', 'pasolibre', 'ce', 'placa', 'motor',
+          'cuadro', 'motores', 'desbloqueo', 'fotocelulas', 'banda', 'luz',
+          'receptor', 'mandos' ],
+    op: [
+          'limitador', 'semaforo', 'pulsemerg', 'seta', 'bucle', 'radar',
+          'sensorap', 'teclado', 'portero', 'pulspared', 'llave' ] },
+  /* Rápida */
+  rapida: {
+    si: [
+          'ancho', 'alto', 'dintel', 'lateral', 'eje', 'arrastre', 'guia',
+          'pasolibre', 'ce', 'placa', 'motor', 'cuadro', 'motores', 'desbloqueo',
+          'fotocelulas', 'banda', 'luz', 'seta' ],
+    op: [
+          'peso', 'limitador', 'semaforo', 'pulsemerg', 'bucle', 'radar',
+          'sensorap', 'receptor', 'mandos', 'teclado', 'pulspared' ] },
+  /* Guillotina o vertical */
+  guillotina: {
+    si: [
+          'ancho', 'alto', 'peso', 'dintel', 'lateral', 'muelle', 'muellediam',
+          'arrastre', 'guia', 'pasolibre', 'ce', 'placa', 'motor', 'cuadro',
+          'motores', 'desbloqueo', 'fotocelulas', 'banda', 'dedos', 'luz', 'seta' ],
+    op: [
+          'limitador', 'semaforo', 'pulsemerg', 'bucle', 'radar', 'sensorap',
+          'receptor', 'mandos', 'teclado', 'pulspared', 'llave' ] },
+  /* Cortafuegos */
+  cortafuegos: {
+    si: [
+          'ancho', 'alto', 'peso', 'dintel', 'lateral', 'guia', 'pasolibre', 'ce',
+          'placa', 'desbloqueo', 'seta', 'incendios' ],
+    op: [
+          'hojas', 'fondo', 'eje', 'paneles', 'arrastre', 'motor', 'cuadro',
+          'motores', 'fotocelulas', 'banda', 'luz', 'pulsemerg', 'radar',
+          'sensorap', 'pulspared' ] },
+  /* Peatonal automática */
+  peatonal: {
+    si: [
+          'ancho', 'alto', 'hojas', 'dintel', 'lateral', 'guia', 'ce', 'placa',
+          'motor', 'cuadro', 'motores', 'desbloqueo', 'fotocelulas', 'dedos',
+          'radar', 'sensorap', 'teclado', 'llave' ],
+    op: [
+          'peso', 'paneles', 'carriles', 'limitador', 'pulsemerg', 'receptor',
+          'mandos', 'portero', 'pulspared', 'incendios' ] },
+  /* Barrera */
+  barrera: {
+    si: [
+          'ancho', 'mastil', 'ce', 'placa', 'motor', 'cuadro', 'motores',
+          'desbloqueo', 'fotocelulas', 'luz', 'receptor', 'mandos', 'teclado' ],
+    op: [
+          'banda', 'semaforo', 'pulsemerg', 'seta', 'bucle', 'radar', 'sensorap',
+          'portero', 'pulspared', 'llave' ] },
+};
+
+/* 'si' | 'op' | 'no'. Una familia sin reconocer contesta 'op' a todo: no
+   esconde nada y no reclama nada. */
+function pideCampo(tipo, clave){
+  const c = CAMPOS_FAMILIA[formaDePuerta(tipo)];
+  if (!c) return 'op';
+  if (c.si.indexOf(clave) >= 0) return 'si';
+  if (c.op.indexOf(clave) >= 0) return 'op';
+  return 'no';
+}
+/* Se enseña el campo */
+const seAplica = (tipo, clave) => pideCampo(tipo, clave) !== 'no';
+/* Y si falta, la ficha está incompleta */
+const esObligado = (tipo, clave) => pideCampo(tipo, clave) === 'si';
+const pideDintel = tipo => seAplica(tipo, 'dintel');
+const pideMuelle = tipo => seAplica(tipo, 'muelle');
+/* Hay campos que viven en columnas añadidas después. Si el SQL no se ha pasado
+   todavía, no se dibujan: guardar en una columna que no existe tira el alta
+   entera, y vale más que falte un campo que perder la puerta. */
+const hayCampo = x => x.desde === 'ficha3' ? !S.sinFicha3
+                    : x.desde === 'bloques' ? !S.sinBloques : true;
+const MEDIDA = c => MEDIDAS_PUERTA.find(m => m.c === c) || null;
+const ELEMENTO = c => ELEMENTOS_PUERTA.find(x => x.c === c) || null;
+
+/* ---- Una medida ----
+   Cada una va en su caja con id, para poder enseñarla o esconderla al cambiar
+   el tipo de puerta sin volver a dibujar el formulario: si se redibujara, se
+   perdería lo que se esté escribiendo. */
+function campoMedida(m, d, tipo){
+  if (!hayCampo(m)) return '';
+  /* El peso de la hoja ya no se pide. Si está anotado de antes se enseña y no
+     se toca; si no, no aparece. */
+  if (m.soloLectura)
+    return d[m.col]
+      ? '<div class="campo"><label>'+esc(m.e)+'</label>'+
+        '<input type="text" value="'+esc(d[m.col])+'" disabled>'+
+        '<span class="pista">'+esc(m.p)+'</span></div>'
+      : '';
+  const est = pideCampo(tipo, m.c);
+  return '<div class="campo" id="f-caja-'+m.c+'"'+(est === 'no' ? ' hidden' : '')+'>'+
+    '<label for="f-'+m.c+'">'+esc(m.e)+
+      (est === 'op' ? ' <span class="mini">(si la lleva)</span>' : '')+'</label>'+
+    (m.texto
+      ? '<input id="f-'+m.c+'" type="text" maxlength="60" value="'+esc(d[m.col] || '')+'">'
+      : '<input id="f-'+m.c+'" type="number" min="0"'+(m.paso ? ' step="'+m.paso+'"' : '')+
+        ' value="'+esc(d[m.col] || '')+'">')+
+    '<span class="pista">'+esc(m.p)+'</span></div>';
+}
+
+/* ---- Un elemento ----
+   Los que son un número llevan su campo; el resto, una casilla. Lo marcado se
+   guarda en puertas.elementos, y los que además son de seguridad se siguen
+   guardando en puertas.seguridad con su mismo nombre, porque eso es lo que leen
+   el parte, el informe, el expediente y los componentes.
+
+   Los que son de seguridad siguen llevando la clase «f-seg» y su nombre en
+   «value», exactamente como antes de los bloques: así el borrador del alta, el
+   botón de añadir un elemento a mano y todo lo que lee «Seguridad instalada»
+   funcionan sin cambiar una línea. */
+function campoElemento(x, d, tipo){
+  if (!hayCampo(x) || x.campo) return '';
+  const est = pideCampo(tipo, x.c);
+  const suelto = est === 'op' ? ' <span class="mini">(si la lleva)</span>' : '';
+  if (x.col)
+    return '<div class="campo" id="f-caja-'+x.c+'"'+(est === 'no' ? ' hidden' : '')+'>'+
+      '<label for="f-'+x.c+'">'+esc(x.e)+suelto+'</label>'+
+      '<input id="f-'+x.c+'" type="number" min="0" value="'+esc(d[x.col] || '')+'">'+
+      (x.p ? '<span class="pista">'+esc(x.p)+'</span>' : '')+'</div>';
+  const puestos = (d.elementos || []).map(nombreElemento);
+  const nombre = x.seg || x.e;
+  const marcado = puestos.indexOf(nombre) >= 0 ||
+    (x.seg && (d.seguridad || []).map(nombreElemento).indexOf(x.seg) >= 0);
+  return '<label id="f-caja-'+x.c+'"'+(est === 'no' ? ' hidden' : '')+'>'+
+    '<input type="checkbox" class="'+(x.seg ? 'f-seg' : 'f-ele')+'" value="'+esc(nombre)+'"'+
+      (marcado ? ' checked' : '')+'>'+esc(x.e)+suelto+'</label>';
+}
+
+/* Los elementos de un bloque. Devuelve '' si en esa familia no queda ninguno:
+   un bloque con el título y nada debajo solo sirve para hacer scroll.
+   «idChecks» existe para que el bloque de seguridades siga llamándose
+   «f-segs», que es de donde lo lee media aplicación. */
+function bloqueElementos(bloque, titulo, d, tipo, pista, idChecks, cola){
+  const hay = ELEMENTOS_PUERTA.filter(x => x.bloque === bloque && !x.campo && hayCampo(x));
+  if (!hay.length) return '';
+  const nums = hay.filter(x => x.col).map(x => campoElemento(x, d, tipo)).filter(Boolean);
+  const chks = hay.filter(x => !x.col).map(x => campoElemento(x, d, tipo)).filter(Boolean);
+  const visibles = hay.filter(x => pideCampo(tipo, x.c) !== 'no').length;
+  return '<div class="grupo" id="f-bloque-'+bloque+'"'+(visibles ? '' : ' hidden')+'>'+
+    '<h3>'+esc(titulo)+'</h3>'+
+    (pista ? '<p class="mini" style="margin:0 0 10px">'+pista+'</p>' : '')+
+    (nums.length ? '<div class="campos">'+nums.join('')+'</div>' : '')+
+    (chks.length ? '<div class="checks"'+(idChecks ? ' id="'+idChecks+'"' : '')+'>'+
+      chks.join('')+'</div>' : '')+
+    (cola || '')+'</div>';
+}
 /* Una corredera puede ir sobre guía en el suelo o en voladizo. No se deduce de la
    nada: solo se afirma cuando el tipo lo dice. null = no consta. */
 const correderaGuiada = t => {
@@ -12840,7 +13198,9 @@ function recomendadoObra(p){
      placa; y en las seccionales, las vueltas de los muelles. */
   if (!S.sinFicha3){
     if (!+p.arrastre_kg) out.push('Arrastre máximo del motor, que viene en su placa');
-    if (pideMuelle(p.tipo) && !+p.vueltas_muelle)
+    /* Obligado, no «se aplica»: en las familias donde David lo marcó OPCIONAL
+       el campo se enseña, pero dejarlo en blanco no es una ficha incompleta. */
+    if (esObligado(p.tipo, 'muelle') && !+p.vueltas_muelle)
       out.push('Vueltas de los muelles, para equilibrar y para pedir el repuesto');
   }
   if (!String(p.cuadro || '').trim()) out.push('Cuadro de maniobra: marca y modelo');
@@ -23140,14 +23500,31 @@ dlgForm.addEventListener('change', e => {
     }
     return;
   }
-  /* El dintel y las vueltas de muelle aparecen o desaparecen según el tipo de
-     puerta que se elija: el dintel en todo lo que sube, las vueltas solo en las
-     seccionales. Un campo que no decide nada solo sirve para dejarlo en blanco. */
+  /* ---- Al cambiar el tipo, cambia lo que se pregunta (24-11-2026) ----
+     Antes esto escondía dos campos: el dintel y las vueltas de muelle. Ahora
+     recorre toda la tabla de David y deja a la vista lo de esa familia y solo
+     lo de esa familia.
+
+     Se enseña y se esconde, NO se redibuja el formulario: redibujarlo
+     borraría lo que el técnico esté escribiendo. Y lo que se escriba en un
+     campo que luego se esconde no se borra tampoco: si vuelve a cambiar el
+     tipo, se lo encuentra puesto. Lo que no se guarda es lo escondido, y eso
+     se decide al guardar, no aquí. */
   if (t.id === 'f-tipo'){
-    const caja = document.getElementById('f-caja-dintel');
-    if (caja) caja.hidden = !pideDintel(t.value);
-    const cajaM = document.getElementById('f-caja-muelle');
-    if (cajaM) cajaM.hidden = !pideMuelle(t.value);
+    const mostrar = (c, vis) => {
+      const caja = document.getElementById('f-caja-'+c);
+      if (caja) caja.hidden = !vis;
+    };
+    MEDIDAS_PUERTA.forEach(m => { if (!m.soloLectura) mostrar(m.c, seAplica(t.value, m.c)); });
+    ELEMENTOS_PUERTA.forEach(x => { if (!x.campo) mostrar(x.c, seAplica(t.value, x.c)); });
+    /* Y un bloque que se queda sin nada que preguntar desaparece entero, con su
+       título: en una barrera no hay «Seguridades» que rellenar. */
+    ['id','motor','seg','acceso'].forEach(b => {
+      const caja = document.getElementById('f-bloque-'+b);
+      if (!caja) return;
+      caja.hidden = !ELEMENTOS_PUERTA.some(x => x.bloque === b && !x.campo &&
+        hayCampo(x) && seAplica(t.value, x.c));
+    });
     return;
   }
   if (t.id === 'pl-art'){
@@ -23240,11 +23617,38 @@ dlgForm.addEventListener('change', e => {
       { avisoId, etapa: t.dataset.etapa });
     return;
   }
-  if (t.dataset && t.dataset.act === 'comp-foto' && t.files && t.files.length){
-    subirDeComponente(t.dataset.id, t.files[0], 'foto'); t.value = ''; return;
-  }
-  if (t.dataset && t.dataset.act === 'comp-doc' && t.files && t.files.length){
-    subirDeComponente(t.dataset.id, t.files[0], 'doc'); t.value = ''; return;
+  /* ---- La foto del componente, antes de guardarlo (24-11-2026) ----
+     David: «no se puede cargar la foto hasta que no se guarda el componente».
+     Y la pantalla lo decía con todas las letras: «Guarda primero el componente
+     y luego podrás ponerle la foto».
+
+     Era verdad por un motivo tonto: la foto se sube a una carpeta que lleva el
+     número del componente, y ese número no existe hasta guardarlo. Pero el
+     momento de hacer la foto es cuando el técnico tiene la placa delante.
+     Guardar, buscar el componente otra vez y volver a entrar no lo hace nadie:
+     la ficha se queda sin la foto de la placa, que es justo la que sirve para
+     pedir el repuesto.
+
+     Ahora la foto se elige antes, se queda esperando, y se sube ella sola en
+     cuanto el componente tiene número. Si el guardado falla, no se sube nada y
+     la foto sigue esperando: no se pierde el viaje. */
+  if (t.dataset && (t.dataset.act === 'comp-foto' || t.dataset.act === 'comp-doc') &&
+      t.files && t.files.length){
+    const que = t.dataset.act === 'comp-foto' ? 'foto' : 'doc';
+    if (t.dataset.id){ subirDeComponente(t.dataset.id, t.files[0], que); t.value = ''; return; }
+    S.compEspera = S.compEspera || {};
+    S.compEspera[que] = t.files[0];
+    const aviso = document.getElementById('o-espera');
+    if (aviso){
+      const n = [S.compEspera.foto && 'la foto', S.compEspera.doc && 'el PDF']
+        .filter(Boolean).join(' y ');
+      aviso.innerHTML = '<b>'+esc(n.charAt(0).toUpperCase()+n.slice(1))+
+        ' se sube'+(S.compEspera.foto && S.compEspera.doc ? 'n' : '')+' al guardar.</b> '+
+        esc([S.compEspera.foto && S.compEspera.foto.name,
+             S.compEspera.doc && S.compEspera.doc.name].filter(Boolean).join(' · '));
+    }
+    t.value = '';
+    return;
   }
   /* Al cambiar la fecha de la factura, el vencimiento se vuelve a proponer con
      el plazo de ese cliente. Si alguien ya lo había tocado a mano, no se le
@@ -23412,6 +23816,11 @@ async function guardarLista(clave, arr){
 const CAMPOS_PUERTA = ['f-cod','f-cbusca','f-clid','f-centro','f-dir','f-ubi','f-tcliente','f-tipo','f-uso',
   'f-marca','f-modelo','f-anio','f-instalador','f-ancho','f-alto','f-dintel',
   'f-arrastre','f-muelle','f-otros',
+  /* Los de la tabla por familia (24-11-2026). Si uno se queda fuera de esta
+     lista, el técnico que sale a crear un cliente a mitad del alta vuelve y se
+     lo encuentra en blanco, sin que nada avise. */
+  'f-hojas','f-lateral','f-fondo','f-mastil','f-eje','f-paneles','f-muellediam',
+  'f-guia','f-carriles','f-pasolibre','f-motores','f-mandos',
   'f-motor-marca','f-motor-modelo','f-cuadro-marca','f-cuadro-modelo','f-modo','f-usuarios',
   'f-matricula','f-sinmat','f-ult','f-prox','f-notas'];
 function guardarBorradorPuerta(){
@@ -23419,6 +23828,9 @@ function guardarBorradorPuerta(){
   CAMPOS_PUERTA.forEach(id => { const e = document.getElementById(id); if (e) b[id] = e.value; });
   b.seguridad = Array.from(document.querySelectorAll('#f-segs .f-seg:checked')).map(x => x.value);
   b.extras = Array.from(document.querySelectorAll('#f-segs .f-seg')).map(x => x.value);
+  /* Los elementos que no son de seguridad (identificación y control de acceso)
+     viven en otros bloques y con otra clase: también hay que guardarlos. */
+  b.elementos = Array.from(document.querySelectorAll('.f-ele:checked')).map(x => x.value);
   S.borradorPuerta = b;
 }
 function aplicarBorradorPuerta(){
@@ -23437,6 +23849,8 @@ function aplicarBorradorPuerta(){
     });
     cont.querySelectorAll('.f-seg').forEach(x => { x.checked = (b.seguridad || []).includes(x.value); });
   }
+  if (b.elementos)
+    document.querySelectorAll('.f-ele').forEach(x => { x.checked = b.elementos.includes(x.value); });
   CAMPOS_PUERTA.forEach(id => {
     const e = document.getElementById(id);
     if (!e || b[id] === undefined) return;
@@ -24253,7 +24667,10 @@ function dlgPuerta(id, avisoId, molde){
       molde.__copiado.map(x => esc(x[0])+': <b>'+esc(x[1])+'</b>').join(' · ')+'</div>'+
       '<div class="mini" style="margin-top:6px">No se ha copiado nada que sea de esa puerta '+
       'y solo de esa: la etiqueta, la matrícula, la ubicación, las observaciones, las fechas '+
-      'de revisión, el peso de la hoja y las vueltas de los muelles. Eso va puerta por puerta.</div>'+
+      'de revisión, el peso de la hoja y las vueltas de los muelles. Tampoco las medidas '+
+      'nuevas (hojas, lateral libre, fondo, mástil, eje, paneles, diámetro del muelle, tipo '+
+      'de guía, carriles y paso libre) ni los mandos entregados: cada puerta tiene las suyas, '+
+      'y copiarlas sería firmar una medida que no se ha tomado. Eso va puerta por puerta.</div>'+
       '</div>';
   if (p && firmados.length)
     h += '<div class="sin-ficha" style="margin-bottom:12px;background:var(--aviso-bg);color:var(--aviso)">'+
@@ -24330,6 +24747,12 @@ function dlgPuerta(id, avisoId, molde){
         'placeholder="Ej.: puerta de taller de los años 80, sin placa; el motor sí tiene y va en su componente">'+
       '<span class="pista">Esto cuenta como dato tomado. Dejarlo en blanco sin matrícula, no.</span></div>')+
     '</div></div>';
+  /* El marcado CE y la placa van aquí, pegados a la matrícula, porque son lo
+     mismo: lo que identifica la puerta y decide qué marco legal se le aplica. */
+  if (!S.sinBloques && !S.sinObra)
+    h += bloqueElementos('id', 'Qué lleva puesto de identificación', d, d.tipo || '',
+      'Marcar que lo lleva no es haberlo leído: lo que diga la placa se copia '+
+      'arriba, en la matrícula.');
   h += '<div class="grupo"><h3>La puerta</h3><div class="campos">'+
     '<div class="campo"><label for="f-tipo">Tipo</label><select id="f-tipo">'+opts(lista('tipos', TIPOS), d.tipo)+'</select></div>'+
     '<div class="campo"><label for="f-uso">Uso</label><select id="f-uso">'+opts(lista('usos', USOS), d.uso)+'</select></div>'+
@@ -24360,35 +24783,16 @@ function dlgPuerta(id, avisoId, molde){
         (d.instalador_desconocido ? ' checked' : '')+
         ' style="accent-color:var(--amarillo);width:18px;height:18px">No se sabe</label>')+
       '</div>'+
-    '<div class="campo"><label for="f-ancho">Ancho (mm)</label><input id="f-ancho" type="number" value="'+esc(d.ancho_mm||'')+'"></div>'+
-    '<div class="campo"><label for="f-alto">Alto (mm)</label><input id="f-alto" type="number" value="'+esc(d.alto_mm||'')+'"></div>'+
-    /* El dintel es lo que decide si la puerta entra. Se pide solo en lo que
-       sube, y el campo aparece o desaparece al cambiar el tipo. */
-    '<div class="campo" id="f-caja-dintel"'+(pideDintel(d.tipo)?'':' hidden')+'>'+
-      '<label for="f-dintel">Dintel (mm)</label>'+
-      '<input id="f-dintel" type="number" value="'+esc(d.dintel_mm||'')+'">'+
-      '<span class="pista">Del hueco al techo. Decide el tipo de guía</span></div>'+
-    /* ---- El arrastre del motor, en lugar del peso de la hoja ----
-       El peso de la hoja no se pide desde el 01-11-2026: en obra no hay báscula
-       y no se rellenaba nunca. El arrastre máximo viene en la placa o en la
-       ficha de casi cualquier motor, y sirve para lo mismo que se quería el
-       peso: saber si el motor va sobrado o justo.
-       Lo que ya estuviera anotado como peso no se borra ni se toca. */
-    (S.sinFicha3 ? '' :
-      '<div class="campo"><label for="f-arrastre">Arrastre máximo del motor (kg)</label>'+
-      '<input id="f-arrastre" type="number" step="1" min="0" value="'+esc(d.arrastre_kg||'')+'">'+
-      '<span class="pista">De la placa o la ficha del motor. Dice si va sobrado o justo</span></div>'+
-      /* Las vueltas de muelle: solo en seccionales, igual que el dintel, y el
-         campo aparece o desaparece al cambiar el tipo. */
-      '<div class="campo" id="f-caja-muelle"'+(pideMuelle(d.tipo)?'':' hidden')+'>'+
-      '<label for="f-muelle">Vueltas de los muelles</label>'+
-      '<input id="f-muelle" type="number" step="0.5" min="0" value="'+esc(d.vueltas_muelle||'')+'">'+
-      '<span class="pista">Con media vuelta vale. Para equilibrar y para pedir el repuesto</span></div>')+
-    (d.peso_kg
-      ? '<div class="campo"><label>Peso de la hoja</label>'+
-        '<input type="text" value="'+esc(d.peso_kg)+' kg" disabled>'+
-        '<span class="pista">Anotado antes. Ya no se pide: en obra no hay báscula</span></div>'
-      : '')+
+    /* ---- Las medidas, las de ESTA familia y no más (24-11-2026) ----
+       Antes estaban escritas a mano aquí, una por una, y se pedían las mismas a
+       todas las puertas: el dintel a una barrera, las vueltas de los muelles a
+       una corredera. Ahora salen de MEDIDAS_PUERTA y cada una aparece o no
+       según la tabla que rellenó David familia por familia.
+
+       Van en cajas con id («f-caja-ancho») para poder enseñarlas y esconderlas
+       al cambiar el tipo SIN redibujar el formulario: si se redibujara, se
+       perdería lo que el técnico esté escribiendo. */
+    MEDIDAS_PUERTA.map(m => campoMedida(m, d, d.tipo || '')).join('')+
     '</div></div>';
 
   /* ---- Más elementos a identificar ----
@@ -24433,6 +24837,11 @@ function dlgPuerta(id, avisoId, molde){
     ((mMotor.de === 'ficha' || mCuadro.de === 'ficha')
       ? ' Lo que había escrito antes de una sola vez está puesto en «marca»: repártelo si hace falta.'
       : '')+'</p></div>';
+  /* Lo que queda de la motorización que no es marca ni modelo: cuántos motores
+     lleva y si tiene desbloqueo manual. El desbloqueo es además de seguridad,
+     así que se guarda en los dos sitios, igual que antes. */
+  if (!S.sinBloques)
+    h += bloqueElementos('motor', 'Más de la motorización', d, d.tipo || '');
 
   /* ---- Cómo se acciona y quién la usa ----
      De estos dos datos sale la protección que le toca a la puerta y, con ella, los
@@ -24457,16 +24866,50 @@ function dlgPuerta(id, avisoId, molde){
       'validar con el ejemplar de la norma: sirve de recordatorio, no acredita cumplimiento.</p></div>';
   }
 
-  const puestos = d.seguridad || [];
-  const maestra = lista('seguridad', SEGURIDAD);
-  const elementos = maestra.concat(puestos.filter(s => !maestra.includes(s)));
-  h += '<div class="grupo"><h3>Seguridad instalada</h3><div class="checks" id="f-segs">'+
-    elementos.map(s => casillaSeg(s, puestos.includes(s))).join('')+
-    '</div><div class="campos" style="margin-top:10px"><div class="campo full"><label for="f-seg-nuevo">Añadir un elemento que no esté en la lista</label>'+
-    '<span class="fila"><input id="f-seg-nuevo" type="text" placeholder="Ej.: bucle magnético, radar de apertura" style="flex:1">'+
+  /* ---- Seguridades y control de acceso, por bloques (24-11-2026) ----
+     Antes era una sola lista de casillas, «Seguridad instalada», con los ocho
+     elementos de siempre y todo lo demás añadido a mano por el técnico. El
+     resultado: lo que una puerta lleva de verdad acababa escrito de cinco
+     maneras distintas («radar», «radar de apertura», «detector»), y lo que no
+     se le ocurría a nadie en ese momento no se anotaba.
+
+     Ahora son los elementos de la tabla de David, repartidos en sus bloques, y
+     cada familia enseña los suyos. El campo libre se queda: una puerta siempre
+     puede llevar algo que no está en ninguna lista.
+
+     Lo de siempre no se ha movido: las casillas de seguridad llevan la misma
+     clase y el mismo nombre, y el contenedor sigue llamándose «f-segs». */
+  const colaSegs =
+    '<div class="campos" style="margin-top:10px"><div class="campo full"><label for="f-seg-nuevo">Añadir un elemento que no esté en la lista</label>'+
+    '<span class="fila"><input id="f-seg-nuevo" type="text" placeholder="Ej.: cerradura motorizada, sirena" style="flex:1">'+
     '<button type="button" class="btn sm" data-act="seg-extra">Añadir</button></span>'+
     (esAdmin() ? '<label class="mini" style="display:inline-flex;align-items:center;gap:6px;margin-top:8px"><input type="checkbox" id="f-seg-maestra" checked style="accent-color:var(--amarillo);width:16px;height:16px">Guardarlo también en la lista general, para todas las puertas</label>' : '')+
-    '</div></div></div>';
+    '</div></div>';
+  if (S.sinBloques){
+    /* Sin el SQL pasado, la pantalla de siempre, tal cual. */
+    const puestos = (d.seguridad || []).map(nombreElemento);
+    const maestra = lista('seguridad', SEGURIDAD);
+    const todos = maestra.concat(puestos.filter(s => !maestra.includes(s)));
+    h += '<div class="grupo"><h3>Seguridad instalada</h3><div class="checks" id="f-segs">'+
+      todos.map(s => casillaSeg(s, puestos.includes(s))).join('')+
+      '</div>'+colaSegs+'</div>';
+  } else {
+    /* Lo que el técnico haya añadido a mano y no esté en ninguna lista: se
+       enseña al final de las seguridades, para que no se pierda al editar. */
+    const conocidos = ELEMENTOS_PUERTA.map(x => x.seg || x.e);
+    const extras = (d.seguridad || []).map(nombreElemento)
+      .concat((d.elementos || []).map(nombreElemento))
+      .filter((s, i, a) => s && conocidos.indexOf(s) < 0 && a.indexOf(s) === i);
+    h += bloqueElementos('seg', 'Seguridades', d, d.tipo || '',
+      'Lo que la puerta lleva puesto, no lo que debería llevar. Lo que falte y '+
+      'tenga que llevar sale en el informe, no aquí.', 'f-segs',
+      (extras.length
+        ? '<div class="checks">'+extras.map(s => casillaSeg(s, true)).join('')+'</div>'
+        : '')+colaSegs);
+    h += bloqueElementos('acceso', 'Control de acceso', d, d.tipo || '',
+      'Cómo se abre la puerta y con qué. El número de mandos entregados queda '+
+      'escrito: es la pregunta que más se repite meses después.');
+  }
   h += '<div class="grupo"><h3>Revisiones y notas</h3><div class="campos">'+
     '<div class="campo"><label for="f-ult">Última revisión</label><input id="f-ult" type="date" value="'+esc(d.ultima_revision||'')+'"></div>'+
     '<div class="campo"><label for="f-prox">Próxima revisión</label><input id="f-prox" type="date" value="'+esc(d.proxima_revision||'')+'"></div>'+
@@ -24501,6 +24944,33 @@ function dlgPuerta(id, avisoId, molde){
       o.arrastre_kg    = val('f-arrastre') ? +val('f-arrastre') : null;
       o.vueltas_muelle = val('f-muelle')   ? +val('f-muelle')   : null;
       o.otros_elementos = val('f-otros') || null;
+    }
+    /* ---- Las medidas y los elementos por familia (24-11-2026) ----
+       Solo se guarda lo que esa familia pregunta. Lo que está escondido NO se
+       escribe, ni con un valor ni con un nulo: si una puerta se dio de alta
+       como seccional con sus siete vueltas de muelle y hoy alguien le cambia
+       el tipo a corredera, las vueltas se quedan guardadas donde estaban. Un
+       tipo mal elegido se corrige; un dato borrado hay que volver a ir a
+       tomarlo a la puerta.
+
+       Los elementos marcados sí van todos, también los que la familia de hoy
+       no pregunta, por lo mismo: la columna se escribe entera cada vez, así
+       que lo que no se mandara se perdería. */
+    if (!S.sinBloques){
+      const tp = val('f-tipo');
+      MEDIDAS_PUERTA.forEach(m => {
+        if (m.soloLectura || m.desde !== 'bloques' || !seAplica(tp, m.c)) return;
+        const v = val('f-'+m.c);
+        o[m.col] = m.texto ? (v || null) : (v ? +v : null);
+      });
+      ELEMENTOS_PUERTA.forEach(x => {
+        if (!x.col || !seAplica(tp, x.c)) return;
+        const v = val('f-'+x.c);
+        o[x.col] = v ? +v : null;
+      });
+      o.elementos = Array.from(dlgForm.querySelectorAll('.f-seg, .f-ele'))
+        .filter(x => x.checked).map(x => x.value)
+        .filter((s, i, a) => a.indexOf(s) === i);
     }
     /* El centro solo se guarda si la base de datos lo tiene: así una copia de la
        aplicación nueva contra una base de datos sin centros.sql no rompe el alta
@@ -25132,6 +25602,9 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
 /* volverAviso: si se ha llegado aquí desde un parte (el alta en obra), al guardar
    se vuelve a ese parte en vez de dejar al técnico en la ficha de la puerta. */
 function dlgComponente(id, puertaId, clave, volverAviso){
+  /* Lo que estuviera esperando de otro componente no vale para este: una foto
+     de la placa de un cuadro no es la de una banda. */
+  S.compEspera = null;
   const c = id ? (S.componentes || []).find(x => x.id === id) : null;
   const pid = (c && c.puerta_id) || puertaId;
   const p = puertaDe(pid);
@@ -25168,7 +25641,11 @@ function dlgComponente(id, puertaId, clave, volverAviso){
     '<label class="btn sm">'+(d.doc_ruta?'Cambiar el papel':'Subir PDF')+
       '<input type="file" accept="application/pdf,.pdf" hidden data-act="comp-doc" data-id="'+esc(id||'')+'"></label>'+
     (d.doc_nombre ? '<span class="mini">'+esc(d.doc_nombre)+'</span>' : '')+
-    '</div>'+(id ? '' : '<p class="mini" style="margin:8px 0 0">Guarda primero el componente y luego podrás ponerle la foto y el papel.</p>')+'</div>';
+    '</div>'+
+    /* Antes aquí decía «guarda primero el componente y luego podrás ponerle la
+       foto». Ya no hace falta: la foto se elige ahora y se sube al guardar. */
+    (id ? '' : '<p class="mini" style="margin:8px 0 0" id="o-espera">Puedes hacer la foto '+
+      'ahora, con la placa delante: se sube en cuanto guardes el componente.</p>')+'</div>';
 
   if (c) h += '<div class="grupo" style="margin-top:12px"><h3>Si se ha retirado</h3><div class="campos">'+
     '<div class="campo"><label class="mini" style="display:inline-flex;align-items:center;gap:8px">'+
@@ -25196,10 +25673,23 @@ function dlgComponente(id, puertaId, clave, volverAviso){
     if (!o.nombre && o.clave) o.nombre = nombreComponente(familia, o.clave);
     if (!o.nombre) return setErr('Ponle un nombre al componente, o elige qué es.');
     try {
+      let nuevoId = c ? c.id : null;
       if (c){ const { error } = await sb.from('componentes').update(o).eq('id', c.id); if (error) throw error; }
       else {
         o.creado_por = yo();
-        const { error } = await sb.from('componentes').insert(o); if (error) throw error;
+        /* Se pide el número del componente recién creado porque la foto que
+           esperaba va a su carpeta, y esa carpeta lleva su número. */
+        const { data, error } = await sb.from('componentes').insert(o).select('id').single();
+        if (error) throw error;
+        nuevoId = data && data.id;
+      }
+      /* La foto y el papel que se eligieron antes de guardar. Van después del
+         guardado, nunca antes: si el guardado falla, la foto sigue esperando. */
+      const esp = S.compEspera || {};
+      if (nuevoId && (esp.foto || esp.doc)){
+        if (esp.foto) await subirDeComponente(nuevoId, esp.foto, 'foto', pid);
+        if (esp.doc)  await subirDeComponente(nuevoId, esp.doc, 'doc', pid);
+        S.compEspera = null;
       }
       /* El motor y el cuadro son el mismo dato que la ficha de la puerta: se
          pueden escribir desde los dos sitios y los dos tienen que decir lo mismo. */
@@ -25288,9 +25778,13 @@ async function expGuardarComponentes(expId){
 /* La foto y el papel de un componente. La foto va al almacén de fotos y el papel al
    de documentos, los mismos que usa la puerta: no hace falta almacén nuevo. Si la
    fila no se puede actualizar, el fichero subido se quita, para no dejar basura. */
-async function subirDeComponente(compId, file, que){
+async function subirDeComponente(compId, file, que, puertaId){
   const c = (S.componentes || []).find(x => x.id === compId);
-  if (!c) return toast('Guarda primero el componente.');
+  /* Un componente recién creado todavía no está en la lista que hay en memoria,
+     porque los datos no se han recargado. La puerta se pasa a mano para no
+     tener que recargar la aplicación entera antes de subir la foto. */
+  const pid = (c && c.puerta_id) || puertaId;
+  if (!pid) return toast('Guarda primero el componente.');
   const bucket = que === 'foto' ? 'fotos' : 'documentos';
   try {
     let blob = file, tipo = file.type || 'application/octet-stream';
@@ -25299,7 +25793,7 @@ async function subirDeComponente(compId, file, que){
       try { blob = await reducir(file); tipo = 'image/jpeg'; ext = 'jpg'; }
       catch(_){ if (file.size > 25*1024*1024) throw new Error('La foto pesa demasiado.'); }
     } else if (file.size > 20*1024*1024) throw new Error('El archivo pasa de 20 MB.');
-    const ruta = c.puerta_id+'/componentes/'+compId+'-'+Date.now()+'.'+ext;
+    const ruta = pid+'/componentes/'+compId+'-'+Date.now()+'.'+ext;
     const { error } = await sb.storage.from(bucket).upload(ruta, blob, { contentType: tipo });
     if (error) throw error;
     const campo = que === 'foto' ? { foto_ruta: ruta }
