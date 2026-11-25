@@ -602,8 +602,26 @@ paso('y qué se pide en su lugar: el arrastre del motor',
   /arrastre máximo del motor/i.test(M) && /sobrado o justo/.test(M));
 paso('y que lo que ya estuviera anotado no se ha borrado',
   /no se ha borrado/.test(M));
-paso('las vueltas de muelle se explican, y que son solo de las seccionales',
+paso('las vueltas de muelle se explican, con la precisión con la que se trabaja',
   /vueltas de los muelles/i.test(M) && /media vuelta/.test(M));
+/* Añadidas el 24-11-2026, con la tabla por familia: el manual decía que las
+   vueltas eran «solo de las seccionales», y David las pidió también en
+   basculante, enrollable y guillotina. Un manual que nombra tres familias
+   menos de las que la aplicación pregunta manda al técnico a buscar un campo
+   que sí está. */
+paso('y que no son solo de las seccionales: también basculante, enrollable y guillotina',
+  /basculante/i.test(M) && /enrollable/i.test(M) && /guillotina/i.test(M));
+paso('y el diámetro del muelle, que es lo que completa la referencia del repuesto',
+  /di[áa]metro del/i.test(M) && /alambre/i.test(M));
+paso('el manual explica que la ficha pregunta lo de cada familia de puerta',
+  /pregunta lo de TU puerta|pregunta lo de cada familia/i.test(M) &&
+  /aparecen y desaparecen/i.test(M));
+paso('y que marcar una casilla no es haberlo comprobado',
+  /no es haberlo comprobado/i.test(M));
+paso('«Baliza» renombrada a «Luz de maniobra» está dicha',
+  /Luz de maniobra/i.test(M) && /Baliza/.test(M));
+paso('y que la foto del componente ya se puede hacer antes de guardar',
+  /antes de guardar/i.test(M) && /no has perdido el viaje/i.test(M));
 paso('y el apartado libre, con el motivo de no desglosar herrajes',
   /[Mm]ás elementos a identificar/.test(M) && /un todo/.test(M));
 paso('arrastrar y soltar está explicado, con lo que hace solo',

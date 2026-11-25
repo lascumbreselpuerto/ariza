@@ -47,7 +47,8 @@ ORDEN="componentes.sql centros.sql parte-por-correo.sql obra.sql ficha.sql \
 almacen.sql presupuestos.sql presupuestos2.sql comercial.sql anexos.sql \
 tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos3.sql valoracion.sql \
 parado.sql factura.sql rutas.sql ruta-cliente.sql telegram.sql subtipo.sql urgencia.sql \
-medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql perifericos.sql ficha4.sql urgencia2.sql falso.sql fotos-aviso.sql barras.sql almacenes.sql nombre-equipo.sql sitio-material.sql conformidad-visita.sql mensajes.sql tecnicos.sql multipuerta.sql"
+medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql perifericos.sql ficha4.sql urgencia2.sql falso.sql fotos-aviso.sql barras.sql almacenes.sql nombre-equipo.sql sitio-material.sql conformidad-visita.sql mensajes.sql tecnicos.sql multipuerta.sql \
+alta-por-bloques.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -180,6 +181,22 @@ if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/ruta-cliente-pruebas.sql" ]; then
     fallos=$((fallos+1))
     echo " FALLA la ruta habitual del cliente:"
     grep -a -m3 -E "ERROR|EXCEPTION" /tmp/ruta-cliente-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
+# El alta por bloques. Lo que se vigila: que «Baliza» pase a llamarse «Luz de
+# maniobra» sin perder el resto de la lista ni su orden, que «elementos» arranque
+# con lo que la puerta ya tenía marcado, y sobre todo que NO pise una puerta ya
+# repasada con la pantalla nueva.
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/alta-por-bloques-pruebas.sql" ]; then
+  echo ""
+  echo "── El alta por bloques ─────────────────────────"
+  if $PSQL -f "$AQUI/sql/alta-por-bloques-pruebas.sql" > /tmp/bloques-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/bloques-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA el alta por bloques:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/bloques-pruebas.log | sed 's/^/         /'
   fi
 fi
 

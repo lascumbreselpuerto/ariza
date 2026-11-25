@@ -867,10 +867,25 @@ const dintel = await T(async () => {
   const visibleSeccional = !!caja && !caja.hidden;
   /* Se escribe y se guarda */
   document.getElementById('f-dintel').value = '420';
-  /* Y al cambiar a corredera, el campo se esconde solo */
+  /* Y al cambiar a corredera, el campo se esconde solo.
+
+     ---- Por qué el tipo NO se escribe aquí a mano (24-11-2026) ----
+     Esta prueba decía tipo.value = 'Corredera' y se puso roja al ampliar la
+     lista de tipos: ya no existe «Corredera» a secas, son «Corredera
+     autoportante», «telescópica», «curva» y «con guía en el suelo». Poner un
+     valor que no es ninguna opción deja el desplegable VACÍO, y con el tipo
+     vacío la ficha no esconde nada, que es lo correcto: si no se sabe qué
+     puerta es, no se puede decidir qué no hace falta.
+
+     O sea que la prueba no estaba cazando un fallo, estaba cazando su propio
+     texto caducado. Ahora el tipo se coge de la lista que la aplicación tiene
+     puesta, así que un cambio de nombre no vuelve a romperla. */
   const tipo = document.getElementById('f-tipo');
   const antes = tipo.value;
-  tipo.value = 'Corredera';
+  const corredera = Array.from(tipo.options).map(o => o.value)
+    .find(v => g.formaDePuerta(v) === 'corredera');
+  if (!corredera) return { sinCorredera: true };
+  tipo.value = corredera;
   tipo.dispatchEvent(new Event('change', { bubbles:true }));
   await new Promise(r => setTimeout(r, 150));
   const visibleCorredera = !!caja && !caja.hidden;
@@ -881,7 +896,7 @@ const dintel = await T(async () => {
   await new Promise(r => setTimeout(r, 900));
   const guardado = (g.puertaDe(pu.id) || {}).dintel_mm;
   g.cerrarDlg();
-  return { donde, visibleSeccional, visibleCorredera, guardado };
+  return { sinCorredera:false, donde, visibleSeccional, visibleCorredera, guardado, corredera };
 });
 paso('el dintel se pide en todo lo que sube',
   dintel.donde['Seccional'] && dintel.donde['Enrollable'] && dintel.donde['Puerta rápida'] &&
@@ -891,6 +906,8 @@ paso('y no se pide donde no decide nada',
   !dintel.donde['Corredera'] && !dintel.donde['Batiente'] && !dintel.donde['Barrera']);
 paso('en la ficha de una seccional el campo está a la vista',
   dintel.visibleSeccional === true);
+paso('la lista de tipos tiene alguna corredera con la que probar',
+  dintel.sinCorredera === false, dintel.corredera);
 paso('y al cambiar el tipo a corredera desaparece solo',
   dintel.visibleCorredera === false);
 paso('el dintel se guarda con la puerta', dintel.guardado === 420, dintel.guardado);
