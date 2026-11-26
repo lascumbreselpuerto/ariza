@@ -113,18 +113,47 @@ paso('el desplegable, plegado, dice qué puertas se van a revisar',
 paso('al guardar quedan enganchadas las tres',
   alta.puertas.length === 3, alta.puertas.join(' · '));
 
+/* ---- Reescrito el 26-11-2026 ----
+   Esta prueba daba por bueno que en una avería NO se preguntara por las
+   puertas. Era verdad y era un fallo: David lo pidió el 24 («en una misma
+   asistencia puede que se toquen varias puertas, y el hacer varias asistencias
+   implicaría varios desplazamientos»), yo hice el parte por puertas y di por
+   hecho que lo de marcarlas ya estaba porque lo había visto en las preventivas.
+
+   La lista del alta llevaba un «tipo !== 'mantenimiento'», así que en una
+   avería no se podía poner la segunda puerta, y el apartado por puerta del
+   parte, que solo sale con más de una, no salía nunca.
+
+   Ahora la lista sale en todos los tipos que van de puertas, y lo que cambia
+   entre ellos es el TEXTO: en una preventiva las puertas se revisan y cada una
+   deja su revisión firmada; en una avería se tocan y cada una lleva su
+   diagnóstico en el parte. Eso es lo que se comprueba. */
 const otroTipo = await T(async () => {
   const g = window.__T;
   g.dlgAviso(null, 'pv-1');
   await new Promise(r => setTimeout(r, 900));
-  document.getElementById('a-tipo').value = 'averia';
-  document.getElementById('a-tipo').dispatchEvent(new Event('change', { bubbles:true }));
-  await new Promise(r => setTimeout(r, 300));
-  const oculto = document.getElementById('a-caja-pts').hidden;
+  const mira = async t => {
+    document.getElementById('a-tipo').value = t;
+    document.getElementById('a-tipo').dispatchEvent(new Event('change', { bubbles:true }));
+    await new Promise(r => setTimeout(r, 300));
+    const tit = document.getElementById('a-pts-tit');
+    return { oculto: document.getElementById('a-caja-pts').hidden,
+             titulo: tit ? tit.textContent : '' };
+  };
+  const averia = await mira('averia');
+  const mant = await mira('mantenimiento');
+  const comercial = await mira('comercial');
   g.cerrarDlg();
-  return { oculto };
+  return { averia, mant, comercial };
 });
-paso('en una avería no se pregunta por las puertas de la revisión', otroTipo.oculto === true);
+paso('en una avería TAMBIÉN se pueden marcar varias puertas',
+  otroTipo.averia.oculto === false);
+paso('pero el texto cambia: ahí las puertas se TOCAN, no se revisan',
+  /se tocan/.test(otroTipo.averia.titulo), otroTipo.averia.titulo);
+paso('y en la preventiva se siguen REVISANDO',
+  /se revisan/.test(otroTipo.mant.titulo), otroTipo.mant.titulo);
+paso('en una comercial no se pregunta: no va de tocar puertas',
+  otroTipo.comercial.oculto === true);
 
 /* ================================================================
    2. Un guion por puerta, cada uno con el suyo

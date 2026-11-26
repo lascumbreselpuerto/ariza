@@ -148,7 +148,101 @@ paso('con las casillas por puerta vacías, el parte conserva lo suyo',
      noPisa === 'Lo que ya decía el parte.', noPisa);
 await pag.keyboard.press('Escape'); await esperar(400);
 
-bloque('5. Si falta el SQL, se dice y no se enseña a medias');
+/* ================================================================
+   Marcar varias puertas DESDE EL ALTA, y en todos los tipos
+   ================================================================
+   Esto faltaba y no se vio el 24-11-2026. Aquel día se hizo el parte por
+   puertas y se dio por bueno que lo de marcar varias ya estaba, porque se
+   había visto funcionando en las preventivas. No estaba: la lista de puertas
+   del alta llevaba un «caja.hidden = tipo !== 'mantenimiento'».
+
+   O sea que en una AVERÍA, que es el caso que planteó David («en una misma
+   asistencia puede que se toquen varias puertas, y el hacer varias
+   asistencias implicaría varios desplazamientos»), no se podía poner la
+   segunda puerta al crearla. Y como el apartado por puerta del parte solo sale
+   con más de una, no salía nunca: estaba hecho y era inalcanzable.
+
+   Lo que se vigila aquí es justamente eso, que es lo que no se comprobó. */
+bloque('5. Varias puertas desde el alta, no solo en preventivas');
+
+const tipos = await T(() => {
+  const g = window.__T;
+  /* Los tipos que la aplicación conoce, no una lista escrita a mano aquí. */
+  const todos = Object.keys(g.TIPO_AVISO || {});
+  return { todos, pide: todos.filter(t => g.pideVariasPuertas(t)),
+           no: todos.filter(t => !g.pideVariasPuertas(t)),
+           noPide: g.ALTA_NO_PIDE };
+});
+paso('en una avería se pueden marcar varias puertas',
+     tipos.pide.indexOf('averia') >= 0, tipos.pide.join(','));
+paso('y en una instalación, una reparación y una preventiva también',
+     ['instalacion','mantenimiento'].every(t => tipos.pide.indexOf(t) >= 0));
+paso('en una comercial NO: no va de tocar puertas',
+     tipos.no.indexOf('comercial') >= 0, tipos.no.join(','));
+paso('ni en un viaje en balde', tipos.no.indexOf('falso') >= 0);
+paso('y los que quedan fuera son exactamente esos dos',
+     tipos.no.length === 2 && tipos.noPide.length === 2);
+
+bloque('6. La lista sale de verdad en el alta de una avería');
+const enAlta = await T(async () => {
+  const g = window.__T;
+  g.cerrarDlg();
+  g.dlgAviso(null);
+  await new Promise(f => setTimeout(f, 800));
+  const sel = document.getElementById('a-tipo');
+  const caja = document.getElementById('a-caja-pts');
+  if (!sel || !caja) return { sinForm: true };
+  const mira = async t => {
+    sel.value = t; sel.dispatchEvent(new Event('change', { bubbles:true }));
+    await new Promise(f => setTimeout(f, 250));
+    const tit = document.getElementById('a-pts-tit');
+    const pis = document.getElementById('a-pts-pista');
+    return { visible: !caja.hidden,
+             titulo: tit ? tit.textContent : '',
+             pista: pis ? pis.textContent : '' };
+  };
+  const averia = await mira('averia');
+  const mant   = await mira('mantenimiento');
+  const comer  = await mira('comercial');
+  g.cerrarDlg();
+  return { sinForm:false, averia, mant, comer };
+});
+paso('al elegir «avería», la lista de puertas está a la vista',
+     enAlta.sinForm || enAlta.averia.visible === true);
+paso('en una preventiva también', enAlta.sinForm || enAlta.mant.visible === true);
+paso('y al pasar a «comercial» se esconde',
+     enAlta.sinForm || enAlta.comer.visible === false);
+
+/* Los textos no son un adorno: decir «se revisan» en una avería mandaría a
+   hacer una revisión que nadie ha pedido. */
+paso('en una preventiva dice que las puertas SE REVISAN',
+     enAlta.sinForm || /se revisan/.test(enAlta.mant.titulo), enAlta.sinForm?'':enAlta.mant.titulo);
+paso('y en una avería, que SE TOCAN en esta visita',
+     enAlta.sinForm || /se tocan/.test(enAlta.averia.titulo), enAlta.sinForm?'':enAlta.averia.titulo);
+paso('y la pista de la avería explica que cada puerta tendrá lo suyo en el parte',
+     enAlta.sinForm || (/su propio diagnóstico/.test(enAlta.averia.pista) &&
+                        /no hace falta una asistencia por puerta/.test(enAlta.averia.pista)));
+paso('mientras que la de la preventiva habla de su revisión firmada',
+     enAlta.sinForm || /revisión firmada/.test(enAlta.mant.pista));
+
+bloque('7. Y lo marcado en una avería llega al parte por puertas');
+/* El camino entero: el tipo que deja marcar varias es el mismo que luego pide
+   diagnóstico por puerta. Si no cuadraran, se podrían marcar dos puertas y no
+   salir el apartado, que es el fallo que acabamos de arreglar pero al revés. */
+const cuadra = await T(() => {
+  const g = window.__T;
+  const todos = Object.keys(g.TIPO_AVISO || {});
+  const marcables = todos.filter(t => g.pideVariasPuertas(t));
+  const conParte = marcables.filter(t => g.pideDiagnostico({ tipo: t }));
+  const sinParte = marcables.filter(t => !g.pideDiagnostico({ tipo: t }));
+  return { marcables, conParte, sinParte };
+});
+paso('una avería deja marcar varias Y pide diagnóstico por puerta',
+     cuadra.conParte.indexOf('averia') >= 0, cuadra.conParte.join(','));
+paso('la preventiva deja marcar varias y NO pide diagnóstico: lleva su revisión',
+     cuadra.sinParte.indexOf('mantenimiento') >= 0, cuadra.sinParte.join(','));
+
+bloque('8. Si falta el SQL, se dice y no se enseña a medias');
 const sinSql = await T(async () => {
   const g = window.__T, S = g.S;
   S.sinMultiPuerta = true;

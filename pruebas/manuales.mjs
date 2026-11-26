@@ -680,6 +680,20 @@ paso('el manual de oficina dice que corregir un componente es de oficina, con ra
   /Corregir uno es vuestro/.test(O) && /qui[eé]n lo corrigi[óo]/.test(O));
 paso('y distingue «no hay fotos» de «no lo he comprobado»',
   /no lo he comprobado/.test(O));
+
+/* ---- Varias puertas desde el alta (26-11-2026) ----
+   Lo que se vigila: que el manual diga DÓNDE se marcan. El apartado por puerta
+   del parte existía desde el 24, pero en una avería no se podía llegar a él
+   porque la lista del alta solo salía en preventivas. Un manual que explique el
+   parte y no diga cómo meter la segunda puerta deja al técnico igual de
+   atascado que estaba. */
+paso('el manual del técnico dice dónde se marcan las puertas de la visita',
+  /Qué puertas se tocan en esta visita/.test(M) &&
+  /Añadir una puerta ya dada de alta/.test(M));
+paso('y el de oficina avisa de que son tres puertas y UN desplazamiento',
+  /un\s*\n?\s*desplazamiento, no tres/.test(O) || /un desplazamiento, no tres/.test(O));
+paso('y explica por qué el texto cambia entre preventiva y avería',
+  /se revisan/.test(O) && /se tocan/.test(O));
 paso('y el apartado libre, con el motivo de no desglosar herrajes',
   /[Mm]ás elementos a identificar/.test(M) && /un todo/.test(M));
 paso('arrastrar y soltar está explicado, con lo que hace solo',
