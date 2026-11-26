@@ -1,6 +1,6 @@
 # Safe2door · Manual de oficina
 
-Versión 2026.11.25-1
+Versión 2026.11.25-3
 
 > **Las fotos de este manual son de antes del cambio de nombre.** La aplicación
 > se llamaba ARIZA SAT y así aparece en la barra de arriba de cada pantalla.
@@ -277,6 +277,43 @@ Lo que esto cambia para la oficina:
 
 Y «Baliza» ahora se llama **«Luz de maniobra»**. Es el mismo elemento, con el
 nombre que se usa en obra. Las puertas que la tenían marcada siguen marcadas.
+
+### Componentes en la ficha: ahora es un espejo
+
+Cambiado el 25 de noviembre de 2026, y conviene saberlo porque afecta a lo que
+podéis tocar desde oficina.
+
+- **Si la puerta no está documentada, el panel no sale.** Antes reclamaba hasta
+  diecisiete componentes con su marca y su referencia en puertas que nadie iba a
+  documentar, y eso no era una falta: era ruido.
+- **Si está documentada, sale como espejo de lo que registró el expediente, y de
+  solo lectura.** Los componentes se piden al documentar.
+- **Corregir uno es vuestro**, de oficina y del administrador. Al técnico no le
+  sale el botón. Y queda escrito quién lo corrigió y cuándo, debajo de la fila.
+
+Esto último importa: el panel es el espejo de un documento. Si alguien lo
+cambia, hay que poder decir quién fue, igual que con la ficha de una puerta que
+ya tiene parte firmado.
+
+**El número de serie del motor y del cuadro NO se ha ido**: se escribe ahora en
+la propia ficha, en «Cuadro y motor». Es el dato que hace falta para pedir un
+repuesto, así que se pide en toda puerta, documentada o no.
+
+### Una foto por elemento, y lo que falta se ve
+
+Cada elemento que el técnico marca puede llevar su foto, hecha desde la propia
+casilla, así que la foto queda atada a su elemento y en la tira de fotos de la
+puerta sale con su nombre delante.
+
+**Se reclaman pero no frenan el cierre de la visita**, por decisión de David: en
+una seccional pueden ser veinte elementos. Lo que falte aparece en la lista de
+lo que le falta a la ficha, con el nombre de cada elemento sin foto, y eso es
+trabajo a rematar, no un bloqueo.
+
+Un detalle de criterio: cuando la aplicación **todavía no ha mirado** qué fotos
+hay, lo dice así, y no da el punto ni por bueno ni por malo. No es lo mismo «no
+hay fotos» que «no lo he comprobado», y un listado que confunda las dos cosas
+manda a alguien a repetir trabajo hecho.
 
 ---
 

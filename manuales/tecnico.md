@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.25-1**
+> **Versión de la aplicación que describe este manual: 2026.11.25-3**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -1205,7 +1205,11 @@ historial, ni expediente, y no se le puede sacar una hoja de campo.
 
 **Las listas largas tienen buscador.** En el tipo de puerta, el cliente, la puerta de una asistencia o el catálogo de componentes, encima del desplegable hay una casilla: escribes tres letras y la lista se queda en lo que casa. Si queda una sola, se elige sola. No hace falta tilde ni mayúscula. Las listas cortas, de tres o cuatro opciones, no la llevan porque no hace falta.
 
-**El cuadro y el motor se escriben una vez.** En la ficha pones marca y modelo de cada uno, y con eso quedan dados de alta en **Componentes**. Allí ya solo tienes que ponerles el número de serie, la foto de la placa y el papel, que es lo que la ficha no guarda. Si los cambias en el componente, la ficha cambia también: es el mismo dato.
+**El cuadro y el motor, con su número de serie, en la ficha (25 de noviembre de 2026).** Marca, modelo **y número de serie** de cada uno se escriben en la ficha, en «Cuadro y motor». Ya no hay que ir a buscarlos a otro sitio.
+
+Ese número de serie es el que hace falta para pedir un repuesto, así que se pide **en toda puerta**, esté documentada o no. Es el único dato de los componentes que vive en la ficha, y es a propósito: los demás se piden al documentar.
+
+Lo que se escriba ahí queda guardado en el componente de siempre, así que no hay dos sitios donde pueda decir cosas distintas. Y si lo dejas en blanco, **no se borra** lo que ya estuviera puesto: lo que no se escribe, no se toca.
 
 **La foto de la placa, antes de guardar (24 de noviembre de 2026).** Hasta ahora
 la pantalla del componente decía «guarda primero el componente y luego podrás
@@ -1343,6 +1347,47 @@ ha cambiado cómo se llama.
 En el bloque de control de acceso hay un campo para **cuántos mandos se le han
 entregado al cliente**. Apúntalo: es la pregunta que más se repite meses
 después, y la que nadie sabe contestar.
+
+### Una foto de cada elemento que marcas
+
+Al lado de cada casilla de elemento hay una **cámara**, dentro de la misma
+pastilla. Marcas «fotocélulas», le das a la cámara y haces la foto. Así la foto
+queda **atada a su elemento**, y nadie tiene que adivinar seis meses después si
+esa foto de un poste era la fotocélula, la banda o el pulsador.
+
+Si la puerta ya existe, la foto sube en el momento. **Si la estás dando de alta,
+la puerta todavía no tiene número**, así que la foto se queda esperando (la
+pastilla pone «Foto lista») y sube sola en cuanto guardas. Es lo mismo que pasa
+con la foto de la placa de un componente, y por el mismo motivo.
+
+**Estas fotos se reclaman pero NO te impiden cerrar la visita.** En una
+seccional pueden ser veinte elementos: un bloqueo de veinte fotos pararía la
+reparación. Lo que falte sale en la lista de lo que le falta a la ficha, con el
+nombre de cada elemento sin foto.
+
+Solo se piden de lo que **has marcado**. Si la puerta no lleva banda, nadie
+tiene que fotografiar una banda que no existe. Y los números, como el nº de
+motores o los mandos entregados, no llevan cámara: no son cosas que se
+fotografíen.
+
+### Componentes: ahora es un espejo, no un formulario
+
+El panel de **Componentes** de la ficha ha cambiado el 25 de noviembre de 2026.
+
+- **Si la puerta no está documentada, no sale.** Antes te reclamaba hasta
+  diecisiete componentes con su marca y su referencia, como si faltaran. No
+  faltaban: es que esa puerta no se iba a documentar.
+- **Si está documentada, sale como espejo** de lo que se registró en el
+  expediente, y de solo lectura. Los componentes se piden **al documentar**, con
+  su marca y su referencia, que es cuando toca.
+- **Corregir uno es cosa de la oficina y del administrador**, y queda anotado
+  quién fue y cuándo. Es el mismo criterio que ya rige para rematar la ficha de
+  una puerta con parte firmado.
+
+Lo que **sí** sigues haciendo tú en campo: el número de serie del motor y del
+cuadro en la ficha, y el atajo del parte **«Añadir la matrícula de un elemento»**,
+que sigue abriendo el alta de componente para que apuntes una placa con ella
+delante.
 
 ### La ficha no es el expediente
 
@@ -1570,4 +1615,4 @@ que mire ahí antes de nada. Puede ser eso.
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.25-1 de Safe2door*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.25-3 de Safe2door*
