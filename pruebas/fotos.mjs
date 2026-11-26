@@ -55,6 +55,20 @@ await ctx.addInitScript(() => {
       db.fotos.push({ id:'ft-'+i, aviso_id:'fo-tope', puerta_id:db.puertas[0].id,
         ruta:'fo-tope/'+i+'.jpg', autor:'prueba', etapa:'otra',
         creado:new Date(Date.now() - (10 - i) * 1000).toISOString() });
+    /* ---- Una visita de dos puertas, para las fotos por puerta (26-11-2026) ----
+       La primera puerta llega con el cupo lleno, diez fotos. Así se ve de un
+       golpe lo que cambia: con el tope contado por parte, en la segunda puerta
+       no cabría ninguna. */
+    if (db.puertas.length > 1){
+      db.avisos.push(Object.assign({}, base, { id:'fo-mp', tipo:'averia', subtipo:'averia',
+        descripcion:'Dos puertas en la misma visita' }));
+      db.aviso_puertas.push({ id:'fomp-1', aviso_id:'fo-mp', puerta_id:db.puertas[0].id, orden:1 });
+      db.aviso_puertas.push({ id:'fomp-2', aviso_id:'fo-mp', puerta_id:db.puertas[1].id, orden:2 });
+      for (let i = 1; i <= 10; i++)
+        db.fotos.push({ id:'fm-'+i, aviso_id:'fo-mp', puerta_id:db.puertas[0].id,
+          ruta:'fo-mp/'+i+'.jpg', autor:'prueba', etapa:'otra',
+          creado:new Date(Date.now() - (11 - i) * 1000).toISOString() });
+    }
   };
 });
 const pag = await ctx.newPage();
@@ -299,6 +313,110 @@ const enElCodigo = await T(() => {
 });
 paso('y en todo el código no queda ni un solo input de foto con «capture»',
   enElCodigo.n === 0, enElCodigo.ejemplos.join(' | '));
+
+/* ================================================================
+   7. Las fotos, puerta por puerta (26-11-2026)
+
+   David: «si es una asistencia multipuerta, cada puerta debe de tener
+   un sitio para poner fotos. Así cada puerta podrá tener sus fotos en
+   su histórico.»
+
+   El fallo que había: todas las fotos del parte se subían con la puerta
+   PRINCIPAL del aviso. En una visita de tres puertas, las de la segunda
+   y la tercera quedaban guardadas como de la primera: el histórico de
+   dos puertas salía vacío y el de la otra, mentiroso. Y eso no lo nota
+   nadie hasta que se abre la ficha meses después.
+   ================================================================ */
+bloque('7. Cada puerta, sus fotos');
+
+const porPuerta = await T(async () => {
+  const g = window.__T;
+  g.cerrarDlg();
+  await new Promise(r => setTimeout(r, 300));
+  g.dlgCierre('fo-mp');
+  await new Promise(r => setTimeout(r, 1800));
+  const cajones = Array.from(document.querySelectorAll('#dlg-form .fotos[data-cajon]'))
+    .map(x => x.dataset.cajon);
+  const pus = (g.S.avisoPuertas || []).filter(x => x.aviso_id === 'fo-mp')
+    .sort((a, b) => (a.orden || 0) - (b.orden || 0)).map(x => x.puerta_id);
+  /* Los botones de cada cajón tienen que apuntar a SU puerta: si uno se
+     quedara con el cajón de otra, la foto se iría a la ficha equivocada y el
+     técnico no se enteraría. */
+  const botones = Array.from(document.querySelectorAll('#dlg-form [data-act="foto-aviso"]'))
+    .map(x => x.dataset.cajon);
+  const titulos = Array.from(document.querySelectorAll('#dlg-form .fotos[data-cajon]'))
+    .map(x => { const c = x.closest('.puerta-parte'); return c ? (c.querySelector('h4')||{}).textContent : ''; });
+  return { cajones, pus, botones, titulos,
+    general: cajones[cajones.length - 1] === '',
+    cuenta1: (document.getElementById('z-fotos-cuenta-'+pus[0]) || {}).textContent || '',
+    cuenta2: (document.getElementById('z-fotos-cuenta-'+pus[1]) || {}).textContent || '' };
+});
+paso('con dos puertas salen tres sitios para fotos: uno por puerta y el general',
+  porPuerta.cajones.length === 3, porPuerta.cajones.join(' | '));
+paso('y cada sitio es de su puerta, en su orden',
+  porPuerta.cajones[0] === porPuerta.pus[0] && porPuerta.cajones[1] === porPuerta.pus[1],
+  porPuerta.cajones.join(' | '));
+paso('el último es el de lo que no es de ninguna puerta', porPuerta.general === true);
+paso('cada uno lleva su puerta en el título',
+  porPuerta.titulos.filter(t => /AR-\d+/.test(t || '')).length === 2,
+  (porPuerta.titulos || []).join(' | '));
+/* Los botones: cuatro etapas por cajón, tres cajones, doce en total */
+paso('los botones de cada sitio apuntan a su propia puerta',
+  porPuerta.botones.length === 12 &&
+  porPuerta.botones.filter(c => c === porPuerta.pus[0]).length === 4 &&
+  porPuerta.botones.filter(c => c === porPuerta.pus[1]).length === 4 &&
+  porPuerta.botones.filter(c => c === '').length === 4,
+  porPuerta.botones.length+' botones');
+paso('la primera puerta llega con el cupo lleno', /10 de 10/.test(porPuerta.cuenta1),
+  porPuerta.cuenta1);
+paso('y la segunda, vacía: el cupo es de cada puerta, no del parte',
+  /ninguna/.test(porPuerta.cuenta2), porPuerta.cuenta2);
+
+/* La de verdad: se sube una foto desde el sitio de la SEGUNDA puerta. Tiene
+   que entrar (aunque el parte ya tenga diez) y tiene que quedar guardada con
+   la segunda puerta, que es la que la pone en su histórico. */
+const subeSegunda = await T(async () => {
+  const g = window.__T;
+  const pus = (g.S.avisoPuertas || []).filter(x => x.aviso_id === 'fo-mp')
+    .sort((a, b) => (a.orden || 0) - (b.orden || 0)).map(x => x.puerta_id);
+  const entrada = document.querySelector('#dlg-form [data-act="foto-aviso"][data-cajon="'+pus[1]+'"]');
+  const dt = new DataTransfer();
+  dt.items.add(new File([new Uint8Array([7,7,7])], 'segunda.jpg', { type:'image/jpeg' }));
+  entrada.files = dt.files;
+  entrada.dispatchEvent(new Event('change', { bubbles:true }));
+  await new Promise(r => setTimeout(r, 2500));
+  const todas = g.fotosDeAviso('fo-mp');
+  const nueva = todas.find(f => !/^fm-/.test(String(f.id || '')));
+  const { data } = await g.sb.from('fotos').select('*').eq('puerta_id', pus[1]);
+  return { total: todas.length, dePuerta2: nueva ? nueva.puerta_id === pus[1] : null,
+    enLaFicha: (data || []).length, pu2: pus[1] };
+});
+paso('en la segunda puerta SÍ entra, aunque el parte ya tenga diez fotos',
+  subeSegunda.total === 11, subeSegunda.total);
+paso('y la foto queda guardada con la segunda puerta, no con la principal',
+  subeSegunda.dePuerta2 === true, String(subeSegunda.dePuerta2));
+paso('así aparece en el histórico de ESA puerta', subeSegunda.enLaFicha >= 1,
+  subeSegunda.enLaFicha+' en la ficha');
+
+/* Y el tope sigue existiendo: en la puerta que ya tiene diez, no entra más. */
+const topePorPuerta = await T(async () => {
+  const g = window.__T;
+  const pus = (g.S.avisoPuertas || []).filter(x => x.aviso_id === 'fo-mp')
+    .sort((a, b) => (a.orden || 0) - (b.orden || 0)).map(x => x.puerta_id);
+  const antes = g.fotosDelCajon('fo-mp', pus[0]).length;
+  const entrada = document.querySelector('#dlg-form [data-act="foto-aviso"][data-cajon="'+pus[0]+'"]');
+  const dt = new DataTransfer();
+  dt.items.add(new File([new Uint8Array([9])], 'once.jpg', { type:'image/jpeg' }));
+  entrada.files = dt.files;
+  entrada.dispatchEvent(new Event('change', { bubbles:true }));
+  await new Promise(r => setTimeout(r, 1800));
+  const despues = g.fotosDelCajon('fo-mp', pus[0]).length;
+  g.cerrarDlg();
+  return { antes, despues };
+});
+paso('en la puerta que ya tiene diez no entra ninguna más',
+  topePorPuerta.antes === 10 && topePorPuerta.despues === 10,
+  topePorPuerta.antes+' → '+topePorPuerta.despues);
 
 console.log('\n'+ok+' bien, '+mal+' mal.');
 const graves = errores.filter(x => !/fonts\.googleapis|ERR_TUNNEL|ERR_NAME|net::ERR|provocado por la prueba/.test(x));

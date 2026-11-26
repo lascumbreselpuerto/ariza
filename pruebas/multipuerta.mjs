@@ -93,12 +93,25 @@ await pag.keyboard.press('Escape'); await esperar(400);
 
 bloque('2. Con dos puertas, una por una');
 const dos = await abrirParteCon(2);
-const conDos = await T(() => ({
-  porPuerta: document.querySelectorAll('.zp-diag').length,
-  trabajos: document.querySelectorAll('.zp-trab').length,
-  cajas: document.querySelectorAll('.puerta-parte').length,
-  titulos: Array.from(document.querySelectorAll('.puerta-parte h4')).map(x => x.textContent),
-}));
+/* ---- Reescrito el 26-11-2026 ----
+   Contaba TODAS las cajas de puerta del parte y esperaba dos. Desde hoy el
+   apartado de fotos también tiene una caja por puerta, así que eran cinco y las
+   dos comprobaciones se pusieron rojas sin que el diagnóstico por puerta
+   hubiera cambiado en nada.
+   Ahora se cuentan las cajas DE SU APARTADO, buscándolas desde el grupo que
+   lleva el diagnóstico. Así esto mide lo suyo y no se vuelve a romper cuando se
+   añadan cajas en otro sitio del parte. */
+const conDos = await T(() => {
+  const grupo = (document.querySelector('.zp-diag') || {}).closest
+    ? document.querySelector('.zp-diag').closest('.grupo') : null;
+  const cajas = grupo ? grupo.querySelectorAll('.puerta-parte') : [];
+  return {
+    porPuerta: document.querySelectorAll('.zp-diag').length,
+    trabajos: document.querySelectorAll('.zp-trab').length,
+    cajas: cajas.length,
+    titulos: Array.from(cajas).map(x => (x.querySelector('h4') || {}).textContent || ''),
+  };
+});
 paso('sale un diagnóstico por puerta', conDos.porPuerta === 2, conDos.porPuerta);
 paso('y un trabajo por puerta', conDos.trabajos === 2, conDos.trabajos);
 paso('cada una en su caja, para no confundirlas', conDos.cajas === 2, conDos.cajas);
