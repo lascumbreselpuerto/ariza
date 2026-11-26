@@ -1,6 +1,6 @@
 # Safe2door · Manual de oficina
 
-Versión 2026.11.25-3
+Versión 2026.11.26-1
 
 > **Las fotos de este manual son de antes del cambio de nombre.** La aplicación
 > se llamaba ARIZA SAT y así aparece en la barra de arriba de cada pantalla.
@@ -99,6 +99,24 @@ falta tener la ficha completa, eso lo remata el técnico allí.
 > etiqueta QR, y es obligatorio. Sin etiqueta la puerta no se puede escanear, y
 > una puerta que no se escanea no entra nunca en el circuito. Si no quedan
 > etiquetas libres, genera un rollo nuevo desde **Etiquetas**.
+
+**Varias puertas en la misma visita (26 de noviembre de 2026).** Debajo de la
+puerta hay un desplegable, **«Qué puertas se tocan en esta visita»**, con las
+puertas de ese cliente. Marca todas las que se vayan a tocar en el mismo viaje.
+
+Esto importa para el dinero: **una visita con tres puertas cuenta un
+desplazamiento, no tres.** Abrir una asistencia por puerta multiplica los
+desplazamientos facturados y falsea el coste real.
+
+En el parte, cada puerta marcada lleva su propio diagnóstico y su propio
+trabajo, y el cliente recibe las tres en un solo papel, con su código delante.
+
+> Hasta esa fecha ese desplegable solo salía en las preventivas, así que en una
+> avería no se podía poner la segunda puerta al crearla. Era un fallo nuestro.
+> En una preventiva el texto dice «qué puertas se revisan», porque allí cada una
+> deja su revisión firmada; en los demás tipos dice «se tocan».
+
+No sale en la visita comercial ni en el viaje en balde, que no van de puertas.
 
 **El técnico y la fecha.** Se pueden dejar en blanco y asignar después, desde el
 Calendario.

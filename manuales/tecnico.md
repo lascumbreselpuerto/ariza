@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.25-3**
+> **Versión de la aplicación que describe este manual: 2026.11.26-1**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -307,6 +307,18 @@ de corrido, con guiones o sin ellos, y en minúsculas.
 ## 3. Cerrar visita, apartado por apartado
 
 ### Si la visita lleva varias puertas
+
+**Cómo se ponen las puertas en la visita (26 de noviembre de 2026).** Al crear
+la asistencia, en el desplegable **«Qué puertas se tocan en esta visita»**,
+marca todas las que vayáis a tocar en el mismo viaje. Sale en todos los tipos
+menos en la visita comercial y el viaje en balde, que no van de puertas.
+
+> Hasta esa fecha ese desplegable solo salía en las preventivas, así que en una
+> avería no se podía poner la segunda puerta al crearla. Era un fallo, no una
+> decisión.
+
+Si la asistencia ya está creada, también puedes añadirlas desde el parte, con
+**«Añadir una puerta ya dada de alta»**.
 
 Cuando en una misma visita se tocan dos o más puertas, el parte sale con **un
 apartado por puerta**, cada uno con su código delante y con su propio
@@ -1615,4 +1627,4 @@ que mire ahí antes de nada. Puede ser eso.
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.25-3 de Safe2door*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.26-1 de Safe2door*
