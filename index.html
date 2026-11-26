@@ -2233,7 +2233,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.25-3';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.26-1';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -13447,6 +13447,22 @@ const ALTA_ES_OBRA = ['instalacion','puesta_servicio','normativa','mantenimiento
 const ALTA_ADMITE_SIN = ['averia','garantia'];
 const MIN_FOTOS_OBRA = 2;
 const obligaAltaObra = a => !!a && !ALTA_NO_PIDE.includes(a.tipo);
+/* ---- Varias puertas en CUALQUIER asistencia (26-11-2026) ----
+   David lo pidió el 24: «a una misma asistencia se le podrían poner varias
+   puertas, ya que en una misma asistencia puede que se toquen varias puertas, y
+   el hacer varias asistencias implicaría varios desplazamientos».
+
+   Aquel día hice el parte por puertas y di por bueno que lo de marcar varias ya
+   estaba, porque lo había visto funcionando en las preventivas. No lo estaba: la
+   lista de puertas del alta solo se enseñaba si el tipo era «mantenimiento». O
+   sea que en una AVERÍA, que es el caso que él planteaba, no se podía poner la
+   segunda puerta al crearla, y como el apartado por puerta del parte solo sale
+   con más de una, no salía nunca. Estaba hecho y era inalcanzable.
+
+   Ahora la lista sale en todos los tipos que documentan puerta. Fuera se quedan
+   los dos que no van de puertas: una visita comercial y un viaje en balde.
+   David, 26-11-2026. */
+const pideVariasPuertas = tipo => !!tipo && !ALTA_NO_PIDE.includes(tipo);
 const altaEsObra = a => !!a && ALTA_ES_OBRA.includes(a.tipo);
 const admiteSinPuerta = a => !!a && !S.sinAltaPuerta && ALTA_ADMITE_SIN.includes(a.tipo);
 /* La válvula, usada: marcada y con motivo. Sin motivo no vale, ni guardada ni en
@@ -24555,13 +24571,37 @@ function pintarSubtipo(){
 /* Las puertas que se pueden revisar en esta preventiva: las del cliente
    elegido. Se repinta al cambiar el tipo o el cliente, porque las dos cosas
    cambian la lista. Lo ya marcado se conserva. */
+/* El título y la pista de la lista de puertas de una asistencia. Dos textos y
+   no uno porque una preventiva y una avería no hacen lo mismo con las puertas
+   que se marcan. (26-11-2026) */
+function tituloPuertasAviso(tipo){
+  return tipo === 'mantenimiento' ? 'Qué puertas se revisan'
+                                  : 'Qué puertas se tocan en esta visita';
+}
+function pistaPuertasAviso(tipo){
+  return tipo === 'mantenimiento'
+    ? 'Se marcan las del cliente. Cada una lleva el guión de su tipo, y cada una deja su '+
+      'revisión firmada. Si no marcas ninguna, se revisa solo la puerta de arriba'
+    : 'Se marcan las del cliente. Marca todas las que se vayan a tocar en el mismo viaje: '+
+      'en el parte, cada una tendrá su propio diagnóstico y su propio trabajo, y así no hace '+
+      'falta una asistencia por puerta. Si no marcas ninguna, la visita es solo de la puerta '+
+      'de arriba';
+}
 function pintarPuertasAviso(avisoId){
   const caja = document.getElementById('a-caja-pts');
   const cont = document.getElementById('a-pts');
   if (!caja || !cont) return;
   const tipo = (document.getElementById('a-tipo') || {}).value || '';
-  caja.hidden = tipo !== 'mantenimiento';
+  caja.hidden = !pideVariasPuertas(tipo);
   if (caja.hidden) return;
+  /* El título y la pista cambian con el tipo: en una preventiva las puertas se
+     REVISAN y cada una deja su revisión firmada; en una avería se TOCAN y cada
+     una lleva su diagnóstico y su trabajo en el parte. Decir «se revisan» en
+     una avería mandaría a hacer una revisión que nadie ha pedido. */
+  const tit = document.getElementById('a-pts-tit');
+  if (tit) tit.textContent = tituloPuertasAviso(tipo);
+  const pis = document.getElementById('a-pts-pista');
+  if (pis) pis.textContent = pistaPuertasAviso(tipo);
   const cid = (document.getElementById('a-cliente') || {}).value || '';
   const pid = (document.getElementById('a-puerta') || {}).value || '';
   const marcadas = new Set(Array.from(cont.querySelectorAll('.a-pt:checked')).map(x => x.value));
@@ -24593,7 +24633,13 @@ function pintarCuentaPuertas(){
   const s = document.getElementById('a-pts-cuenta');
   if (!s) return;
   const m = Array.from(document.querySelectorAll('#a-pts .a-pt:checked'));
-  if (!m.length){ s.textContent = 'sin marcar: se revisa solo la puerta de arriba'; return; }
+  if (!m.length){
+    const t = (document.getElementById('a-tipo') || {}).value || '';
+    s.textContent = t === 'mantenimiento'
+      ? 'sin marcar: se revisa solo la puerta de arriba'
+      : 'sin marcar: la visita es solo de la puerta de arriba';
+    return;
+  }
   const cods = m.map(x => {
     const p = puertaDe(x.value);
     return (p && p.codigo) || 'sin código';
@@ -25810,11 +25856,11 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
     /* Plegado igual que los tipos de puerta: un cliente con veinte puertas
        llenaba la pantalla de casillas antes de llegar a lo demás (06-11-2026). */
     (S.sinAvisoPuertas ? '' : '<details class="campo full plegable" id="a-caja-pts"'+
-      (d.tipo === 'mantenimiento' ? '' : ' hidden')+'>'+
-      '<summary><b>Qué puertas se revisan</b> <span class="mini" id="a-pts-cuenta"></span></summary>'+
+      (pideVariasPuertas(d.tipo) ? '' : ' hidden')+'>'+
+      '<summary><b id="a-pts-tit">'+esc(tituloPuertasAviso(d.tipo))+'</b> '+
+        '<span class="mini" id="a-pts-cuenta"></span></summary>'+
       '<div id="a-pts"></div>'+
-      '<span class="pista">Se marcan las del cliente. Cada una lleva el guión de su tipo, y cada una '+
-      'deja su revisión firmada. Si no marcas ninguna, se revisa solo la puerta de arriba</span>'+
+      '<span class="pista" id="a-pts-pista">'+esc(pistaPuertasAviso(d.tipo))+'</span>'+
       /* ---- Crear aquí la puerta que falta (07-11-2026) ----
          David: «En la creación de asistencia preventiva, en qué puertas se
          revisan, la oficina debe poder crear de manera básica la puerta, al
@@ -26190,7 +26236,7 @@ function dlgAviso(puertaId, avisoId, clienteId, fecha){
          principal si no había ninguna; las demás van a la lista. Y lo que se
          desmarca se suelta: si no, quitar una puerta de la revisión no serviría
          de nada. */
-      if (avisoId && !S.sinAvisoPuertas && o.tipo === 'mantenimiento'){
+      if (avisoId && !S.sinAvisoPuertas && pideVariasPuertas(o.tipo)){
         const caja = document.getElementById('a-caja-pts');
         if (caja && !caja.hidden){
           const marcadas = Array.from(document.querySelectorAll('#a-pts .a-pt:checked')).map(x => x.value);
