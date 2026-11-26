@@ -259,6 +259,47 @@ paso('una comercial también trae el apartado de fotos', balde.hayApartado === t
 paso('un viaje en balde se cierra sin ninguna foto',
   balde.cerrado === true && balde.fotos === 0, balde.err);
 
+/* ================================================================
+   La galería, no solo la cámara
+   ================================================================
+   David, 26-11-2026: «en una asistencia comercial, al cargar fotos no me ha
+   dejado cargar fotos de la galería, solo de la cámara».
+
+   Era «capture="environment"» en los botones de hacer fotos. En el móvil eso
+   abre la cámara directamente y esconde el carrete. Y no era solo la
+   comercial: lo llevaban las fotos de la visita, las de obra y las de una baja
+   de material.
+
+   Quitarlo no quita la cámara: el móvil ofrece las dos cosas. Hace falta
+   cuando la foto se hizo antes de abrir el parte, o la mandó el cliente.
+
+   Se mira el documento entero porque el fallo era de todos los botones, no de
+   uno: comprobar solo el de la comercial habría dejado los otros tres. */
+bloque('La galería también vale, no solo la cámara');
+const sinCaptura = await T(() => {
+  const ents = Array.from(document.querySelectorAll('input[type="file"][accept^="image"]'));
+  return { total: ents.length,
+           conCaptura: ents.filter(x => x.hasAttribute('capture')).map(x =>
+             x.dataset.act || x.id || 'sin nombre') };
+});
+paso('hay botones de foto en la pantalla', sinCaptura.total > 0, sinCaptura.total);
+paso('y ninguno de los que se ven fuerza la cámara',
+  sinCaptura.conCaptura.length === 0, sinCaptura.conCaptura.join(', '));
+
+/* Y lo que de verdad cierra la puerta: mirar el CÓDIGO entero, no la pantalla.
+   Los cuatro botones del fallo no estaban todos a la vista a la vez (uno está
+   en el parte, otro en la obra, otro en una baja de material), así que una
+   prueba que solo mire lo dibujado deja fuera justo los que se escaparon. */
+const enElCodigo = await T(() => {
+  const txt = document.documentElement.outerHTML;
+  /* Se cuentan las apariciones DENTRO de un input de fichero, no las del
+     comentario que explica por qué se quitó. */
+  const m = txt.match(/<input[^>]*type="file"[^>]*capture=/gi) || [];
+  return { n: m.length, ejemplos: m.slice(0, 3) };
+});
+paso('y en todo el código no queda ni un solo input de foto con «capture»',
+  enElCodigo.n === 0, enElCodigo.ejemplos.join(' | '));
+
 console.log('\n'+ok+' bien, '+mal+' mal.');
 const graves = errores.filter(x => !/fonts\.googleapis|ERR_TUNNEL|ERR_NAME|net::ERR|provocado por la prueba/.test(x));
 if (graves.length) console.log('Errores de JavaScript:\n'+graves.join('\n'));

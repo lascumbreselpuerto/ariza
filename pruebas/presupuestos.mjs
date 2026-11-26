@@ -302,8 +302,22 @@ const convertir = await T(async () => {
            enlace: av && av.presupuesto_id === p.id,
            pactado: av && g.pactadoDe(av),
            base: p2.base,
+           /* ---- Quién se queda el trabajo (26-11-2026) ----
+              Aquí ponía tecnico_id: admin, así que aceptar un presupuesto le
+              asignaba el trabajo al administrador. El 24-11-2026 eso se quitó
+              del alta de asistencias, porque a David se le llenaba «Mi trabajo»
+              de avisos que no iba a hacer él, pero el arreglo se hizo solo en
+              aquella pantalla y este es otro camino. David lo volvió a ver el
+              26: «cuando se crea una asistencia automáticamente se me asigna a
+              mí». Esto es lo que lo vigila. */
+           tecnico: av && av.tecnico_id,
+           estadoAviso: av && av.estado,
            desdeAviso: av && (g.presuDelAviso(av)||{}).id === p.id };
 });
+paso('el trabajo nace SIN asignar, no para el administrador',
+  convertir.tecnico === null, String(convertir.tecnico));
+paso('y en «recibido», que es como se queda a la espera de que oficina lo asigne',
+  convertir.estadoAviso === 'recibido', convertir.estadoAviso);
 paso('se abre una asistencia nueva', convertir.creado === 1, convertir.creado);
 paso('para el mismo cliente y diciendo de qué presupuesto sale',
   convertir.aviso.cliente === true && /Presupuesto aceptado PR-/.test(convertir.aviso.desc),

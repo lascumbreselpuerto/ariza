@@ -694,6 +694,15 @@ paso('y el de oficina avisa de que son tres puertas y UN desplazamiento',
   /un\s*\n?\s*desplazamiento, no tres/.test(O) || /un desplazamiento, no tres/.test(O));
 paso('y explica por qué el texto cambia entre preventiva y avería',
   /se revisan/.test(O) && /se tocan/.test(O));
+
+/* ---- Los dos arreglos del 26-11-2026 ----
+   Los dos son cosas que el técnico y la oficina notan en la rutina, así que un
+   manual que no las diga deja a alguien peleándose con algo que ya está
+   arreglado. */
+paso('el manual dice que la foto se puede coger del carrete, no solo de la cámara',
+  /cogerla del carrete/.test(M) && /no solo en los de la comercial/.test(M));
+paso('y el de oficina avisa de que un presupuesto aceptado tampoco se autoasigna',
+  /presupuesto aceptado/.test(O) && /mismo fallo por otra puerta/.test(O));
 paso('y el apartado libre, con el motivo de no desglosar herrajes',
   /[Mm]ás elementos a identificar/.test(M) && /un todo/.test(M));
 paso('arrastrar y soltar está explicado, con lo que hace solo',

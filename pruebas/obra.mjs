@@ -743,8 +743,17 @@ paso('el parte trae su propio botón de fotos', oyente.hay === true);
 paso('apuntando a esta puerta y a esta asistencia',
   oyente.puerta === 'pt-sin-doc' && oyente.aviso === 'av-inst',
   oyente.puerta+' / '+oyente.aviso);
-paso('y abre la cámara de atrás del móvil, no el carrete',
-  oyente.camara === 'environment', oyente.camara);
+/* ---- Reescrito el 26-11-2026 ----
+   Esta prueba daba por bueno que el botón forzara la cámara («capture»). Era
+   verdad y estorbaba: David, el 26, «al cargar fotos no me ha dejado cargar
+   fotos de la galería, solo de la cámara». Y no era solo la comercial: lo
+   llevaban las fotos de la visita, las de obra y las de una baja de material.
+
+   Quitar «capture» no quita la cámara: el móvil ofrece las dos cosas, hacer la
+   foto o cogerla del carrete. Hace falta cuando la foto se hizo antes de abrir
+   el parte o la mandó el cliente. Así que ahora se comprueba lo contrario. */
+paso('y NO fuerza la cámara: deja hacer la foto o cogerla del carrete',
+  oyente.camara === null, String(oyente.camara));
 
 /* El fichero se elige de verdad, para comprobar que el diálogo tiene oyente:
    antes de esto, los botones de fichero dentro de un diálogo no hacían nada,
