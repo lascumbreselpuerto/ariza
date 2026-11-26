@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.26-3**
+> **Versión de la aplicación que describe este manual: 2026.11.26-4**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -561,6 +561,17 @@ en todos los botones de foto, no solo en los de la comercial.
 No es burocracia: es la prueba de lo que había y de lo que hiciste. Dentro de
 tres meses, cuando el cliente diga que la puerta ya estaba así o que eso no se
 cambió, esto es lo único que lo cuenta. Y si pide las fotos, se le mandan.
+
+**Si la visita lleva varias puertas, cada una tiene su sitio para fotos (26 de
+noviembre de 2026).** Haz las de cada puerta en su sitio: así van al histórico
+de esa puerta y no al de la primera. Hasta esa fecha todas las fotos del parte
+se guardaban como de la puerta principal, aunque las hubieras hecho en la
+tercera: la ficha de las otras salía vacía y la de la primera decía cosas que no
+eran suyas.
+
+Caben diez **en cada puerta**, no diez en todo el parte. Y al final hay un sitio
+más, **Generales de la visita**, para el acceso, el albarán o la calle: lo que no
+es de ninguna puerta en concreto. Esas no entran en ningún histórico.
 
 Dos cosas prácticas:
 
@@ -1651,4 +1662,4 @@ que mire ahí antes de nada. Puede ser eso.
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.26-3 de Safe2door*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.26-4 de Safe2door*
