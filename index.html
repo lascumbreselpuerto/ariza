@@ -277,6 +277,19 @@ html{scroll-padding-top:104px}
 .checks{display:flex;flex-wrap:wrap;gap:8px}
 .checks label{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:20px;padding:6px 12px;font-size:14px;cursor:pointer;background:var(--surface)}
 .checks input{accent-color:var(--amarillo);width:16px;height:16px}
+/* ---- Cada elemento con su foto (25-11-2026) ----
+   David: «lo que sí es necesario cuando damos de alta la puerta (en bloque) es
+   fotos de todo lo seleccionado y anotado». La cámara va DENTRO de la misma
+   pastilla del elemento, pegada a su nombre, y no en una lista aparte: una
+   lista aparte obliga a volver a buscar de qué elemento era cada foto, y eso
+   con veinte elementos no lo hace nadie. */
+.checks .ele{display:inline-flex;align-items:stretch;border:1px solid var(--line);
+  border-radius:20px;background:var(--surface);overflow:hidden}
+.checks .ele>label{border:0;border-radius:0;background:none}
+.checks .ele>.cam{display:inline-flex;align-items:center;gap:5px;border-left:1px solid var(--line);
+  padding:6px 11px;font-size:12px;cursor:pointer;color:var(--muted);white-space:nowrap}
+.checks .ele>.cam:hover{background:var(--gris-bg)}
+.checks .ele>.cam.puesta{color:var(--ok);font-weight:600;background:var(--ok-bg)}
 /* ---- Elegir con cantidad, y plegado (06-11-2026) ----
    Las listas largas de casillas van dentro de un <details> para no hacer densa
    la pantalla, y las que llevan cantidad reservan su hueco a la derecha. En el
@@ -1178,7 +1191,8 @@ const S = { user:null, perfil:null, tab:'puertas', puertas:[], avisos:[], etique
             expedientes:[], expFotos:[], expDocs:[], exp:null, expPaso:'obra', expSucio:false,
             fotosEquipo:{}, histBusca:'', histTec:'', histTipo:'', histDesde:'', histHasta:'', histArchivadas:false,
             cliArchivados:false, centros:[], sinCentros:false, versionNueva:null, versionAvisada:null,
-            manual:null, manuales:null, sinObra:false, sinModo:false, sinFicha3:false, sinBloques:false, sinCatalogo:false,
+            manual:null, manuales:null, sinObra:false, sinModo:false, sinFicha3:false, sinBloques:false, sinCatalogo:false, sinFotoElemento:false,
+            fotosEspera:null, fotosFicha:[],
             compEspera:null,
             sinPresuAviso:false, matSinPrecio:null, fotosCuenta:{}, sinFactura:false,
             sinRutas:false, sinRutaCliente:false, sinSubtipo:false, sinUrgencia:false,
@@ -1903,6 +1917,11 @@ async function cargar(){
      antes, que funciona pero no es el que marcó David en su hoja. */
   const eu = await sb.from('expedientes').select('catalogo').limit(1);
   S.sinCatalogo = !!eu.error;
+  /* De qué elemento es cada foto: servidor/fotos-elemento.sql. Sin esa columna
+     las fotos se siguen subiendo como siempre, colgadas de la puerta, pero sin
+     saber de qué elemento son, y la cámara de cada elemento no se dibuja. */
+  const fe = await sb.from('fotos').select('elemento').limit(1);
+  S.sinFotoElemento = !!fe.error;
   /* El plazo de pago del cliente y el vencimiento de la factura:
      servidor/factura.sql. Sin esas columnas, la ficha del cliente no enseña el
      plazo, el vencimiento no se puede guardar y el panel de impagados dice que
@@ -2214,7 +2233,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.25-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.25-3';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -3182,16 +3201,54 @@ function vistaFicha(id){
      Marca, modelo, número de serie, cuándo se puso y el papel que lo acompaña:
      lo que hace falta para pedir un repuesto, justificar una sustitución o
      rellenar el expediente sin tener que ir a mirar a la puerta. */
+  /* ---- Componentes: espejo del expediente, no un formulario (25-11-2026) ----
+     David: «en la ficha de dicha puerta aparece componentes y valoro no
+     necesario, a no ser que esté la puerta creada la documentación completa.
+     Los componentes se deben de solicitar con datos como marca, referencia etc
+     en el momento de crear la documentación. Que no es lo mismo que la ficha de
+     la puerta.»
+
+     Tenía razón, y el panel era además engañoso: en una puerta sin documentar
+     te reclamaba diecisiete componentes con su marca y su referencia, como si
+     faltaran. No faltaban: es que esa puerta no se iba a documentar.
+
+     Así que:
+       · Sin expediente, el panel NO SALE. Una línea dice dónde se documenta.
+       · Con expediente, sale como ESPEJO de lo que allí se registró, de solo
+         lectura. El alta de componentes se hace al documentar.
+       · Y lo corrigen oficina y el administrador, no el técnico, con quién y
+         cuándo anotado. Es el mismo criterio que ya rige para rematar la ficha
+         de una puerta con parte firmado.
+
+     Lo que NO se ha movido: el número de serie del motor y del cuadro, que
+     ahora se escriben arriba, en «Cuadro y motor». Ese dato sirve en toda
+     puerta, documentada o no, porque es el que se necesita para pedir un
+     repuesto. */
   const comps = componentesDe(p.id);
-  const min = componentesMinimos(p);
+  const exps = (S.expedientes || []).filter(x => x.puerta_id === p.id && !x.archivado);
+  const documentada = exps.length > 0;
+  if (!documentada && !comps.length){
+    h += '<div class="panel"><div class="panel-h"><h3>Componentes</h3></div>'+
+      '<p class="mini" style="margin:0">Esta puerta no está documentada, así que aquí no hay '+
+      'nada que enseñar. Los componentes, con su marca, su referencia y su número de serie, '+
+      'se piden <b>al crear la documentación</b>, que es otra cosa distinta de la ficha. '+
+      'El número de serie del motor y del cuadro está arriba, en «Cuadro y motor»: ese sirve '+
+      'siempre, documentada o no.</p></div>';
+  } else {
   h += '<div class="panel"><div class="panel-h"><h3>Componentes</h3>'+
        '<span class="mini">'+comps.length+'</span><span class="sp"></span>'+
-       (min.faltan.length ? '<button class="btn sm" data-act="comp-minimos" data-id="'+p.id+'">Añadir los que faltan ('+min.faltan.length+')</button>' : '')+
-       '<button class="btn sm pri" data-act="comp-nuevo" data-id="'+p.id+'">Añadir componente</button></div>';
+       (esGestion() && documentada
+         ? '<span class="mini">Solo oficina los corrige, y queda anotado</span>'
+         : '')+'</div>';
   if (S.sinComponentes){
     h += '<p class="mini" style="margin:0">Falta ejecutar el SQL de componentes en la base de datos. '+
          'Hasta entonces esta parte no guarda nada.</p></div>';
   } else {
+    h += '<p class="mini" style="margin:0 0 10px">'+
+      (documentada
+        ? 'Lo que se registró al documentar esta puerta. Se rellena en el expediente, no aquí.'
+        : 'Lo que quedó anotado de antes. Para documentar la puerta hay que abrir un expediente.')+
+      '</p>';
     if (!comps.length) h += '<p class="muted" style="margin:0">Todavía no hay ningún componente dado de alta.</p>';
     else {
       h += '<div class="tabla-wrap"><table class="tabla"><thead><tr>'+
@@ -3208,16 +3265,29 @@ function vistaFicha(id){
             (c.doc_ruta ? '<button class="btn sm plana" data-act="comp-doc-ver" data-id="'+c.id+'">Papel</button>' : '')+
           '</td>'+
           '<td style="text-align:right;white-space:nowrap">'+
-            '<button class="btn sm" data-act="comp-editar" data-id="'+c.id+'">Editar</button></td></tr>';
+            /* Solo oficina y el administrador. El técnico lo ve y no lo cambia:
+               esto es el espejo de lo que se documentó, y lo que se documentó
+               se corrige por donde se documentó o por quien responde de él. */
+            (esGestion()
+              ? '<button class="btn sm" data-act="comp-editar" data-id="'+c.id+'">Corregir</button>'
+              : '')+
+            '</td></tr>'+
+          (c.actualizado_por
+            ? '<tr class="sub-fila"><td colspan="6" class="mini" style="padding-top:0">'+
+              'Corregido por <b>'+esc(c.actualizado_por)+'</b>'+
+              (c.actualizado ? ' el '+esc(fechaHora(c.actualizado)) : '')+'</td></tr>'
+            : '');
       });
       h += '</tbody></table></div>';
     }
-    if (min.faltan.length){
-      h += '<div class="sin-ficha" style="margin-top:10px">Faltan por dar de alta: '+
-        esc(min.faltan.map(x => x.nombre).join(', '))+'.</div>';
-    }
-    if (min.aviso) h += '<p class="mini" style="margin:10px 0 0">'+esc(min.aviso)+'</p>';
+    /* Lo que antes salía aquí como «faltan por dar de alta» se ha ido con el
+       panel de alta: en una ficha reclamaba componentes de una puerta que
+       nadie iba a documentar. Lo que falta de verdad se reclama en el
+       expediente, que es donde se documenta, y allí separado en sus tres
+       grupos: lo que exige la norma, lo propio del producto y lo que añade el
+       instalador. */
     h += '</div>';
+  }
   }
 
   h += '<div class="panel"><div class="panel-h"><h3>Fotos</h3><label class="btn sm">Añadir fotos<input type="file" accept="image/*" multiple hidden data-act="subir-foto" data-id="'+p.id+'"></label></div>'+
@@ -4756,6 +4826,11 @@ const QUE_HACE_FALTA = [
             'libre, el fondo, el mástil, el eje, los paneles, el diámetro del muelle, el '+
             'tipo de guía, los carriles, el paso libre, los motores, los mandos entregados '+
             'ni el control de acceso.' },
+  { marca:'sinFotoElemento', fichero:'fotos-elemento.sql',
+    que:'Una foto por cada elemento de la puerta',
+    pierdes:'Las fotos de la puerta siguen yendo todas a un montón común, sin saber de '+
+            'qué elemento es cada una, y no se puede decir qué elementos marcados se han '+
+            'quedado sin foto. Y no queda rastro de quién corrige un componente.' },
   { marca:'sinCatalogo', fichero:'elementos-unificados.sql',
     que:'Que el expediente pida los mismos elementos que la ficha',
     pierdes:'El expediente sigue con el catálogo de cuatro familias de antes: marcas '+
@@ -10179,6 +10254,17 @@ async function pintarFotos(puertaId){
   if (!cont) return;
   const { data, error } = await sb.from('fotos').select('*').eq('puerta_id', puertaId).order('creado', {ascending:false});
   if (error){ cont.innerHTML = '<p class="mini">No se pudieron cargar las fotos.</p>'; return; }
+  /* Ya que están todas aquí, se apunta de qué elementos hay foto: así el
+     reclamo de la ficha sale sin una segunda consulta. (25-11-2026)
+
+     Y si es la PRIMERA vez que se sabe de esta puerta, se repinta una vez. Si
+     no, el reclamo de las fotos que faltan no aparecería hasta la segunda
+     visita a la ficha: el panel se dibuja antes de que lleguen las fotos, y sin
+     saber qué fotos hay el punto no se pone. Se repinta como mucho una vez por
+     puerta y por sesión, porque la condición es que la caché estuviera vacía. */
+  const eraNuevo = !FOTOS_ELEM[puertaId];
+  FOTOS_ELEM[puertaId] = data.map(f => f.elemento).filter(Boolean);
+  if (eraNuevo && FOTOS_ELEM[puertaId].length && S.ficha === puertaId) setTimeout(pintar, 0);
   if (!data.length){ cont.innerHTML = '<p class="mini" style="margin:0">Sin fotos todavía.</p>'; return; }
   const urls = await Promise.all(data.map(f => sb.storage.from('fotos').createSignedUrl(f.ruta, 3600)));
   cont.innerHTML = data.map((f,i) => {
@@ -10187,7 +10273,14 @@ async function pintarFotos(puertaId){
     return '<div class="foto">'+
       '<img src="'+esc(u)+'" alt="Foto de la puerta" loading="lazy" data-act="foto-ver" data-id="'+f.id+'" style="cursor:zoom-in" '+
         'onerror="this.replaceWith(Object.assign(document.createElement(\'a\'),{href:this.src,target:\'_blank\',rel:\'noopener\',className:\'foto-rota\',textContent:\'Foto guardada · abrir\'}))">'+
-      '<span class="pie-foto">'+esc([f.autor||'', f.creado?fechaCorta(f.creado):''].filter(Boolean).join(' · '))+'</span>'+
+      /* De qué elemento es, si se sabe (25-11-2026). Primero el elemento y
+         luego quién y cuándo: lo que se busca al mirar la tira de fotos es
+         «¿cuál es la de las fotocélulas?», no quién la hizo. Las fotos de
+         antes de esa fecha no llevan elemento y siguen saliendo igual. */
+      '<span class="pie-foto">'+esc([
+          f.elemento ? ((ELEMENTO(f.elemento) || {}).e || f.elemento) : '',
+          f.autor || '', f.creado ? fechaCorta(f.creado) : ''
+        ].filter(Boolean).join(' · '))+'</span>'+
       '<button data-act="foto-borrar" data-id="'+f.id+'" data-ruta="'+esc(f.ruta)+'" data-puerta="'+puertaId+'">Borrar</button></div>';
   }).join('');
 }
@@ -10258,6 +10351,36 @@ const nombreEtapa = k => {
    imposible de cumplir se acaba sorteando. Decisión de David, 07-11-2026. */
 const pideFotoVisita = a => !!a && !esFalso(a);
 const fotosDeAviso = avisoId => (S.fotosAviso || []).filter(f => f && f.aviso_id === avisoId);
+/* ---- Qué elementos de esta puerta tienen ya su foto (25-11-2026) ----
+   Se piden solo la ruta y el elemento, no la foto: aquí no hay que verlas, hay
+   que saber cuáles faltan. Y al llegar se repintan SOLO las etiquetas de las
+   cámaras, no el formulario: redibujarlo borraría lo que se esté escribiendo. */
+/* Qué elementos de cada puerta tienen foto, por puerta. Se llena cuando se
+   abre una ficha o se pintan sus fotos, y de aquí lo lee minimoObra: así el
+   reclamo aparece sin tener que pasarlo a mano por las seis pantallas que lo
+   usan, y mientras no se sepa NO se dice nada. (25-11-2026) */
+const FOTOS_ELEM = Object.create(null);
+async function cargarFotosDeElementos(puertaId){
+  S.fotosFicha = [];
+  if (!puertaId || S.sinFotoElemento) return;
+  try {
+    const { data, error } = await sb.from('fotos')
+      .select('id,elemento').eq('puerta_id', puertaId).not('elemento', 'is', null);
+    if (error) throw error;
+    S.fotosFicha = data || [];
+    FOTOS_ELEM[puertaId] = S.fotosFicha.map(f => f.elemento).filter(Boolean);
+  } catch(_){ return; }
+  S.fotosFicha.forEach(f => {
+    const caja = document.getElementById('f-caja-'+f.elemento);
+    const cam = caja ? caja.querySelector('.cam') : null;
+    if (!cam || cam.classList.contains('puesta')) return;
+    cam.classList.add('puesta');
+    const ent = cam.querySelector('input');
+    cam.textContent = 'Con foto';
+    if (ent) cam.appendChild(ent);
+  });
+}
+
 async function subirFotos(puertaId, ficheros, opts){
   const o = opts || {};
   let n = 0, tal = 0;
@@ -10294,6 +10417,10 @@ async function subirFotos(puertaId, ficheros, opts){
         if (o.avisoId) fila.aviso_id = o.avisoId;
         if (o.etapa) fila.etapa = o.etapa;
       }
+      /* De qué elemento es la foto. Igual que arriba: solo se manda si la base
+         lo tiene, así que contra una base sin fotos-elemento.sql las fotos se
+         suben como siempre, sin saber de qué son. */
+      if (!S.sinFotoElemento && o.elemento) fila.elemento = o.elemento;
       const { error: eFila } = await sb.from('fotos').insert(fila);
       if (eFila){
         await sb.storage.from('fotos').remove([ruta]);   // no se deja basura en el almacén
@@ -12949,9 +13076,27 @@ function campoElemento(x, d, tipo){
   const nombre = x.seg || x.e;
   const marcado = puestos.indexOf(nombre) >= 0 ||
     (x.seg && (d.seguridad || []).map(nombreElemento).indexOf(x.seg) >= 0);
-  return '<label id="f-caja-'+x.c+'"'+(est === 'no' ? ' hidden' : '')+'>'+
+  /* ---- La foto del elemento, al lado de su casilla (25-11-2026) ----
+     Si la puerta ya existe, la foto se sube en el momento. Si es un alta, la
+     puerta todavía no tiene número, así que la foto se queda esperando y sube
+     sola al guardar: el mismo arreglo que se hizo el 24-11-2026 con la foto de
+     la placa de un componente, y por el mismo motivo. El momento de hacer la
+     foto es cuando el técnico tiene el elemento delante. */
+  const esp = (S.fotosEspera || {})[x.c];
+  /* Las fotos de esta puerta no viven en memoria: se piden al abrir la ficha y
+     se dejan en S.fotosFicha, y cuando llegan se repintan solo las etiquetas de
+     las cámaras. Así la pantalla no espera a la red para dibujarse. */
+  const yaTiene = !S.sinFotoElemento &&
+    (S.fotosFicha || []).some(f => f.elemento === x.c);
+  const cam = S.sinFotoElemento ? '' :
+    '<label class="cam'+((esp || yaTiene) ? ' puesta' : '')+'">'+
+      (esp ? 'Foto lista' : yaTiene ? 'Con foto' : 'Foto')+
+      '<input type="file" accept="image/*" hidden data-act="ele-foto" data-ele="'+x.c+'"'+
+      (d.id ? ' data-puerta="'+esc(d.id)+'"' : '')+'></label>';
+  return '<span class="ele" id="f-caja-'+x.c+'"'+(est === 'no' ? ' hidden' : '')+'>'+
+    '<label>'+
     '<input type="checkbox" class="'+(x.seg ? 'f-seg' : 'f-ele')+'" value="'+esc(nombre)+'"'+
-      (marcado ? ' checked' : '')+'>'+esc(x.e)+suelto+'</label>';
+      (marcado ? ' checked' : '')+'>'+esc(x.e)+suelto+'</label>'+cam+'</span>';
 }
 
 /* Los elementos de un bloque. Devuelve '' si en esa familia no queda ninguno:
@@ -13164,9 +13309,13 @@ function marcaModeloFicha(p, cual){
   const c = clave ? componentesDe(p && p.id)
     .find(x => x.activo !== false && x.clave === clave) : null;
   if (c && (c.marca || c.modelo))
-    return { marca: c.marca || '', modelo: c.modelo || '', de: 'componente', id: c.id };
+    return { marca: c.marca || '', modelo: c.modelo || '', serie: c.num_serie || '',
+             de: 'componente', id: c.id };
   const txt = String((p && (cual === 'motor' ? p.motor : p.cuadro)) || '').trim();
-  return { marca: txt, modelo: '', de: txt ? 'ficha' : 'nada', id: c ? c.id : null };
+  /* El número de serie sale siempre del componente, aunque la marca venga del
+     texto viejo de la ficha: son dos datos y cada uno está donde está. */
+  return { marca: txt, modelo: '', serie: (c && c.num_serie) || '',
+           de: txt ? 'ficha' : 'nada', id: c ? c.id : null };
 }
 
 /* De la ficha al componente. No borra nunca: si los dos campos se dejan vacíos,
@@ -13178,17 +13327,26 @@ async function guardarCuadroMotor(puertaId, puerta){
     const clave = claveFicha(puerta, cual);
     if (!clave) continue;
     const marca = val('f-'+cual+'-marca'), modelo = val('f-'+cual+'-modelo');
-    if (!marca && !modelo) continue;
+    /* El número de serie se escribe en la ficha desde el 25-11-2026, cuando el
+       panel de componentes salió de ahí. Va al mismo componente, para que no
+       haya dos sitios donde pueda decir cosas distintas. */
+    const serie = val('f-'+cual+'-serie');
+    if (!marca && !modelo && !serie) continue;
     const ya = componentesDe(puertaId).find(x => x.activo !== false && x.clave === clave);
     try {
       if (ya){
-        if ((ya.marca || '') === marca && (ya.modelo || '') === modelo) continue;
+        if ((ya.marca || '') === marca && (ya.modelo || '') === modelo &&
+            (ya.num_serie || '') === serie) continue;
         await sb.from('componentes').update({ marca: marca || null, modelo: modelo || null,
-          actualizado: new Date().toISOString() }).eq('id', ya.id);
+          /* Vaciar el campo en la ficha NO borra un número de serie que ya
+             estuviera puesto: lo que no se escribe, no se toca. */
+          num_serie: serie || ya.num_serie || null,
+          actualizado: new Date().toISOString(), actualizado_por: yo() }).eq('id', ya.id);
       } else {
         await sb.from('componentes').insert({ puerta_id: puertaId, clave,
           nombre: nombreComponente(familiaDePuerta(puerta), clave),
-          marca: marca || null, modelo: modelo || null, creado_por: yo() });
+          marca: marca || null, modelo: modelo || null, num_serie: serie || null,
+          creado_por: yo() });
       }
     } catch(_){ /* el componente es la copia; la ficha ya está guardada */ }
   }
@@ -13332,8 +13490,16 @@ function matriculaTomada(p){
 
 /* El mínimo que hay que llevarse de la obra. nFotos a null significa «todavía no
    se ha contado»: entonces el punto de las fotos queda en duda y no se da por
-   bueno, porque el cierre lo vuelve a contar antes de dejar firmar. */
-function minimoObra(p, nFotos){
+   bueno, porque el cierre lo vuelve a contar antes de dejar firmar.
+
+   «elemsConFoto» es la lista de claves de elemento que ya tienen foto. Si no se
+   pasa, se mira la caché FOTOS_ELEM; y si tampoco está ahí, EL PUNTO NO SE PONE.
+
+   La primera versión lo dejaba «en duda» cuando no se sabía, y eso tenía una
+   consecuencia que cazó la suite de obra: un punto en duda cuenta como pendiente,
+   así que TODA puerta aparecía con la ficha incompleta por unas fotos que nadie
+   había mirado. Decir «no lo sé» está bien; apuntarlo como falta, no. (25-11-2026) */
+function minimoObra(p, nFotos, elemsConFoto){
   const puntos = [];
   const mete = (clave, texto, que, ok, extra) =>
     puntos.push(Object.assign({ clave, texto, que, ok: !!ok, duda: ok === null }, extra || {}));
@@ -13374,6 +13540,34 @@ function minimoObra(p, nFotos){
     'una foto más de eso. Para cerrar el parte basta con una.',
     nFotos == null ? null : (nFotos >= MIN_FOTOS_OBRA),
     { basico: true, okBasico: nFotos == null ? null : (nFotos >= 1) });
+  /* ---- Las fotos de los elementos marcados (25-11-2026) ----
+     David pidió «fotos de todo lo seleccionado y anotado», y decidió el mismo
+     día que se RECLAMEN pero NO frenen el cierre. Por eso este punto va sin
+     «basico»: sale en la lista de lo que le falta a la ficha y en el parte,
+     pero no impide cerrar la visita. En una seccional pueden ser veinte
+     elementos, y un bloqueo de veinte fotos se sortea o para la reparación.
+
+     Solo cuenta lo que ESTÁ marcado: si la puerta no lleva banda, nadie tiene
+     que fotografiar una banda que no existe. */
+  const elemsFoto = elemsConFoto || FOTOS_ELEM[p.id] || null;
+  if (!S.sinFotoElemento && !S.sinBloques && elemsFoto){
+    const marcados = (p.elementos || []).concat(p.seguridad || []).map(nombreElemento)
+      .filter((n, i, a) => n && a.indexOf(n) === i)
+      .map(n => (ELEMENTOS_PUERTA.find(x => (x.seg || x.e) === n) || {}).c)
+      .filter(Boolean);
+    const sinFoto = marcados.filter(c => elemsFoto.indexOf(c) < 0);
+    const nombreDe = c => (ELEMENTO(c) || {}).e || c;
+    /* Y si no hay nada marcado, tampoco se pone: no se reclama la foto de lo
+       que la puerta no lleva. */
+    if (marcados.length)
+      mete('fotos-elementos', 'Una foto de cada elemento marcado',
+        'De lo que has marcado que la puerta lleva. La cámara está al lado de cada '+
+        'casilla, en su propia pastilla, así que la foto queda atada a su elemento y no '+
+        'hay que adivinar después de qué era. '+
+        (sinFoto.length ? 'Faltan: '+sinFoto.map(nombreDe).join(', ')+'.' : 'No falta ninguna.')+
+        ' Esto no impide cerrar la visita.',
+        sinFoto.length === 0);
+  }
   mete('matricula', 'Matrícula de lo que hay puesto',
     'Copia la placa: marca, modelo y número de serie. Vale la de la puerta, la del motor o la '+
     'del cuadro, y lo normal es tomar las tres. Si no hay placa o está ilegible, escríbelo en '+
@@ -13472,10 +13666,24 @@ function recomendadoObra(p){
 async function contarFotos(puertaId){
   if (!puertaId) return 0;
   try {
-    const { count, error } = await sb.from('fotos')
-      .select('id', { count:'exact', head:true }).eq('puerta_id', puertaId);
+    /* Se piden las filas, no solo la cuenta: con el mismo viaje se aprende de
+       qué elementos hay foto, que es lo que hace falta para reclamar las que
+       faltan. Antes era un head:true que solo contaba. (25-11-2026)
+
+       Si la columna «elemento» todavía no está en la base, se vuelve al conteo
+       de siempre: lo que no se puede saber no se finge. */
+    if (S.sinFotoElemento){
+      const { count, error } = await sb.from('fotos')
+        .select('id', { count:'exact', head:true }).eq('puerta_id', puertaId);
+      if (error) throw error;
+      S.fotosCuenta[puertaId] = count || 0;
+      return count || 0;
+    }
+    const { data, error } = await sb.from('fotos')
+      .select('id,elemento').eq('puerta_id', puertaId);
     if (error) throw error;
-    const n = count || 0;
+    const n = (data || []).length;
+    FOTOS_ELEM[puertaId] = (data || []).map(f => f.elemento).filter(Boolean);
     S.fotosCuenta[puertaId] = n;
     return n;
   } catch(_){
@@ -23722,7 +23930,9 @@ dlgForm.addEventListener('keydown', e => {
   }
   if (e.key === 'Escape' && caja && !caja.hidden){ e.preventDefault(); cerrarListaCliente(); }
 });
-dlgForm.addEventListener('change', e => {
+/* async desde el 25-11-2026: la foto de un elemento se sube aquí mismo cuando
+   la puerta ya existe, y hay que esperar a que suba para poder decirlo. */
+dlgForm.addEventListener('change', async e => {
   const t = e.target;
   /* ---- La foto del material (02-11-2026) ----
      Este campo vive dentro del diálogo del artículo, pero quien lo escuchaba
@@ -23945,6 +24155,44 @@ dlgForm.addEventListener('change', e => {
       { avisoId, etapa: t.dataset.etapa });
     return;
   }
+  /* ---- La foto de un elemento de la puerta (25-11-2026) ----
+     David: «lo que sí es necesario cuando damos de alta la puerta (en bloque) es
+     fotos de todo lo seleccionado y anotado».
+
+     Si la puerta ya existe, la foto sube en el momento. Si es un alta, la puerta
+     todavía no tiene número y la carpeta del almacén lleva ese número, así que la
+     foto se queda esperando y sube sola al guardar. Es el mismo arreglo del
+     24-11-2026 para la placa de un componente.
+
+     Y una decisión de David de hoy: estas fotos SE RECLAMAN pero NO frenan el
+     cierre de la visita. En una seccional pueden ser veinte elementos, y un
+     bloqueo de veinte fotos se acaba sorteando o para la reparación. */
+  if (t.dataset && t.dataset.act === 'ele-foto' && t.files && t.files.length){
+    const clave = t.dataset.ele || '';
+    const file = t.files[0];
+    t.value = '';
+    if (!clave || !file) return;
+    const marcar = texto => {
+      const caja = document.getElementById('f-caja-'+clave);
+      const cam = caja ? caja.querySelector('.cam') : null;
+      if (!cam) return;
+      const ent = cam.querySelector('input');
+      cam.classList.add('puesta');
+      cam.textContent = texto;
+      if (ent) cam.appendChild(ent);
+    };
+    if (t.dataset.puerta){
+      marcar('Subiendo…');
+      await subirFotos(t.dataset.puerta, [file], { elemento: clave });
+      await cargarFotosDeElementos(t.dataset.puerta);
+      marcar('Con foto');
+      return;
+    }
+    S.fotosEspera = S.fotosEspera || {};
+    S.fotosEspera[clave] = file;
+    marcar('Foto lista');
+    return;
+  }
   /* ---- La foto del componente, antes de guardarlo (24-11-2026) ----
      David: «no se puede cargar la foto hasta que no se guarda el componente».
      Y la pantalla lo decía con todas las letras: «Guarda primero el componente
@@ -24149,7 +24397,8 @@ const CAMPOS_PUERTA = ['f-cod','f-cbusca','f-clid','f-centro','f-dir','f-ubi','f
      lo encuentra en blanco, sin que nada avise. */
   'f-hojas','f-lateral','f-fondo','f-mastil','f-eje','f-paneles','f-muellediam',
   'f-guia','f-carriles','f-pasolibre','f-motores','f-mandos',
-  'f-motor-marca','f-motor-modelo','f-cuadro-marca','f-cuadro-modelo','f-modo','f-usuarios',
+  'f-motor-marca','f-motor-modelo','f-motor-serie',
+  'f-cuadro-marca','f-cuadro-modelo','f-cuadro-serie','f-modo','f-usuarios',
   'f-matricula','f-sinmat','f-ult','f-prox','f-notas'];
 function guardarBorradorPuerta(){
   const b = {};
@@ -24926,6 +25175,10 @@ function dlgPuerta(id, avisoId, molde){
   /* Si se viene con molde, cualquier borrador que quedara suelto es de un alta
      anterior que se abandonó: aplicarlo machacaría lo copiado sin avisar. */
   if (molde) S.borradorPuerta = null;
+  /* Lo que estuviera esperando de otra puerta no vale para esta: una foto de las
+     fotocélulas de la nave de al lado no son estas fotocélulas. (25-11-2026) */
+  S.fotosEspera = null;
+  S.fotosFicha = [];
   const p = id ? puertaDe(id) : null;
   const libres = etiquetasLibres(p && p.id).map(e => e.codigo);
   const d = p || molde || { estado:'operativa', seguridad:[] };
@@ -25152,16 +25405,47 @@ function dlgPuerta(id, avisoId, molde){
       '<input id="f-motor-marca" type="text" maxlength="60" value="'+esc(mMotor.marca)+'"></div>'+
     '<div class="campo"><label for="f-motor-modelo">Motor · modelo</label>'+
       '<input id="f-motor-modelo" type="text" maxlength="80" value="'+esc(mMotor.modelo)+'"></div>'+
+    /* ---- El número de serie, aquí y no en un panel aparte (25-11-2026) ----
+       David: «en la ficha de dicha puerta aparece componentes y valoro no
+       necesario, a no ser que esté la puerta creada la documentación completa».
+       Tiene razón en lo del panel: una tabla de diecisiete componentes
+       pidiendo marca y referencia en una puerta que nadie va a documentar
+       estorba y no se rellena.
+
+       Pero sacarlo sin más tenía una consecuencia: el número de serie del
+       motor se apuntaba ahí, y es EL dato que hace falta para pedir un
+       repuesto. Una puerta sin documentar se quedaba sin sitio donde
+       guardarlo, y son justo las puertas que él describe: «hay puertas que no
+       cumplen la normativa que por necesidades del mercado tenemos que
+       asistirlas».
+
+       Así que el panel se va y estos dos campos se quedan, que es lo que de
+       verdad se usa. Decisión de David, 25-11-2026.
+
+       No es un dato nuevo en la base: se guarda en el mismo componente de
+       siempre, así que no hay dos sitios donde pueda decir cosas distintas. */
+    (S.sinComponentes ? '' :
+      '<div class="campo"><label for="f-motor-serie">Motor · nº de serie</label>'+
+        '<input id="f-motor-serie" type="text" maxlength="60" value="'+esc(mMotor.serie || '')+'"'+
+        ' placeholder="De la placa del motor">'+
+        '<span class="pista">Es el que hace falta para pedir el repuesto</span></div>')+
     (hayCuadro
       ? '<div class="campo"><label for="f-cuadro-marca">Cuadro de maniobra · marca</label>'+
           '<input id="f-cuadro-marca" type="text" maxlength="60" value="'+esc(mCuadro.marca)+'"></div>'+
         '<div class="campo"><label for="f-cuadro-modelo">Cuadro de maniobra · modelo</label>'+
-          '<input id="f-cuadro-modelo" type="text" maxlength="80" value="'+esc(mCuadro.modelo)+'"></div>'
+          '<input id="f-cuadro-modelo" type="text" maxlength="80" value="'+esc(mCuadro.modelo)+'"></div>'+
+        (S.sinComponentes ? '' :
+          '<div class="campo"><label for="f-cuadro-serie">Cuadro de maniobra · nº de serie</label>'+
+            '<input id="f-cuadro-serie" type="text" maxlength="60" value="'+esc(mCuadro.serie || '')+'"'+
+            ' placeholder="De la placa del cuadro">'+
+            '<span class="pista">Si la lleva: hay cuadros que no la traen</span></div>')
       : '')+
     '</div><p class="mini" style="margin:8px 0 0">Esto es lo mismo que el componente: al guardar, '+
-    'el motor'+(hayCuadro ? ' y el cuadro quedan dados' : ' queda dado')+' de alta en Componentes con esta marca y este modelo, '+
-    'y no hay que volver a escribirlos allí. El número de serie, la foto de la placa y el papel '+
-    'van en el componente, que es donde caben.'+
+    'el motor'+(hayCuadro ? ' y el cuadro quedan dados' : ' queda dado')+' de alta en Componentes con esta marca, este modelo y este número de serie, '+
+    'y no hay que volver a escribirlos allí. '+
+    (S.sinComponentes
+      ? 'El número de serie no se puede guardar todavía: falta ejecutar el SQL de componentes.'
+      : 'La foto de la placa se hace abajo, en Fotos, y el papel va en el componente.')+
     ((mMotor.de === 'ficha' || mCuadro.de === 'ficha')
       ? ' Lo que había escrito antes de una sola vez está puesto en «marca»: repártelo si hace falta.'
       : '')+'</p></div>';
@@ -25246,7 +25530,10 @@ function dlgPuerta(id, avisoId, molde){
   h += '<p class="err" role="alert"></p><div class="pie">'+
     (p ? '<button type="button" class="btn" data-act="puerta-borrar" data-id="'+p.id+'">Borrar puerta</button>' : '')+
     '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button><button type="submit" class="btn pri">Guardar</button></div>';
-  setTimeout(() => { pintarCentros(d.centro_id || ''); aplicarBorradorPuerta(); estadoCliente(); }, 0);
+  setTimeout(() => { pintarCentros(d.centro_id || ''); aplicarBorradorPuerta(); estadoCliente();
+    /* Qué elementos tienen ya su foto. Se pide después de dibujar, no antes:
+       la pantalla no debe esperar a la red para aparecer. */
+    if (p && !S.sinFotoElemento) cargarFotosDeElementos(p.id); }, 0);
   abrirDlg(h, async () => {
     const seg = Array.from(dlgForm.querySelectorAll('.f-seg')).filter(x => x.checked).map(x => x.value);
     const o = {
@@ -25379,6 +25666,18 @@ function dlgPuerta(id, avisoId, molde){
          veces. Va después de guardar la puerta, porque una puerta nueva no tiene
          id hasta ese momento. */
       if (puertaId) await guardarCuadroMotor(puertaId, Object.assign({ id: puertaId }, o));
+      /* Las fotos de los elementos que se hicieron antes de que la puerta
+         tuviera número. Van aquí, después de guardarla, por lo mismo que el
+         cuadro y el motor. Si falla la subida de una, las demás siguen: lo que
+         no se puede perder es la ficha, que ya está guardada. */
+      const espera = S.fotosEspera || {};
+      const clavesEspera = Object.keys(espera);
+      if (puertaId && clavesEspera.length && !S.sinFotoElemento){
+        for (const k of clavesEspera){
+          try { await subirFotos(puertaId, [espera[k]], { elemento: k }); } catch(_){}
+        }
+        S.fotosEspera = null;
+      }
       /* Si venimos de una asistencia, la puerta queda enganchada a ella.
          Antes esto hacía un update de avisos.puerta_id, y en una obra de varias
          puertas la segunda soltaba a la primera sin avisar. Ahora se añade a la
@@ -26002,7 +26301,13 @@ function dlgComponente(id, puertaId, clave, volverAviso){
     if (!o.nombre) return setErr('Ponle un nombre al componente, o elige qué es.');
     try {
       let nuevoId = c ? c.id : null;
-      if (c){ const { error } = await sb.from('componentes').update(o).eq('id', c.id); if (error) throw error; }
+      if (c){
+        /* Quién lo corrigió y cuándo. Desde el 25-11-2026 el panel de la ficha
+           es el espejo de lo que se documentó, y corregirlo lo hacen oficina y
+           el administrador: entonces hay que poder decir quién fue. */
+        o.actualizado_por = yo();
+        const { error } = await sb.from('componentes').update(o).eq('id', c.id); if (error) throw error;
+      }
       else {
         o.creado_por = yo();
         /* Se pide el número del componente recién creado porque la foto que
@@ -32753,8 +33058,20 @@ raiz.addEventListener('click', async e => {
     if (!armar(b, 'Confirmar')) return;
     await expGuardarComponentes(b.dataset.id);
   }
+  /* ---- «comp-nuevo» y «comp-minimos» ya no se pulsan desde la ficha ----
+     Salieron de ahí el 25-11-2026, cuando el panel de componentes pasó a ser
+     espejo de solo lectura. Los dos manejadores se quedan porque el atajo del
+     parte («Añadir la matrícula de un elemento», obra-comp) sigue abriendo el
+     alta de componente: eso es el técnico apuntando el número de serie del
+     motor con la placa delante, que es el caso que David quiso conservar. */
   else if (a === 'comp-nuevo') dlgComponente(null, b.dataset.id);
-  else if (a === 'comp-editar') dlgComponente(b.dataset.id);
+  /* Corregir: solo oficina y el administrador, y queda anotado quién. En la
+     ficha el botón solo se dibuja para ellos; esto es la red por si alguien
+     llega por otro camino. */
+  else if (a === 'comp-editar'){
+    if (!esGestion()) return toast('Un componente lo corrige la oficina o el administrador.');
+    dlgComponente(b.dataset.id);
+  }
   else if (a === 'comp-minimos'){
     if (!armar(b, 'Confirmar')) return;
     await anadirComponentesMinimos(b.dataset.id);
