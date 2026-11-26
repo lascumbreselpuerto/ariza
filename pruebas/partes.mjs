@@ -216,8 +216,19 @@ paso('en los títulos solo queda lo suyo',
 bloque('4. El remate: quién paga y dónde se dice');
 
 const ps = await partede('pt-ps');
-paso('el remate NO pregunta qué has encontrado y qué has hecho',
-  ps.diag === false && ps.trab === false);
+/* ---- Reescrita el 26-11-2026 ----
+   Decía: «el remate NO pregunta qué has encontrado y qué has hecho», con
+   ps.diag === false && ps.trab === false. David: «En "puesta en servicio" echo
+   en falta un sitio donde anotar algo como una explicación de lo que se ha
+   hecho.» Lo que sobraba era el diagnóstico, no el contarlo. Así que ahora el
+   remate lleva un campo y solo uno, y las dos mitades se comprueban por
+   separado para que no se cuele otra vez el apartado entero. */
+paso('el remate NO pregunta qué has encontrado: no hay nada que averiguar',
+  ps.diag === false);
+paso('pero SÍ tiene sitio para contar lo que ha hecho', ps.trab === true);
+paso('con su propio título, no el de los demás partes',
+  ps.titulos.some(t => /Qué has hecho en este remate/.test(t)) &&
+  !ps.titulos.some(t => /Qué has encontrado/.test(t)), ps.titulos.join(' | '));
 paso('no ofrece la casilla de «esta visita no se cobra»: es redundante',
   ps.sincargo === false);
 /* Y la que pidió David: cobro en obra solo cuando hay algo que cobrar */
@@ -246,6 +257,31 @@ paso('y el trabajo lo escribe la propia visita, con su obra y lo que quedó pend
 const ps2 = await partede('pt-ps2');
 paso('en un remate marcado como repercutible SÍ sale cobro en obra', ps2.cobro === true);
 paso('y sigue sin preguntar qué has encontrado', ps2.diag === false);
+
+/* ---- Lo que escribe el técnico manda (26-11-2026) ----
+   El relleno automático del 06-11 sigue ahí, y tenía que seguir: el técnico va
+   a dejar el campo en blanco muchas veces. Pero ahora que hay sitio para
+   escribirlo, si escribe algo no se puede pisar con el texto de la obra. Eso es
+   lo que se comprueba aquí, porque es el fallo que tendría este cambio: un
+   parte que le dice al cliente «remate de la instalación» cuando el técnico
+   había escrito que la puerta se quedó sin terminar otra vez. */
+const psEscrito = await T(async () => {
+  const g = window.__T;
+  document.getElementById('z-trab').value =
+    'Montada la fotocélula y programado el cuadro. El solado sigue sin estar.';
+  document.getElementById('z-horas').value = '2';
+  document.getElementById('z-sin').value = 'Prueba automática';
+  await g.guardarCierre(g.S.avisos.find(x => x.id === 'pt-ps2'), true);
+  await new Promise(r => setTimeout(r, 1700));
+  const a = g.S.avisos.find(x => x.id === 'pt-ps2');
+  return { cerrado: !!a.cerrado, trabajo: a.trabajo || '',
+           err: (document.querySelector('#dlg-form .err') || {}).textContent || '' };
+});
+paso('un remate con el trabajo escrito a mano se cierra igual',
+  psEscrito.cerrado === true, psEscrito.err);
+paso('y se guarda lo que escribió el técnico, no el texto automático',
+  /fotocélula/i.test(psEscrito.trabajo) && !/Remate de la instalación/i.test(psEscrito.trabajo),
+  psEscrito.trabajo);
 
 const enCreacion = await T(async () => {
   const g = window.__T;
