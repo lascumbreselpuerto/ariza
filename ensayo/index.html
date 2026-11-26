@@ -2245,7 +2245,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.26-2';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.26-3';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -13519,6 +13519,21 @@ const visitaSinPuerta = a => !!a && !!a.sin_puerta && !!String(a.sin_puerta_moti
    el trabajo y el diagnóstico salen del guion, y en la comercial, de los huecos
    medidos. */
 const pideDiagnostico = a => !!a && !['mantenimiento','comercial','puesta_servicio'].includes(a.tipo);
+/* ---- El sitio para contar el remate (26-11-2026) ----
+   David: «En "puesta en servicio" echo en falta un sitio donde anotar algo como
+   una explicación de lo que se ha hecho.»
+
+   Esto NO desdice lo que dictó el 06-11. Lo que sobraba en un remate era el
+   apartado entero de «qué has encontrado y qué has hecho»: el diagnóstico no
+   pinta nada, porque no se va a averiguar qué le pasa a nada, se va a terminar
+   lo que quedó de la obra. Lo que faltaba era el otro campo, el de contarlo.
+   Así que se pregunta solo uno, con su propio título, y el diagnóstico sigue
+   fuera de la vista.
+
+   No es obligatorio: si lo deja vacío, al guardar se sigue rellenando solo con
+   la obra de la que viene y lo que quedó pendiente de ella, como desde el
+   06-11. Un remate no puede quedarse sin poder cerrarse por un campo nuevo. */
+const pideTrabajoRemate = a => !!a && a.tipo === 'puesta_servicio';
 const pideMateriales  = a => !!a && a.tipo !== 'comercial';
 const pideComoQueda   = a => !!a && a.tipo !== 'comercial';
 /* Y «esta visita no se cobra» no se le ofrece a los tipos que ya valen cero por
@@ -30115,6 +30130,21 @@ function dlgCierre(avisoId){
       '<div class="campo full"><label for="z-trab">Trabajo realizado</label><textarea id="z-trab" rows="3" placeholder="Ej.: sustituida banda, ajustado final de carrera y engrase general">'+esc(a.trabajo||'')+'</textarea>'+
         frasesDe('frases_trab', FRASES_TRAB, 'z-trab')+'</div>'+
       '</div></div>';
+  /* El remate lleva solo el campo de contarlo, con su título. El de arriba no
+     vale aquí: habla de encontrar algo, y en un remate ya se sabía lo que
+     había. (26-11-2026) */
+  else if (pideTrabajoRemate(a))
+    h += '<div class="grupo"><h3>Qué has hecho en este remate</h3><div class="campos">'+
+      '<div class="campo full"><label for="z-trab">Trabajo realizado</label>'+
+      '<textarea id="z-trab" rows="3" placeholder="Ej.: montada la fotocélula que faltaba, '+
+      'programado el cuadro y ajustadas las fuerzas">'+esc(a.trabajo||'')+'</textarea>'+
+      frasesDe('frases_trab', FRASES_TRAB, 'z-trab')+'</div>'+
+      '</div><p class="mini" style="margin:10px 0 0">No es obligatorio. Si lo dejas en blanco, '+
+      'el parte lo escribe solo con la obra de la que viene esta visita y lo que quedó pendiente '+
+      'de ella. Escríbelo cuando hayas hecho algo que ahí no se cuenta, o cuando el remate no haya '+
+      'salido como estaba previsto: esto es lo que lee el cliente en su parte y lo que queda en el '+
+      'histórico de la puerta.</p>'+
+      '<div hidden><textarea id="z-diag">'+esc(a.diagnostico||'')+'</textarea></div></div>';
   else
     h += '<div hidden>'+
       '<textarea id="z-diag">'+esc(a.diagnostico||'')+'</textarea>'+
@@ -31822,7 +31852,12 @@ async function guardarCierre(a, cerrando){
        seguía exigiendo: el parte no se podía cerrar de ninguna manera. Lo cazó
        la prueba de obra el mismo día.
        Así que se rellena con lo que de verdad es: el remate de su obra y lo que
-       quedó pendiente de ella, que ya está escrito y no hay que teclear. */
+       quedó pendiente de ella, que ya está escrito y no hay que teclear.
+
+       Desde el 26-11-2026 el remate sí tiene su campo para contarlo, pero esto
+       se queda: es el respaldo de cuando el técnico lo deja en blanco, que
+       seguirá pasando. Lo que escriba él manda, porque esto solo entra si no
+       hay nada. */
     /* ---- El viaje en balde (07-11-2026) ----
        Si el técnico ha marcado que no se pudo trabajar, el parte se cierra con
        eso y no se le pide nada más: ni qué ha hecho (no ha hecho nada), ni la
