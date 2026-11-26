@@ -2233,7 +2233,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.26-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.26-2';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -5971,7 +5971,7 @@ function dlgMover(articuloId, modo, avisoId){
         '<span class="pista">Obligatorio. Una baja es material pagado que desaparece: sin esto, '+
         'dentro de tres meses nadie sabe si se rompió, se perdió o se quedó en una obra.</span>'+
         '<div style="margin-top:8px"><label for="mv-baja-foto">Foto, si procede</label>'+
-        '<input id="mv-baja-foto" type="file" accept="image/*" capture="environment">'+
+        '<input id="mv-baja-foto" type="file" accept="image/*">'+
         '<span class="pista">Opcional. Para una pieza cara, una foto explica más que un texto.</span>'+
         '</div></div>');
 
@@ -8267,14 +8267,33 @@ async function convertirPresupuesto(id, tipoElegido){
   if (!p) return;
   const lineas = lineasDe(id);
   try {
-    const admin = (S.equipo.find(t => t.rol === 'admin' && t.activo) || {}).id || null;
     const { data: av, error } = await sb.from('avisos').insert({
       /* El tipo lo elige quien abre el trabajo. Si por lo que sea no llega
          ninguno, se abre como instalación y NO como comercial: una oferta
          vendida no es una visita de ir a ofertar, y comercial se valora a cero. */
       tipo: tipoElegido || 'instalacion',
-      estado: admin ? 'asignado' : 'recibido', prioridad: 'normal', origen: 'Interno',
-      cliente_id: p.cliente_id, puerta_id: p.puerta_id || null, tecnico_id: admin,
+      /* ---- Nace SIN asignar, como todas (26-11-2026) ----
+         Aquí ponía «tecnico_id: admin» y el estado en «asignado», con la misma
+         idea de antes: que el trabajo no se quedara sin dueño.
+
+         El 24-11-2026 se quitó eso del alta de asistencias, porque a David se
+         le llenaba «Mi trabajo» de avisos que no iba a hacer él y esa pantalla
+         dejaba de significar «lo que tengo que hacer hoy». Pero el arreglo se
+         hizo SOLO en la pantalla de crear, y este es otro camino: aceptar un
+         presupuesto también crea una asistencia.
+
+         Así que el fallo siguió vivo por aquí y David lo volvió a ver el
+         26-11-2026: «cuando se crea una asistencia automáticamente se me
+         asigna a mí». Tenía razón, y era el mismo fallo en otra puerta.
+
+         Lección, apuntada para la próxima: al arreglar algo, buscar TODOS los
+         sitios que lo hacen, no solo el que se tenía delante.
+
+         El miedo original sigue cubierto, y mejor: un trabajo sin dueño ahora
+         SE VE, en la pastilla de «Sin asignar» con su cuenta. Metido en la
+         lista de alguien que no va a ir, no se veía. */
+      estado: 'recibido', prioridad: 'normal', origen: 'Interno',
+      cliente_id: p.cliente_id, puerta_id: p.puerta_id || null, tecnico_id: null,
       descripcion: 'Presupuesto aceptado '+(p.referencia||'')+': '+p.titulo,
       notas_oficina: (p.descripcion || '') +
         (p.condiciones ? '\n\nCondiciones ofertadas: '+p.condiciones : ''),
@@ -30120,9 +30139,21 @@ function dlgCierre(avisoId){
       : 'En un viaje en balde no hace falta ninguna: no has podido ver nada. ')+
     'Caben hasta '+MAX_FOTOS_AVISO+'. <span id="z-fotos-cuenta"></span></p>'+
     '<div class="fila" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">'+
+    /* ---- Sin «capture»: la galería también vale (26-11-2026) ----
+       Estos botones llevaban capture="environment", que en el móvil abre la
+       cámara DIRECTAMENTE y esconde el carrete. David: «en una asistencia
+       comercial, al cargar fotos no me ha dejado cargar fotos de la galería,
+       solo de la cámara».
+
+       Y no era solo la comercial: lo llevaban las fotos de la visita, las de
+       obra y las de una baja de material. O sea, todas.
+
+       Quitarlo no quita la cámara: el móvil ofrece las dos cosas, hacer la foto
+       o elegirla del carrete. Que es lo que hace falta cuando la foto se hizo
+       antes de abrir el parte, o la mandó el cliente por WhatsApp. */
     ETAPAS_FOTO.map(([k, n]) =>
       '<label class="btn sm'+(k === 'encontrado' ? ' pri' : '')+'">'+esc(n)+
-      '<input type="file" accept="image/*" capture="environment" multiple hidden '+
+      '<input type="file" accept="image/*" multiple hidden '+
       'data-act="foto-aviso" data-aviso="'+a.id+'" data-etapa="'+k+'"></label>').join('')+
     '</div>'+
     '<div class="fotos" id="z-fotos"></div></div>';
@@ -30165,7 +30196,7 @@ function dlgCierre(avisoId){
       '<div class="campo"><label for="pm-cant">Cuántos has gastado</label>'+
         '<input id="pm-cant" type="number" step="any" min="0" value="1"></div>'+
       '<div class="campo full"><label for="pm-foto">Foto de la caja</label>'+
-        '<input id="pm-foto" type="file" accept="image/*" capture="environment">'+
+        '<input id="pm-foto" type="file" accept="image/*">'+
         '<span class="pista">Obligatoria. Con la foto, la oficina ve la marca y la referencia '+
         'y lo da de alta bien. Sin ella tendría que llamarte para preguntarte qué era.</span></div>'+
       '<div class="campo full"><label for="pm-nota">Algo más que deba saber la oficina</label>'+
@@ -30819,7 +30850,7 @@ function cuerpoAltaObra(a, p, nFotos, dentro){
   h += '<div class="fila" style="gap:8px;flex-wrap:wrap;margin-top:10px">'+
     '<button type="button" class="btn sm" data-act="obra-ficha" data-id="'+a.id+
       '" data-puerta="'+esc(p.id)+'">Rellenar la ficha'+(dentro?'':' de la puerta')+'</button>'+
-    '<label class="btn sm">Hacer fotos<input type="file" accept="image/*" capture="environment" multiple hidden '+
+    '<label class="btn sm">Hacer fotos<input type="file" accept="image/*" multiple hidden '+
       'data-act="obra-foto" data-id="'+esc(p.id)+'" data-aviso="'+a.id+'"></label>'+
     '<button type="button" class="btn sm" data-act="obra-comp" data-id="'+a.id+
       '" data-puerta="'+esc(p.id)+'">Añadir la matrícula de un elemento</button>'+
