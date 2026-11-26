@@ -2245,7 +2245,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.26-3';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.26-4';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -10320,10 +10320,25 @@ async function pintarFotos(puertaId){
    que lo lea tres meses más tarde entiende la secuencia sin preguntar.
    (07-11-2026) */
 async function pintarFotosAviso(avisoId){
-  const cont = document.getElementById('z-fotos');
-  if (!cont || !avisoId) return;
-  const xs = fotosDeAviso(avisoId);
-  const cuenta = document.getElementById('z-fotos-cuenta');
+  if (!avisoId) return;
+  /* Un parte puede tener varios cajones de fotos (26-11-2026). Se recorren
+     todos: el de siempre es uno con data-cajon="*". Las URL firmadas se piden
+     DE UNA VEZ para todas las fotos del aviso y luego se reparten, porque
+     pedirlas cajón por cajón serían tres rondas al almacén en vez de una. */
+  const cajones = Array.from(document.querySelectorAll('#dlg-form .fotos[data-cajon]'));
+  if (!cajones.length) return;
+  const todas = fotosDeAviso(avisoId);
+  const urlDe = {};
+  if (todas.length){
+    const urls = await Promise.all(todas.map(f => sb.storage.from('fotos').createSignedUrl(f.ruta, 3600)));
+    todas.forEach((f, i) => { urlDe[f.id] = urls[i] && urls[i].data ? urls[i].data.signedUrl : ''; });
+  }
+  cajones.forEach(cont => pintarCajonFotos(cont, avisoId, urlDe));
+}
+function pintarCajonFotos(cont, avisoId, urlDe){
+  const cajon = cont.dataset.cajon;
+  const xs = fotosDelCajon(avisoId, cajon);
+  const cuenta = document.getElementById(cont.id ? cont.id.replace('z-fotos', 'z-fotos-cuenta') : '');
   if (cuenta) cuenta.textContent = xs.length
     ? xs.length+' de '+MAX_FOTOS_AVISO
     : 'ninguna todavía';
@@ -10331,9 +10346,8 @@ async function pintarFotosAviso(avisoId){
     cont.innerHTML = '<p class="mini" style="margin:0">Todavía no has hecho ninguna foto.</p>';
     return;
   }
-  const urls = await Promise.all(xs.map(f => sb.storage.from('fotos').createSignedUrl(f.ruta, 3600)));
-  cont.innerHTML = xs.map((f, i) => {
-    const u = urls[i] && urls[i].data ? urls[i].data.signedUrl : '';
+  cont.innerHTML = xs.map((f) => {
+    const u = urlDe[f.id] || '';
     FOTOS[f.id] = { url:u, autor:f.autor||'', creado:f.creado, ruta:f.ruta, puerta:f.puerta_id };
     return '<div class="foto">'+
       /* Sin «ampliar»: abrir la foto en un diálogo cerraría el parte a medio
@@ -10382,6 +10396,34 @@ const nombreEtapa = k => {
    imposible de cumplir se acaba sorteando. Decisión de David, 07-11-2026. */
 const pideFotoVisita = a => !!a && !esFalso(a);
 const fotosDeAviso = avisoId => (S.fotosAviso || []).filter(f => f && f.aviso_id === avisoId);
+/* ---- Las fotos, puerta por puerta (26-11-2026) ----
+   David: «si es una asistencia multipuerta, cada puerta debe de tener un sitio
+   para poner fotos. Así cada puerta podrá tener sus fotos en su histórico.»
+
+   Antes todas las fotos del parte se subían con la puerta PRINCIPAL del aviso:
+   en una visita de tres puertas, las de la segunda y la tercera quedaban
+   guardadas como de la primera. El histórico de las otras dos salía vacío y el
+   de la primera, mentiroso.
+
+   Ahora el apartado se parte en cajones. Un cajón es el sitio donde van unas
+   fotos, y cada uno sabe de qué puerta son:
+     · '*'  → una sola puerta (o ninguna): todas las fotos del aviso, como hasta
+              hoy, y se suben con la puerta principal.
+     · '<id>' → esa puerta: las fotos se suben con su puerta_id y salen en SU
+              ficha.
+     · ''   → generales de la visita: el acceso, el albarán, la calle. No son de
+              ninguna puerta y no entran en ningún histórico.
+   El máximo es por cajón, no por parte: con tres puertas, diez fotos entre
+   todas dejarían a la tercera sin sitio. */
+function fotosDelCajon(avisoId, cajon){
+  const xs = fotosDeAviso(avisoId);
+  if (cajon === '*') return xs;
+  if (!cajon) return xs.filter(f => !f.puerta_id);
+  return xs.filter(f => f.puerta_id === cajon);
+}
+/* De qué puerta son las fotos de este cajón, para subirlas. En el cajón de
+   siempre sigue mandando la puerta principal del aviso. */
+const puertaDelCajon = (cajon, a) => cajon === '*' ? ((a && a.puerta_id) || null) : (cajon || null);
 /* ---- Qué elementos de esta puerta tienen ya su foto (25-11-2026) ----
    Se piden solo la ruta y el elemento, no la foto: aquí no hay que verlas, hay
    que saber cuáles faltan. Y al llegar se repintan SOLO las etiquetas de las
@@ -24205,15 +24247,20 @@ dlgForm.addEventListener('change', async e => {
     const av = S.avisos.find(x => x.id === avisoId);
     const ficheros = Array.from(t.files);
     t.value = '';
-    const ya = fotosDeAviso(avisoId).length;
+    /* El tope se cuenta en SU cajón, no en el parte entero: con tres puertas,
+       diez fotos entre todas dejarían a la última sin sitio. (26-11-2026) */
+    const cajon = t.dataset.cajon != null ? t.dataset.cajon : '*';
+    const ya = fotosDelCajon(avisoId, cajon).length;
     const caben = Math.max(0, MAX_FOTOS_AVISO - ya);
+    const donde = cajon === '*' ? 'en esta visita'
+      : (cajon ? 'en esta puerta' : 'en las generales de la visita');
     if (!caben){
-      toast('Ya hay '+MAX_FOTOS_AVISO+' fotos en esta visita, que es el máximo. Borra alguna si quieres cambiarla.');
+      toast('Ya hay '+MAX_FOTOS_AVISO+' fotos '+donde+', que es el máximo. Borra alguna si quieres cambiarla.');
       return;
     }
     if (ficheros.length > caben)
-      toast('Caben '+caben+' foto'+(caben===1?'':'s')+' más: se suben las '+caben+' primeras.');
-    subirFotos((av && av.puerta_id) || null, ficheros.slice(0, caben),
+      toast('Caben '+caben+' foto'+(caben===1?'':'s')+' más '+donde+': se suben las '+caben+' primeras.');
+    subirFotos(puertaDelCajon(cajon, av), ficheros.slice(0, caben),
       { avisoId, etapa: t.dataset.etapa });
     return;
   }
@@ -30171,6 +30218,30 @@ function dlgCierre(avisoId){
 
      Van antes de los materiales porque es lo que se hace estando delante de la
      puerta, y los materiales se rellenan ya con la furgoneta cerrada. */
+  /* ---- Sin «capture»: la galería también vale (26-11-2026) ----
+     Estos botones llevaban capture="environment", que en el móvil abre la
+     cámara DIRECTAMENTE y esconde el carrete. David: «en una asistencia
+     comercial, al cargar fotos no me ha dejado cargar fotos de la galería,
+     solo de la cámara».
+
+     Y no era solo la comercial: lo llevaban las fotos de la visita, las de
+     obra y las de una baja de material. O sea, todas.
+
+     Quitarlo no quita la cámara: el móvil ofrece las dos cosas, hacer la foto
+     o elegirla del carrete. Que es lo que hace falta cuando la foto se hizo
+     antes de abrir el parte, o la mandó el cliente por WhatsApp. */
+  const botonesFoto = (cajon, suf) =>
+    '<div class="fila" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">'+
+    ETAPAS_FOTO.map(([k, n]) =>
+      '<label class="btn sm'+(k === 'encontrado' ? ' pri' : '')+'">'+esc(n)+
+      '<input type="file" accept="image/*" multiple hidden '+
+      'data-act="foto-aviso" data-aviso="'+a.id+'" data-etapa="'+k+'" '+
+      'data-cajon="'+esc(cajon)+'"></label>').join('')+
+    '</div><div class="fotos" data-cajon="'+esc(cajon)+'" id="z-fotos'+suf+'"></div>';
+  /* Una sola puerta: todo sigue como el 07-11, un solo sitio. Varias: un sitio
+     por puerta, porque cada foto tiene que ir al histórico de SU puerta, y uno
+     al final para lo que no es de ninguna. (26-11-2026) */
+  const fotosPorPuerta = !S.sinMultiPuerta && puertasParte.length > 1;
   if (!S.sinFotoAviso)
   h += '<div class="grupo"><h3>Fotos de esta visita</h3>'+
     '<p class="mini" style="margin:0 0 10px">Lo que te encontraste, cómo queda y la pieza que has '+
@@ -30179,26 +30250,24 @@ function dlgCierre(avisoId){
     (pideFotoVisita(a)
       ? '<b>Hace falta al menos una para cerrar.</b> '
       : 'En un viaje en balde no hace falta ninguna: no has podido ver nada. ')+
-    'Caben hasta '+MAX_FOTOS_AVISO+'. <span id="z-fotos-cuenta"></span></p>'+
-    '<div class="fila" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">'+
-    /* ---- Sin «capture»: la galería también vale (26-11-2026) ----
-       Estos botones llevaban capture="environment", que en el móvil abre la
-       cámara DIRECTAMENTE y esconde el carrete. David: «en una asistencia
-       comercial, al cargar fotos no me ha dejado cargar fotos de la galería,
-       solo de la cámara».
-
-       Y no era solo la comercial: lo llevaban las fotos de la visita, las de
-       obra y las de una baja de material. O sea, todas.
-
-       Quitarlo no quita la cámara: el móvil ofrece las dos cosas, hacer la foto
-       o elegirla del carrete. Que es lo que hace falta cuando la foto se hizo
-       antes de abrir el parte, o la mandó el cliente por WhatsApp. */
-    ETAPAS_FOTO.map(([k, n]) =>
-      '<label class="btn sm'+(k === 'encontrado' ? ' pri' : '')+'">'+esc(n)+
-      '<input type="file" accept="image/*" multiple hidden '+
-      'data-act="foto-aviso" data-aviso="'+a.id+'" data-etapa="'+k+'"></label>').join('')+
-    '</div>'+
-    '<div class="fotos" id="z-fotos"></div></div>';
+    (fotosPorPuerta
+      ? 'Son '+puertasParte.length+' puertas: haz las fotos de cada una en su sitio y así quedan '+
+        'en su ficha. Caben hasta '+MAX_FOTOS_AVISO+' en cada una.</p>'+
+        puertasParte.map(pu => {
+          const titulo = [pu.codigo, pu.ubicacion || pu.direccion].filter(Boolean).join(' · ') ||
+            'Puerta sin código';
+          return '<div class="puerta-parte"><h4>'+esc(titulo)+
+            ' <span class="mini" id="z-fotos-cuenta-'+pu.id+'"></span></h4>'+
+            botonesFoto(pu.id, '-'+pu.id)+'</div>';
+        }).join('')+
+        '<div class="puerta-parte"><h4>Generales de la visita '+
+        '<span class="mini" id="z-fotos-cuenta"></span></h4>'+
+        '<p class="mini" style="margin:0 0 10px">El acceso, el albarán, la calle: lo que no es de '+
+        'ninguna puerta en concreto. Estas no entran en el histórico de ninguna ficha.</p>'+
+        botonesFoto('', '')+'</div>'
+      : 'Caben hasta '+MAX_FOTOS_AVISO+'. <span id="z-fotos-cuenta"></span></p>'+
+        botonesFoto('*', ''))+
+    '</div>';
 
   if (pideMateriales(a))
   h += '<div class="grupo"><h3>Materiales</h3>'+
