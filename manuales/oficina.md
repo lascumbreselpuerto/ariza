@@ -1,6 +1,6 @@
 # Safe2door · Manual de oficina
 
-Versión 2026.11.26-1
+Versión 2026.11.26-2
 
 > **Las fotos de este manual son de antes del cambio de nombre.** La aplicación
 > se llamaba ARIZA SAT y así aparece en la barra de arriba de cada pantalla.
@@ -125,6 +125,12 @@ Calendario.
 nacían asignadas al administrador, y eso le llenaba «Mi trabajo» de avisos que
 no iba a hacer él. Ahora una asistencia recién creada se queda en **Sin
 asignar**, con su cuenta en la tira de arriba, hasta que decidís quién va.
+
+> **Y eso vale también para los trabajos que salen de un presupuesto aceptado
+> (26 de noviembre de 2026).** Hasta esa fecha, aceptar una oferta abría el
+> trabajo ya asignado al administrador: el arreglo del día 24 se había hecho
+> solo en la pantalla de crear, y aceptar un presupuesto es otro camino. Era el
+> mismo fallo por otra puerta.
 
 **Se puede asignar a más de un técnico, y ya desde el alta.** La pantalla de
 asignar lleva una casilla por cada uno, en vez de un desplegable de uno solo, y

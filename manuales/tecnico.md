@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.26-1**
+> **Versión de la aplicación que describe este manual: 2026.11.26-2**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -530,7 +530,13 @@ las medidas definitivas de fabricación se comprueban antes de pedir la puerta.
 ### Fotos de esta visita (7 de noviembre de 2026)
 
 Lo que te encontraste, cómo queda y la pieza que has cambiado. Cuatro botones,
-uno por cada cosa, y se hacen con la cámara sin salir del parte.
+uno por cada cosa, sin salir del parte.
+
+**Puedes hacer la foto en el momento o cogerla del carrete (26 de noviembre de
+2026).** Hasta esa fecha estos botones abrían la cámara directamente y no
+dejaban elegir del carrete, y eso estorbaba cuando la foto ya estaba hecha
+antes de abrir el parte o la había mandado el cliente. Era un fallo, y estaba
+en todos los botones de foto, no solo en los de la comercial.
 
 **Hace falta al menos una para cerrar.** Caben hasta diez.
 
@@ -1627,4 +1633,4 @@ que mire ahí antes de nada. Puede ser eso.
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.26-1 de Safe2door*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.26-2 de Safe2door*
