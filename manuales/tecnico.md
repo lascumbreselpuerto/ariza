@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.26-2**
+> **Versión de la aplicación que describe este manual: 2026.11.26-3**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -376,7 +376,7 @@ tipos de visita, porque no en todos tiene sentido:
 | | Avería · Urgencia · Garantía | Preventiva | Comercial | Puesta en servicio |
 |---|---|---|---|---|
 | Documentar la puerta | Sí | Sí | No | Sí |
-| Qué has encontrado y qué has hecho | Sí | **No** | **No** | **No** |
+| Qué has encontrado y qué has hecho | Sí | **No** | **No** | **No**, lleva el suyo |
 | Guión de revisión | No | Sí | No | No |
 | Toma de medidas | No | No | Sí | No |
 | Fotos de esta visita | Sí | Sí | Sí | Sí |
@@ -396,6 +396,24 @@ visita. En una preventiva, el trabajo realizado lo escribe el guión. En una
 comercial, los huecos que has medido. En una puesta en servicio, la obra de la
 que viene y lo que quedó pendiente de ella. Si antes escribías eso a mano, ya no
 hace falta.
+
+### El remate ya tiene dónde contarse (26 de noviembre de 2026)
+
+En la puesta en servicio sale ahora un apartado propio, **Qué has hecho en este
+remate**, con un solo campo. No lleva diagnóstico, porque en un remate no vas a
+averiguar qué le pasa a nada: vas a terminar lo que quedó de la obra, y eso ya
+se sabía al salir.
+
+**No es obligatorio.** Si lo dejas en blanco, el parte sigue escribiéndolo solo
+con la obra de la que viene la visita y lo que quedó pendiente de ella, igual
+que desde el 6 de noviembre. Lo que escribas tú manda siempre: el texto
+automático solo entra cuando no hay nada.
+
+Escríbelo cuando hayas hecho algo que ahí no se cuenta, o cuando el remate no
+haya salido como estaba previsto. Es lo que lee el cliente en su parte y lo que
+queda en el histórico de la puerta: «montada la fotocélula y programado el
+cuadro, el solado sigue sin estar» dice mucho más dentro de seis meses que
+«remate de la instalación».
 
 ### Qué has encontrado y qué has hecho
 
@@ -1633,4 +1651,4 @@ que mire ahí antes de nada. Puede ser eso.
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.26-2 de Safe2door*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.26-3 de Safe2door*
