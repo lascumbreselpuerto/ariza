@@ -21,6 +21,7 @@ const AQUI = dirname(fileURLToPath(import.meta.url));
 const URL_APP = process.env.ARIZA_URL || 'http://127.0.0.1:8899/index.html';
 const RUTA = join(AQUI, '..', 'manuales', 'tecnico.md');
 const RUTA_FORM = join(AQUI, '..', 'manuales', 'formacion.md');
+const RUTA_OFI  = join(AQUI, '..', 'manuales', 'oficina.md');
 
 const ajustes = JSON.parse(readFileSync(join(AQUI,'ajustes.json'),'utf8'));
 const ENV = { ...process.env, LANG:'es_ES.UTF-8', LANGUAGE:'es_ES:es', LC_ALL:'es_ES.UTF-8' };
@@ -430,6 +431,12 @@ bloque('9. El manual de formación');
 
 paso('el manual de formación está en el repositorio', existsSync(RUTA_FORM));
 const F = existsSync(RUTA_FORM) ? readFileSync(RUTA_FORM, 'utf8') : '';
+/* El manual de oficina no se comprobaba hasta hoy. Se carga aquí porque desde
+   el 25-11-2026 dice quién puede corregir un componente, y eso es un permiso:
+   un manual que lo diga mal manda a un técnico a pelearse con un botón que no
+   le sale. */
+paso('el manual de oficina está en el repositorio', existsSync(RUTA_OFI));
+const O = existsSync(RUTA_OFI) ? readFileSync(RUTA_OFI, 'utf8') : '';
 paso('y tiene cuerpo de material formativo, no un resumen',
   F.length > 8000, F.length + ' caracteres');
 paso('dice qué versión describe, y es la actual',
@@ -652,6 +659,27 @@ paso('y explica el error de leer «C+D o E» como tres elementos',
   /vías alternativas/.test(F) && /se da por incumplida una/.test(F));
 paso('y que documentar no es obligatorio para todo',
   /hay que asistir igual/.test(F) && /Una ficha no acredita nada/.test(F));
+
+/* ---- La foto por elemento y el espejo de componentes (25-11-2026) ----
+   Lo que se vigila: que el manual no deje al técnico creyendo que las fotos de
+   los elementos le van a impedir cerrar la visita (no), ni buscando el panel de
+   componentes para apuntar un número de serie (ya está en la ficha). Las dos
+   cosas son decisiones de David del 25-11-2026 y las dos cambian la rutina de
+   campo, así que si el manual no las dice, se las encuentra el técnico solo. */
+paso('el manual explica la cámara de cada elemento y que la foto queda atada a él',
+  /Una foto de cada elemento/.test(M) && /atada a su elemento/.test(M));
+paso('y que esas fotos NO impiden cerrar la visita',
+  /no te impiden cerrar/i.test(M) || /NO te impiden cerrar/.test(M));
+paso('y que en un alta la foto espera y sube al guardar',
+  /Foto lista/.test(M) && /sube sola en cuanto guardas/.test(M));
+paso('dice que Componentes es ahora un espejo y no un formulario',
+  /es un espejo, no un formulario/.test(M) && /solo lectura/.test(M));
+paso('y dónde se apunta ahora el nº de serie del motor',
+  /Cuadro y motor/.test(M) && /n[úu]mero de serie/i.test(M));
+paso('el manual de oficina dice que corregir un componente es de oficina, con rastro',
+  /Corregir uno es vuestro/.test(O) && /qui[eé]n lo corrigi[óo]/.test(O));
+paso('y distingue «no hay fotos» de «no lo he comprobado»',
+  /no lo he comprobado/.test(O));
 paso('y el apartado libre, con el motivo de no desglosar herrajes',
   /[Mm]ás elementos a identificar/.test(M) && /un todo/.test(M));
 paso('arrastrar y soltar está explicado, con lo que hace solo',
@@ -695,10 +723,19 @@ const ficha = await T(() => {
 });
 paso('el manual explica que las listas largas tienen buscador',
   /buscador/i.test(M) && /se elige sola/.test(M));
-paso('y que el cuadro y el motor se escriben una sola vez',
-  /se escriben una vez/.test(M) && /Componentes/.test(M));
-paso('diciendo qué queda en el componente y qué no',
-  /número de serie, la foto de la placa y el papel/.test(M));
+/* ---- Reescritas el 25-11-2026 ----
+   Decían que el cuadro y el motor «se escriben una vez» en la ficha y que el
+   número de serie «queda en el componente». Ya no es verdad, y el cambio es a
+   propósito: al sacar el panel de componentes de la ficha, una puerta sin
+   documentar se quedaba sin sitio donde guardar el número de serie del motor, y
+   es EL dato para pedir un repuesto. David decidió que ese campo se queda en la
+   ficha. Lo que el manual tiene que decir ahora es eso. */
+paso('y que el cuadro y el motor, con su nº de serie, se escriben en la ficha',
+  /con su número de serie, en la ficha/.test(M) && /Cuadro y motor/.test(M));
+paso('diciendo que ese dato se pide en toda puerta, documentada o no',
+  /esté documentada o no/.test(M) && /pedir un repuesto/.test(M));
+paso('y que dejarlo en blanco no borra lo que ya estuviera puesto',
+  /no se borra/.test(M) && /lo que no se escribe, no se toca/i.test(M));
 /* Los cuatro modos no se escriben aquí: se leen de la aplicación */
 ficha.modos.forEach(n => paso('el manual nombra el modo «'+n+'» como lo nombra la aplicación',
   M.toLowerCase().includes(n.toLowerCase()), n));

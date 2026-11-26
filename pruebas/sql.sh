@@ -48,7 +48,7 @@ almacen.sql presupuestos.sql presupuestos2.sql comercial.sql anexos.sql \
 tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos3.sql valoracion.sql \
 parado.sql factura.sql rutas.sql ruta-cliente.sql telegram.sql subtipo.sql urgencia.sql \
 medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql perifericos.sql ficha4.sql urgencia2.sql falso.sql fotos-aviso.sql barras.sql almacenes.sql nombre-equipo.sql sitio-material.sql conformidad-visita.sql mensajes.sql tecnicos.sql multipuerta.sql \
-alta-por-bloques.sql elementos-unificados.sql"
+alta-por-bloques.sql elementos-unificados.sql fotos-elemento.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -197,6 +197,22 @@ if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/alta-por-bloques-pruebas.sql" ]; then
     fallos=$((fallos+1))
     echo " FALLA el alta por bloques:"
     grep -a -m3 -E "ERROR|EXCEPTION" /tmp/bloques-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
+# La foto por elemento y la firma de quien corrige un componente. Lo que se
+# vigila: que las columnas acepten lo suyo, que el índice esté (sin él, saber qué
+# elementos tienen foto es un recorrido de la tabla entera por cada ficha), y que
+# las fotos de antes se queden SIN elemento, que es la verdad.
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/fotos-elemento-pruebas.sql" ]; then
+  echo ""
+  echo "── La foto de cada elemento ────────────────────"
+  if $PSQL -f "$AQUI/sql/fotos-elemento-pruebas.sql" > /tmp/fe-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/fe-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA la foto de cada elemento:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/fe-pruebas.log | sed 's/^/         /'
   fi
 fi
 

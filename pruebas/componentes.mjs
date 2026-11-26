@@ -167,12 +167,33 @@ await irAPestana(pag, 'puertas'); await esperar(500);
 await pag.locator('#vista .item:has-text("Talleres Guadalete")').first().click(); await esperar(800);
 paso('la ficha de la puerta tiene su apartado de componentes',
   await pag.locator('#vista .panel:has(h3:text-is("Componentes"))').count() === 1);
-paso('dice que no hay ninguno todavía',
-  /Todavía no hay ningún componente/.test(await pag.textContent('#vista .panel:has(h3:text-is("Componentes"))')));
-paso('y ofrece añadir los que faltan',
-  await pag.locator('[data-act="comp-minimos"]').count() === 1);
+/* ---- Reescrito el 25-11-2026 ----
+   El panel de la ficha ya NO da de alta componentes. David: «en la ficha de
+   dicha puerta aparece componentes y valoro no necesario, a no ser que esté la
+   puerta creada la documentación completa. Los componentes se deben de
+   solicitar con datos como marca, referencia etc en el momento de crear la
+   documentación».
 
-await pag.click('[data-act="comp-nuevo"]'); await esperar(700);
+   Así que lo que antes se comprobaba aquí («dice que no hay ninguno» y «ofrece
+   añadir los que faltan») ya no tiene que pasar, y «añadir los que faltan» se
+   ha quitado entero: era justo lo que reclamaba diecisiete componentes de una
+   puerta que nadie iba a documentar.
+
+   El alta de componente sigue existiendo por el atajo del parte («Añadir la
+   matrícula de un elemento»), que es el técnico apuntando una placa con ella
+   delante. Es por ahí por donde se entra ahora, y es lo que se prueba. */
+paso('sin expediente, el panel dice que la puerta no está documentada',
+  /no está documentada/.test(await pag.textContent('#vista .panel:has(h3:text-is("Componentes"))')));
+paso('y NO ofrece dar de alta componentes ahí',
+  await pag.locator('[data-act="comp-nuevo"]').count() === 0 &&
+  await pag.locator('[data-act="comp-minimos"]').count() === 0);
+
+/* El camino de verdad: el atajo del parte abre el alta de componente */
+await T(() => {
+  const g = window.__T;
+  const p = g.S.puertas.find(x => x.codigo === 'AR-0002');
+  g.dlgComponente(null, p.id);
+}); await esperar(700);
 paso('el alta de componente deja elegir qué es', await pag.locator('#o-clave').count() === 1);
 paso('y pide marca, modelo y número de serie',
   await pag.locator('#o-marca').count() === 1 && await pag.locator('#o-modelo').count() === 1 &&
@@ -225,31 +246,68 @@ paso('con la fecha puesta sola', !!retirado.fecha, retirado.fecha);
 paso('y el motivo', retirado.motivo === 'Sustituida por avería');
 
 /* ================================================================
-   3. Añadir los que faltan
-   ================================================================ */
-bloque('3. Añadir de una vez los que faltan');
+   3. El cuadro y el motor se dan de alta desde la FICHA
+   ================================================================
+   Esto sustituye al «añadir los que faltan» del 25-11-2026, que se quitó
+   porque reclamaba diecisiete componentes de una puerta que nadie iba a
+   documentar. El camino que queda, y el que importa, es este: el técnico
+   escribe en la ficha la marca, el modelo y el NÚMERO DE SERIE del motor y del
+   cuadro, y de ahí salen sus componentes.
 
-await irAPestana(pag, 'puertas'); await esperar(400);
-await pag.locator('#vista .item:has-text("Talleres Guadalete")').first().click(); await esperar(700);
-const antes = await T(() => {
+   El número de serie es el dato con el que se pide un repuesto, y por eso se
+   quedó en la ficha: una puerta sin documentar también se avería. */
+bloque('3. El cuadro y el motor, desde la ficha, con su nº de serie');
+
+const desdeFicha = await T(async () => {
   const g = window.__T;
   const p = g.S.puertas.find(x => x.codigo === 'AR-0002');
-  return g.componentesDe(p.id).length;
-});
-await pag.click('[data-act="comp-minimos"]'); await esperar(400);
-await pag.click('[data-act="comp-minimos"]'); await esperar(1600);
-const despues = await T(() => {
-  const g = window.__T;
-  const p = g.S.puertas.find(x => x.codigo === 'AR-0002');
+  g.cerrarDlg();
+  g.dlgPuerta(p.id);
+  await new Promise(r => setTimeout(r, 700));
+  const pon = (id, v) => { const e = document.getElementById(id); if (e) e.value = v; };
+  pon('f-motor-marca', 'Hörmann');
+  pon('f-motor-modelo', 'SupraMatic');
+  pon('f-motor-serie', 'MO-4471');
+  pon('f-cuadro-marca', 'Erreka');
+  pon('f-cuadro-modelo', 'CT-102');
+  pon('f-cuadro-serie', 'CU-77');
+  const habia = g.componentesDe(p.id).length;
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 1800));
+  g.cerrarDlg();
   const cs = g.componentesDe(p.id);
-  return { n: cs.length, vacios: cs.filter(c => !c.marca && !c.modelo).length,
-           claves: cs.map(c => c.clave) };
+  const mot = cs.find(c => c.clave === 'motor');
+  const cua = cs.find(c => c.clave === 'cuadro');
+  return { habia, ahora: cs.length,
+           motor: mot ? { m:mot.marca, mo:mot.modelo, s:mot.num_serie } : null,
+           cuadro: cua ? { m:cua.marca, mo:cua.modelo, s:cua.num_serie } : null };
 });
-paso('añade de una vez los que faltaban', despues.n > antes, antes+' → '+despues.n);
-paso('y los deja EN BLANCO: la aplicación no se inventa de qué marca son',
-  despues.vacios >= despues.n - 1, despues.vacios+' de '+despues.n+' sin marca');
-paso('sin duplicar el que ya estaba',
-  despues.claves.filter(c => c === 'fotocelulas').length === 1);
+paso('escribirlos en la ficha los da de alta como componentes',
+  desdeFicha.ahora > desdeFicha.habia, desdeFicha.habia+' → '+desdeFicha.ahora);
+paso('el motor, con su marca, su modelo y su nº de serie',
+  !!desdeFicha.motor && desdeFicha.motor.s === 'MO-4471' &&
+  desdeFicha.motor.m === 'Hörmann', JSON.stringify(desdeFicha.motor));
+paso('y el cuadro igual',
+  !!desdeFicha.cuadro && desdeFicha.cuadro.s === 'CU-77',
+  JSON.stringify(desdeFicha.cuadro));
+
+/* Y lo que no se escribe, no se toca: vaciar el campo no borra el nº de serie */
+const noBorra = await T(async () => {
+  const g = window.__T;
+  const p = g.S.puertas.find(x => x.codigo === 'AR-0002');
+  g.cerrarDlg();
+  g.dlgPuerta(p.id);
+  await new Promise(r => setTimeout(r, 700));
+  const e = document.getElementById('f-motor-serie');
+  if (e) e.value = '';
+  document.querySelector('#dlg-form [type="submit"]').click();
+  await new Promise(r => setTimeout(r, 1800));
+  g.cerrarDlg();
+  const mot = g.componentesDe(p.id).find(c => c.clave === 'motor');
+  return mot ? mot.num_serie : null;
+});
+paso('vaciar el campo en la ficha NO borra el nº de serie que ya estaba',
+  noBorra === 'MO-4471', noBorra);
 
 /* ================================================================
    4. El puente con el expediente
@@ -260,10 +318,11 @@ const puente = await T(async () => {
   const g = window.__T, S = g.S;
   const p = S.puertas.find(x => x.codigo === 'AR-0002');
   /* un componente con datos, para ver si llegan al expediente */
+  /* El cuadro ya viene de la sección 3, dado de alta desde la ficha con su
+     número de serie. Antes lo creaba «añadir los que faltan», que ya no
+     existe. (25-11-2026) */
   const cuadro = g.componentesDe(p.id).find(c => c.clave === 'cuadro');
-  await g.sb.from('componentes')
-    .update({ marca:'Erreka', modelo:'CT-102', num_serie:'CU-77' }).eq('id', cuadro.id);
-  await g.cargar();
+  if (!cuadro) return { sinCuadro: true };
 
   const { data: exp } = await g.sb.from('expedientes').insert({
     referencia:'EXP-PRUEBA-COMP', puerta_id:p.id, cliente_id:p.cliente_id,
