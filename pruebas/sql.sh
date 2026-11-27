@@ -48,7 +48,8 @@ almacen.sql presupuestos.sql presupuestos2.sql comercial.sql anexos.sql \
 tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos3.sql valoracion.sql \
 parado.sql factura.sql rutas.sql ruta-cliente.sql telegram.sql subtipo.sql urgencia.sql \
 medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql perifericos.sql ficha4.sql urgencia2.sql falso.sql fotos-aviso.sql barras.sql almacenes.sql nombre-equipo.sql sitio-material.sql conformidad-visita.sql mensajes.sql tecnicos.sql multipuerta.sql \
-alta-por-bloques.sql elementos-unificados.sql fotos-elemento.sql fotos-hueco.sql"
+alta-por-bloques.sql elementos-unificados.sql fotos-elemento.sql fotos-hueco.sql \
+cobro-en-obra.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -70,6 +71,15 @@ if ! $PSQL -f "$AQUI/sql/andamio.sql" > /tmp/andamio.log 2>&1; then
   echo " FALLA el andamio:"; sed -n '1,20p' /tmp/andamio.log; exit 1
 fi
 echo "  OK   lo que Supabase da por hecho"
+
+# Una base con SOLO el andamio, para poder separar después lo que añaden los
+# ficheros de servidor/ de lo que el andamio monta por su cuenta. Sin esto, la
+# comparación del final acusaba al instalador de columnas que no son suyas
+# (contrato_puertas.id, valoraciones.creado): las monta el andamio a su manera.
+psql -h $SOCK -p $PUERTO -U ariza -d postgres -c "drop database if exists ariza_andamio" >/dev/null 2>&1
+psql -h $SOCK -p $PUERTO -U ariza -d postgres -c "create database ariza_andamio" >/dev/null 2>&1
+psql -h $SOCK -p $PUERTO -U ariza -d ariza_andamio -v ON_ERROR_STOP=1 --quiet \
+  -f "$AQUI/sql/andamio.sql" >/tmp/andamio-solo.log 2>&1
 
 fallos=0
 vuelta () {
@@ -230,6 +240,22 @@ if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/fotos-hueco-pruebas.sql" ]; then
     fallos=$((fallos+1))
     echo " FALLA la foto de cada hueco:"
     grep -a -m3 -E "ERROR|EXCEPTION" /tmp/fh-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
+# Lo que el técnico tiene que cobrar en obra. Lo que se vigila: que el total sea
+# la base mas su IVA y que la base sea la de la valoración (si se separan, se
+# cobra una cosa y se factura otra), que NO salga el coste ni el margen, y que un
+# técnico no pueda ver el importe de una visita que no es suya.
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/cobro-en-obra-pruebas.sql" ]; then
+  echo ""
+  echo "── Lo que hay que cobrar en obra ───────────────"
+  if $PSQL -f "$AQUI/sql/cobro-en-obra-pruebas.sql" > /tmp/co-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/co-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA lo que hay que cobrar en obra:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/co-pruebas.log | sed 's/^/         /'
   fi
 fi
 
@@ -575,6 +601,63 @@ if [ -f "$INST" ]; then
       echo "  OK   las funciones que la aplicación llama están todas"
     else
       echo " FALLA faltan funciones: $FALTAF"; fallos=$((fallos+1))
+    fi
+
+    # ---- El instalador contra los ficheros, columna por columna (27-11-2026)
+    # Las dos comprobaciones de arriba miran una LISTA ESCRITA A MANO de tablas
+    # y de funciones. Eso dejaba fuera lo que más se escapa: una columna nueva.
+    # Y pasó de verdad: fotos.elemento (25-11) y fotos.medida_id (26-11) se
+    # añadieron en su fichero de servidor/ y nadie las puso en el instalador,
+    # así que una base nueva nacía sin ellas y la aplicación las daba por no
+    # instaladas. Nadie lo habría visto hasta tener que montar la base otra vez,
+    # que es justo el día en que no se puede estar depurando el instalador.
+    #
+    # Esto no es una lista: saca las columnas de la base que montan los
+    # ficheros, las de la base que monta el instalador, y dice la diferencia.
+    COLS="select table_name || '.' || column_name from information_schema.columns
+           where table_schema = 'public'"
+    for b in ariza ariza_andamio ariza_nueva; do
+      psql -h $SOCK -p $PUERTO -U ariza -d $b -t -A -c "$COLS" 2>/dev/null | sort -u > /tmp/cols-$b.txt
+    done
+    # Lo que añaden los ficheros de servidor/ = (andamio + ficheros) - andamio.
+    # Y de eso, lo que el instalador no monta es lo que falta de verdad.
+    comm -23 /tmp/cols-ariza.txt /tmp/cols-ariza_andamio.txt > /tmp/cols-ficheros.txt
+    FALTAN=$(comm -23 /tmp/cols-ficheros.txt /tmp/cols-ariza_nueva.txt | tr '\n' ' ')
+    if [ -z "$FALTAN" ]; then
+      echo "  OK   y no le falta ninguna columna de las que añaden los ficheros"
+    else
+      echo " FALLA al instalador le faltan columnas que sí añaden los ficheros de servidor/:"
+      echo "         $FALTAN"
+      fallos=$((fallos+1))
+    fi
+
+    # ---- Y lo mismo con las funciones reescritas (27-11-2026)
+    # Una función que un fichero de servidor/ reescribe (crear_expediente lo
+    # hizo el 25-11 para nacer con el catálogo de las once familias) se queda
+    # con la versión VIEJA en el instalador, y una base nueva haría expedientes
+    # del año pasado sin que nada avisara. Se compara el cuerpo, no el nombre.
+    # Los dos ayudantes de permisos se dejan fuera: en el andamio son muñones a
+    # propósito, así que siempre van a ser distintos y no dicen nada.
+    FND="select p.proname || '|' || md5(pg_get_functiondef(p.oid))
+           from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+          where n.nspname = 'public' and p.prokind = 'f'
+            and p.proname not in ('es_equipo','es_gestion','es_admin')"
+    for b in ariza ariza_andamio ariza_nueva; do
+      psql -h $SOCK -p $PUERTO -U ariza -d $b -t -A -c "$FND" 2>/dev/null | sort -u > /tmp/fn-$b.txt
+    done
+    # Las que definen los ficheros de servidor/, no el andamio
+    comm -23 <(cut -d'|' -f1 /tmp/fn-ariza.txt | sort -u) \
+             <(cut -d'|' -f1 /tmp/fn-ariza_andamio.txt | sort -u) > /tmp/fn-ficheros.txt
+    DISTINTAS=$(join -t'|' -j1 <(sort -t'|' -k1,1 /tmp/fn-ariza.txt) \
+                               <(sort -t'|' -k1,1 /tmp/fn-ariza_nueva.txt) \
+                | awk -F'|' '$2 != $3 { print $1 }' | sort -u \
+                | grep -x -f /tmp/fn-ficheros.txt | tr '\n' ' ')
+    if [ -z "$DISTINTAS" ]; then
+      echo "  OK   y las funciones de los ficheros son las mismas que monta el instalador"
+    else
+      echo " FALLA el instalador monta una versión distinta de estas funciones:"
+      echo "         $DISTINTAS"
+      fallos=$((fallos+1))
     fi
   fi
 else

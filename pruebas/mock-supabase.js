@@ -601,6 +601,38 @@ const RPC = {
     /* lo que no tiene ni enlace ni coste se queda sin precio, y vale cero */
     return { ok:true };
   },
+  /* ---- Lo que hay que cobrar en obra (27-11-2026) ----
+     OJO con lo que esto es y lo que NO es. El cálculo de verdad lo hace la
+     función del servidor, que usa valorar_aviso, y se prueba contra Postgres
+     de verdad en sql/cobro-en-obra-pruebas.sql. Aquí solo hace falta un número
+     para poder probar la PANTALLA: que el botón guarde el parte antes de
+     preguntar, que el desglose se pinte, que el total pase al importe, que no
+     se pise lo que el técnico ya hubiera escrito y que un nulo no se enseñe
+     como cero euros.
+     Por eso la cuenta de aquí es la mínima y está a la vista: horas por el
+     precio de la hora, el desplazamiento de la tarifa y la suma de los precios
+     de los materiales. Si algún día esto se pareciera más a la de verdad sería
+     peor, no mejor: una prueba que se mide contra su propia copia del cálculo
+     no prueba nada. */
+  cobro_en_obra({ p_aviso }){
+    const av = (DB.avisos || []).find(x => String(x.id) === String(p_aviso));
+    if (!av) return null;
+    /* Como en el servidor: si la visita no es de este técnico, no se dice. El
+       simulador entra siempre como administrador, así que esto solo salta con
+       la marca que ponen las pruebas a propósito. */
+    if (DB.__cobroAjeno) return null;
+    const tar = (DB.tarifas || [])[0] || {};
+    const mats = (DB.materiales || []).filter(m => String(m.aviso_id) === String(p_aviso));
+    const r2 = n => Math.round((+n || 0) * 100) / 100;
+    const mano = r2((+av.horas || 0) * (+tar.precio_hora || 0));
+    const desp = r2(av.sin_cargo ? 0 : (+tar.desplazamiento_fijo || 0));
+    const mat  = r2(mats.reduce((s, m) => s + (+m.precio || 0) * (+m.cantidad || 1), 0));
+    const base = r2(mano + desp + mat);
+    const tipo = (+tar.iva || 21);
+    const iva  = r2(base * tipo / 100);
+    return { mano, desplazamiento: desp, materiales: mat, base,
+             tipo_iva: tipo, iva, total: r2(base + iva) };
+  },
   archivar_asistencia(){ return { ok:true }; },
   borrar_asistencia({ p_aviso }){
     DB.avisos = DB.avisos.filter(x => String(x.id) !== String(p_aviso));

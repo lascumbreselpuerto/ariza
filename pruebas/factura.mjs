@@ -50,6 +50,14 @@ await ctx.addInitScript(() => {
       { id:'cli-30', nombre:'Comunidad Los Olivos', nif:'H11000001',
         plazo_pago_dias:30, forma_pago:'Transferencia' },
       { id:'cli-0',  nombre:'Particular de la esquina', nif:'11111111H' });
+    /* Una avería abierta para el cobro en obra (27-11-2026). Lleva una puerta y
+       una foto, que es lo que hace falta para poder cerrarla. */
+    db.avisos.push({ id:'fa-cobro', tipo:'averia', subtipo:'averia', estado:'asignado',
+      prioridad:'normal', tecnico_id:'usuario-admin', cliente_id:db.puertas[0].cliente_id,
+      puerta_id:db.puertas[0].id, ruta:'ruta1', descripcion:'No cierra del todo',
+      creado:new Date().toISOString() });
+    db.fotos.push({ id:'fa-cobro-foto', aviso_id:'fa-cobro', puerta_id:db.puertas[0].id,
+      ruta:'fa-cobro/1.jpg', autor:'prueba', etapa:'hecho', creado:new Date().toISOString() });
   };
 });
 const pag = await ctx.newPage();
@@ -440,6 +448,103 @@ paso('los números en coma decimal, que es como los lee Excel en español',
   fichero.lineas[1]);
 paso('y el material sin precio tampoco se cuela aquí',
   !/Torniller/.test(fichero.texto));
+
+/* ================================================================
+   Lo que el técnico tiene que cobrar, con IVA (27-11-2026)
+
+   David: «Para un cobro en obra, al técnico le debe de sacar el importe
+   a pagar más IVA, en función de horas, desplazamiento y materiales.»
+
+   Hasta hoy el técnico escribía el importe de su cabeza. Lo que se
+   vigila aquí es la PANTALLA, no la cuenta: la cuenta la hace el
+   servidor con la misma función que factura la oficina, y se prueba
+   contra Postgres de verdad en sql/cobro-en-obra-pruebas.sql.
+
+   Y lo que más importa de todo: que en esa pantalla no aparezcan el
+   coste ni el margen. El técnico no ve precios de coste, y este
+   apartado es la única excepción de la aplicación, así que es justo
+   donde hay que vigilarlo.
+   ================================================================ */
+bloque('Lo que hay que cobrar en obra');
+
+const cobroObra = await T(async () => {
+  const g = window.__T;
+  g.cerrarDlg();
+  await new Promise(r => setTimeout(r, 300));
+  g.dlgCierre('fa-cobro');
+  await new Promise(r => setTimeout(r, 1600));
+  const hayBoton = !!document.querySelector('[data-act="cobro-calcular"]');
+  /* Se rellena el parte como lo haría el técnico: dos horas y lo hecho */
+  document.getElementById('z-trab').value = 'Cambiada la banda de seguridad.';
+  document.getElementById('z-horas').value = '2';
+  const horasAntes = (g.S.avisos.find(x => x.id === 'fa-cobro') || {}).horas;
+  document.querySelector('[data-act="cobro-calcular"]').click();
+  await new Promise(r => setTimeout(r, 2600));
+  const caja = document.getElementById('z-cobro-cuenta');
+  return { hayBoton, horasAntes,
+    horasDespues: (g.S.avisos.find(x => x.id === 'fa-cobro') || {}).horas,
+    texto: (caja || {}).innerText || '',
+    importe: (document.getElementById('z-imp') || {}).value || '' };
+});
+paso('el apartado del cobro trae el botón de calcular', cobroObra.hayBoton === true);
+/* Esto es lo que hace que la cuenta sea de verdad: las horas tienen que estar
+   guardadas antes de preguntar, porque la cuenta la hace el servidor con lo
+   guardado, no con lo que haya en pantalla. */
+paso('al calcular, primero guarda el parte: las horas quedan guardadas',
+  Number(cobroObra.horasDespues) === 2,
+  cobroObra.horasAntes+' → '+cobroObra.horasDespues);
+paso('y sale el desglose de los tres conceptos',
+  /Mano de obra/i.test(cobroObra.texto) && /Desplazamiento/i.test(cobroObra.texto) &&
+  /Materiales/i.test(cobroObra.texto), cobroObra.texto.replace(/\n/g, ' · ').slice(0, 90));
+paso('con su IVA y su total a cobrar',
+  /IVA \(21/.test(cobroObra.texto) && /A cobrar/i.test(cobroObra.texto),
+  cobroObra.texto.replace(/\n/g, ' · ').slice(0, 120));
+/* La que de verdad cierra la puerta: el técnico no ve coste ni margen, y este
+   es el único sitio de la aplicación donde se le dan importes. */
+paso('y NO aparece el coste ni el margen, que el técnico no ve',
+  !/coste/i.test(cobroObra.texto) && !/margen/i.test(cobroObra.texto),
+  cobroObra.texto.replace(/\n/g, ' · ').slice(0, 120));
+/* 2 h × 45 + 30 de desplazamiento = 120 de base, +21 % = 145,20 */
+paso('el importe se pone solo, para no teclearlo delante del cliente',
+  cobroObra.importe === '145.20', cobroObra.importe);
+
+/* Y si el técnico ya había escrito un importe, no se le pisa: puede haber
+   acordado otra cantidad con el cliente y perderla sería peor que no calcular. */
+const noPisa = await T(async () => {
+  const g = window.__T;
+  document.getElementById('z-imp').value = '100';
+  document.querySelector('[data-act="cobro-calcular"]').click();
+  await new Promise(r => setTimeout(r, 2600));
+  return { importe: document.getElementById('z-imp').value };
+});
+paso('si ya había un importe escrito, no se pisa', noPisa.importe === '100', noPisa.importe);
+
+/* Nulo no es cero. El servidor devuelve nulo cuando la visita no es de ese
+   técnico, y enseñarle «0,00 €» le haría cobrar de menos. */
+const ajena = await T(async () => {
+  const g = window.__T;
+  /* La marca del simulador que le hace contestar nulo, igual que el servidor a
+     un técnico que pregunta por una visita que no es suya */
+  const db = window.__DB;
+  if (db) db.__cobroAjeno = true;
+  document.getElementById('z-imp').value = '';
+  document.querySelector('[data-act="cobro-calcular"]').click();
+  await new Promise(r => setTimeout(r, 2600));
+  const t = (document.getElementById('z-cobro-cuenta') || {}).innerText || '';
+  if (db) db.__cobroAjeno = false;
+  g.cerrarDlg();
+  return { texto: t, importe: document.getElementById('z-imp') ? document.getElementById('z-imp').value : '?' };
+});
+/* Se mira el mensaje CONCRETO, no uno parecido. Mi primera versión de esta
+   comprobación solo pedía «no se ha podido calcular», y eso también sale cuando
+   el nulo se cuela y revienta por dentro: el error se recoge y el aviso sale
+   igual, así que la prueba pasaba con y sin la guarda y no probaba nada.
+   El mensaje de este caso tiene que decirle al técnico QUÉ hacer, que es
+   pedírselo a la oficina, no un fallo genérico. (27-11-2026) */
+paso('si la visita no es suya, se le dice por qué y qué hacer, y NO se escribe cero',
+  /no está a tu nombre/i.test(ajena.texto) && /oficina/i.test(ajena.texto) &&
+  ajena.importe === '',
+  ajena.texto.slice(0, 80)+' · importe «'+ajena.importe+'»');
 
 console.log('\n'+ok+' bien, '+mal+' mal.');
 const graves = errores.filter(x => !/fonts\.googleapis|ERR_TUNNEL|ERR_NAME|net::ERR|provocado por la prueba/.test(x));

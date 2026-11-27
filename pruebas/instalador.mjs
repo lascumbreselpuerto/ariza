@@ -61,10 +61,19 @@ const INST = readFileSync(RUTA_INST, 'utf8');
    anclados con ^ no encontraban nada y la suite daba por ausente TODO lo que
    el instalador crea. Un vigilante que no ve nada dice que falta todo, que es
    la otra manera de no servir. (17-11-2026) */
+/* Y el mismo tipo de ceguera otra vez, con las mayúsculas (27-11-2026): el
+   instalador es una radiografía de Postgres, que escribe «CREATE OR REPLACE
+   FUNCTION», pero lo que se le añade a mano va en minúsculas como el resto de
+   los SQL del proyecto. A Postgres le da igual; al patrón no, y las funciones
+   añadidas a mano no las veía. Se buscó una función que SÍ estaba y la prueba
+   dijo que faltaba. Así que se compara sin distinguir mayúsculas y el nombre se
+   guarda en minúsculas, que es como lo escribe la aplicación al llamarla. */
 const unicos = (txt, re, i) => {
   const s = new Set(); let m;
-  const r = new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g');
-  while ((m = r.exec(txt))) s.add(m[i]);
+  let flags = re.flags.includes('g') ? re.flags : re.flags + 'g';
+  if (!flags.includes('i')) flags += 'i';
+  const r = new RegExp(re.source, flags);
+  while ((m = r.exec(txt))) s.add(String(m[i]).toLowerCase());
   return [...s].sort();
 };
 const tablasApp  = unicos(APP, /sb\.from\('([a-z_]+)'\)/, 1);
