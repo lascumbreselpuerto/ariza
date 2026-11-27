@@ -1,6 +1,6 @@
 # Safe2door · Manual de oficina
 
-Versión 2026.11.27-5
+Versión 2026.11.27-6
 
 > **Las fotos de este manual son de antes del cambio de nombre.** La aplicación
 > se llamaba ARIZA SAT y así aparece en la barra de arriba de cada pantalla.
@@ -211,6 +211,59 @@ antes de corregir algo que ya está facturado o entregado.
 ## 2. Cuando la visita vuelve: valorar y facturar
 
 Este es el capítulo que más dinero mueve.
+
+### El camino de un parte: por revisar, cerrados, eliminados (27 de noviembre de 2026)
+
+Realizados se parte ahora en tres secciones, y en este orden, que es el del
+trabajo:
+
+**Por revisar.** Lo que ha cerrado el técnico y nadie ha repasado. Miras las
+horas, que el material esté valorado y el importe, y le das a **«Marcar
+revisado»**. Un toque, sin más preguntas.
+
+**Cerrados.** Lo repasado. De aquí sale la factura con **«Apuntar la factura»**,
+y aquí se apunta el cobro.
+
+**Partes eliminados.** Los que decidiste **no facturar**. El botón está en las
+dos secciones anteriores: **«No facturar»**. Pide el motivo, porque es lo que
+explica el coste perdido del mes cuando lo lea el administrador.
+
+Lo importante de esa última sección: **la visita no desaparece y su coste se
+sigue contando**. Las horas del técnico se pagan igual y el material ya salió
+del almacén, así que es dinero puesto que no se va a cobrar. La sección lo dice
+en su cabecera: «coste perdido». Y se puede deshacer con **«Volver a
+facturarla»**, que pide confirmación.
+
+Una cosa que conviene saber del material: **no se vuelve a dar de baja del
+almacén**. Ya salió cuando se cerró el parte, y descontarlo otra vez dejaría la
+furgoneta a cero de algo que sí tiene. Lo que hace la aplicación es
+identificarlo por su parte, así que el coste se cuenta sin tocar ni una unidad.
+
+**Revisar y facturar son dos pasos distintos, a propósito.** Se repasa el parte
+cuando llega, con el técnico localizable para preguntarle, y se factura a fin de
+mes. Sin esos dos pasos, un parte repasado y uno sin repasar se ven igual.
+
+**El técnico no ve nada de esto.** Para él, Realizados sigue siendo una sola
+lista con sus visitas, sin secciones y sin botones de revisar ni facturar.
+
+### El cobro: entero, a medias o nada (27 de noviembre de 2026)
+
+Al apuntar la factura, si marcas que está cobrada te pide **cuánto**. Y ahí está
+lo que importa:
+
+- Si es el total, queda **cobrada**.
+- Si es menos, queda **cobrada a medias**, y la tarjeta dice lo que falta:
+  «Cobrada a medias · 100,00 € de 242,00 € · falta 142,00 €».
+- Si no marcas la casilla, queda **sin cobrar**.
+
+Se guarda **lo cobrado**, y lo que falta se calcula. Al revés sería peor: el
+total puede cambiar y entonces el pendiente guardado dejaría de cuadrar sin que
+nadie lo hubiera tocado.
+
+> **Ojo con el IVA.** Lo que se le cobra al cliente lleva IVA y el importe de la
+> visita se guarda sin IVA. Una visita de 200 € se cobra con 242. Si apuntas 200
+> cobrados, la aplicación te dirá que **faltan 42**, y tiene razón: eso es lo
+> que pasa cuando se cobra la base y se olvida el IVA.
 
 ### Lo que se ve en la lista de Realizados (27 de noviembre de 2026)
 
