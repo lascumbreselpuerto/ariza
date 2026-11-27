@@ -2022,6 +2022,11 @@ async function cargar(){
   const corr = await sb.from('avisos')
     .select('corregido_en, corregido_por, corregido_nota, correcciones').limit(1);
   S.sinCorregir = !!corr.error;
+  /* El precio puesto a mano: servidor/precio-a-mano.sql. Sin esas columnas el
+     importe es siempre el calculado, como antes del 27-11-2026, y la oficina no
+     puede escribir uno acordado con el cliente. */
+  const pman = await sb.from('valoraciones').select('imp_manual, manual_por').limit(1);
+  S.sinPrecioMano = !!pman.error;
   /* El código de barras del fabricante: servidor/barras.sql. Sin esa columna
      en el catálogo, leer una caja no puede reconocer el material y el lector
      solo lee nuestras etiquetas QR, como antes del 08-11-2026. */
@@ -2253,7 +2258,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.27-3';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.27-5';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -3416,6 +3421,60 @@ function caraTec(id, grande){
   return '<span class="cara ini c'+colorTec(id)+g+'" title="'+esc(nom)+'">'+esc(inicialesTec(nom))+'</span>';
 }
 /* Marcas de una asistencia que ya no está en juego */
+/* ---- El tiempo y lo que vale, en la propia tarjeta (27-11-2026) ----
+   David: «quiero que salga asistencia realizada, tiempo y valoración total por
+   partes (horas técnicos, desplazamiento y materiales) para que la oficina
+   pueda gestionar el cobro y no tener que calcular el importe.»
+
+   Hasta hoy el importe estaba calculado desde el minuto en que se cerraba la
+   visita, pero solo se veía en Gestión o abriendo la valoración una por una. En
+   Realizadas había que entrar en cada visita para saber lo que valía.
+
+   El tiempo lo ve cualquiera: son las horas del técnico, no un precio. El
+   DINERO solo lo ven la oficina y la administración, como en toda la
+   aplicación. Y si la visita no está valorada, se dice y se ofrece calcularla,
+   porque una visita sin valorar es una que nadie va a facturar. */
+function lineaValoracionAsis(a){
+  if (!a || !a.cerrado || a.anulada) return '';
+  const trozos = [];
+  if (a.horas != null && a.horas !== '')
+    trozos.push('<b>'+esc(String(a.horas))+' h</b>'+
+      ((+a.num_tecnicos || 1) > 1 ? ' × '+(+a.num_tecnicos)+' técnicos' : ''));
+  if (a.estado_final) trozos.push(esc(a.estado_final));
+  let h = trozos.length ? '<p class="mini" style="margin:0">'+trozos.join(' · ')+'</p>' : '';
+  if (!esGestion()) return h;
+  const v = valoracionDe(a.id);
+  if (!v)
+    return h + '<p class="mini" style="margin:0"><span class="chip aviso sin">Sin valorar</span> '+
+      '<button class="btn sm plana" data-act="revalorar" data-id="'+a.id+'">Calcular lo que vale</button></p>';
+  /* El desglose que pidió David, en una línea: por partes y con el total. Sin
+     coste ni margen, que eso es de Gestión y no de una lista. */
+  h += '<p class="mini" style="margin:0">'+
+    'Mano de obra <b>'+eur(v.imp_mano_obra)+'</b> · '+
+    'Desplazamiento <b>'+eur(v.imp_desplazamiento)+'</b> · '+
+    'Material <b>'+eur(v.imp_materiales)+'</b> · '+
+    'Total <b>'+eur(v.imp_total)+'</b> sin IVA'+
+    (S.tarifas && +S.tarifas.iva
+      ? ' · <b>'+eur((+v.imp_total || 0) * (1 + (+S.tarifas.iva) / 100))+'</b> con el '+(+S.tarifas.iva)+' %'
+      : '')+
+    '</p>'+
+    '<p class="mini" style="margin:0">'+
+    /* Lo cobrado en obra, con su importe, para que no se vuelva a cobrar. Y si
+       lo cobrado no cuadra con lo calculado, se dice: es la diferencia que
+       antes solo se veía abriendo la visita. */
+    (a.cobrado
+      ? '<span class="chip ok sin">Cobrado en obra'+
+        (a.cobro_importe != null ? ' · '+eur(a.cobro_importe) : '')+'</span> '
+      : '<span class="chip gris sin">Sin cobrar en obra</span> ')+
+    (v.facturado
+      ? '<span class="chip ok sin">Facturada'+(v.factura_ref ? ' · '+esc(v.factura_ref) : '')+'</span> '
+      : '<span class="chip aviso sin">Sin facturar</span> ')+
+    '<button class="btn sm plana" data-act="ver-valoracion" data-id="'+a.id+'">Ver la valoración</button>'+
+    (v.facturado ? '' :
+      ' <button class="btn sm plana" data-act="marcar-facturado" data-id="'+a.id+'">Apuntar la factura</button>')+
+    '</p>';
+  return h;
+}
 function chipsEstadoAsis(a){
   let h = '';
   if (a.anulada) h += '<span class="chip anulada sin" title="'+esc(a.anulada_motivo||'')+'">Anulada</span>';
@@ -3525,10 +3584,26 @@ function tarjetaAviso(a){
     (a.notas_oficina?'<p class="nota-oficina">Oficina: '+esc(a.notas_oficina)+'</p>':'')+
     (a.anulada ? '<p class="mini" style="margin:0"><b>Anulada</b> el '+fechaHora(a.anulada_en)+
        (a.anulada_por?(' por '+esc(a.anulada_por)):'')+': '+esc(a.anulada_motivo||'')+'</p>' : '')+
+    /* ---- Las fechas de una visita cerrada (27-11-2026) ----
+       David: «la fecha que marca es de entrada del parte pero no del cierre de
+       la asistencia y esta última fecha es muy importante que aparezca aquí.»
+
+       Tenía razón: la tarjeta decía solo «Entró el…», que es cuando se creó el
+       aviso. En Realizadas eso no es lo que se busca: se busca cuándo se hizo.
+       Ahora, en una visita cerrada, lo primero es la fecha de CIERRE, y la de
+       entrada se queda detrás, en pequeño, porque la diferencia entre las dos
+       es lo que se tardó en atender al cliente y eso también vale saberlo. */
     '<p class="mini" style="margin:0">'+
-      (a.fecha_prevista ? ('Visita: '+fechaCorta(a.fecha_prevista)+' · '+relativo(a.fecha_prevista)+' · ') : '')+
-      'Entró el '+fechaHora(a.creado)+(a.origen==='cliente'?' por el QR':'')+
+      (a.cerrado
+        ? '<b>Cerrada el '+fechaHora(a.cerrado)+'</b>'+
+          (a.cerrado_por ? ' por '+esc(a.cerrado_por) : '')+
+          ' · entró el '+fechaCorta(a.creado)+
+          (() => { const d = Math.round((new Date(a.cerrado) - new Date(a.creado)) / 86400000);
+                   return d > 0 ? ' ('+d+(d === 1 ? ' día' : ' días')+')' : ''; })()
+        : (a.fecha_prevista ? ('Visita: '+fechaCorta(a.fecha_prevista)+' · '+relativo(a.fecha_prevista)+' · ') : '')+
+          'Entró el '+fechaHora(a.creado)+(a.origen==='cliente'?' por el QR':''))+
     '</p>'+
+    lineaValoracionAsis(a)+
     (cont ? '<p class="mini" style="margin:0">'+cont+'</p>' : '')+
     accionesAsis(a, firmada)+
     '</div>';
@@ -4915,6 +4990,8 @@ const QUE_HACE_FALTA = [
     pierdes:'No se lleva lo pendiente de facturar ni los impagados.' },
   { marca:'sinFotoAviso', fichero:'fotos-aviso.sql', que:'Fotos de antes y después',
     pierdes:'Las fotos de la visita no se separan en antes y después.' },
+  { marca:'sinPrecioMano', fichero:'precio-a-mano.sql', que:'El precio puesto a mano',
+    pierdes:'El importe es siempre el que sale del cálculo: no se puede poner el precio acordado con el cliente sin tocar las horas.' },
   { marca:'sinCorregir', fichero:'corregir-parte.sql', que:'Corregir un parte ya cerrado',
     pierdes:'La oficina no puede corregir un parte cerrado: habría que reabrirlo, y entonces cambia su fecha de cierre y no queda dicho quién lo tocó.' },
   { marca:'sinCobroObra', fichero:'cobro-en-obra.sql', que:'Lo que hay que cobrar en obra',
@@ -4996,6 +5073,20 @@ function vistaGestion(){
   const facturable = suma(delMes, 'imp_total');
   const coste = suma(delMes, 'coste_total');
   const margen = suma(delMes, 'margen');
+  /* ---- El acumulado del año (27-11-2026) ----
+     David: «me he dado cuenta de que el margen no termina en sumatorio, cosa
+     necesaria para hacer cálculos.»
+
+     El mes ya se sumaba. Lo que no había era el año, que es con lo que se
+     decide: una tarifa, un sueldo o una furgoneta no se deciden con el margen
+     de noviembre, se deciden con el del ejercicio. El año es el del mes que se
+     está mirando, no el de hoy: si se mira enero, se ve el acumulado de ese
+     año y no el del actual. */
+  const anioMes = String(mes).slice(0, 4);
+  const delAnio = cerradas.filter(a => String(mesDe(a.cerrado)).slice(0, 4) === anioMes);
+  const facturableAnio = suma(delAnio, 'imp_total');
+  const costeAnio = suma(delAnio, 'coste_total');
+  const margenAnio = suma(delAnio, 'margen');
 
   /* Pendiente de facturar: cerradas, no cobradas en obra, no marcadas como
      facturadas. Las de importe 0 € también salen: antes se descartaban, y una
@@ -5077,6 +5168,20 @@ function vistaGestion(){
     '</div>';
   h += '<p class="mini" style="margin:0">El margen es sobre la venta: lo que queda de cada euro facturado, '+
        'después de pagar las horas, el desplazamiento y el material. No confundir con el recargo sobre el coste del material.</p>';
+  /* El acumulado del año, debajo del mes y con el mismo formato: lo que hace
+     falta para decidir una tarifa o un sueldo. (27-11-2026) */
+  h += '<div class="panel"><div class="panel-h"><h3>Acumulado de '+esc(anioMes)+'</h3>'+
+    '<span class="mini">'+delAnio.length+' visita'+(delAnio.length===1?'':'s')+' cerrada'+
+    (delAnio.length===1?'':'s')+'</span></div>'+
+    '<div class="cifras">'+
+    '<div class="cifra"><b>'+eur(facturableAnio)+'</b><span>Facturable del año, sin IVA</span></div>'+
+    '<div class="cifra"><b>'+eur(costeAnio)+'</b><span>Coste del año</span></div>'+
+    '<div class="cifra'+(margenAnio < 0 ? ' mal' : '')+'"><b>'+eur(margenAnio)+'</b>'+
+    '<span>Margen del año · '+pct(margenAnio, facturableAnio)+'</span></div>'+
+    '</div>'+
+    '<p class="mini" style="margin:8px 0 0">Suma todas las visitas cerradas de '+esc(anioMes)+
+    ', estén facturadas o no, y las anuladas quedan fuera porque no se hicieron. '+
+    'Es el año del mes que estás mirando arriba, no el de hoy.</p></div>';
 
   // --- Pendiente de facturar ---
   h += '<div class="panel"><div class="panel-h"><h3>Pendiente de facturar</h3>'+
@@ -24415,6 +24520,8 @@ dlgForm.addEventListener('change', async e => {
     }
   }
   if (t.id === 'fa-vence') t.dataset.tocado = '1';
+  /* El margen que deja el importe que se está escribiendo a mano (27-11-2026) */
+  if (t.id === 'pm-imp') pintarMargenMano();
   if (t.id === 'k-dur' || t.id === 'k-alta'){
     const dur = +val('k-dur'), alta = val('k-alta') || hoy();
     const venc = document.getElementById('k-venc');
@@ -28533,6 +28640,88 @@ function venceProponer(fechaIso, clienteId){
   const d = deIso(base); d.setDate(d.getDate() + dias_);
   return iso(d);
 }
+/* ---- Poner el precio a mano (27-11-2026) ----
+   David: «Si veo necesario que oficina pueda modificar el precio a mano. Estos
+   importes sumarán en ingresos positivos y se le calculará el margen con los
+   costes estipulados.»
+
+   Se pide el importe y el motivo. El motivo no es burocracia: dentro de seis
+   meses, cuando el margen de un mes no cuadre con la tarifa, esto es lo único
+   que explica por qué esa visita valía otra cosa.
+
+   El coste no se toca y se enseña aquí mismo, con el margen que quedaría: así
+   la decisión se toma viendo lo que deja, no a ciegas. */
+function dlgPrecioMano(avisoId){
+  const a = S.avisos.find(x => x.id === avisoId);
+  const v = valoracionDe(avisoId);
+  if (!a || !v || S.sinPrecioMano) return;
+  if (!esGestion()){ toast('El importe a mano solo lo pone la oficina o la administración.'); return; }
+  const calc = Math.round(((+v.imp_mano_obra||0)+(+v.imp_desplazamiento||0)+(+v.imp_materiales||0)) * 100) / 100;
+  const coste = +v.coste_total || 0;
+  const iva = +((S.tarifas || {}).iva) || 0;
+  const pac = pactadoDe(a);
+  const h = '<h3>Poner el importe a mano</h3>'+
+    '<p class="mini" style="margin:0 0 12px">'+esc(nombreCliente(a))+' · '+esc(tipoAsis(a))+
+    ' · cerrada el '+esc(fechaCorta(a.cerrado))+'</p>'+
+    '<dl class="datos">'+
+    '<div><dt>Suma del cálculo</dt><dd>'+eur(calc)+'</dd></div>'+
+    '<div><dt>Coste real</dt><dd>'+eur(coste)+'</dd></div>'+
+    (pac != null ? '<div><dt>Pactado en el presupuesto</dt><dd>'+eur(pac)+'</dd></div>' : '')+
+    '</dl>'+
+    '<div class="campos" style="margin-top:10px">'+
+    '<div class="campo"><label for="pm-imp">Importe a facturar, sin IVA (€)</label>'+
+    '<input id="pm-imp" type="number" step="0.01" min="0" data-act="pm-calc" value="'+
+      esc(v.imp_manual != null ? v.imp_manual : (pac != null ? pac : calc))+'">'+
+    (pac != null ? '<span class="pista">Se propone lo pactado en el presupuesto</span>'
+                 : '<span class="pista">Se propone la suma del cálculo, para partir de ahí</span>')+
+    '</div>'+
+    '<div class="campo" style="align-content:end"><span class="pista" id="pm-margen"></span></div>'+
+    '<div class="campo full"><label for="pm-nota">Por qué se pone a mano</label>'+
+    '<input id="pm-nota" type="text" maxlength="200" value="'+esc(v.manual_nota || '')+'" '+
+    'placeholder="Ej.: precio acordado con el administrador de la comunidad">'+
+    '<span class="pista">Hace falta. Es lo que explica, dentro de seis meses, por qué esta visita '+
+    'valía otra cosa que lo que dice la tarifa</span></div>'+
+    '</div>'+
+    '<p class="mini" style="margin:10px 0 0">El coste no cambia: sale de las horas, la ruta y el '+
+    'material. El margen se calcula contra ese coste, así que lo que escribas aquí es lo que entra '+
+    'en los ingresos del mes y en la cuenta del margen.</p>'+
+    '<p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">Guardar el importe</button></div>';
+  abrirDlg(h, async () => {
+    const imp = val('pm-imp');
+    const nota = (val('pm-nota') || '').trim();
+    if (imp === '' || isNaN(+imp) || +imp < 0) return setErr('Pon el importe que se va a facturar.');
+    if (!nota) return setErr('Escribe por qué se pone a mano. Queda guardado con tu nombre y la fecha.');
+    try {
+      const { error } = await sb.from('valoraciones').update({
+        imp_manual: +imp, manual_por: yo(), manual_en: new Date().toISOString(), manual_nota: nota,
+      }).eq('aviso_id', a.id);
+      if (error) throw error;
+      /* Se recalcula para que el total y el margen queden con el importe nuevo:
+         la cuenta la hace el servidor, aquí no se escribe ningún total. */
+      await sb.rpc('valorar_aviso', { p_aviso: a.id });
+      cerrarDlg(); await cargar();
+      toast('Importe puesto a mano: '+eur(+imp)+(iva ? ' ('+eur(+imp * (1 + iva/100))+' con IVA)' : '')+'.');
+      return true;
+    } catch(err){ setErr((err && err.message) || 'No se pudo guardar.'); }
+  });
+  PM_COSTE = coste;
+  setTimeout(() => pintarMargenMano(), 0);
+}
+/* El margen que quedaría con el importe que se está escribiendo, debajo del
+   campo: la decisión se toma viendo lo que deja. */
+let PM_COSTE = 0;
+function pintarMargenMano(){
+  const e = document.getElementById('pm-margen');
+  const i = document.getElementById('pm-imp');
+  if (!e || !i) return;
+  const coste = +PM_COSTE || 0;
+  const imp = +i.value || 0;
+  const m = Math.round((imp - coste) * 100) / 100;
+  e.innerHTML = 'Margen con ese importe: <b style="color:'+(m < 0 ? 'var(--mal)' : 'var(--ok)')+'">'+
+    eur(m)+'</b>'+(imp ? ' · '+pct(m, imp) : '');
+}
 function dlgFacturar(avisoId){
   const a = S.avisos.find(x => x.id === avisoId);
   const v = valoracionDe(avisoId);
@@ -29133,9 +29322,36 @@ function dlgValoracion(avisoId){
       (matSinPrecioDe(avisoId).length
         ? ' <span class="mini" style="color:var(--mal)">('+matSinPrecioDe(avisoId).length+
           ' sin precio, a 0 €)</span>' : '')) +
+    /* ---- El precio puesto a mano (27-11-2026) ----
+       Cuando la oficina ha escrito un importe, se enseñan los DOS números: el
+       que salió del cálculo y el que se factura. Enseñar solo el de la factura
+       escondería que alguien lo cambió, y entonces el margen de esa visita no
+       se podría explicar. */
+    (v.imp_manual != null
+      ? fila('Suma del cálculo', eur((+v.imp_mano_obra||0)+(+v.imp_desplazamiento||0)+(+v.imp_materiales||0)))+
+        fila('<b>Puesto a mano</b>', '<b>'+eur(v.imp_manual)+'</b>'+
+          (() => { const c = (+v.imp_mano_obra||0)+(+v.imp_desplazamiento||0)+(+v.imp_materiales||0);
+                   const d = Math.round(((+v.imp_manual||0) - c) * 100) / 100;
+                   return d ? ' <span class="mini">('+(d > 0 ? '+' : '')+eur(d)+')</span>' : ''; })(), true)+
+        fila('Quién y cuándo', esc(v.manual_por || '—')+(v.manual_en ? ' · '+esc(fechaHora(v.manual_en)) : ''))+
+        (v.manual_nota ? fila('Por qué', esc(v.manual_nota)) : '')
+      : '')+
     fila('Total sin IVA', eur(v.imp_total), true) +
     (S.tarifas ? fila('Con IVA', eur(+v.imp_total * (1 + (+S.tarifas.iva || 21) / 100))) : '') +
-    '</dl></div>';
+    '</dl>'+
+    /* El botón para ponerlo o para quitarlo. Solo gestión llega a esta pantalla,
+       pero se comprueba igual: esta es la que decide lo que se factura. */
+    (S.sinPrecioMano || !esGestion() ? '' :
+      '<div class="fila" style="gap:8px;flex-wrap:wrap;margin-top:10px"><span class="sp"></span>'+
+      '<button type="button" class="btn sm'+(v.imp_manual != null ? ' plana' : ' pri')+'" '+
+      'data-act="precio-mano" data-id="'+a.id+'">'+
+      (v.imp_manual != null ? 'Cambiar el importe a mano' : 'Poner el importe a mano')+'</button>'+
+      (v.imp_manual != null
+        ? '<button type="button" class="btn sm plana" data-act="precio-mano-quitar" data-id="'+a.id+'">'+
+          'Volver al calculado</button>'
+        : '')+
+      '</div>')+
+    '</div>';
   h += '<div class="grupo"><h3>Lo que cuesta</h3><dl class="datos">'+
     fila('Coste total', eur(v.coste_total)) +
     fila('Margen', '<span style="color:'+(+v.margen < 0 ? 'var(--mal)' : 'var(--ok)')+'">'+eur(v.margen)+'</span>', true) +
@@ -35159,6 +35375,21 @@ dlgForm.addEventListener('click', async e => {
     return;
   }
   if (a === 'marcar-facturado'){ cerrarDlg(); dlgFacturar(b.dataset.id); return; }
+  /* El precio a mano, desde la valoración (27-11-2026) */
+  if (a === 'precio-mano'){ const id = b.dataset.id; cerrarDlg(); dlgPrecioMano(id); return; }
+  if (a === 'precio-mano-quitar'){
+    if (!armar(b, 'Confirmar')) return;
+    try {
+      const { error } = await sb.from('valoraciones').update({
+        imp_manual: null, manual_por: null, manual_en: null, manual_nota: null,
+      }).eq('aviso_id', b.dataset.id);
+      if (error) throw error;
+      await sb.rpc('valorar_aviso', { p_aviso: b.dataset.id });
+      cerrarDlg(); await cargar();
+      toast('Vuelve a valer el importe calculado.');
+    } catch(err){ fallo(err); }
+    return;
+  }
   if (a === 'contrato-borrar'){
     if (!armar(b, 'Confirmar')) return;
     try { await sb.from('contratos').delete().eq('id', b.dataset.id); cerrarDlg(); await cargar(); toast('Contrato borrado.'); }
