@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.27-3**
+> **Versión de la aplicación que describe este manual: 2026.11.27-5**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -767,6 +767,11 @@ Pídeselo a la oficina.
 Firma en la pantalla y pones el **Nombre de quien firma**. Si no puede firmar, hay que indicar el motivo.
 
 > **La firma no arregla nada.** Un punto marcado Mal sigue estando Mal después de firmar. La firma dice que el cliente ha visto lo que has hecho, no que la puerta esté conforme.
+
+**En la lista de las visitas cerradas, cada tarjeta dice ahora cuándo se cerró
+y las horas que llevó** (27 de noviembre de 2026). Antes solo ponía la fecha en
+que entró el aviso, que no es lo que se busca ahí. De importes no verás nada:
+eso es de la oficina, como siempre.
 
 **Y desde el 27 de noviembre de 2026, la oficina puede corregir un parte tuyo
 ya cerrado.** No lo puedes hacer tú: lo hacen ellos, tienen que escribir por qué
@@ -1733,4 +1738,4 @@ que mire ahí antes de nada. Puede ser eso.
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.27-3 de Safe2door*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.27-5 de Safe2door*

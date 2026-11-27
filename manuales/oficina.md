@@ -1,6 +1,6 @@
 # Safe2door · Manual de oficina
 
-Versión 2026.11.27-3
+Versión 2026.11.27-5
 
 > **Las fotos de este manual son de antes del cambio de nombre.** La aplicación
 > se llamaba ARIZA SAT y así aparece en la barra de arriba de cada pantalla.
@@ -212,6 +212,27 @@ antes de corregir algo que ya está facturado o entregado.
 
 Este es el capítulo que más dinero mueve.
 
+### Lo que se ve en la lista de Realizados (27 de noviembre de 2026)
+
+Antes había que abrir cada visita, o irse a Gestión, para saber lo que valía.
+Ahora cada visita cerrada lo lleva en su tarjeta:
+
+- **Cuándo se cerró**, que es la fecha que importa en esta pantalla. La de
+  entrada se queda detrás, en pequeño, con los días que se tardó en atenderla.
+- **El tiempo**: las horas y, si fueron dos técnicos, también.
+- **El desglose**: mano de obra, desplazamiento, material, el total sin IVA y el
+  total con IVA. Ya no hay que calcular nada para gestionar el cobro.
+- **Si se cobró en obra**, con su importe, y **si está facturada**, con su
+  número.
+- Y dos atajos: **ver la valoración** entera y **apuntar la factura**.
+
+Si una visita cerrada aparece como **«Sin valorar»**, es una que nadie va a
+facturar: tiene ahí mismo el botón para calcularla.
+
+**El técnico no ve nada de esto.** En su móvil, esa misma tarjeta le dice la
+fecha de cierre y las horas, y ningún importe. Los precios son de la oficina y
+de la administración, y eso no cambia.
+
 ### Qué es valorar
 
 Cuando el técnico cierra el parte, la visita queda **cerrada pero sin valorar**.
@@ -276,6 +297,44 @@ los manda ni pudiendo.
 **Las visitas a cero euros.** Una visita cerrada sin horas se valora en cero y
 parece que no hay nada que hacer con ella. Salen en la lista igualmente, porque
 una visita cerrada, firmada y sin cobrar es justo la que hay que mirar.
+
+### Poner el precio a mano (27 de noviembre de 2026)
+
+El importe de una visita sale del cálculo: horas por la tarifa, desplazamiento
+de su ruta y material con su recargo. Eso vale casi siempre. Para cuando no
+vale (un precio acordado con el cliente, una visita que se cierra en redondo, lo
+pactado en un presupuesto) tienes en la valoración el botón **«Poner el importe
+a mano»**.
+
+Antes, para cuadrar un total había que tocar las horas hasta que saliera la
+cifra. Eso es mentir en el dato de lo que se tardó, y ese dato es el que dice
+cuánto cuesta de verdad una avería.
+
+Cómo funciona:
+
+- Escribes el importe y **por qué**. El motivo hace falta: es lo que explica,
+  dentro de seis meses, por qué esa visita valía otra cosa que lo que dice la
+  tarifa. Queda guardado con tu nombre y la fecha.
+- **Ese importe es el que se factura** y el que suma en los ingresos del mes.
+- **El coste no cambia.** Sale de las horas, la ruta y el material, igual que
+  siempre, y el margen se calcula contra ese coste real. Si pones un precio por
+  debajo del coste, el margen sale negativo, que es la verdad.
+- Mientras lo escribes, debajo te dice **el margen que deja** ese importe.
+- En la valoración se ven luego **los dos números**: la suma del cálculo y el
+  importe puesto a mano, con la diferencia. Nunca se esconde que alguien lo
+  cambió.
+- **Recalcular no lo borra.** Hay recálculos automáticos, al cerrar la visita y
+  al corregir el parte: ninguno deshace tu decisión. Para volver al calculado
+  hay un botón, **«Volver al calculado»**, que pide confirmación.
+
+### El acumulado del año (27 de noviembre de 2026)
+
+En Gestión, debajo de las cifras del mes, está el **acumulado del año**:
+facturable, coste y margen desde enero. Una tarifa, un sueldo o una furgoneta no
+se deciden con el margen de noviembre, se deciden con el del ejercicio.
+
+Es el año del mes que estás mirando arriba, no el de hoy: si miras enero de
+2025, ves el acumulado de 2025.
 
 ### La propuesta de factura
 
