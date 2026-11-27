@@ -2016,6 +2016,12 @@ async function cargar(){
     { p_aviso: '00000000-0000-0000-0000-000000000000' });
   S.sinCobroObra = !!(co.error && /function|does not exist|schema cache/i.test(
     String((co.error && (co.error.message || co.error.hint)) || '')));
+  /* Corregir un parte cerrado: servidor/corregir-parte.sql. Sin esas columnas no
+     hay dónde apuntar quién lo corrigió, cuándo y por qué, así que no se ofrece
+     corregir: editar un parte firmado sin dejar rastro es peor que no poder. */
+  const corr = await sb.from('avisos')
+    .select('corregido_en, corregido_por, corregido_nota, correcciones').limit(1);
+  S.sinCorregir = !!corr.error;
   /* El código de barras del fabricante: servidor/barras.sql. Sin esa columna
      en el catálogo, leer una caja no puede reconocer el material y el lector
      solo lee nuestras etiquetas QR, como antes del 08-11-2026. */
@@ -2247,7 +2253,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.27-1';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.27-3';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -3556,6 +3562,23 @@ function accionesAsis(a, firmada){
                : '<span class="mini" title="A este correo saldría">'+esc(mail)+'</span>'));
     else
       b.push('<span class="mini">Sin correo del cliente: no se le puede mandar el parte</span>');
+  }
+  /* ---- Corregir un parte ya cerrado (27-11-2026) ----
+     David: «Poder editar una asistencia realizada… aun estando firmadas.
+     Siempre bajo la responsabilidad de la oficina y solo desde oficina o
+     administración.»
+
+     Solo gestión, y no en una anulada: una anulada no tiene parte que corregir,
+     se vuelve a abrir. Y se dice si ya se corrigió antes, con quién y cuándo:
+     eso es la nota que pidió David, y se ve sin tener que abrir nada. */
+  if (a.cerrado && !a.anulada && esGestion() && !S.sinCorregir){
+    b.push('<button class="btn sm plana" data-act="parte-corregir" data-id="'+a.id+'">'+
+      'Corregir el parte</button>'+
+      (a.corregido_en
+        ? '<span class="mini" title="'+esc(a.corregido_nota || '')+'">Corregido'+
+          (a.correcciones > 1 ? ' '+a.correcciones+' veces, la última' : '')+
+          ' por '+esc(a.corregido_por || 'oficina')+' el '+fechaHora(a.corregido_en)+'</span>'
+        : ''));
   }
   /* La oficina apunta aquí lo que el técnico tiene que llevar y montar */
   if (!a.cerrado && esGestion() && !S.sinAlmacen){
@@ -4892,6 +4915,8 @@ const QUE_HACE_FALTA = [
     pierdes:'No se lleva lo pendiente de facturar ni los impagados.' },
   { marca:'sinFotoAviso', fichero:'fotos-aviso.sql', que:'Fotos de antes y después',
     pierdes:'Las fotos de la visita no se separan en antes y después.' },
+  { marca:'sinCorregir', fichero:'corregir-parte.sql', que:'Corregir un parte ya cerrado',
+    pierdes:'La oficina no puede corregir un parte cerrado: habría que reabrirlo, y entonces cambia su fecha de cierre y no queda dicho quién lo tocó.' },
   { marca:'sinCobroObra', fichero:'cobro-en-obra.sql', que:'Lo que hay que cobrar en obra',
     pierdes:'El técnico que cobra en obra tiene que escribir el importe a mano, y lo que cobra puede no ser lo que se factura.' },
   { marca:'sinFotoHueco', fichero:'fotos-hueco.sql', que:'Fotos de cada hueco medido',
@@ -23986,10 +24011,18 @@ function abrirDlg(html, guardar){
    el siguiente presupuesto que se abra empieza por el principio, que es lo que
    uno espera al abrir algo nuevo. */
 let ALTURAS = {};
-function cerrarDlg(){ dlg.close(); alGuardar = null; ALTURAS = {}; }
+/* Al cerrar el diálogo se apaga el modo corrección: si se quedara encendido, el
+   siguiente parte que se abriera para cerrarlo de verdad se guardaría como una
+   corrección y no quedaría cerrado. (27-11-2026) */
+function cerrarDlg(){ dlg.close(); alGuardar = null; ALTURAS = {}; CORRIGIENDO = null; }
 /* Un solo envío por vez. Con red lenta, dos toques en «Cerrar visita» lanzaban
    dos guardados en paralelo: dos borrados y dos altas de los mismos materiales. */
 let enviando = false;
+/* El parte que se está corrigiendo, si es que se está corrigiendo alguno. Vive
+   aquí arriba y no junto a dlgCierre porque cerrarDlg lo apaga, y cerrarDlg
+   está antes: con la declaración abajo, una llamada temprana a cerrarDlg se
+   encontraría la variable sin nacer. (27-11-2026) */
+let CORRIGIENDO = null;
 dlgForm.addEventListener('submit', async e => {
   e.preventDefault();
   if (!alGuardar || enviando) return;
@@ -24144,6 +24177,16 @@ dlgForm.addEventListener('change', async e => {
         if (campo) campo.focus();
       }
     }
+    /* ---- Y el guión se quita de la vista (27-11-2026) ----
+       El apartado del balde promete que el parte «se cierra con eso, sin
+       pedirte nada más», y luego dejaba a la vista un guión de 43 puntos de una
+       puerta que el técnico no ha podido ver. Aunque ya no se exija, dejarlo ahí
+       es decirle que lo rellene. Se oculta al marcar y vuelve al desmarcar: no
+       se borra nada, porque el técnico puede haberse equivocado al marcar. */
+    document.querySelectorAll('#dlg-form .guion').forEach(g => {
+      const grupo = g.closest('.grupo') || g;
+      grupo.hidden = !!t.checked;
+    });
     return;
   }
   /* «No se sabe»: apaga su campo y lo deja vacío, para que no queden las dos
@@ -30021,9 +30064,18 @@ async function cogerParte(a){
   } catch(e){ console.warn('Safe2door · no se ha podido apuntar quién lleva el parte:', e.message); }
 }
 
-function dlgCierre(avisoId){
+/* ---- El parte que se corrige, no el que se cierra (27-11-2026) ----
+   Corregir reutiliza el parte entero a propósito: así se vuelve a comprobar
+   todo lo que se comprueba al cerrar, se recalcula lo que cuesta la visita y el
+   material descontado se rehace solo (descontarMaterialDelParte borra primero
+   los movimientos de este parte y los vuelve a hacer, así que corregir no
+   descuadra el almacén). Lo único que cambia es que NO se vuelve a cerrar: la
+   fecha de cierre y quién cerró se quedan como estaban, porque la visita se
+   hizo el día que se hizo. */
+function dlgCierre(avisoId, corrigiendo){
   const a = S.avisos.find(x => x.id === avisoId);
   if (!a) return;
+  CORRIGIENDO = (corrigiendo && a.cerrado && !S.sinCorregir) ? a.id : null;
   /* De qué visita es el parte que está abierto. Hace falta para que una
      petición de material quede colgada de la visita en la que se gastó, aunque
      se pida sin haber pasado por el botón de leer la etiqueta. */
@@ -30051,7 +30103,37 @@ function dlgCierre(avisoId){
      días suele llevar más de una. */
   const puertas = puertasDeAviso(a.id);
   const varias = puertas.length > 1;
-  let h = '<h3>'+(larga ? 'Cerrar la obra' : 'Cerrar visita')+' · '+esc(tipoAsis(a))+'</h3>';
+  let h = '<h3>'+(CORRIGIENDO ? 'Corregir el parte'
+                 : (larga ? 'Cerrar la obra' : 'Cerrar visita'))+' · '+esc(tipoAsis(a))+'</h3>';
+  /* ---- El recuadro de la corrección (27-11-2026) ----
+     Va arriba del todo porque lo primero que hay que saber es que esto no es un
+     parte nuevo: es uno cerrado, puede estar firmado, y el cliente puede tener
+     ya su copia. Y el motivo se pide aquí, no al final, por lo mismo. */
+  if (CORRIGIENDO){
+    const fact = valoracionDe(a.id) || {};
+    h += '<div class="sin-ficha" style="margin-bottom:12px">'+
+      '<b>Estás corrigiendo un parte ya cerrado'+(a.firma_ruta ? ' y firmado' : '')+'.</b> '+
+      'Se cerró el '+fechaHora(a.cerrado)+(a.cerrado_por ? ' por '+esc(a.cerrado_por) : '')+
+      ', y esa fecha no cambia: la visita se hizo el día que se hizo. La firma del cliente se '+
+      'queda como está y no se le vuelve a pedir.'+
+      (a.corregido_en
+        ? ' Ya se corrigió '+(a.correcciones > 1 ? a.correcciones+' veces, la última ' : '')+
+          'el '+fechaHora(a.corregido_en)+' por '+esc(a.corregido_por || 'oficina')+
+          (a.corregido_nota ? ': «'+esc(a.corregido_nota)+'»' : '')+'.'
+        : '')+
+      (fact.facturado
+        ? '<br><br><b>Ojo: esta visita ya está facturada.</b> Si cambias las horas o los '+
+          'materiales, el importe deja de cuadrar con la factura que ya salió. Puedes hacerlo, '+
+          'pero entonces hay que rectificar la factura: no se arregla solo.'
+        : '')+
+      '<div class="campos" style="margin-top:10px">'+
+      '<div class="campo full"><label for="z-cornota">Por qué se corrige</label>'+
+      '<input id="z-cornota" type="text" maxlength="200" value="'+esc(a.corregido_nota || '')+'" '+
+      'placeholder="Ej.: el técnico apuntó 2 horas y fueron 3, lo confirmó por teléfono">'+
+      '<span class="pista">Hace falta. Un parte firmado que cambia sin decir por qué es justo lo '+
+      'que no se puede defender si el cliente reclama. Queda guardado con tu nombre y la fecha, y '+
+      'se ve en la ficha de la asistencia</span></div></div></div>';
+  }
 
   /* ---- El viaje en balde, lo marca el técnico (07-11-2026) ----
      David: «Este punto lo deben activar los técnicos. Debe aparecer en
@@ -30709,12 +30791,17 @@ function dlgCierre(avisoId){
         'ponlo en el contacto de esta asistencia o en su ficha.</p>')+
     '</div></div>';
 
+  /* En una corrección no se ofrece «guardar sin cerrar»: la visita ya está
+     cerrada y ese botón solo serviría para dejarla a medias sin rastro. Y el
+     botón de abajo dice lo que hace. (27-11-2026) */
   h += '<p class="err"></p><div class="pie">'+
-    '<button type="button" class="btn" data-act="guardar-avance" data-id="'+a.id+'">Guardar sin cerrar</button>'+
+    (CORRIGIENDO ? ''
+      : '<button type="button" class="btn" data-act="guardar-avance" data-id="'+a.id+'">Guardar sin cerrar</button>')+
     '<span class="sp"></span><button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
-    '<button type="submit" class="btn pri">Cerrar visita</button></div>';
+    '<button type="submit" class="btn pri">'+
+    (CORRIGIENDO ? 'Guardar la corrección' : 'Cerrar visita')+'</button></div>';
 
-  abrirDlg(h, () => guardarCierre(a, true));
+  abrirDlg(h, () => guardarCierre(a, true, !!CORRIGIENDO));
   setTimeout(() => prepararCierre(a), 0);
 }
 
@@ -31740,7 +31827,13 @@ async function descontarMaterialDelParte(a, mats){
              : '' };
 }
 
-async function guardarCierre(a, cerrando){
+async function guardarCierre(a, cerrando, corrigiendo){
+  /* Corregir se pide con el tercer parámetro, pero también vale el modo en el
+     que se abrió el parte: así el botón «Guardar la corrección» no tiene que
+     acordarse de pasarlo. Y nunca se corrige lo que no está cerrado ni sin las
+     columnas del rastro: sin ellas, corregir sería editar a escondidas. */
+  corrigiendo = !!(corrigiendo || (CORRIGIENDO && CORRIGIENDO === a.id))
+                && !!a.cerrado && !S.sinCorregir;
   /* El día del cierre, en hora local. Con toISOString se cogía el día en UTC: una
      visita cerrada a las 00:30 de verano quedaba fechada el día anterior, y con ella
      las horas de entrada y salida y la fecha de la revisión. */
@@ -31926,7 +32019,26 @@ async function guardarCierre(a, cerrando){
   const gs = guionesDelForm();
   const revisiones = [];
   let malosTotal = 0, tiposRev = [];
-  for (const cont of document.querySelectorAll('#dlg-form .guion')){
+  /* ---- El guión no se pide en un viaje en balde (27-11-2026) ----
+     David: «Cuando una asistencia se marca como que no se ha podido trabajar,
+     se debería poder cerrar una vez se ha marcado y dicho el porqué. Ahora no
+     te deja cerrar sin rellenar lo obligatorio para cualquier asistencia.»
+
+     Esto era verdad y era grave. El 07-11 se quitó del balde todo lo que no se
+     puede cumplir sin ver la puerta: las horas, la foto, la ficha y la firma.
+     Pero el guión de revisión se quedó fuera de ese repaso, y en una preventiva
+     en balde el parte decía «te quedan 43 puntos del guión sin marcar» y no
+     había manera de cerrarlo. El técnico llega, la nave está cerrada, lo marca,
+     y la aplicación le pide marcar 43 puntos de una puerta que no ha visto.
+
+     Es el mismo error de siempre: arreglar por un camino y no mirar los demás.
+     El 07-11 los caminos eran cinco y miré cuatro.
+
+     Y no se guarda ninguna revisión: una revisión con los puntos en blanco
+     diría en el histórico de la puerta que se revisó y salió bien, y eso es
+     peor que no tener nada. */
+  const baldeSinGuion = !S.sinFalso && esBalde;
+  for (const cont of (baldeSinGuion ? [] : document.querySelectorAll('#dlg-form .guion'))){
     const g = leerGuion(cont);
     if (!g) continue;
     const pu = g.puerta_id ? puertaDe(g.puerta_id) : null;
@@ -31979,8 +32091,18 @@ async function guardarCierre(a, cerrando){
      Guardar el avance NO comprueba nada: el técnico está midiendo y guarda a
      medias a propósito. Lo que se comprueba es el cierre, porque una comercial
      cerrada sin medidas es un viaje hecho del que no sale presupuesto. */
+  /* ---- Y en un viaje en balde, ninguna medida (27-11-2026) ----
+     Lo encontró el repaso de los tipos de visita, probando el balde en una
+     comercial: si la oficina había marcado el tipo de puerta, el parte venía
+     con un bloque de hueco que ya traía ese tipo puesto. Eso basta para que el
+     bloque cuente como empezado, y entonces el cierre pedía «falta el ancho o
+     el alto en el hueco 1» de un hueco que el técnico no ha podido medir. Otro
+     bloqueo imposible de cumplir, el segundo de este mismo repaso.
+     Con el balde marcado no se comprueba ninguna medida y no se guarda ninguna:
+     un hueco con solo el tipo puesto no es una medida, es el bloque en blanco
+     que pintó la aplicación. */
   const medidas = [];
-  if (a.tipo === 'comercial' && !S.sinMedidas){
+  if (a.tipo === 'comercial' && !S.sinMedidas && !(!S.sinFalso && esBalde)){
     const bloques = Array.from(document.querySelectorAll('#dlg-form .medida'));
     bloques.forEach((cont, i) => {
       const m = leerMedida(cont);
@@ -32192,8 +32314,25 @@ async function guardarCierre(a, cerrando){
     o.estado = 'cerrado';
     // si nadie la tenía asignada, la cierra quien la cierra: el parte no puede salir sin técnico
     if (!a.tecnico_id && S.perfil) { o.tecnico_id = S.perfil.id; o.tecnico = yo(); }
-    o.cerrado = new Date().toISOString();
-    o.cerrado_por = yo();
+    /* ---- Corregir no es volver a cerrar (27-11-2026) ----
+       La fecha de cierre y quién cerró se quedan como estaban: la visita se
+       hizo el día que se hizo, y machacarlas haría que un parte corregido hoy
+       pareciera una visita de hoy. En su lugar queda apuntado quién corrige,
+       cuándo y por qué, y cuántas veces se ha corregido ya.
+       El motivo es obligatorio a propósito: lo que no se puede defender ante un
+       cliente es un parte firmado que cambió y nadie sabe por qué. */
+    if (corrigiendo){
+      o.corregido_nota = (val('z-cornota') || '').trim();
+      if (!o.corregido_nota)
+        return setErr('Escribe por qué corriges este parte. Queda guardado con tu nombre y la '+
+          'fecha: es lo único que explica, dentro de seis meses, por qué un parte firmado cambió.');
+      o.corregido_en = new Date().toISOString();
+      o.corregido_por = yo();
+      o.correcciones = (+a.correcciones || 0) + 1;
+    } else {
+      o.cerrado = new Date().toISOString();
+      o.cerrado_por = yo();
+    }
   }
   try {
     // firma
@@ -32252,7 +32391,12 @@ async function guardarCierre(a, cerrando){
        la lista se ha quedado vacía: si el técnico quitó un hueco que había
        apuntado por error, tiene que desaparecer de verdad. Con un «if
        (medidas.length)» delante, el hueco borrado seguiría en el presupuesto. */
-    if (a.tipo === 'comercial' && !S.sinMedidas) await rehacer('medidas', medidas.map(x => x.m));
+    /* En un balde no se tocan las medidas guardadas: con la lista vacía, rehacer
+       borraría lo que hubiera y no metería nada. No debería haber nada, porque
+       quien no pudo medir no midió, pero borrar lo que escribió el técnico sin
+       decírselo no se hace nunca. (27-11-2026) */
+    if (a.tipo === 'comercial' && !S.sinMedidas && !(!S.sinFalso && esBalde))
+      await rehacer('medidas', medidas.map(x => x.m));
     const { error } = await sb.from('avisos').update(o).eq('id', a.id);
     if (error) throw error;
     /* ---- Lo de cada puerta, a su fila (24-11-2026) ----
@@ -32299,7 +32443,8 @@ async function guardarCierre(a, cerrando){
     // la base de datos valora la visita: el técnico no ve tarifas ni costes
     if (cerrando) { try { await sb.rpc('valorar_aviso', { p_aviso: a.id }); } catch(_){} }
     cerrarDlg(); await cargar();
-    toast(cerrando ? 'Visita cerrada. La oficina ya tiene el parte.' : 'Guardado.');
+    toast(corrigiendo ? 'Parte corregido. Queda apuntado quién y cuándo.'
+          : (cerrando ? 'Visita cerrada. La oficina ya tiene el parte.' : 'Guardado.'));
     if (almacen && almacen.bajas)
       toast(almacen.bajas+' material'+(almacen.bajas===1?'':'es')+' descontado'+
             (almacen.bajas===1?'':'s')+' de '+almacen.origen+'.');
@@ -33090,6 +33235,13 @@ raiz.addEventListener('click', async e => {
       toast('Copia creada. Repasa la fecha y lo que hay que hacer.');
       if (data) dlgAviso(null, data);
     } catch(err){ fallo(err); }
+  }
+  /* ---- Corregir un parte cerrado (27-11-2026) ----
+     Se abre el mismo parte en modo corrección. No se pide confirmación aquí: lo
+     que hay que confirmar es el cambio, y eso se hace dentro, con el motivo. */
+  else if (a === 'parte-corregir'){
+    if (!esGestion()){ toast('Un parte cerrado solo lo corrige la oficina o la administración.'); return; }
+    dlgCierre(b.dataset.id, true);
   }
   else if (a === 'aviso-reabrir'){
     if (!armar(b, 'Confirmar')) return;
