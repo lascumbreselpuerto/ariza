@@ -63,6 +63,20 @@ await ctx.addInitScript(() => {
       tecnico_id:'usuario-admin', cliente_id:cli,
       descripcion:'No había nadie', trabajo:'Viaje en balde', horas:1,
       creado:'2026-10-15T09:00:00.000Z', cerrado:'2026-10-15T10:00:00.000Z' });
+    /* ---- Una de cada tipo, para el repaso del 27-11-2026 ----
+       El 07-11 se probó el balde en una avería y en una instalación, y así se
+       escapó que en una preventiva no se podía cerrar: el guión de 43 puntos lo
+       seguía exigiendo. Esta vez se prueban TODOS los tipos que la oficina
+       puede crear, uno por uno, y no un par de ellos. */
+    [['bl-averia','averia','averia'], ['bl-prev','mantenimiento',null],
+     ['bl-com','comercial',null], ['bl-inst','instalacion','puerta_automatica'],
+     ['bl-urg','urgencia',null], ['bl-norm','instalacion','normativa']].forEach(
+      ([id, tipo, sub]) => db.avisos.push({ id, tipo, subtipo:sub, estado:'asignado',
+        prioridad:'normal', tecnico_id:'usuario-admin', cliente_id:cli,
+        puerta_id: tipo === 'comercial' ? null : db.puertas[0].id,
+        tipos_puerta: tipo === 'comercial' ? ['Seccional'] : null,
+        descripcion:'Para el repaso del viaje en balde',
+        creado:new Date().toISOString() }));
   };
 });
 const pag = await ctx.newPage();
@@ -254,6 +268,109 @@ paso('al guardarla, la de origen queda gestionada', nueva.resuelto === true);
 /* El rastro: cuántos viajes costó de verdad ese trabajo */
 paso('y enlazada con la que la sustituye', !!nueva.enlace, nueva.enlace);
 paso('la lista se queda vacía', nueva.quedan.length === 0, nueva.quedan.join(' · '));
+
+/* ================================================================
+   El repaso que faltaba: un balde en CADA tipo de visita (27-11-2026)
+
+   David: «Cuando una asistencia se marca como que no se ha podido
+   trabajar, se debería poder cerrar una vez se ha marcado y dicho el
+   porqué. Ahora no te deja cerrar sin rellenar lo obligatorio para
+   cualquier asistencia.»
+
+   Tenía razón, y lo que fallaba era la PREVENTIVA: el guión de revisión
+   se quedó fuera del repaso del 07-11, así que el parte decía «te
+   quedan 43 puntos del guión sin marcar» y no se podía cerrar de
+   ninguna manera. El técnico llega, la nave está cerrada, lo marca, y
+   la aplicación le pide marcar 43 puntos de una puerta que no ha visto.
+
+   El 07-11 se probó en una avería y en una instalación y se dio por
+   bueno. De ahí esta sección: se prueban TODOS los tipos que la oficina
+   puede crear, uno a uno, porque el fallo estaba justo en el que no se
+   probó. Si mañana se añade una exigencia nueva a cualquier parte, aquí
+   sale en rojo el tipo en el que bloquea.
+   ================================================================ */
+bloque('Un viaje en balde se cierra en CUALQUIER tipo de visita');
+
+const TIPOS_BALDE = [
+  ['bl-averia', 'una avería'],
+  ['bl-prev',   'una preventiva, la que fallaba'],
+  ['bl-com',    'una comercial'],
+  ['bl-inst',   'una instalación'],
+  ['bl-urg',    'una urgencia'],
+  ['bl-norm',   'una adecuación a normativa'],
+];
+for (const [id, comoSeLlama] of TIPOS_BALDE){
+  const r = await T(async x => {
+    const g = window.__T;
+    g.cerrarDlg();
+    await new Promise(f => setTimeout(f, 300));
+    g.dlgCierre(x);
+    await new Promise(f => setTimeout(f, 1700));
+    const c = document.getElementById('z-falso');
+    if (!c) return { sinCasilla:true };
+    c.checked = true; c.dispatchEvent(new Event('change', { bubbles:true }));
+    const m = document.getElementById('z-falsomot');
+    if (m) m.value = 'Llegué y estaba todo cerrado, nadie contestaba al teléfono';
+    await new Promise(f => setTimeout(f, 400));
+    /* Lo único que se toca es la casilla y el motivo. Nada más: eso es
+       justamente lo que se está probando. */
+    await g.guardarCierre(g.S.avisos.find(y => y.id === x), true);
+    await new Promise(f => setTimeout(f, 2000));
+    const a = g.S.avisos.find(y => y.id === x) || {};
+    g.cerrarDlg();
+    return { cerrado: !!a.cerrado, trabajo: a.trabajo || '',
+      err: (document.querySelector('#dlg-form .err') || {}).textContent || '' };
+  }, id);
+  paso('se cierra marcando solo el balde y el motivo, en '+comoSeLlama,
+    r.cerrado === true, r.sinCasilla ? 'no sale la casilla' : r.err);
+  paso('  y el parte queda diciendo lo que pasó, en '+comoSeLlama,
+    /desplazamiento en falso/i.test(r.trabajo || '') && /cerrado/i.test(r.trabajo || ''),
+    (r.trabajo || '').slice(0, 70));
+}
+
+/* Y lo que se vio de paso: con el balde marcado, el guión se quita de la vista.
+   Dejar 43 puntos a la vista es decirle al técnico que los rellene, aunque ya
+   no se le exijan. Al desmarcar vuelve, porque pudo ser un error al marcar. */
+const guionFuera = await T(async () => {
+  const g = window.__T;
+  g.cerrarDlg();
+  await new Promise(f => setTimeout(f, 300));
+  /* Una preventiva nueva, que la de arriba ya se cerró */
+  const av = { id:'bl-prev2', tipo:'mantenimiento', estado:'asignado', prioridad:'normal',
+    tecnico_id: g.S.perfil.id, cliente_id: g.S.puertas[0].cliente_id,
+    puerta_id: g.S.puertas[0].id, descripcion:'Revisión anual',
+    creado:new Date().toISOString() };
+  await g.sb.from('avisos').insert(av);
+  await g.cargar();
+  g.dlgCierre('bl-prev2');
+  await new Promise(f => setTimeout(f, 1700));
+  const visible = () => { const x = document.querySelector('#dlg-form .guion');
+    return !!(x && (x.closest('.grupo') || x).offsetParent !== null); };
+  const antes = visible();
+  const c = document.getElementById('z-falso');
+  c.checked = true; c.dispatchEvent(new Event('change', { bubbles:true }));
+  await new Promise(f => setTimeout(f, 400));
+  const conBalde = visible();
+  c.checked = false; c.dispatchEvent(new Event('change', { bubbles:true }));
+  await new Promise(f => setTimeout(f, 400));
+  const alDesmarcar = visible();
+  g.cerrarDlg();
+  return { antes, conBalde, alDesmarcar };
+});
+paso('en una preventiva normal el guión se ve', guionFuera.antes === true);
+paso('al marcar el balde, el guión se quita de la vista', guionFuera.conBalde === false);
+paso('y si se desmarca, vuelve: pudo ser un error al marcar',
+  guionFuera.alDesmarcar === true);
+
+/* Y que no quede una revisión fantasma: una revisión con los puntos en blanco
+   diría en el histórico de la puerta que se revisó y salió bien. */
+const sinRevision = await T(async () => {
+  const g = window.__T;
+  const { data } = await g.sb.from('revisiones').select('*').eq('aviso_id', 'bl-prev');
+  return { n: (data || []).length };
+});
+paso('y la preventiva en balde NO deja una revisión en blanco en la puerta',
+  sinRevision.n === 0, sinRevision.n+' revisiones');
 
 console.log('\n'+ok+' bien, '+mal+' mal.');
 const graves = errores.filter(x => !/fonts\.googleapis|ERR_TUNNEL|ERR_NAME|net::ERR|provocado por la prueba/.test(x));
