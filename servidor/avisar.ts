@@ -266,7 +266,145 @@ Deno.serve(async (req) => {
 
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const ADMIN_MAIL = Deno.env.get('AVISOS_ADMIN') || 'arizapuertasautomaticas@gmail.com';
-    const { tipo, aviso_id, contrato_id, jornada_id, mensaje_id } = await req.json();
+    const { tipo, aviso_id, contrato_id, jornada_id, mensaje_id, mes } = await req.json();
+
+    /* ========================================================================
+       LOS DOS INFORMES MENSUALES AL ADMINISTRADOR            27-11-2026
+
+       David: «se enviará por correo al administrador los resultados de los
+       márgenes mensualmente. Pero en documentos diferentes y correos
+       diferentes. Llamémoslo "partes eliminados" y "Margen de Noviembre".»
+
+       Dos correos y no uno, porque son dos cosas que se leen en momentos
+       distintos: el margen es la marcha del negocio, y los partes eliminados
+       son dinero puesto que no se cobró, que se lee para preguntar. Juntos, el
+       segundo no se leería nunca.
+
+       Los números salen de la vista margen_por_mes, la misma que usa la
+       pantalla de Gestión: así el correo y la pantalla no pueden decir cosas
+       distintas.
+       ======================================================================== */
+    const MESES_ES = ['enero','febrero','marzo','abril','mayo','junio','julio',
+                      'agosto','septiembre','octubre','noviembre','diciembre'];
+    /* El mes en palabras, que es como lo pidió David: «Margen de Noviembre». */
+    const mesEnLetra = (m: string) => {
+      const [a, mm] = String(m || '').split('-');
+      const i = Number(mm) - 1;
+      return (MESES_ES[i] ? MESES_ES[i][0].toUpperCase() + MESES_ES[i].slice(1) : m) + ' de ' + a;
+    };
+    const eur = (n: unknown) => (Number(n) || 0).toLocaleString('es-ES',
+      { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+    const pct = (p: number, t: number) => t ? Math.round((p / t) * 1000) / 10 + ' %' : '—';
+    /* Sin mes, el anterior: el que está cerrado y no va a cambiar. */
+    const mesPedido = () => {
+      if (mes) return String(mes);
+      const d = new Date();
+      d.setDate(1); d.setMonth(d.getMonth() - 1);
+      return d.toISOString().slice(0, 7);
+    };
+
+    // ---- Margen del mes ----
+    if (tipo === 'margen') {
+      const m = mesPedido();
+      const { data: fila } = await admin.from('margen_por_mes')
+        .select('*').eq('mes', m).maybeSingle();
+      if (!fila) {
+        const r0 = await enviar([ADMIN_MAIL], `Margen de ${mesEnLetra(m)}`,
+          plantilla(`Margen de ${mesEnLetra(m)}`,
+            [['Visitas cerradas', '0']],
+            'Ese mes no tiene ninguna visita cerrada. No es un fallo: es que no hubo.',
+            'Informe mensual automático · ARIZA SAT'));
+        return ok({ ok: true, vacio: true, ...r0 });
+      }
+      const facturable = Number(fila.facturable) || 0;
+      const margen = Number(fila.margen) || 0;
+      const filas: string[][] = [
+        ['Visitas cerradas', String(fila.visitas ?? 0)],
+        ['Facturable, sin IVA', `<b>${eur(fila.facturable)}</b>`],
+        ['Coste', eur(fila.coste)],
+        ['Margen', `<b style="color:${margen < 0 ? '#B3261E' : '#2E7D46'}">${eur(margen)}</b>` +
+          ` <span style="color:#6B6560">· ${pct(margen, facturable)} sobre la venta</span>`],
+        ['Facturadas', `${fila.facturadas ?? 0} de ${fila.visitas ?? 0}`],
+        ['Cobrado', eur(fila.cobrado)],
+      ];
+      /* Lo no facturado se nombra aquí, pero su detalle va en el OTRO correo:
+         este informe es la marcha del mes, no la lista de lo que se regaló. */
+      if (Number(fila.no_facturadas) > 0)
+        filas.push(['Partes no facturados',
+          `${fila.no_facturadas} · coste perdido <b style="color:#B3261E">${eur(fila.coste_perdido)}</b>` +
+          `<br><span style="color:#6B6560">El detalle va en el correo «Partes eliminados»</span>`]);
+      const r = await enviar([ADMIN_MAIL], `Margen de ${mesEnLetra(m)}`,
+        plantilla(`Margen de ${mesEnLetra(m)}`, filas,
+          'Todas las visitas cerradas del mes, estén facturadas o no. Las anuladas quedan fuera, ' +
+          'porque no se hicieron. El margen es sobre la venta: lo que queda después de pagar las ' +
+          'horas, el desplazamiento y el material. Los partes que se decidió no facturar no entran ' +
+          'en el facturable ni en el margen: su coste va aparte.',
+          'Informe mensual automático · ARIZA SAT'));
+      return ok({ ok: true, mes: m, ...r });
+    }
+
+    // ---- Partes eliminados del mes ----
+    if (tipo === 'eliminados') {
+      const m = mesPedido();
+      /* Las visitas del mes que la oficina decidió no facturar. Se piden por el
+         rango del mes y no por un campo «mes», porque avisos no lo tiene: lo
+         calcula la vista, y aquí hace falta el detalle de cada visita. */
+      const desde = m + '-01';
+      const d2 = new Date(desde + 'T00:00:00Z');
+      d2.setUTCMonth(d2.getUTCMonth() + 1);
+      const hasta = d2.toISOString().slice(0, 10);
+      const { data: vals } = await admin.from('valoraciones')
+        .select('aviso_id, imp_total, coste_total, no_facturar_motivo, no_facturar_por, ' +
+                'avisos!inner(cerrado, tipo, descripcion, horas, clientes(nombre), puertas(codigo))')
+        .eq('no_facturar', true)
+        .gte('avisos.cerrado', desde).lt('avisos.cerrado', hasta)
+        .order('aviso_id');
+      const lista = (vals || []).filter(v => (v as Record<string, unknown>).avisos);
+      if (!lista.length) {
+        const r0 = await enviar([ADMIN_MAIL], `Partes eliminados · ${mesEnLetra(m)}`,
+          plantilla(`Partes eliminados · ${mesEnLetra(m)}`,
+            [['Partes sin facturar', '0']],
+            'Ese mes no se quedó ningún parte sin facturar. Mejor así.',
+            'Informe mensual automático · ARIZA SAT'));
+        return ok({ ok: true, vacio: true, ...r0 });
+      }
+      /* El material que se puso y no se va a cobrar, por visita */
+      const { data: mats } = await admin.from('material_perdido')
+        .select('aviso_id, descripcion, cantidad, coste').eq('mes', m);
+      let costeTotal = 0;
+      const filas: string[][] = lista.map(v => {
+        const a = (v as Record<string, any>).avisos;
+        costeTotal += Number(v.coste_total) || 0;
+        const suyos = (mats || []).filter(x => x.aviso_id === v.aviso_id);
+        const mat = suyos.length
+          ? '<br><span style="color:#6B6560">Material: ' +
+            suyos.map(x => `${x.descripcion || 'material'} × ${x.cantidad} (${eur(x.coste)})`).join(', ') +
+            '</span>'
+          : '';
+        return [
+          String(a.cerrado || '').slice(0, 10),
+          `<b>${a.clientes?.nombre || 'Cliente'}</b>` +
+          `${a.puertas?.codigo ? ' · ' + a.puertas.codigo : ''}` +
+          `<br><span style="color:#6B6560">${a.descripcion || ''}` +
+          `${a.horas != null ? ' · ' + a.horas + ' h' : ''}` +
+          ` · se dejó de facturar ${eur(v.imp_total)}` +
+          ` · coste <b style="color:#B3261E">${eur(v.coste_total)}</b></span>` +
+          `<br><span style="color:#6B6560">Motivo: ${v.no_facturar_motivo || 'sin indicar'}` +
+          `${v.no_facturar_por ? ' · ' + v.no_facturar_por : ''}</span>${mat}`,
+        ];
+      });
+      filas.push(['<b>Coste perdido</b>',
+        `<b style="color:#B3261E">${eur(costeTotal)}</b>`]);
+      const r = await enviar([ADMIN_MAIL],
+        `Partes eliminados · ${mesEnLetra(m)}: ${lista.length} sin facturar`,
+        plantilla(`Partes eliminados · ${mesEnLetra(m)}`, filas,
+          'Visitas que se hicieron y que la oficina decidió no facturar. Las horas del técnico se ' +
+          'pagaron igual y el material ya salió del almacén, así que el coste de abajo es dinero ' +
+          'puesto que no se va a cobrar. El material no se ha vuelto a dar de baja: ya salió al ' +
+          'cerrar el parte.',
+          'Informe mensual automático · ARIZA SAT'));
+      return ok({ ok: true, mes: m, partes: lista.length, ...r });
+    }
 
     // ---- Resumen semanal de revisiones ----
     if (tipo === 'revisiones') {

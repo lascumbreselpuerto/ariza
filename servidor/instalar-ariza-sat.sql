@@ -6012,6 +6012,79 @@ begin
      propósito: son de la oficina, no del cálculo, y un recálculo no los toca. */
 end $function$;
 
+create or replace function public.informe_margen(p_mes text default null)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_sec text;
+  v_url text;
+  v_mes text;
+begin
+  /* Lo puede pedir la oficina y la administración desde el botón, y lo pide la
+     tarea programada, que entra como el dueño de la base y no tiene perfil: por
+     eso no se exige es_gestion() cuando no hay usuario. */
+  if auth.uid() is not null and not public.es_gestion() then return false; end if;
+
+  /* Sin mes, el anterior: es el que está cerrado y no va a cambiar. */
+  v_mes := coalesce(nullif(btrim(p_mes), ''),
+    to_char((now() at time zone 'Europe/Madrid')::date - interval '1 month', 'YYYY-MM'));
+
+  select valor into v_url from public.config_interna where clave = 'avisos_url';
+  select valor into v_sec from public.config_interna where clave = 'avisos_secreto';
+  if v_url is null or v_sec is null then return false; end if;
+
+  perform net.http_post(
+    url     := v_url,
+    headers := jsonb_build_object('Content-Type','application/json','x-ariza-secreto', v_sec),
+    body    := jsonb_build_object('tipo','margen','mes', v_mes)
+  );
+  return true;
+end $$;
+
+create or replace function public.informe_eliminados(p_mes text default null)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_sec text;
+  v_url text;
+  v_mes text;
+begin
+  if auth.uid() is not null and not public.es_gestion() then return false; end if;
+
+  v_mes := coalesce(nullif(btrim(p_mes), ''),
+    to_char((now() at time zone 'Europe/Madrid')::date - interval '1 month', 'YYYY-MM'));
+
+  select valor into v_url from public.config_interna where clave = 'avisos_url';
+  select valor into v_sec from public.config_interna where clave = 'avisos_secreto';
+  if v_url is null or v_sec is null then return false; end if;
+
+  perform net.http_post(
+    url     := v_url,
+    headers := jsonb_build_object('Content-Type','application/json','x-ariza-secreto', v_sec),
+    body    := jsonb_build_object('tipo','eliminados','mes', v_mes)
+  );
+  return true;
+end $$;
+
+create or replace function public.informes_disponibles()
+returns boolean
+language sql
+immutable
+as $$ select true $$;
+
+grant execute on function public.informe_margen(text) to authenticated;
+grant execute on function public.informe_eliminados(text) to authenticated;
+grant execute on function public.informes_disponibles() to authenticated;
+grant execute on function public.informe_margen(text) to anon;
+grant execute on function public.informe_eliminados(text) to anon;
+grant execute on function public.informes_disponibles() to anon;
+
 grant execute on function public.cobro_en_obra(uuid) to authenticated;
 grant execute on function public.cobro_en_obra(uuid) to anon;
 grant execute on function public.cobro_en_obra(uuid) to service_role;
