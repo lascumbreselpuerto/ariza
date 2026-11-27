@@ -223,7 +223,15 @@ const gestionada = await T(async () => {
   g.S.tab = 'gestion';
   g.pintar();
   await new Promise(r => setTimeout(r, 1200));
+  /* ---- Sin el índice de la pantalla (27-11-2026) ----
+     Gestión se pinta con un índice arriba, una fila de botones con el nombre de
+     cada apartado, y solo aparece cuando la pantalla no se ve entera. Su texto
+     contiene «Viajes en balde» como todos los demás nombres, así que buscar el
+     panel por su texto se quedaba con el índice y no con el apartado. No
+     fallaba por casualidad: hasta que Gestión creció con el acumulado del año,
+     la pantalla cabía y el índice no salía. */
   const panel = [...document.querySelectorAll('#vista .panel')]
+    .filter(p => !p.classList.contains('eq-indice'))
     .find(p => /Viajes en balde/i.test(p.textContent || ''));
   const texto = panel ? panel.textContent : '';
   const btn = panel ? panel.querySelector('[data-act="falso-ok"]') : null;
@@ -243,6 +251,7 @@ paso('al decir que ya está gestionada, sale de la lista',
 const nueva = await T(async () => {
   const g = window.__T;
   const panel = [...document.querySelectorAll('#vista .panel')]
+    .filter(p => !p.classList.contains('eq-indice'))   /* ver arriba (27-11-2026) */
     .find(p => /Viajes en balde/i.test(p.textContent || ''));
   const btn = panel ? panel.querySelector('[data-act="falso-nueva"]') : null;
   if (!btn) return { sinBoton: true };

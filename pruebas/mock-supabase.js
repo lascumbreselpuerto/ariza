@@ -599,6 +599,26 @@ const RPC = {
       m.precio = Math.round(m.coste * (1 + (tar.recargo_material || 0) / 100) * 100) / 100;
     });
     /* lo que no tiene ni enlace ni coste se queda sin precio, y vale cero */
+    /* ---- El importe puesto a mano (27-11-2026) ----
+       El simulador NO calcula la valoración: los importes se siembran en cada
+       prueba. Pero esta regla sí se aplica aquí, porque es la que hace que la
+       PANTALLA enseñe lo que va a facturarse: si la oficina ha puesto un
+       importe a mano, ese es el total, y el margen sale contra el coste que
+       hubiera. La cuenta de verdad se prueba contra Postgres en
+       sql/precio-a-mano-pruebas.sql; aquí solo se refleja su resultado. */
+    const val = (DB.valoraciones || []).find(v => String(v.aviso_id) === String(p_aviso));
+    if (val){
+      /* Con importe a mano, ese es el total. Sin él, vuelve la suma de las tres
+         partes, que es lo que hace el servidor al quitarlo: si aquí no se
+         reflejara, el total se quedaría con el importe que ya se quitó y la
+         pantalla enseñaría un número que no existe. */
+      const suma = Math.round(((+val.imp_mano_obra || 0) + (+val.imp_desplazamiento || 0) +
+                               (+val.imp_materiales || 0)) * 100) / 100;
+      val.imp_total = val.imp_manual != null
+        ? Math.round((+val.imp_manual || 0) * 100) / 100
+        : suma;
+      val.margen = Math.round((val.imp_total - (+val.coste_total || 0)) * 100) / 100;
+    }
     return { ok:true };
   },
   /* ---- Lo que hay que cobrar en obra (27-11-2026) ----

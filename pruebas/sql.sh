@@ -49,7 +49,7 @@ tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos
 parado.sql factura.sql rutas.sql ruta-cliente.sql telegram.sql subtipo.sql urgencia.sql \
 medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql perifericos.sql ficha4.sql urgencia2.sql falso.sql fotos-aviso.sql barras.sql almacenes.sql nombre-equipo.sql sitio-material.sql conformidad-visita.sql mensajes.sql tecnicos.sql multipuerta.sql \
 alta-por-bloques.sql elementos-unificados.sql fotos-elemento.sql fotos-hueco.sql \
-cobro-en-obra.sql corregir-parte.sql"
+cobro-en-obra.sql corregir-parte.sql precio-a-mano.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -272,6 +272,22 @@ if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/corregir-parte-pruebas.sql" ]; then
     fallos=$((fallos+1))
     echo " FALLA corregir un parte cerrado:"
     grep -a -m3 -E "ERROR|EXCEPTION" /tmp/cpa-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
+# El precio puesto a mano por la oficina. Lo que se vigila: que se facture ese
+# importe, que el margen se calcule contra el COSTE real y no contra lo escrito,
+# y sobre todo que recalcular NO borre el importe a mano: hay recálculos
+# automáticos y uno de ellos desharía la decisión de la oficina sin avisar.
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/precio-a-mano-pruebas.sql" ]; then
+  echo ""
+  echo "── El precio puesto a mano ─────────────────────"
+  if $PSQL -f "$AQUI/sql/precio-a-mano-pruebas.sql" > /tmp/pm-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/pm-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA el precio puesto a mano:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/pm-pruebas.log | sed 's/^/         /'
   fi
 fi
 

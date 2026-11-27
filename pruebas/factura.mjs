@@ -450,6 +450,214 @@ paso('y el material sin precio tampoco se cuela aquí',
   !/Torniller/.test(fichero.texto));
 
 /* ================================================================
+   El precio puesto a mano, y el acumulado del año (27-11-2026)
+
+   David: «Si veo necesario que oficina pueda modificar el precio a
+   mano. Estos importes sumarán en ingresos positivos y se le calculará
+   el margen con los costes estipulados.»
+
+   Y: «me he dado cuenta de que el margen no termina en sumatorio, cosa
+   necesaria para hacer cálculos.»
+
+   La cuenta la hace el servidor y se prueba contra Postgres de verdad
+   en sql/precio-a-mano-pruebas.sql. Aquí se prueba la PANTALLA: que se
+   vean los dos números (el calculado y el de la factura), que no se
+   pueda poner sin decir por qué, que el técnico no llegue a esto, y que
+   el acumulado del año salga en Gestión.
+   ================================================================ */
+bloque('El precio puesto a mano');
+
+const precioMano = await T(async () => {
+  const g = window.__T;
+  g.cerrarDlg();
+  await new Promise(r => setTimeout(r, 250));
+  g.dlgValoracion('pf-1');
+  await new Promise(r => setTimeout(r, 900));
+  const hayBoton = !!document.querySelector('[data-act="precio-mano"]');
+  const hayQuitar = !!document.querySelector('[data-act="precio-mano-quitar"]');
+  document.querySelector('[data-act="precio-mano"]').click();
+  await new Promise(r => setTimeout(r, 900));
+  const txt = document.getElementById('dlg-form').innerText;
+  /* Se intenta guardar sin motivo */
+  document.getElementById('pm-imp').value = '250';
+  const form = document.getElementById('dlg-form');
+  form.dispatchEvent(new Event('submit', { bubbles:true, cancelable:true }));
+  await new Promise(r => setTimeout(r, 900));
+  const err = (document.querySelector('#dlg-form .err') || {}).textContent || '';
+  const v = g.valoracionDe('pf-1') || {};
+  return { hayBoton, hayQuitar, txt, err, manualTodavia: v.imp_manual == null };
+});
+paso('en la valoración hay botón para poner el importe a mano', precioMano.hayBoton === true);
+paso('y todavía no hay botón de volver al calculado: no hay importe a mano',
+  precioMano.hayQuitar === false);
+/* Sin distinguir mayúsculas: los rótulos de una lista de datos los pone el
+   CSS en mayúsculas, y la prueba no está para vigilar el CSS. (27-11-2026) */
+paso('el diálogo enseña la suma del cálculo y el coste real, para decidir con los dos',
+  /suma del cálculo/i.test(precioMano.txt) && /coste real/i.test(precioMano.txt),
+  precioMano.txt.replace(/\n/g, ' · ').slice(0, 100));
+paso('y dice que el coste no cambia y que el margen sale de ese coste',
+  /El coste no cambia/.test(precioMano.txt) && /margen se calcula contra ese coste/.test(precioMano.txt));
+paso('sin decir por qué, no se guarda', /Escribe por qué se pone a mano/.test(precioMano.err),
+  precioMano.err.slice(0, 70));
+paso('y no se ha puesto nada', precioMano.manualTodavia === true);
+
+const puesto = await T(async () => {
+  const g = window.__T;
+  document.getElementById('pm-imp').value = '250';
+  document.getElementById('pm-nota').value = 'Precio acordado con el administrador';
+  document.getElementById('dlg-form').dispatchEvent(
+    new Event('submit', { bubbles:true, cancelable:true }));
+  await new Promise(r => setTimeout(r, 2200));
+  const v = g.valoracionDe('pf-1') || {};
+  /* Y se vuelve a abrir la valoración para ver los dos números */
+  g.dlgValoracion('pf-1');
+  await new Promise(r => setTimeout(r, 900));
+  const txt = document.getElementById('dlg-form').innerText;
+  const hayQuitar = !!document.querySelector('[data-act="precio-mano-quitar"]');
+  g.cerrarDlg();
+  return { manual: v.imp_manual, total: v.imp_total, margen: v.margen,
+    coste: v.coste_total, por: v.manual_por, nota: v.manual_nota, txt, hayQuitar };
+});
+paso('con el motivo, se guarda el importe a mano', Number(puesto.manual) === 250, puesto.manual);
+paso('y pasa a ser lo que se factura', Number(puesto.total) === 250, puesto.total);
+/* La que de verdad importa: el margen contra el coste real, no contra lo escrito */
+paso('el margen se calcula contra el coste real',
+  Math.round((250 - (+puesto.coste)) * 100) === Math.round((+puesto.margen) * 100),
+  puesto.margen+' con coste '+puesto.coste);
+paso('queda guardado quién lo puso y por qué',
+  !!puesto.por && /acordado/.test(puesto.nota || ''), puesto.por+' · '+puesto.nota);
+paso('al volver a abrirla se ven los DOS números, el calculado y el de la factura',
+  /suma del cálculo/i.test(puesto.txt) && /puesto a mano/i.test(puesto.txt) &&
+  /268,90/.test(puesto.txt) && /250,00/.test(puesto.txt),
+  puesto.txt.replace(/\n/g, ' · ').slice(0, 130));
+paso('y ya se ofrece volver al calculado', puesto.hayQuitar === true);
+
+/* Y se quita, que es la salida. Esto además deja la visita como estaba para las
+   pruebas de más abajo: la primera versión de esta sección se la dejaba con el
+   precio a mano puesto y las dos comprobaciones del total de la tarjeta se
+   ponían rojas sin que nada estuviera mal. (27-11-2026) */
+const quitado = await T(async () => {
+  const g = window.__T;
+  g.dlgValoracion('pf-1');
+  await new Promise(r => setTimeout(r, 900));
+  const b1 = document.querySelector('[data-act="precio-mano-quitar"]');
+  b1.click();                                   // primer toque: pide confirmación
+  await new Promise(r => setTimeout(r, 300));
+  const pide = /Confirmar/i.test(b1.textContent || '');
+  const vMedio = g.valoracionDe('pf-1') || {};
+  b1.click();                                   // segundo toque: lo quita
+  await new Promise(r => setTimeout(r, 2200));
+  const v = g.valoracionDe('pf-1') || {};
+  g.cerrarDlg();
+  return { pide, aMedias: vMedio.imp_manual, manual: v.imp_manual,
+    total: v.imp_total, nota: v.manual_nota };
+});
+paso('quitar el importe a mano pide confirmación: es una decisión de dinero',
+  quitado.pide === true && Number(quitado.aMedias) === 250, quitado.aMedias);
+paso('con el segundo toque se quita', quitado.manual == null, String(quitado.manual));
+paso('y vuelve a valer el calculado', Number(quitado.total) === 268.9, quitado.total);
+paso('sin dejar el motivo de antes colgado', quitado.nota == null, String(quitado.nota));
+
+/* Y el acumulado del año, que es lo del sumatorio */
+const acumulado = await T(async () => {
+  const g = window.__T;
+  const rolAntes = g.S.perfil.rol;
+  g.S.perfil.rol = 'admin';
+  g.S.vista = 'gestion';
+  g.pintar();
+  await new Promise(r => setTimeout(r, 1200));
+  const txt = (document.getElementById('vista') || document.body).innerText;
+  g.S.perfil.rol = rolAntes;
+  return { txt, hay: /Acumulado de \d{4}/.test(txt) };
+});
+paso('en Gestión sale el acumulado del año, no solo el del mes',
+  acumulado.hay === true, (acumulado.txt.match(/Acumulado de \d{4}/) || [''])[0]);
+paso('con facturable, coste y margen del año',
+  /Facturable del año/.test(acumulado.txt) && /Coste del año/.test(acumulado.txt) &&
+  /Margen del año/.test(acumulado.txt));
+
+/* ================================================================
+   La tarjeta de una visita realizada (27-11-2026)
+
+   David: «quiero que salga asistencia realizada, tiempo y valoración
+   total por partes (horas técnicos, desplazamiento y materiales) para
+   que la oficina pueda gestionar el cobro y no tener que calcular el
+   importe», y «la fecha que marca es de entrada del parte pero no del
+   cierre de la asistencia y esta última fecha es muy importante que
+   aparezca aquí».
+
+   El importe estaba calculado desde que se cierra la visita, pero solo
+   se veía en Gestión o abriendo la valoración una por una.
+
+   LO QUE MÁS SE VIGILA AQUÍ: que el DINERO siga siendo de la oficina y
+   de la administración. Esta es una lista que el técnico abre en su
+   móvil, y meter importes en una tarjeta es la manera más fácil de
+   saltarse esa regla sin darse cuenta.
+   ================================================================ */
+bloque('La tarjeta de una visita realizada');
+
+const tarjeta = await T(async () => {
+  const g = window.__T;
+  const a = g.S.avisos.find(x => x.id === 'pf-1');
+  const rolAntes = g.S.perfil.rol;
+  const comoOficina = g.tarjetaAviso(a);
+  g.S.perfil.rol = 'tecnico';
+  const comoTecnico = g.tarjetaAviso(a);
+  g.S.perfil.rol = rolAntes;
+  const abierta = g.S.avisos.find(x => !x.cerrado && !x.anulada);
+  return { comoOficina, comoTecnico,
+    laAbierta: abierta ? g.tarjetaAviso(abierta) : '',
+    texto: comoOficina.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ') };
+});
+/* El punto 3: la fecha de cierre, que es la que se busca en Realizadas */
+paso('la tarjeta de una cerrada dice CUÁNDO se cerró',
+  /Cerrada el/.test(tarjeta.texto), (tarjeta.texto.match(/Cerrada el [^·]+/) || [''])[0]);
+paso('y deja la fecha de entrada detrás, para saber lo que se tardó en atenderla',
+  /entró el/i.test(tarjeta.texto));
+paso('una visita todavía abierta sigue diciendo «Entró el», que es lo suyo',
+  /Entró el/.test(tarjeta.laAbierta) && !/Cerrada el/.test(tarjeta.laAbierta));
+/* El punto 1: el tiempo y el desglose */
+paso('se ve el tiempo de la visita', /2 h/.test(tarjeta.texto), '2 h');
+paso('y el desglose por partes: mano de obra, desplazamiento y material',
+  /Mano de obra/.test(tarjeta.texto) && /Desplazamiento/.test(tarjeta.texto) &&
+  /Material/.test(tarjeta.texto));
+paso('con los importes de cada parte', /90,00/.test(tarjeta.texto) &&
+  /45,00/.test(tarjeta.texto) && /133,90/.test(tarjeta.texto),
+  (tarjeta.texto.match(/Mano de obra[^·]+·[^·]+·[^·]+/) || [''])[0]);
+paso('el total sin IVA', /268,90/.test(tarjeta.texto));
+paso('y el total con IVA, que es lo que se le pide al cliente',
+  /325,37/.test(tarjeta.texto), (tarjeta.texto.match(/[\d.,]+ € con el \d+/) || [''])[0]);
+paso('se dice si está facturada o no', /Sin facturar/.test(tarjeta.texto));
+paso('y si se cobró en obra o no', /Sin cobrar en obra/.test(tarjeta.texto));
+paso('con el atajo para ver la valoración y para apuntar la factura',
+  /data-act="ver-valoracion"/.test(tarjeta.comoOficina) &&
+  /data-act="marcar-facturado"/.test(tarjeta.comoOficina));
+/* Y la que de verdad cierra la puerta */
+const dineroTec = tarjeta.comoTecnico.replace(/<[^>]+>/g, ' ');
+paso('un TÉCNICO ve la fecha de cierre y las horas',
+  /Cerrada el/.test(dineroTec) && /2 h/.test(dineroTec));
+paso('pero NO ve ningún importe: el dinero es de la oficina',
+  !/Mano de obra/.test(dineroTec) && !/268,90/.test(dineroTec) &&
+  !/Total/.test(dineroTec) && !/€/.test(dineroTec),
+  dineroTec.replace(/\s+/g, ' ').slice(0, 110));
+
+/* Una visita cerrada SIN valorar: eso es una que nadie va a facturar, así que
+   se dice y se ofrece calcularla ahí mismo. */
+const sinValorar = await T(async () => {
+  const g = window.__T;
+  await g.sb.from('avisos').insert({ id:'pf-sv', tipo:'averia', estado:'cerrado',
+    prioridad:'normal', tecnico_id:'usuario-admin', cliente_id:'cli-30',
+    horas:1, cerrado:new Date().toISOString(), creado:new Date().toISOString() });
+  await g.cargar();
+  const a = g.S.avisos.find(x => x.id === 'pf-sv');
+  const html = g.tarjetaAviso(a);
+  return { html, texto: html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ') };
+});
+paso('una cerrada sin valorar lo dice', /Sin valorar/.test(sinValorar.texto));
+paso('y ofrece calcularla ahí mismo, sin ir a buscarla a Gestión',
+  /data-act="revalorar"/.test(sinValorar.html));
+
+/* ================================================================
    Lo que el técnico tiene que cobrar, con IVA (27-11-2026)
 
    David: «Para un cobro en obra, al técnico le debe de sacar el importe
