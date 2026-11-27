@@ -2033,6 +2033,15 @@ async function cargar(){
   const rev = await sb.from('valoraciones')
     .select('revisado_en, no_facturar, cobrado_importe').limit(1);
   S.sinRevisar = !!rev.error;
+  /* ---- Los dos informes mensuales: servidor/informes-mensuales.sql ----
+     Se pregunta con informes_disponibles(), que no hace nada más que existir.
+     La primera versión de esto preguntaba llamando a informe_margen con un mes
+     imposible, y eso MANDA UN CORREO: habría salido un correo al administrador
+     en cada carga de la aplicación, con el margen del año 1900. Lo cazó el
+     banco al ver cinco informes pedidos sin que nadie tocara un botón.
+     Una función que tiene efectos no se usa para preguntar si está. */
+  const inf = await sb.rpc('informes_disponibles');
+  S.sinInformes = !!inf.error;
   /* El código de barras del fabricante: servidor/barras.sql. Sin esa columna
      en el catálogo, leer una caja no puede reconocer el material y el lector
      solo lee nuestras etiquetas QR, como antes del 08-11-2026. */
@@ -2264,7 +2273,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.27-6';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.27-7';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -5132,6 +5141,8 @@ const QUE_HACE_FALTA = [
     pierdes:'No se lleva lo pendiente de facturar ni los impagados.' },
   { marca:'sinFotoAviso', fichero:'fotos-aviso.sql', que:'Fotos de antes y después',
     pierdes:'Las fotos de la visita no se separan en antes y después.' },
+  { marca:'sinInformes', fichero:'informes-mensuales.sql', que:'Los dos informes mensuales por correo',
+    pierdes:'El margen del mes y los partes eliminados no se le mandan al administrador, ni el día 1 ni a mano.' },
   { marca:'sinRevisar', fichero:'revisar-y-cobrar.sql', que:'Revisar, no facturar y cobrar a medias',
     pierdes:'Realizados no se parte en por revisar, cerrados y partes eliminados, y una factura solo puede estar cobrada o no, nunca a medias.' },
   { marca:'sinPrecioMano', fichero:'precio-a-mano.sql', que:'El precio puesto a mano',
@@ -5325,7 +5336,22 @@ function vistaGestion(){
     '</div>'+
     '<p class="mini" style="margin:8px 0 0">Suma todas las visitas cerradas de '+esc(anioMes)+
     ', estén facturadas o no, y las anuladas quedan fuera porque no se hicieron. '+
-    'Es el año del mes que estás mirando arriba, no el de hoy.</p></div>';
+    'Es el año del mes que estás mirando arriba, no el de hoy.</p>'+
+    /* ---- Los dos informes al administrador (27-11-2026) ----
+       David: «también se enviará por correo al administrador los resultados de
+       los márgenes mensualmente [...] en documentos diferentes y correos
+       diferentes». Salen solos el día 1 con el mes cerrado; estos botones son
+       para mandarlos cuando se quiera, con el mes que esté elegido arriba. */
+    (S.sinInformes || !esAdmin() ? '' :
+      '<div class="fila" style="gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:10px;'+
+      'border-top:1px solid var(--line)">'+
+      '<span class="mini sp">Los dos informes salen solos el día 1 de cada mes, con el mes que '+
+      'acaba de cerrarse. Desde aquí se mandan cuando quieras, con '+esc(nombreMes(mes))+'.</span>'+
+      '<button class="btn sm plana" data-act="informe-margen" data-mes="'+esc(mes)+'">'+
+      'Mandarme el margen</button>'+
+      '<button class="btn sm plana" data-act="informe-eliminados" data-mes="'+esc(mes)+'">'+
+      'Mandarme los partes eliminados</button></div>')+
+    '</div>';
 
   // --- Pendiente de facturar ---
   h += '<div class="panel"><div class="panel-h"><h3>Pendiente de facturar</h3>'+
@@ -33790,6 +33816,21 @@ raiz.addEventListener('click', async e => {
     } catch(err){ fallo(err); }
   }
   else if (a === 'no-facturar') dlgNoFacturar(b.dataset.id);
+  /* Los dos informes, a mano. El correo va al administrador, no a quien pulsa:
+     lo decide el servidor, no la pantalla. (27-11-2026) */
+  else if (a === 'informe-margen' || a === 'informe-eliminados'){
+    if (!esAdmin()){ toast('Los informes del mes los manda la administración.'); return; }
+    const cual = a === 'informe-margen' ? 'informe_margen' : 'informe_eliminados';
+    const comoSeLlama = a === 'informe-margen' ? 'del margen' : 'de los partes eliminados';
+    if (!armar(b, 'Confirmar')) return;
+    try {
+      const { data, error } = await sb.rpc(cual, { p_mes: b.dataset.mes || null });
+      if (error) throw error;
+      toast(data === false
+        ? 'No se ha podido mandar: falta configurar el correo en el servidor.'
+        : 'Informe '+comoSeLlama+' pedido. Llega al correo del administrador en unos segundos.');
+    } catch(err){ fallo(err); }
+  }
   else if (a === 'si-facturar'){
     if (!esGestion()) return;
     if (!armar(b, 'Confirmar')) return;
