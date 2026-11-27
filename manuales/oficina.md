@@ -1,6 +1,6 @@
 # Safe2door · Manual de oficina
 
-Versión 2026.11.27-1
+Versión 2026.11.27-3
 
 > **Las fotos de este manual son de antes del cambio de nombre.** La aplicación
 > se llamaba ARIZA SAT y así aparece en la barra de arriba de cada pantalla.
@@ -172,6 +172,39 @@ Desde **Asistencias** ves en qué estado está cada una. Cuando el técnico puls
 Si necesitas decirle algo cuando ya va de camino, usa la **Conversación** de esa
 asistencia. Lo que escribas ahí le suena en el grupo y queda pegado a la puerta
 para siempre. Lo que se habla por WhatsApp no.
+
+### Corregir un parte ya cerrado (27 de noviembre de 2026)
+
+En una asistencia cerrada tienes el botón **«Corregir el parte»**. Lo ves tú y
+el administrador; el técnico no, porque no se corrige lo que ya firmó un
+cliente. Sirve para lo de siempre: el técnico apuntó dos horas y fueron tres, se
+le olvidó un material, el estado final está mal puesto.
+
+Abre el mismo parte, con todo lo que tenía, y se guarda con el botón **«Guardar
+la corrección»**. Lo que tienes que saber:
+
+- **Hay que decir por qué.** Es un campo obligatorio, de una línea. Queda
+  guardado con tu nombre y la fecha, y se ve en la ficha de la asistencia sin
+  abrir nada: «Corregido 2 veces, la última por Ana el 27/11». Un parte firmado
+  que cambia sin decir por qué es justo lo que no se puede defender si el
+  cliente reclama.
+- **La fecha de cierre no cambia.** La visita se hizo el día que se hizo. Si
+  cambiara, esa visita saltaría al mes siguiente y descolocaría lo facturado, la
+  revisión de la puerta y el histórico.
+- **La firma del cliente se queda como está** y no se le vuelve a pedir.
+- **El importe se recalcula solo.** Si corriges las horas, la valoración se
+  vuelve a hacer: por eso se corrige aquí y no a mano en otro sitio.
+- **El material no se descuenta dos veces.** Los movimientos de almacén de ese
+  parte se rehacen, no se suman.
+- **Si la visita ya está facturada, te lo dice en grande.** Puedes corregirla
+  igual, pero entonces hay que rectificar la factura: eso no se arregla solo.
+- **El cliente no recibe otro correo** ni salta el aviso al grupo. Esos avisan
+  cuando una visita se cierra, y corregir no es cerrar.
+
+No hay versiones: se corrige en el sitio, que es lo que decidió David. Lo que
+queda es el parte corregido más la nota de quién, cuándo, por qué y cuántas
+veces. Si alguna vez hace falta saber qué decía antes, eso no está: piénsalo
+antes de corregir algo que ya está facturado o entregado.
 
 ---
 

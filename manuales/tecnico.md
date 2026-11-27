@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.27-1**
+> **Versión de la aplicación que describe este manual: 2026.11.27-3**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -342,6 +342,20 @@ pudo trabajar (no había nadie, el acceso cerrado, la puerta no era de ese
 cliente), marca **«No, ha sido un desplazamiento en falso»**, escribe qué te
 encontraste y cierra. **No se te pide nada más**: ni horas, ni ficha de la
 puerta, ni firma. No has trabajado, no la has visto y no había nadie que firmara.
+
+**Corregido el 27 de noviembre de 2026, y era importante.** Eso de «no se te
+pide nada más» no era verdad en dos casos, y en los dos el parte no se podía
+cerrar de ninguna manera:
+
+- **En una preventiva** te seguía pidiendo los puntos del guión de revisión.
+  Cuarenta y tres puntos de una puerta que no habías visto.
+- **En una comercial**, si la oficina había marcado el tipo de puerta, te pedía
+  el ancho y el alto de un hueco que no habías podido medir.
+
+Ahora en una preventiva el guión **se quita de la vista** al marcar el balde, y
+vuelve si lo desmarcas. Y la preventiva en balde no deja ninguna revisión
+apuntada en la puerta: una revisión con los puntos en blanco diría en su
+histórico que se revisó y salió bien.
 
 Escríbelo con detalle: la hora a la que llegaste, a quién llamaste, qué te
 dijeron. Eso es lo que la oficina necesita para volver a quedar con el cliente y
@@ -753,6 +767,15 @@ Pídeselo a la oficina.
 Firma en la pantalla y pones el **Nombre de quien firma**. Si no puede firmar, hay que indicar el motivo.
 
 > **La firma no arregla nada.** Un punto marcado Mal sigue estando Mal después de firmar. La firma dice que el cliente ha visto lo que has hecho, no que la puerta esté conforme.
+
+**Y desde el 27 de noviembre de 2026, la oficina puede corregir un parte tuyo
+ya cerrado.** No lo puedes hacer tú: lo hacen ellos, tienen que escribir por qué
+y queda apuntado con su nombre y la fecha. La fecha en que tú lo cerraste no
+cambia, y tu firma del cliente tampoco se toca.
+
+Sirve para lo de siempre: apuntaste dos horas y fueron tres, se te olvidó un
+material. Si te das cuenta de algo después de cerrar, **dilo en la oficina** en
+vez de dejarlo: ahora se arregla en un minuto y queda dicho quién lo arregló.
 
 ---
 
@@ -1710,4 +1733,4 @@ que mire ahí antes de nada. Puede ser eso.
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.27-1 de Safe2door*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.27-3 de Safe2door*
