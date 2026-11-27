@@ -49,7 +49,7 @@ tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos
 parado.sql factura.sql rutas.sql ruta-cliente.sql telegram.sql subtipo.sql urgencia.sql \
 medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql perifericos.sql ficha4.sql urgencia2.sql falso.sql fotos-aviso.sql barras.sql almacenes.sql nombre-equipo.sql sitio-material.sql conformidad-visita.sql mensajes.sql tecnicos.sql multipuerta.sql \
 alta-por-bloques.sql elementos-unificados.sql fotos-elemento.sql fotos-hueco.sql \
-cobro-en-obra.sql"
+cobro-en-obra.sql corregir-parte.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -256,6 +256,22 @@ if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/cobro-en-obra-pruebas.sql" ]; then
     fallos=$((fallos+1))
     echo " FALLA lo que hay que cobrar en obra:"
     grep -a -m3 -E "ERROR|EXCEPTION" /tmp/co-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
+# Corregir un parte ya cerrado. Lo que se vigila: que el contador nazca en cero
+# y no en nulo, que el índice de los corregidos sea parcial, y sobre todo que
+# corregir NO toque la fecha de cierre ni quién cerró: si las tocara, un parte
+# corregido hoy parecería una visita de hoy.
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/corregir-parte-pruebas.sql" ]; then
+  echo ""
+  echo "── Corregir un parte cerrado ───────────────────"
+  if $PSQL -f "$AQUI/sql/corregir-parte-pruebas.sql" > /tmp/cpa-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/cpa-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA corregir un parte cerrado:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/cpa-pruebas.log | sed 's/^/         /'
   fi
 fi
 
