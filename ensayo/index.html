@@ -2014,6 +2014,11 @@ async function cargar(){
      y el parte no enseña el apartado ni exige ninguna. */
   const fv = await sb.from('fotos').select('aviso_id, etapa').limit(1);
   S.sinFotoAviso = !!fv.error;
+  /* La foto de un hueco medido: servidor/fotos-hueco.sql. Sin esa columna, una
+     comercial sigue teniendo un solo montón de fotos para todos sus huecos,
+     como antes del 26-11-2026, y no se pueden separar por hueco. */
+  const fh = await sb.from('fotos').select('medida_id').limit(1);
+  S.sinFotoHueco = !!fh.error;
   /* El código de barras del fabricante: servidor/barras.sql. Sin esa columna
      en el catálogo, leer una caja no puede reconocer el material y el lector
      solo lee nuestras etiquetas QR, como antes del 08-11-2026. */
@@ -2245,7 +2250,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.26-4';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.26-5';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -4890,6 +4895,8 @@ const QUE_HACE_FALTA = [
     pierdes:'No se lleva lo pendiente de facturar ni los impagados.' },
   { marca:'sinFotoAviso', fichero:'fotos-aviso.sql', que:'Fotos de antes y después',
     pierdes:'Las fotos de la visita no se separan en antes y después.' },
+  { marca:'sinFotoHueco', fichero:'fotos-hueco.sql', que:'Fotos de cada hueco medido',
+    pierdes:'En una comercial de varios huecos las fotos se quedan en un montón común y no se sabe de qué hueco es cada una.' },
   { marca:'sinMultiPuerta', fichero:'multipuerta.sql', que:'Un parte con varias puertas',
     pierdes:'En una visita de varias puertas no se puede escribir el diagnóstico y el trabajo de cada una por separado.' },
   { marca:'sinAvisoTecnicos', fichero:'tecnicos.sql', que:'Varios técnicos en una asistencia',
@@ -10411,19 +10418,27 @@ const fotosDeAviso = avisoId => (S.fotosAviso || []).filter(f => f && f.aviso_id
               hoy, y se suben con la puerta principal.
      · '<id>' → esa puerta: las fotos se suben con su puerta_id y salen en SU
               ficha.
+     · 'h:<id>' → ese hueco medido de una comercial (26-11-2026). En una visita
+              de ofertar no hay puerta todavía: hay huecos, y de ahí sale el
+              presupuesto. La foto se cuelga del hueco con medida_id.
      · ''   → generales de la visita: el acceso, el albarán, la calle. No son de
-              ninguna puerta y no entran en ningún histórico.
+              ninguna puerta ni de ningún hueco y no entran en ningún histórico.
    El máximo es por cajón, no por parte: con tres puertas, diez fotos entre
    todas dejarían a la tercera sin sitio. */
+const esCajonHueco = c => typeof c === 'string' && c.indexOf('h:') === 0;
+const huecoDelCajon = c => esCajonHueco(c) ? c.slice(2) : null;
 function fotosDelCajon(avisoId, cajon){
   const xs = fotosDeAviso(avisoId);
   if (cajon === '*') return xs;
-  if (!cajon) return xs.filter(f => !f.puerta_id);
+  if (esCajonHueco(cajon)) return xs.filter(f => f.medida_id === huecoDelCajon(cajon));
+  if (!cajon) return xs.filter(f => !f.puerta_id && !f.medida_id);
   return xs.filter(f => f.puerta_id === cajon);
 }
 /* De qué puerta son las fotos de este cajón, para subirlas. En el cajón de
-   siempre sigue mandando la puerta principal del aviso. */
-const puertaDelCajon = (cajon, a) => cajon === '*' ? ((a && a.puerta_id) || null) : (cajon || null);
+   siempre sigue mandando la puerta principal del aviso, y el de un hueco no
+   tiene puerta: la tendrá el día que el cliente acepte la oferta. */
+const puertaDelCajon = (cajon, a) => cajon === '*' ? ((a && a.puerta_id) || null)
+  : (esCajonHueco(cajon) ? null : (cajon || null));
 /* ---- Qué elementos de esta puerta tienen ya su foto (25-11-2026) ----
    Se piden solo la ruta y el elemento, no la foto: aquí no hay que verlas, hay
    que saber cuáles faltan. Y al llegar se repintan SOLO las etiquetas de las
@@ -10494,6 +10509,10 @@ async function subirFotos(puertaId, ficheros, opts){
          lo tiene, así que contra una base sin fotos-elemento.sql las fotos se
          suben como siempre, sin saber de qué son. */
       if (!S.sinFotoElemento && o.elemento) fila.elemento = o.elemento;
+      /* De qué hueco medido es, en una comercial (26-11-2026). Igual que
+         arriba: solo se manda si la base lo tiene, así que contra una base sin
+         fotos-hueco.sql las fotos se suben como siempre, en un montón común. */
+      if (!S.sinFotoHueco && o.medidaId) fila.medida_id = o.medidaId;
       const { error: eFila } = await sb.from('fotos').insert(fila);
       if (eFila){
         await sb.storage.from('fotos').remove([ruta]);   // no se deja basura en el almacén
@@ -24253,7 +24272,8 @@ dlgForm.addEventListener('change', async e => {
     const ya = fotosDelCajon(avisoId, cajon).length;
     const caben = Math.max(0, MAX_FOTOS_AVISO - ya);
     const donde = cajon === '*' ? 'en esta visita'
-      : (cajon ? 'en esta puerta' : 'en las generales de la visita');
+      : (esCajonHueco(cajon) ? 'en este hueco'
+      : (cajon ? 'en esta puerta' : 'en las generales de la visita'));
     if (!caben){
       toast('Ya hay '+MAX_FOTOS_AVISO+' fotos '+donde+', que es el máximo. Borra alguna si quieres cambiarla.');
       return;
@@ -24261,7 +24281,7 @@ dlgForm.addEventListener('change', async e => {
     if (ficheros.length > caben)
       toast('Caben '+caben+' foto'+(caben===1?'':'s')+' más '+donde+': se suben las '+caben+' primeras.');
     subirFotos(puertaDelCajon(cajon, av), ficheros.slice(0, caben),
-      { avisoId, etapa: t.dataset.etapa });
+      { avisoId, etapa: t.dataset.etapa, medidaId: huecoDelCajon(cajon) });
     return;
   }
   /* ---- La foto de un elemento de la puerta (25-11-2026) ----
@@ -30242,6 +30262,11 @@ function dlgCierre(avisoId){
      por puerta, porque cada foto tiene que ir al histórico de SU puerta, y uno
      al final para lo que no es de ninguna. (26-11-2026) */
   const fotosPorPuerta = !S.sinMultiPuerta && puertasParte.length > 1;
+  /* En una comercial las fotos de cada hueco van DENTRO de su hueco, con sus
+     medidas. Entonces el apartado de arriba deja de ser «todas las de la
+     visita» y pasa a ser el de las generales: si siguiera siendo todas, cada
+     foto saldría dos veces, aquí y en su hueco. (26-11-2026) */
+  const fotosPorHueco = a.tipo === 'comercial' && !S.sinFotoHueco && !S.sinMedidas;
   if (!S.sinFotoAviso)
   h += '<div class="grupo"><h3>Fotos de esta visita</h3>'+
     '<p class="mini" style="margin:0 0 10px">Lo que te encontraste, cómo queda y la pieza que has '+
@@ -30265,6 +30290,12 @@ function dlgCierre(avisoId){
         '<p class="mini" style="margin:0 0 10px">El acceso, el albarán, la calle: lo que no es de '+
         'ninguna puerta en concreto. Estas no entran en el histórico de ninguna ficha.</p>'+
         botonesFoto('', '')+'</div>'
+      : fotosPorHueco
+      ? 'Aquí van las de la visita en general: el acceso, la fachada, por dónde entra la mercancía. '+
+        '<b>Las fotos de cada hueco se hacen dentro de su hueco</b>, abajo, junto a sus medidas: así '+
+        'al presupuestar se ve cada hueco con las suyas. Caben hasta '+MAX_FOTOS_AVISO+' aquí. '+
+        '<span id="z-fotos-cuenta"></span></p>'+
+        botonesFoto('', '')
       : 'Caben hasta '+MAX_FOTOS_AVISO+'. <span id="z-fotos-cuenta"></span></p>'+
         botonesFoto('*', ''))+
     '</div>';
@@ -30541,7 +30572,11 @@ function dlgCierre(avisoId){
     else h += bloqueMedidas(a, null, 0);
     h += '</div>'+
       '<div class="fila" style="margin:0 0 14px">'+
-      '<button type="button" class="btn sm plana" data-act="med-add">Añadir otro hueco</button>'+
+      /* El aviso va en el botón porque el hueco que se añada tiene que poder
+         llevar sus propias fotos, y para eso hace falta saber de qué visita es.
+         Sin esto, el tercer portón que el técnico añadía a mano era el único
+         que no podía tener fotos. (26-11-2026) */
+      '<button type="button" class="btn sm plana" data-act="med-add" data-aviso="'+a.id+'">Añadir otro hueco</button>'+
       '<span class="sp"></span></div>';
   }
 
@@ -31240,17 +31275,34 @@ function guionDelForm(){ return guionesDelForm()[0] || null; }
    Todo lo del bloque vive DENTRO de su contenedor y se busca por clase, no por
    identificador: con cuatro bloques en pantalla, cuatro campos con el mismo id
    no son cuatro campos, son uno que gana y tres que se pierden. */
+/* ---- El hueco nace con su número (26-11-2026) ----
+   Hasta hoy un hueco nuevo no tenía id hasta que se guardaba el parte: lo
+   ponía la base al insertarlo. Para colgarle una foto hace falta antes, porque
+   la foto se hace estando delante del hueco y el parte se guarda después. Así
+   que el número lo pone el navegador y la base lo respeta al insertar, que es
+   lo mismo que ya se hacía con las puertas de una obra.
+   Si el técnico hace fotos y luego cierra el parte sin guardar, las fotos no se
+   pierden: siguen colgadas de la visita y salen en las generales. */
+const nuevoIdHueco = () => (window.crypto && crypto.randomUUID)
+  ? crypto.randomUUID()
+  /* Respaldo para un navegador viejo sin randomUUID: un uuid v4 a mano. No es
+     criptográfico y no hace falta que lo sea, solo que no choque. */
+  : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = Math.random() * 16 | 0;
+      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
 function bloqueMedidas(a, m, n){
   m = m || {};
   const tipos = lista('tipos', TIPOS);
   const tp = m.tipo_puerta || '';
   const cual = (n == null) ? '' : ' · hueco '+(n + 1);
   const v = x => (x == null || x === '') ? '' : esc(String(x));
+  const idHueco = m.id || nuevoIdHueco();
   return '<div class="grupo"><h3>Toma de medidas'+cual+'</h3>'+
     '<p class="mini" style="margin:0 0 10px">Las medidas son del <b>hueco</b>, no de la hoja, y en '+
     'milímetros. De esto sale el presupuesto tal cual, así que una medida mal apuntada aquí es una '+
     'puerta mal pedida después. Si hay más de un hueco, dale a «Añadir otro hueco» al final.</p>'+
-    '<div class="medida" data-id="'+v(m.id)+'"><div class="campos">'+
+    '<div class="medida" data-id="'+v(idHueco)+'"><div class="campos">'+
     '<div class="campo full"><label>Dónde está el hueco</label>'+
       '<input class="m-ubi" type="text" maxlength="160" value="'+v(m.ubicacion)+'" '+
       'placeholder="Ej.: nave trasera, portón izquierdo">'+
@@ -31312,8 +31364,39 @@ function bloqueMedidas(a, m, n){
       '<input class="m-sinmedm" type="text" maxlength="200" value="'+v(m.sin_medir_motivo)+'" '+
       'placeholder="Ej.: había mercancía delante y no se podía acceder"></div>'+
     '</div>'+
+    /* ---- Las fotos de ESTE hueco (26-11-2026) ----
+       David: «En la asistencia comercial hay un sitio para poner fotos, pero
+       debería de aparecer un sitio para poner fotos por puerta que se mida.»
+
+       Van dentro del bloque del hueco, no en el apartado de fotos de arriba, y
+       es a propósito: el técnico está delante del hueco, acaba de apuntar sus
+       medidas y hace la foto ahí mismo. Subirlas arriba sería tener que
+       recordar después cuál era cuál, que es justo el problema.
+
+       Sin fotos-hueco.sql no se pintan: la foto subiría a un montón común sin
+       decir de qué hueco es, y eso es peor que no ofrecerlo, porque parece
+       hecho y no lo está. */
+    (S.sinFotoHueco || S.sinFotoAviso || !a || !a.id ? '' :
+      '<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">'+
+      '<label class="mini" style="display:block;margin-bottom:6px"><b>Fotos de este hueco</b> '+
+      '<span class="mini" id="z-fotos-cuenta-h-'+idHueco+'"></span></label>'+
+      '<p class="mini" style="margin:0 0 8px">El hueco como está hoy, lo que hay que quitar, el '+
+      'techo y los laterales. Estas fotos se quedan en este hueco: al presupuestar se ven con sus '+
+      'medidas, y si el cliente acepta, son el antes de esa puerta. Caben hasta '+
+      MAX_FOTOS_AVISO+'.</p>'+
+      '<div class="fila" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">'+
+      ETAPAS_FOTO.filter(([k]) => k !== 'sustituido').map(([k, n2]) =>
+        '<label class="btn sm'+(k === 'encontrado' ? ' pri' : '')+'">'+
+        esc(k === 'encontrado' ? 'El hueco' : (k === 'hecho' ? 'El entorno' : n2))+
+        '<input type="file" accept="image/*" multiple hidden '+
+        'data-act="foto-aviso" data-aviso="'+a.id+'" data-etapa="'+k+'" '+
+        'data-cajon="h:'+esc(idHueco)+'"></label>').join('')+
+      '</div>'+
+      '<div class="fotos" data-cajon="h:'+esc(idHueco)+'" id="z-fotos-h-'+esc(idHueco)+'"></div>'+
+      '</div>')+
     '<div class="fila" style="margin-top:8px"><span class="sp"></span>'+
-      '<button type="button" class="btn sm plana" data-act="med-quitar">Quitar este hueco</button></div>'+
+      '<button type="button" class="btn sm plana" data-act="med-quitar" data-aviso="'+
+      ((a && a.id) ? esc(a.id) : '')+'">Quitar este hueco</button></div>'+
     '</div></div>';
 }
 /* Lee UN bloque de medidas tal y como está en pantalla. Devuelve null si está
@@ -31380,12 +31463,36 @@ function renumerarMedidas(){
     if (t) t.textContent = 'Toma de medidas · hueco '+(i + 1);
   });
 }
-/* Añade un bloque vacío al final y lleva la pantalla hasta él */
-function anadirHueco(){
+/* ---- Reapuntar el cajón de fotos de un hueco (26-11-2026) ----
+   Un bloque de hueco se pinta con un número y luego puede pasar a tener otro:
+   el guardado. Las fotos cuelgan del número, así que cuando cambia hay que
+   mover con él el cajón, sus botones, su rejilla y su contador. Si no, las
+   fotos que ese hueco ya tenía dejan de verse y las nuevas se cuelgan de un
+   hueco que no existe. */
+function reapuntarCajonHueco(cont, idNuevo){
+  if (!cont || !idNuevo) return;
+  const rej = cont.querySelector('.fotos[data-cajon]');
+  if (!rej) return;
+  const viejo = huecoDelCajon(rej.dataset.cajon);
+  if (!viejo || viejo === idNuevo) return;
+  rej.dataset.cajon = 'h:'+idNuevo;
+  rej.id = 'z-fotos-h-'+idNuevo;
+  cont.querySelectorAll('[data-act="foto-aviso"]').forEach(e => { e.dataset.cajon = 'h:'+idNuevo; });
+  const cuenta = cont.querySelector('#z-fotos-cuenta-h-'+viejo);
+  if (cuenta) cuenta.id = 'z-fotos-cuenta-h-'+idNuevo;
+}
+/* Añade un bloque vacío al final y lleva la pantalla hasta él. El aviso se
+   pasa para que el hueco nuevo lleve sus botones de foto como los demás
+   (26-11-2026). */
+function anadirHueco(avisoId){
   const zona = document.getElementById('med-zona');
   if (!zona) return;
-  zona.insertAdjacentHTML('beforeend', bloqueMedidas(null, null, bloquesMedidaEnForm()));
+  const av = avisoId ? S.avisos.find(x => x.id === avisoId) : null;
+  zona.insertAdjacentHTML('beforeend', bloqueMedidas(av, null, bloquesMedidaEnForm()));
   renumerarMedidas();
+  /* El cajón de fotos del hueco nuevo nace vacío: se pinta para que diga que
+     todavía no hay ninguna, en vez de quedarse en blanco. */
+  if (av) pintarFotosAviso(av.id);
   const ult = zona.querySelector('.grupo:last-child');
   if (ult){
     ult.scrollIntoView({ block:'nearest' });
@@ -31467,12 +31574,22 @@ async function prepararCierre(a){
   if (a.tipo === 'comercial' && !S.sinMedidas && document.getElementById('med-zona')){
     const { data: meds } = await sb.from('medidas').select('*').eq('aviso_id', a.id).order('orden');
     const lis = meds || [];
-    while (lis.length > bloquesMedidaEnForm()) anadirHueco();
+    while (lis.length > bloquesMedidaEnForm()) anadirHueco(a.id);
     renumerarMedidas();
     const bloques = Array.from(document.querySelectorAll('#dlg-form .medida'));
     lis.forEach((m, i) => {
       const cont = bloques[i];
       if (!cont) return;
+      /* ---- El cajón de fotos sigue al hueco (26-11-2026) ----
+         Aquí el bloque pintado se queda con el id del hueco GUARDADO, que es el
+         que manda: una foto subida la semana pasada cuelga de ese id. El cajón
+         de fotos nació con el número que inventó el navegador, así que hay que
+         reapuntarlo o apuntaría a un hueco que no existe y las fotos de ayer no
+         se verían. Esto se me escapó al hacer las fotos por hueco: lo arreglé
+         en el sitio donde se pinta y no miré el sitio donde se rellena, que es
+         el mismo error que ya cometí el 24 y el 26 de noviembre. Buscar TODOS
+         los caminos, no el primero. */
+      reapuntarCajonHueco(cont, m.id || cont.dataset.id);
       cont.dataset.id = m.id || '';
       const pon = (sel, val) => { const e = cont.querySelector(sel); if (e) e.value = (val == null ? '' : val); };
       pon('.m-ubi', m.ubicacion); pon('.m-tipo', m.tipo_puerta || '');
@@ -34225,7 +34342,7 @@ dlgForm.addEventListener('click', async e => {
     repintarCuentas(b.closest('.guion'));
     return;
   }
-  if (a === 'med-add'){ anadirHueco(); return; }
+  if (a === 'med-add'){ anadirHueco(b.dataset.aviso); return; }
   if (a === 'med-quitar'){
     /* El último no se quita: una comercial sin ningún bloque de medidas es una
        pantalla en la que no se puede apuntar nada. Si de verdad no se ha
@@ -34234,9 +34351,34 @@ dlgForm.addEventListener('click', async e => {
       toast('Este es el único hueco. Si no has podido medirlo, marca «No se ha podido medir» y di por qué.');
       return;
     }
-    const g = b.closest('.grupo');
-    if (g) g.remove();
+    /* ---- Las fotos del hueco que se quita (26-11-2026) ----
+       Un hueco borrado desaparece del parte al guardar, y sus fotos se
+       quedarían colgadas de un hueco que ya no existe: con aviso_id, sí, pero
+       invisibles, porque el cajón general solo enseña las que no son de ningún
+       hueco. Fotos que se suben, se ven, y después desaparecen sin que nadie
+       diga nada. Así que pasan a las generales de la visita y se avisa. */
+    const grupoFuera = b.closest('.grupo');
+    const cajonFotos = grupoFuera ? grupoFuera.querySelector('.fotos[data-cajon]') : null;
+    const idHuecoFuera = cajonFotos ? huecoDelCajon(cajonFotos.dataset.cajon) : null;
+    const avisoHueco = b.dataset.aviso || null;
+    if (idHuecoFuera && avisoHueco && !S.sinFotoHueco){
+      const suyas = fotosDelCajon(avisoHueco, 'h:'+idHuecoFuera);
+      if (suyas.length){
+        try {
+          const { error } = await sb.from('fotos').update({ medida_id: null })
+            .eq('medida_id', idHuecoFuera);
+          if (error) throw error;
+          toast(suyas.length === 1
+            ? 'La foto de ese hueco pasa a las fotos generales de la visita: no se pierde.'
+            : 'Las '+suyas.length+' fotos de ese hueco pasan a las generales de la visita: no se pierden.');
+        } catch(err){ fallo(err); return; }
+      }
+    }
+    if (grupoFuera) grupoFuera.remove();
     renumerarMedidas();
+    /* Se recargan para que las que acaban de pasar a generales se vean ahí
+       mismo: si no, el técnico las ve desaparecer y no reaparecer. */
+    if (avisoHueco) await cargarFotosAviso(avisoHueco);
     return;
   }
   if (a === 'guardar-avance'){
