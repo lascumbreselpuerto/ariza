@@ -465,6 +465,126 @@ const cobro = await T(async () => {
 paso('una comercial con medidas se sigue valorando en cero', cobro.sinValor === true);
 paso('y no se pide cobro en obra en una comercial', cobro.sinCobro === true);
 
+/* ================================================================
+   11. Las fotos de cada hueco (26-11-2026)
+
+   David: «En la asistencia comercial, hay un sitio para poner fotos,
+   pero debería de aparecer un sitio para poner fotos por puerta que se
+   mida.»
+
+   En una comercial no hay puerta: hay huecos. Así que la foto se cuelga
+   del hueco, y eso necesitó columna nueva (fotos.medida_id). Lo que se
+   vigila aquí es lo que de verdad puede salir mal:
+
+     · que cada hueco tenga SU sitio, también el que se añade a mano,
+       que era el único que se quedaba fuera;
+     · que la foto se guarde con SU hueco y no en un montón común;
+     · que el apartado de arriba deje de ser «todas»: si siguiera
+       siéndolo, cada foto saldría dos veces, arriba y en su hueco;
+     · y que al quitar un hueco con fotos, esas fotos NO desaparezcan.
+       Ese es el agujero de este cambio: se quedarían colgadas de un
+       hueco que ya no existe, invisibles, sin que nadie avise.
+   ================================================================ */
+bloque('11. Cada hueco, sus fotos');
+
+const huecoFotos = await T(async () => {
+  const g = window.__T;
+  g.cerrarDlg();
+  await new Promise(r => setTimeout(r, 300));
+  g.dlgCierre('co-1');
+  await new Promise(r => setTimeout(r, 1800));
+  const cajones = Array.from(document.querySelectorAll('#dlg-form .fotos[data-cajon]'))
+    .map(x => x.dataset.cajon);
+  const ids = Array.from(document.querySelectorAll('#dlg-form .medida')).map(x => x.dataset.id);
+  return { cajones, ids, bloques: ids.length,
+    /* El de arriba tiene que ser el general, no el de todas */
+    arriba: cajones[0] };
+});
+/* El número de cada hueco: el guardado si ya lo tiene, y si no uno que pone el
+   navegador. Lo que importa es que NINGUNO se quede sin número, porque sin eso
+   no se le puede colgar una foto. (Aquí los huecos vienen ya guardados por las
+   pruebas de más arriba, así que llevan el de la base.) */
+paso('los dos huecos nacen con su número puesto, para poder colgarles fotos',
+  huecoFotos.ids.length === 2 && huecoFotos.ids.every(x => !!x && x.length > 5),
+  huecoFotos.ids.join(' | '));
+paso('el apartado de arriba pasa a ser el de las generales, no el de todas',
+  huecoFotos.arriba === '', '«'+huecoFotos.arriba+'»');
+paso('y cada hueco tiene su propio sitio para fotos',
+  huecoFotos.cajones.filter(c => /^h:/.test(c)).length === 2, huecoFotos.cajones.join(' | '));
+paso('que es el de SU hueco, no el de otro',
+  huecoFotos.ids.every(id => huecoFotos.cajones.indexOf('h:'+id) >= 0),
+  huecoFotos.cajones.join(' | '));
+
+/* El hueco que se añade a mano: era el único que se quedaba sin fotos, porque
+   al añadirlo no se sabía de qué visita era. */
+const anadido = await T(async () => {
+  const g = window.__T;
+  document.querySelector('#dlg-form [data-act="med-add"]').click();
+  await new Promise(r => setTimeout(r, 700));
+  const ids = Array.from(document.querySelectorAll('#dlg-form .medida')).map(x => x.dataset.id);
+  const cajones = Array.from(document.querySelectorAll('#dlg-form .fotos[data-cajon]'))
+    .map(x => x.dataset.cajon);
+  return { ids, cajones, nuevo: ids[ids.length - 1] };
+});
+paso('el hueco que se añade a mano también tiene su sitio para fotos',
+  anadido.cajones.indexOf('h:'+anadido.nuevo) >= 0, anadido.cajones.join(' | '));
+paso('y su número es distinto del de los demás',
+  new Set(anadido.ids).size === 3, anadido.ids.join(' | '));
+
+/* La de verdad: se sube una foto al segundo hueco y tiene que quedar guardada
+   con ESE hueco. */
+const subeHueco = await T(async () => {
+  const g = window.__T;
+  const ids = Array.from(document.querySelectorAll('#dlg-form .medida')).map(x => x.dataset.id);
+  /* La visita ya trae fotos de las pruebas de más arriba, así que se mide el
+     ANTES y el DESPUÉS: contar el total diría cualquier cosa. */
+  const antes = (await g.sb.from('fotos').select('id').eq('aviso_id', 'co-1')).data || [];
+  const previas = antes.map(f => f.id);
+  const generalesAntes = g.fotosDelCajon('co-1', '').length;
+  const entrada = document.querySelector('#dlg-form [data-act="foto-aviso"][data-cajon="h:'+ids[1]+'"]');
+  const dt = new DataTransfer();
+  dt.items.add(new File([new Uint8Array([3,3,3])], 'hueco2.jpg', { type:'image/jpeg' }));
+  entrada.files = dt.files;
+  entrada.dispatchEvent(new Event('change', { bubbles:true }));
+  await new Promise(r => setTimeout(r, 2500));
+  const { data } = await g.sb.from('fotos').select('*').eq('aviso_id', 'co-1');
+  const nueva = (data || []).find(f => previas.indexOf(f.id) < 0) || {};
+  return { nuevas: (data || []).length - previas.length,
+    suHueco: nueva.medida_id === ids[1], hueco2: ids[1],
+    enSuCajon: g.fotosDelCajon('co-1', 'h:'+ids[1]).length,
+    generalesAntes, generalesDespues: g.fotosDelCajon('co-1', '').length };
+});
+paso('la foto del segundo hueco se sube', subeHueco.nuevas === 1, subeHueco.nuevas);
+paso('y queda guardada con SU hueco', subeHueco.suHueco === true, String(subeHueco.suHueco));
+paso('sale en el sitio de ese hueco', subeHueco.enSuCajon === 1, subeHueco.enSuCajon);
+paso('y NO sale además arriba, en las generales: una foto, un sitio',
+  subeHueco.generalesDespues === subeHueco.generalesAntes,
+  subeHueco.generalesAntes+' → '+subeHueco.generalesDespues);
+
+/* Y el agujero: quitar el hueco que tiene la foto. */
+const quitaConFoto = await T(async () => {
+  const g = window.__T;
+  const ids = Array.from(document.querySelectorAll('#dlg-form .medida')).map(x => x.dataset.id);
+  const antes = ((await g.sb.from('fotos').select('id').eq('aviso_id', 'co-1')).data || []).length;
+  const generalesAntes = g.fotosDelCajon('co-1', '').length;
+  const bloque2 = Array.from(document.querySelectorAll('#dlg-form .medida'))
+    .find(x => x.dataset.id === ids[1]);
+  bloque2.querySelector('[data-act="med-quitar"]').click();
+  await new Promise(r => setTimeout(r, 2200));
+  const { data } = await g.sb.from('fotos').select('*').eq('aviso_id', 'co-1');
+  return { antes, despues: (data || []).length,
+    delHueco: (data || []).filter(f => f.medida_id === ids[1]).length,
+    generalesAntes, generalesDespues: g.fotosDelCajon('co-1', '').length,
+    bloques: document.querySelectorAll('#dlg-form .medida').length };
+});
+paso('al quitar el hueco, su foto NO se borra',
+  quitaConFoto.despues === quitaConFoto.antes, quitaConFoto.antes+' → '+quitaConFoto.despues);
+paso('se le quita el hueco, que ya no existe', quitaConFoto.delHueco === 0, quitaConFoto.delHueco);
+paso('y pasa a las generales de la visita, donde se ve',
+  quitaConFoto.generalesDespues === quitaConFoto.generalesAntes + 1,
+  quitaConFoto.generalesAntes+' → '+quitaConFoto.generalesDespues);
+paso('el hueco sí desaparece del parte', quitaConFoto.bloques === 2, quitaConFoto.bloques);
+
 console.log('\n'+ok+' bien, '+mal+' mal.');
 const graves = errores.filter(x => !/fonts\.googleapis|ERR_TUNNEL|ERR_NAME|net::ERR|provocado por la prueba/.test(x));
 if (graves.length) console.log('Errores de JavaScript:\n'+graves.join('\n'));
