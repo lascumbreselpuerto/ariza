@@ -1,6 +1,6 @@
 # Safe2door · Manual de oficina
 
-Versión 2026.11.27-6
+Versión 2026.11.27-7
 
 > **Las fotos de este manual son de antes del cambio de nombre.** La aplicación
 > se llamaba ARIZA SAT y así aparece en la barra de arriba de cada pantalla.
@@ -379,6 +379,32 @@ Cómo funciona:
 - **Recalcular no lo borra.** Hay recálculos automáticos, al cerrar la visita y
   al corregir el parte: ninguno deshace tu decisión. Para volver al calculado
   hay un botón, **«Volver al calculado»**, que pide confirmación.
+
+### Los dos correos del día 1 (27 de noviembre de 2026)
+
+Cada día 1 de mes salen dos correos al administrador, con el mes que acaba de
+cerrarse:
+
+**«Margen de Noviembre».** Las visitas cerradas, lo facturable, el coste, el
+margen con su porcentaje, cuántas se facturaron y lo cobrado. Si hubo partes sin
+facturar, los nombra y dice su coste perdido, pero el detalle va en el otro.
+
+**«Partes eliminados · Noviembre».** Cada visita que se decidió no facturar: el
+cliente, la puerta, las horas, lo que se dejó de facturar, el coste que se quedó
+la empresa, el motivo, quién lo decidió y el material que se puso. Y al final, el
+coste perdido del mes.
+
+Son **dos correos y no uno** a propósito: el margen es la marcha del negocio y se
+lee con calma; los partes eliminados son dinero puesto que no se cobró y se leen
+para preguntar. Juntos, el segundo no se leería nunca.
+
+En Gestión, debajo del acumulado del año, hay dos botones para **mandarlos
+cuando quieras**, con el mes que tengas elegido arriba. Piden confirmación: es un
+correo, no se manda por tocar sin querer. Los botones los ve solo la
+administración.
+
+Los números del correo salen de la misma vista que usa la pantalla de Gestión,
+así que el correo y la pantalla no pueden decir cosas distintas.
 
 ### El acumulado del año (27 de noviembre de 2026)
 
