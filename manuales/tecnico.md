@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.26-5**
+> **Versión de la aplicación que describe este manual: 2026.11.27-1**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -716,6 +716,37 @@ vistazo si el cliente arregló lo que se le dijo.
 - **Esta visita no se cobra** → hay que decir por qué.
 
 Si no marcas ninguna, la visita queda **pendiente de facturar** y la oficina la ve.
+
+**Cuánto hay que cobrar (27 de noviembre de 2026).** Hay un botón, **«Calcular
+lo que hay que cobrar»**, y no hace falta marcar nada para usarlo: para decidir
+si cobras, lo primero que necesitas es saber cuánto.
+
+Te saca el desglose con **mano de obra, desplazamiento y materiales**, la base,
+el **IVA** y el **total a cobrar**. Y pone el total en el importe, para que no
+tengas que teclear 145,20 delante del cliente, que es como se cuelan los errores
+de dedo. Si ya habías escrito un importe, no te lo toca.
+
+Dos cosas que conviene saber:
+
+- **Al calcular se guarda el parte.** Tiene que ser así: la cuenta la hace el
+  servidor con las horas y los materiales **guardados**, no con lo que haya en
+  pantalla. Si preguntaras sin guardar, te daría el importe de antes de
+  rellenarlo.
+- **Es la misma cuenta que va a facturar la oficina.** No es una estimación ni
+  una cuenta aparte: sale de la misma función. Así lo que cobras y lo que se
+  factura no pueden separarse.
+
+Si cobras otra cantidad porque lo has acordado con el cliente, **corrige el
+importe y dilo en la referencia**. La oficina necesita saber por qué, y la
+diferencia se arregla al facturar, no después.
+
+Si te dice que no se puede calcular porque la visita no está a tu nombre, es
+eso: el importe de una visita que no llevas tú no te lo da la aplicación.
+Pídeselo a la oficina.
+
+> **Lo que sigues sin ver, y seguirá así:** el coste y el margen. Aquí se te
+> dice lo que hay que pedirle al cliente, nada más. No es desconfianza: un
+> precio de coste en una pantalla de campo acaba leyéndolo quien no debe.
 
 ### Firma del cliente
 
@@ -1679,4 +1710,4 @@ que mire ahí antes de nada. Puede ser eso.
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.26-5 de Safe2door*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.27-1 de Safe2door*

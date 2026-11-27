@@ -1,6 +1,6 @@
 # Safe2door · Manual de oficina
 
-Versión 2026.11.26-5
+Versión 2026.11.27-1
 
 > **Las fotos de este manual son de antes del cambio de nombre.** La aplicación
 > se llamaba ARIZA SAT y así aparece en la barra de arriba de cada pantalla.
@@ -224,6 +224,21 @@ Si lo pasas por alto, **desaparece el importe entero de una venta**.
 después. Esas visitas salen en «pendiente de facturar» **con su etiqueta de que
 ya se cobró**. No las vuelvas a cobrar, pero factúralas: dinero cobrado sin
 factura es un problema de IVA, no un descuido.
+
+**Desde el 27 de noviembre de 2026 el técnico ve lo que hay que cobrar.** En su
+parte tiene un botón que le saca el desglose con IVA y el total. Dos cosas que
+te afectan:
+
+- **Es tu misma cuenta.** El importe no lo calcula su móvil: sale de la misma
+  función que valora la visita para facturarla. Lo que cobró en obra y lo que
+  vas a facturar son el mismo número, salvo que él lo cambie a mano.
+- **Si cobró otra cantidad, lo dice en la referencia.** Está en el manual del
+  técnico: si acuerda otra cifra con el cliente, corrige el importe y escribe
+  por qué. Si ves una diferencia sin explicación, pregúntale antes de facturar.
+
+Lo que el técnico **no** ve sigue siendo el coste y el margen. Esa pantalla le
+da lo que hay que pedirle al cliente y nada más, y la función del servidor no se
+los manda ni pudiendo.
 
 **Las visitas a cero euros.** Una visita cerrada sin horas se valora en cero y
 parece que no hay nada que hacer con ella. Salen en la lista igualmente, porque
