@@ -49,7 +49,7 @@ tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos
 parado.sql factura.sql rutas.sql ruta-cliente.sql telegram.sql subtipo.sql urgencia.sql \
 medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql perifericos.sql ficha4.sql urgencia2.sql falso.sql fotos-aviso.sql barras.sql almacenes.sql nombre-equipo.sql sitio-material.sql conformidad-visita.sql mensajes.sql tecnicos.sql multipuerta.sql \
 alta-por-bloques.sql elementos-unificados.sql fotos-elemento.sql fotos-hueco.sql \
-cobro-en-obra.sql corregir-parte.sql precio-a-mano.sql"
+cobro-en-obra.sql corregir-parte.sql precio-a-mano.sql revisar-y-cobrar.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -288,6 +288,23 @@ if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/precio-a-mano-pruebas.sql" ]; then
     fallos=$((fallos+1))
     echo " FALLA el precio puesto a mano:"
     grep -a -m3 -E "ERROR|EXCEPTION" /tmp/pm-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
+# Revisar, no facturar y cobrar a medias. Lo que se vigila: que no_facturar
+# nazca en false, que la vista del material perdido saque lo suyo y SOLO lo
+# suyo, que decidir no facturar NO mueva el almacén (el material ya salió al
+# cerrar el parte), y que el resumen del mes separe lo facturable del coste
+# perdido en vez de mezclarlos.
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/revisar-y-cobrar-pruebas.sql" ]; then
+  echo ""
+  echo "── Revisar, no facturar y cobrar ───────────────"
+  if $PSQL -f "$AQUI/sql/revisar-y-cobrar-pruebas.sql" > /tmp/rc-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/rc-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA revisar, no facturar y cobrar:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/rc-pruebas.log | sed 's/^/         /'
   fi
 fi
 
