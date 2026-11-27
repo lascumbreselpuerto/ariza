@@ -133,6 +133,9 @@ create table if not exists public.avisos (
   sin_cargo    boolean not null default false,
   sin_cargo_motivo text,
   cerrado      timestamptz,
+  -- Está en producción desde el principio y aquí faltaba: lo descubrió la
+  -- prueba de corregir un parte, que necesita saber quién lo cerró. (27-11-2026)
+  cerrado_por  text,
   anulada      boolean not null default false,
   /* El motivo de la anulación existe en producción desde que se puede anular
      una visita sin parte, y faltaba aquí: una prueba que anulaba una visita
