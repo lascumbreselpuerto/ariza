@@ -49,7 +49,7 @@ tarifas2.sql catalogo.sql obra2.sql obra3.sql ficha2.sql ficha3.sql presupuestos
 parado.sql factura.sql rutas.sql ruta-cliente.sql telegram.sql subtipo.sql urgencia.sql \
 medidas.sql puesta-servicio.sql alta-puerta.sql comercial2.sql perifericos.sql ficha4.sql urgencia2.sql falso.sql fotos-aviso.sql barras.sql almacenes.sql nombre-equipo.sql sitio-material.sql conformidad-visita.sql mensajes.sql tecnicos.sql multipuerta.sql \
 alta-por-bloques.sql elementos-unificados.sql fotos-elemento.sql fotos-hueco.sql \
-cobro-en-obra.sql corregir-parte.sql precio-a-mano.sql revisar-y-cobrar.sql"
+cobro-en-obra.sql corregir-parte.sql precio-a-mano.sql revisar-y-cobrar.sql informes-mensuales.sql"
 
 echo "── Levantando Postgres ─────────────────────────"
 su postgres -s /bin/bash -c "$PGBIN/pg_ctl -D $PGD stop -m immediate" >/dev/null 2>&1
@@ -305,6 +305,22 @@ if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/revisar-y-cobrar-pruebas.sql" ]; then
     fallos=$((fallos+1))
     echo " FALLA revisar, no facturar y cobrar:"
     grep -a -m3 -E "ERROR|EXCEPTION" /tmp/rc-pruebas.log | sed 's/^/         /'
+  fi
+fi
+
+# Los dos informes mensuales. Lo que más se vigila: que la función que la
+# aplicación llama para saber si esto está instalado NO tenga efectos. La
+# primera versión preguntaba llamando a la que manda el correo, y eso habría
+# mandado un correo al administrador en cada carga de la aplicación.
+if [ "$fallos" -eq 0 ] && [ -f "$AQUI/sql/informes-mensuales-pruebas.sql" ]; then
+  echo ""
+  echo "── Los informes mensuales ──────────────────────"
+  if $PSQL -f "$AQUI/sql/informes-mensuales-pruebas.sql" > /tmp/im-pruebas.log 2>&1; then
+    grep -a "NOTICE" /tmp/im-pruebas.log | sed 's/^psql:[^ ]* //; s/^NOTICE:  /  OK   /'
+  else
+    fallos=$((fallos+1))
+    echo " FALLA los informes mensuales:"
+    grep -a -m3 -E "ERROR|EXCEPTION" /tmp/im-pruebas.log | sed 's/^/         /'
   fi
 fi
 
@@ -706,6 +722,22 @@ if [ -f "$INST" ]; then
     else
       echo " FALLA el instalador monta una versión distinta de estas funciones:"
       echo "         $DISTINTAS"
+      fallos=$((fallos+1))
+    fi
+
+    # ---- Y las que FALTAN del todo (27-11-2026)
+    # La comparación de arriba solo mira las funciones que están en las dos
+    # bases y tienen el cuerpo distinto. Una función nueva que no se añadiera al
+    # instalador no salía por ahí, y por el otro lado la suite del instalador
+    # solo ve las llamadas escritas literalmente: una llamada por variable
+    # (sb.rpc(cual)) se le escapa. Pasó con informe_margen e informe_eliminados.
+    FALTANF=$(comm -23 <(sort -u /tmp/fn-ficheros.txt) \
+                       <(cut -d'|' -f1 /tmp/fn-ariza_nueva.txt | sort -u) | tr '\n' ' ')
+    if [ -z "$FALTANF" ]; then
+      echo "  OK   y no le falta ninguna función de las que añaden los ficheros"
+    else
+      echo " FALLA al instalador le faltan funciones que sí añaden los ficheros de servidor/:"
+      echo "         $FALTANF"
       fallos=$((fallos+1))
     fi
   fi

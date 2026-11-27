@@ -653,6 +653,21 @@ const RPC = {
     return { mano, desplazamiento: desp, materiales: mat, base,
              tipo_iva: tipo, iva, total: r2(base + iva) };
   },
+  /* ---- Los dos informes mensuales (27-11-2026) ----
+     El simulador no manda correos: apunta que se han pedido, con su mes, que es
+     lo que la pantalla tiene que conseguir. El contenido del correo lo arma la
+     función de correo (servidor/avisar.ts) y eso no se prueba desde aquí. */
+  /* Existe y no hace nada: es lo que la aplicación usa para saber si los
+     informes están instalados, sin llamar a una que manda correos. */
+  informes_disponibles(){ return true; },
+  informe_margen({ p_mes }){
+    DB.__informes = (DB.__informes || []).concat([{ tipo:'margen', mes: p_mes || null }]);
+    return true;
+  },
+  informe_eliminados({ p_mes }){
+    DB.__informes = (DB.__informes || []).concat([{ tipo:'eliminados', mes: p_mes || null }]);
+    return true;
+  },
   archivar_asistencia(){ return { ok:true }; },
   borrar_asistencia({ p_aviso }){
     DB.avisos = DB.avisos.filter(x => String(x.id) !== String(p_aviso));

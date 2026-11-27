@@ -328,6 +328,73 @@ paso('se guarda lo cobrado', Number(guardaParcial.cobrado) === 100, guardaParcia
 paso('y la factura queda como cobrada a medias',
   guardaParcial.estado === 'parcial', guardaParcial.estado);
 
+/* ================================================================
+   6. Los dos informes mensuales (27-11-2026)
+
+   David: «se enviará mensualmente por correo al administrador [...]
+   Pero en documentos diferentes y correos diferentes.»
+
+   El correo lo arma y lo manda el servidor. Lo que se prueba aquí es
+   la pantalla: que los dos botones estén, que solo los vea la
+   administración, que pidan confirmación (es un correo, no se manda
+   por tocar sin querer) y que cada uno pida SU informe con el mes que
+   está elegido arriba.
+   ================================================================ */
+bloque('6. Los dos informes al administrador');
+
+const informes = await T(async () => {
+  const g = window.__T;
+  g.cerrarDlg();
+  await new Promise(r => setTimeout(r, 250));
+  const rolAntes = g.S.perfil.rol;
+  g.S.tab = 'gestion';
+  g.S.mesGestion = '2026-11';
+  g.pintar();
+  await new Promise(r => setTimeout(r, 1200));
+  const hayMargen = !!document.querySelector('[data-act="informe-margen"]');
+  const hayElim = !!document.querySelector('[data-act="informe-eliminados"]');
+  /* Un técnico no los ve */
+  g.S.perfil.rol = 'tecnico';
+  g.pintar();
+  await new Promise(r => setTimeout(r, 900));
+  const comoTecnico = !!document.querySelector('[data-act="informe-margen"]');
+  /* Y la oficina tampoco: esto es de administración */
+  g.S.perfil.rol = 'oficina';
+  g.pintar();
+  await new Promise(r => setTimeout(r, 900));
+  const comoOficina = !!document.querySelector('[data-act="informe-margen"]');
+  g.S.perfil.rol = rolAntes;
+  g.pintar();
+  await new Promise(r => setTimeout(r, 1000));
+  /* Se pide el del margen: un toque pide confirmación, el segundo lo manda */
+  const b1 = document.querySelector('[data-act="informe-margen"]');
+  b1.click();
+  await new Promise(r => setTimeout(r, 300));
+  const pide = /Confirmar/i.test(b1.textContent || '');
+  const aMedias = (window.__DB.__informes || []).length;
+  b1.click();
+  await new Promise(r => setTimeout(r, 1500));
+  const b2 = document.querySelector('[data-act="informe-eliminados"]');
+  b2.click(); await new Promise(r => setTimeout(r, 300));
+  b2.click(); await new Promise(r => setTimeout(r, 1500));
+  return { hayMargen, hayElim, comoTecnico, comoOficina, pide, aMedias,
+    pedidos: window.__DB.__informes || [] };
+});
+paso('en Gestión están los dos botones', informes.hayMargen && informes.hayElim);
+paso('un técnico no los ve', informes.comoTecnico === false);
+paso('y la oficina tampoco: los números del año son de administración',
+  informes.comoOficina === false);
+paso('un toque no manda nada: pide confirmación',
+  informes.pide === true && informes.aMedias === 0, informes.aMedias);
+paso('con el segundo toque se piden los dos informes',
+  informes.pedidos.length === 2, informes.pedidos.length);
+paso('cada uno pide el suyo, y con el mes elegido arriba',
+  informes.pedidos[0] && informes.pedidos[0].tipo === 'margen' &&
+  informes.pedidos[0].mes === '2026-11' &&
+  informes.pedidos[1] && informes.pedidos[1].tipo === 'eliminados' &&
+  informes.pedidos[1].mes === '2026-11',
+  JSON.stringify(informes.pedidos));
+
 console.log('\n'+ok+' bien, '+mal+' mal.');
 const graves = errores.filter(x => !/fonts\.googleapis|ERR_TUNNEL|ERR_NAME|net::ERR|provocado por la prueba/.test(x));
 if (graves.length) console.log('Errores de JavaScript:\n'+graves.join('\n'));
