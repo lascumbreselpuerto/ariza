@@ -5465,6 +5465,216 @@ select 'Nave', 'nave'
 where not exists (select 1 from public.ubicaciones where tipo = 'nave');
 
 
+
+-- ============================================================================
+-- LO ENTREGADO DESPUÉS DEL 17-11-2026
+--
+-- Este fichero es la radiografía de la base de producción tal y como estaba el
+-- 17 de noviembre de 2026. Lo que se entregó después vive en sus propios
+-- ficheros de servidor/, que ya están aplicados en producción, pero una base
+-- NUEVA se monta solo con este: si no está aquí, no está.
+--
+-- Y eso falló. Entre el 25 y el 27 de noviembre se entregaron cuatro ficheros
+-- que añadían diecisiete columnas y reescribían una función, y nada de eso se
+-- trajo aquí. Una base nueva nacía sin las columnas del alta por bloques, sin
+-- la foto por elemento, sin la foto por hueco y haciendo expedientes con el
+-- catálogo viejo. No lo habría visto nadie hasta el día de montar la base otra
+-- vez, que es justo el día en que no se puede estar depurando el instalador.
+--
+-- Lo caza ahora una comprobación de pruebas/sql.sh: monta esta base y la que
+-- montan los ficheros de servidor/, y compara columna por columna y función
+-- por función. Si vuelve a faltar algo, sale en rojo con su nombre.
+--
+-- Todo lo de aquí abajo se puede ejecutar las veces que haga falta.
+--
+-- 27-11-2026
+-- ============================================================================
+
+-- ---- Las medidas por familia de puerta (alta-por-bloques.sql, 25-11-2026) ----
+alter table public.puertas add column if not exists n_hojas integer;
+alter table public.puertas add column if not exists lateral_libre_mm numeric;
+alter table public.puertas add column if not exists fondo_mm numeric;
+alter table public.puertas add column if not exists mastil_mm numeric;
+alter table public.puertas add column if not exists eje_mm numeric;
+alter table public.puertas add column if not exists n_paneles integer;
+alter table public.puertas add column if not exists muelle_diam_mm numeric;
+alter table public.puertas add column if not exists tipo_guia text;
+alter table public.puertas add column if not exists n_carriles integer;
+alter table public.puertas add column if not exists paso_libre_mm numeric;
+alter table public.puertas add column if not exists n_motores integer;
+alter table public.puertas add column if not exists n_mandos integer;
+alter table public.puertas add column if not exists elementos text[] default '{}'::text[];
+
+-- ---- La foto de cada elemento (fotos-elemento.sql, 25-11-2026) ----
+alter table public.fotos add column if not exists elemento text;
+create index if not exists fotos_puerta_elemento_idx
+  ON public.fotos USING btree (puerta_id, elemento);
+alter table public.componentes add column if not exists actualizado_por text;
+
+-- ---- El catálogo del expediente (elementos-unificados.sql, 25-11-2026) ----
+alter table public.expedientes add column if not exists catalogo text;
+
+-- ---- La foto de cada hueco medido (fotos-hueco.sql, 26-11-2026) ----
+alter table public.fotos add column if not exists medida_id uuid;
+create index if not exists fotos_medida_idx
+  ON public.fotos USING btree (medida_id);
+
+-- ---- Y las funciones, en la versión que está en producción ----
+-- crear_expediente se reescribió el 25-11-2026 para que un expediente nuevo
+-- nazca con el catálogo de las once familias. enviar_parte y tecnicos_de_aviso
+-- también habían quedado atrás. cobro_en_obra es del 27-11-2026.
+
+CREATE OR REPLACE FUNCTION public.crear_expediente(p_puerta uuid, p_situacion text, p_familia text, p_aviso uuid DEFAULT NULL::uuid)
+ RETURNS json
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'auth'
+AS $function$
+declare
+  v_id uuid; v_num int; v_ref text; v_cli uuid; v_quien text; v_anio int;
+begin
+  if not public.es_equipo() then
+    return json_build_object('ok', false, 'motivo', 'permiso');
+  end if;
+  if p_situacion not in ('nueva_fabricante','nueva_instalador','adecuacion','modificacion') then
+    return json_build_object('ok', false, 'motivo', 'situacion');
+  end if;
+  if p_familia not in ('industrial','peatonal','barrera','cortafuegos') then
+    return json_build_object('ok', false, 'motivo', 'familia');
+  end if;
+
+  select cliente_id into v_cli from public.puertas where id = p_puerta;
+  select coalesce(nombre, '') into v_quien from public.perfiles where id = auth.uid();
+
+  v_anio := extract(year from (now() at time zone 'Europe/Madrid'))::int;
+  select coalesce(max(e.numero), 0) + 1 into v_num
+    from public.expedientes e
+   where extract(year from e.fecha_apertura) = v_anio;
+  v_ref := 'EXP-' || v_anio || '-' || lpad(v_num::text, 3, '0');
+
+  insert into public.expedientes (referencia, numero, puerta_id, cliente_id, aviso_id,
+                                  situacion, familia, autor, catalogo)
+  values (v_ref, v_num, p_puerta, v_cli, p_aviso, p_situacion, p_familia,
+          nullif(v_quien, ''), 'familia47')
+  returning id into v_id;
+
+  return json_build_object('ok', true, 'id', v_id, 'referencia', v_ref);
+end $function$
+;
+
+create or replace function public.enviar_parte(p_aviso uuid)
+returns boolean language plpgsql security definer
+set search_path = public, extensions as $$
+declare
+  v_sec  text;
+  v_url  text;
+  v_mail text;
+begin
+  if not public.es_gestion() then return false; end if;
+
+  -- Un parte es de una visita cerrada. De una abierta no hay nada que mandar.
+  if not exists (select 1 from public.avisos
+                  where id = p_aviso and cerrado is not null) then
+    return false;
+  end if;
+
+  /* El correo: primero el contacto de esta asistencia y, si no hay, el de la
+     ficha del cliente, sea el del aviso o el de la puerta. Es el mismo orden
+     que sigue la función de correo y el que ofrece la aplicación. */
+  select coalesce(
+           nullif(btrim(a.contacto_email), ''),
+           nullif(btrim(c1.email), ''),
+           nullif(btrim(c2.email), '')
+         )
+    into v_mail
+    from public.avisos a
+    left join public.clientes c1 on c1.id = a.cliente_id
+    left join public.puertas  pu on pu.id = a.puerta_id
+    left join public.clientes c2 on c2.id = pu.cliente_id
+   where a.id = p_aviso;
+
+  if v_mail is null then return false; end if;
+
+  select valor into v_url from public.config_interna where clave = 'avisos_url';
+  select valor into v_sec from public.config_interna where clave = 'avisos_secreto';
+  if v_url is null or v_sec is null then return false; end if;
+
+  perform net.http_post(
+    url     := v_url,
+    headers := jsonb_build_object('Content-Type','application/json','x-ariza-secreto', v_sec),
+    body    := jsonb_build_object('tipo','parte','aviso_id', p_aviso)
+  );
+  return true;
+end $$;
+
+create or replace function public.tecnicos_de_aviso(p_aviso uuid)
+returns setof uuid
+language sql stable security definer
+set search_path to 'public'
+as $$
+  select t.tecnico_id from public.aviso_tecnicos t where t.aviso_id = p_aviso
+  union
+  select a.tecnico_id from public.avisos a
+   where a.id = p_aviso and a.tecnico_id is not null;
+$$;
+
+create or replace function public.cobro_en_obra(p_aviso uuid)
+returns json
+language plpgsql
+security definer
+set search_path to 'public', 'auth'
+as $function$
+declare
+  v        public.valoraciones%rowtype;
+  v_iva    numeric;
+  v_base   numeric;
+  v_cuota  numeric;
+  v_mio    boolean := false;
+begin
+  if not public.es_equipo() then return null; end if;
+
+  -- De quién es esta visita. La oficina y la administración ven cualquiera; un
+  -- técnico, solo la suya: la que tiene asignada o una en la que va de segundo.
+  if public.es_gestion() then
+    v_mio := true;
+  else
+    select exists (
+      select 1 from public.avisos a where a.id = p_aviso and a.tecnico_id = auth.uid()
+    ) or exists (
+      select 1 from public.aviso_tecnicos t
+       where t.aviso_id = p_aviso and t.tecnico_id = auth.uid()
+    ) into v_mio;
+  end if;
+  if not v_mio then return null; end if;
+
+  -- La misma cuenta que usa la oficina, no otra parecida
+  perform public.valorar_aviso(p_aviso);
+
+  select * into v from public.valoraciones where aviso_id = p_aviso;
+  if v.aviso_id is null then return null; end if;
+
+  select t.iva into v_iva from public.tarifas t where t.id = 1;
+  v_iva  := coalesce(v_iva, 21);
+  v_base := round(coalesce(v.imp_total, 0), 2);
+  v_cuota := round(v_base * v_iva / 100, 2);
+
+  -- Lo que sale de aquí es solo lo que hay que pedirle al cliente. El coste y
+  -- el margen se quedan dentro a propósito: ver arriba.
+  return json_build_object(
+    'mano',           round(coalesce(v.imp_mano_obra, 0), 2),
+    'desplazamiento', round(coalesce(v.imp_desplazamiento, 0), 2),
+    'materiales',     round(coalesce(v.imp_materiales, 0), 2),
+    'base',           v_base,
+    'tipo_iva',       v_iva,
+    'iva',            v_cuota,
+    'total',          round(v_base + v_cuota, 2)
+  );
+end $function$;
+
+grant execute on function public.cobro_en_obra(uuid) to authenticated;
+grant execute on function public.cobro_en_obra(uuid) to anon;
+grant execute on function public.cobro_en_obra(uuid) to service_role;
+
 -- ============================================================================
 -- COMPROBACIÓN
 --
