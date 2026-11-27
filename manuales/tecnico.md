@@ -31,7 +31,7 @@ El buscador no busca solo en los títulos: busca también dentro del texto, y te
 enseña el trozo donde aparece la palabra para que sepas si te sirve antes de
 abrirlo. Escribe «furgoneta», «dintel» o «acta» y lo verás.
 
-> **Versión de la aplicación que describe este manual: 2026.11.26-4**
+> **Versión de la aplicación que describe este manual: 2026.11.26-5**
 > La tuya la tienes arriba del todo de esta misma pantalla. Si no coinciden, la
 > aplicación te lo dice ahí y hay que avisar a la oficina. Cuando salga la barra
 > amarilla diciendo que hay una versión nueva, dale a **Recargar ahora**.
@@ -525,6 +525,23 @@ De cada hueco se pide esto:
   oficina, porque pasa al presupuesto tal y como lo escribas.
 - **Notas del hueco**: acceso, suelo, pendiente, obra que hace falta. Todo lo
   que haga falta para ofertarlo y para montarlo.
+- **Fotos de este hueco**, desde el **26 de noviembre de 2026**. Al final de
+  cada bloque tienes sus propios botones de foto. Hazlas ahí, estando delante
+  del hueco: así quedan pegadas a sus medidas.
+
+**Las fotos de cada hueco van en su hueco, no arriba.** Antes todas las fotos de
+una comercial iban al mismo montón y nadie sabía después qué foto era de qué
+hueco. En una oferta de tres portones eso significaba que una medida rara (un
+dintel de 180) no se podía comprobar sin volver a ir. Ahora cada hueco lleva las
+suyas: al presupuestar se ven con sus medidas, y si el cliente acepta, son el
+antes de esa puerta.
+
+El apartado **Fotos de esta visita** de arriba sigue estando, y en una comercial
+pasa a ser el de lo general: el acceso, la fachada, por dónde entra la
+mercancía. Lo que no es de un hueco concreto.
+
+Si quitas un hueco que ya tiene fotos, **las fotos no se borran**: pasan a las
+generales de la visita y te lo dice. Lo que se sube no desaparece sin avisar.
 
 **Lo que no te deja cerrar.** De cada hueco hacen falta el ancho y el alto. Si
 falta uno, la aplicación te dice **en qué hueco** y te lleva hasta él. Y si
@@ -1662,4 +1679,4 @@ que mire ahí antes de nada. Puede ser eso.
 
 ---
 
-*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.26-4 de Safe2door*
+*Ariza Puertas y Automatismos S.L.U. · Documento interno · Describe la versión 2026.11.26-5 de Safe2door*
