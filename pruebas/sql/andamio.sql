@@ -306,6 +306,15 @@ create table if not exists public.ajustes (
   valor jsonb not null default '{}'::jsonb
 );
 
+-- ---- La configuración interna ----
+-- La URL y el secreto de la función de correo. Está en producción desde el
+-- principio y aquí faltaba: lo descubrió la prueba de los informes mensuales,
+-- que comprueba que sin configuración no se manda nada. (27-11-2026)
+create table if not exists public.config_interna (
+  clave text primary key,
+  valor text not null
+);
+
 -- ---- Los dos ayudantes de permisos ----
 -- En producción miran el perfil de quien ha entrado. Aquí basta con que
 -- existan y devuelvan algo: lo que se prueba es que los ficheros se ejecuten,
