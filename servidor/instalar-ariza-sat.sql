@@ -5537,6 +5537,58 @@ create index if not exists valoraciones_manual_idx
   ON public.valoraciones USING btree (manual_en)
   WHERE (imp_manual IS NOT NULL);
 
+-- ---- Revisar, decidir si se factura, y cobrar a medias (revisar-y-cobrar.sql, 27-11-2026) ----
+alter table public.valoraciones add column if not exists revisado_en timestamptz;
+alter table public.valoraciones add column if not exists revisado_por text;
+alter table public.valoraciones add column if not exists no_facturar boolean not null default false;
+alter table public.valoraciones add column if not exists no_facturar_motivo text;
+alter table public.valoraciones add column if not exists no_facturar_por text;
+alter table public.valoraciones add column if not exists no_facturar_en timestamptz;
+alter table public.valoraciones add column if not exists cobrado_importe numeric;
+create index if not exists valoraciones_por_revisar_idx
+  ON public.valoraciones USING btree (revisado_en)
+  WHERE (revisado_en IS NULL);
+create index if not exists valoraciones_no_facturar_idx
+  ON public.valoraciones USING btree (no_facturar_en)
+  WHERE (no_facturar IS TRUE);
+
+create or replace view public.material_perdido as
+  select m.id,
+         m.aviso_id,
+         a.cerrado,
+         to_char(a.cerrado at time zone 'Europe/Madrid', 'YYYY-MM') as mes,
+         a.cliente_id,
+         a.puerta_id,
+         m.articulo_id,
+         ar.descripcion,
+         m.cantidad,
+         coalesce(m.coste, ar.coste, 0)                      as coste_unidad,
+         round(coalesce(m.coste, ar.coste, 0) * coalesce(m.cantidad, 0), 2) as coste,
+         v.no_facturar_motivo
+    from public.materiales m
+    join public.avisos a       on a.id = m.aviso_id
+    join public.valoraciones v on v.aviso_id = m.aviso_id
+    left join public.articulos ar on ar.id = m.articulo_id
+   where v.no_facturar is true
+     and a.anulada is not true;
+
+create or replace view public.margen_por_mes as
+  select to_char(a.cerrado at time zone 'Europe/Madrid', 'YYYY-MM') as mes,
+         count(*)                                              as visitas,
+         count(*) filter (where v.no_facturar is true)          as no_facturadas,
+         count(*) filter (where v.facturado)                    as facturadas,
+         round(coalesce(sum(v.imp_total)    filter (where v.no_facturar is not true), 0), 2) as facturable,
+         round(coalesce(sum(v.coste_total)  filter (where v.no_facturar is not true), 0), 2) as coste,
+         round(coalesce(sum(v.margen)       filter (where v.no_facturar is not true), 0), 2) as margen,
+         round(coalesce(sum(v.coste_total)  filter (where v.no_facturar is true), 0), 2)     as coste_perdido,
+         round(coalesce(sum(v.cobrado_importe), 0), 2)          as cobrado
+    from public.avisos a
+    join public.valoraciones v on v.aviso_id = a.id
+   where a.cerrado is not null
+     and a.anulada is not true
+   group by 1
+   order by 1 desc;
+
 -- ---- Y las funciones, en la versión que está en producción ----
 -- crear_expediente se reescribió el 25-11-2026 para que un expediente nuevo
 -- nazca con el catálogo de las once familias. enviar_parte y tecnicos_de_aviso
