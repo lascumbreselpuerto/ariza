@@ -5519,6 +5519,15 @@ alter table public.fotos add column if not exists medida_id uuid;
 create index if not exists fotos_medida_idx
   ON public.fotos USING btree (medida_id);
 
+-- ---- Corregir un parte ya cerrado (corregir-parte.sql, 27-11-2026) ----
+alter table public.avisos add column if not exists corregido_en timestamptz;
+alter table public.avisos add column if not exists corregido_por text;
+alter table public.avisos add column if not exists corregido_nota text;
+alter table public.avisos add column if not exists correcciones integer not null default 0;
+create index if not exists avisos_corregidos_idx
+  ON public.avisos USING btree (corregido_en)
+  WHERE (corregido_en IS NOT NULL);
+
 -- ---- Y las funciones, en la versión que está en producción ----
 -- crear_expediente se reescribió el 25-11-2026 para que un expediente nuevo
 -- nazca con el catálogo de las once familias. enviar_parte y tecnicos_de_aviso
