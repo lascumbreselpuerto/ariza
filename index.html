@@ -2007,6 +2007,15 @@ async function cargar(){
      como antes del 26-11-2026, y no se pueden separar por hueco. */
   const fh = await sb.from('fotos').select('medida_id').limit(1);
   S.sinFotoHueco = !!fh.error;
+  /* Lo que hay que cobrar en obra: servidor/cobro-en-obra.sql. Sin esa función
+     el técnico no puede saber el importe con IVA desde su móvil, porque los
+     importes solo los lee la oficina, y vuelve a escribirlo a mano como antes
+     del 27-11-2026. Se pregunta por un aviso que no existe: lo que se mira es
+     si la función está, no lo que contesta. */
+  const co = await sb.rpc('cobro_en_obra',
+    { p_aviso: '00000000-0000-0000-0000-000000000000' });
+  S.sinCobroObra = !!(co.error && /function|does not exist|schema cache/i.test(
+    String((co.error && (co.error.message || co.error.hint)) || '')));
   /* El código de barras del fabricante: servidor/barras.sql. Sin esa columna
      en el catálogo, leer una caja no puede reconocer el material y el lector
      solo lee nuestras etiquetas QR, como antes del 08-11-2026. */
@@ -2238,7 +2247,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.26-5';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.27-1';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -4883,6 +4892,8 @@ const QUE_HACE_FALTA = [
     pierdes:'No se lleva lo pendiente de facturar ni los impagados.' },
   { marca:'sinFotoAviso', fichero:'fotos-aviso.sql', que:'Fotos de antes y después',
     pierdes:'Las fotos de la visita no se separan en antes y después.' },
+  { marca:'sinCobroObra', fichero:'cobro-en-obra.sql', que:'Lo que hay que cobrar en obra',
+    pierdes:'El técnico que cobra en obra tiene que escribir el importe a mano, y lo que cobra puede no ser lo que se factura.' },
   { marca:'sinFotoHueco', fichero:'fotos-hueco.sql', que:'Fotos de cada hueco medido',
     pierdes:'En una comercial de varios huecos las fotos se quedan en un montón común y no se sabe de qué hueco es cada una.' },
   { marca:'sinMultiPuerta', fichero:'multipuerta.sql', que:'Un parte con varias puertas',
@@ -30655,7 +30666,29 @@ function dlgCierre(avisoId){
       '<div class="campo"><label for="z-forma">Forma de cobro</label><select id="z-forma"><option value=""></option>'+
         lista('formas_cobro', COBROS).map(f=>'<option'+(a.cobro_forma===f?' selected':'')+'>'+esc(f)+'</option>').join('')+'</select></div>'+
       '<div class="campo full"><label for="z-ref">Referencia o quién paga</label><input id="z-ref" type="text" maxlength="120" value="'+esc(a.cobro_ref||'')+'" placeholder="Ej.: nº de operación del datáfono, o paga el presidente"></div>'+
-      '</div><p class="mini" style="margin:8px 0 0">Si no cobras, déjalo sin marcar: queda pendiente de facturar en oficina.</p></div>';
+      '</div>'+
+      /* ---- Cuánto hay que cobrar (27-11-2026) ----
+         David: «Para un cobro en obra, al técnico le debe de sacar el importe a
+         pagar más IVA, en función de horas, desplazamiento y materiales.»
+
+         Hasta hoy el técnico que cobraba escribía el importe de su cabeza, y lo
+         que cobraba no tenía por qué ser lo que la oficina iba a facturar.
+
+         El botón no calcula aquí: guarda el avance y le pregunta al servidor,
+         que usa la MISMA cuenta que la factura. Si lo calculara la aplicación
+         serían dos cuentas que al cambiar una tarifa dejan de coincidir, y
+         entonces el técnico cobraría una cosa y la oficina facturaría otra.
+
+         Sale sin tener que marcar nada: para decidir si cobra, lo primero que
+         necesita es saber cuánto. Y el número se pone solo en el importe,
+         porque teclear a mano 387,20 delante del cliente es como se cuelan los
+         errores de dedo. */
+      (S.sinCobroObra ? '' :
+        '<div class="fila" style="gap:8px;flex-wrap:wrap;margin-top:10px">'+
+        '<button type="button" class="btn sm pri" data-act="cobro-calcular" data-id="'+a.id+'">'+
+        'Calcular lo que hay que cobrar</button><span class="sp"></span></div>'+
+        '<div id="z-cobro-cuenta" class="mini" style="margin-top:8px"></div>')+
+      '<p class="mini" style="margin:8px 0 0">Si no cobras, déjalo sin marcar: queda pendiente de facturar en oficina.</p></div>';
   }
 
   h += '<div class="grupo"><h3>Firma del cliente</h3>'+
@@ -34372,6 +34405,52 @@ dlgForm.addEventListener('click', async e => {
   if (a === 'guardar-avance'){
     const av = S.avisos.find(x => x.id === b.dataset.id);
     if (av) await guardarCierre(av, false);
+    return;
+  }
+  /* ---- Cuánto hay que cobrar (27-11-2026) ----
+     Primero se guarda el avance y después se pregunta. Tiene que ser en ese
+     orden: la cuenta la hace el servidor con las horas y los materiales
+     GUARDADOS, así que preguntar sin guardar daría el importe de antes de
+     rellenar el parte, que es peor que no dar ninguno. */
+  if (a === 'cobro-calcular'){
+    const av = S.avisos.find(x => x.id === b.dataset.id);
+    const caja = document.getElementById('z-cobro-cuenta');
+    if (!av) return;
+    if (caja) caja.innerHTML = 'Guardando el parte y calculando...';
+    try {
+      await guardarCierre(av, false);
+      const { data, error } = await sb.rpc('cobro_en_obra', { p_aviso: av.id });
+      if (error) throw error;
+      /* Nulo no es cero: significa que el servidor no ha querido decirlo, y eso
+         pasa cuando la visita no es de este técnico. Decirle «0,00 €» sería
+         mentirle y cobraría de menos. */
+      if (!data){
+        if (caja) caja.innerHTML = '<b>No se ha podido calcular.</b> Esta visita no está a tu '+
+          'nombre, así que su importe no te lo puede dar la aplicación. Pídeselo a la oficina.';
+        return;
+      }
+      const d = data;
+      if (caja) caja.innerHTML =
+        '<table style="width:100%;border-collapse:collapse">'+
+        '<tr><td style="padding:2px 0">Mano de obra</td><td style="text-align:right">'+eur(d.mano)+'</td></tr>'+
+        '<tr><td style="padding:2px 0">Desplazamiento</td><td style="text-align:right">'+eur(d.desplazamiento)+'</td></tr>'+
+        '<tr><td style="padding:2px 0">Materiales</td><td style="text-align:right">'+eur(d.materiales)+'</td></tr>'+
+        '<tr><td style="padding:2px 0;border-top:1px solid var(--line)">Base</td>'+
+        '<td style="text-align:right;border-top:1px solid var(--line)">'+eur(d.base)+'</td></tr>'+
+        '<tr><td style="padding:2px 0">IVA ('+(+d.tipo_iva)+' %)</td><td style="text-align:right">'+eur(d.iva)+'</td></tr>'+
+        '<tr><td style="padding:4px 0"><b>A cobrar</b></td>'+
+        '<td style="text-align:right"><b>'+eur(d.total)+'</b></td></tr></table>'+
+        '<p class="mini" style="margin:8px 0 0">Esto es lo mismo que va a facturar la oficina: '+
+        'sale de la misma cuenta. Si cobras otra cantidad, corrige el importe y dilo en la '+
+        'referencia, para que al facturar se sepa por qué.</p>';
+      /* El importe se pone solo, pero solo si está vacío: si el técnico ya
+         había escrito algo, no se le pisa sin avisar. */
+      const imp = document.getElementById('z-imp');
+      if (imp && !String(imp.value || '').trim()) imp.value = (+d.total).toFixed(2);
+    } catch(err){
+      if (caja) caja.innerHTML = '<b>No se ha podido calcular.</b> '+
+        esc(String((err && err.message) || err || ''));
+    }
     return;
   }
   if (a === 'cli-elegir'){ elegirCliente(b.dataset.id); return; }
