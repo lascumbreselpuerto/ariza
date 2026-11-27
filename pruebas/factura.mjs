@@ -629,9 +629,25 @@ paso('y el total con IVA, que es lo que se le pide al cliente',
   /325,37/.test(tarjeta.texto), (tarjeta.texto.match(/[\d.,]+ € con el \d+/) || [''])[0]);
 paso('se dice si está facturada o no', /Sin facturar/.test(tarjeta.texto));
 paso('y si se cobró en obra o no', /Sin cobrar en obra/.test(tarjeta.texto));
-paso('con el atajo para ver la valoración y para apuntar la factura',
-  /data-act="ver-valoracion"/.test(tarjeta.comoOficina) &&
-  /data-act="marcar-facturado"/.test(tarjeta.comoOficina));
+/* ---- Reescrita el 27-11-2026 ----
+   Pedía el atajo de «apuntar la factura» en cualquier parte cerrado. Desde hoy
+   hay dos pasos (revisar y luego facturar), así que en un parte por revisar el
+   atajo que toca es el de revisar: ofrecer facturar antes de haberlo repasado
+   es saltarse el paso que David pidió. Se comprueban los dos casos. */
+paso('el atajo de ver la valoración está siempre',
+  /data-act="ver-valoracion"/.test(tarjeta.comoOficina));
+paso('en un parte por revisar, el atajo que sale es el de revisarlo',
+  /data-act="revisar-parte"/.test(tarjeta.comoOficina) &&
+  !/data-act="marcar-facturado"/.test(tarjeta.comoOficina));
+paso('y una vez revisado, sale el de apuntar la factura', await T(async () => {
+  const g = window.__T;
+  const v = g.valoracionDe('pf-1');
+  const antes = v.revisado_en;
+  v.revisado_en = new Date().toISOString(); v.revisado_por = 'Oficina';
+  const html = g.tarjetaAviso(g.S.avisos.find(x => x.id === 'pf-1'));
+  v.revisado_en = antes;                     // se deja como estaba
+  return /data-act="marcar-facturado"/.test(html);
+}) === true);
 /* Y la que de verdad cierra la puerta */
 const dineroTec = tarjeta.comoTecnico.replace(/<[^>]+>/g, ' ');
 paso('un TÉCNICO ve la fecha de cierre y las horas',

@@ -116,6 +116,8 @@ clienteDeLaPuertaDelAviso condicionesDelForm clausulasFabrica condicionCambiada
 clausulasDelForm pintarClausulas
 sumaMesesDia sumaMeses sumaDias opts dondeAsistencia periodicidadDe contratoVivo
 iso deIso mesActual valoracionDe nombreCliente guardarCierre materialesDelForm
+lineaValoracionAsis tarjetaAviso estadoCobro chipCobro totalACobrar cobradoDe
+dlgNoFacturar vistaRealizadas
 subirFotos subirDocs cambiarVisibilidad pintarFotos pintarDocs
 correoDelParte enviarParte accionesAsis
 centroDe centrosDe centroDePuerta direccionCentro puertasDeCentro sitioPuerta
