@@ -2027,6 +2027,12 @@ async function cargar(){
      puede escribir uno acordado con el cliente. */
   const pman = await sb.from('valoraciones').select('imp_manual, manual_por').limit(1);
   S.sinPrecioMano = !!pman.error;
+  /* Revisar, no facturar y cobrar a medias: servidor/revisar-y-cobrar.sql. Sin
+     esas columnas, Realizados no se parte en secciones y el cobro sigue siendo
+     sí o no, como antes del 27-11-2026. */
+  const rev = await sb.from('valoraciones')
+    .select('revisado_en, no_facturar, cobrado_importe').limit(1);
+  S.sinRevisar = !!rev.error;
   /* El código de barras del fabricante: servidor/barras.sql. Sin esa columna
      en el catálogo, leer una caja no puede reconocer el material y el lector
      solo lee nuestras etiquetas QR, como antes del 08-11-2026. */
@@ -2258,7 +2264,7 @@ const abiertoDe = id => avisosDe(id).find(x => !x.cerrado && x.tipo !== 'comerci
    comprueba que tiene la forma correcta y que es la de hoy o posterior, para que
    no se quede olvidada. La marca del comentario es por la que se busca al leer el
    fichero publicado: no se toque. */
-const ARIZA_VERSION = '2026.11.27-5';   /* ARIZA_VERSION_MARCA */
+const ARIZA_VERSION = '2026.11.27-6';   /* ARIZA_VERSION_MARCA */
 const ARIZA_VERSION_RE = /const ARIZA_VERSION = '([^']+)'/;
 
 /* Lee la versión que hay publicada en el servidor. La URL lleva marca de tiempo:
@@ -3466,14 +3472,81 @@ function lineaValoracionAsis(a){
       ? '<span class="chip ok sin">Cobrado en obra'+
         (a.cobro_importe != null ? ' · '+eur(a.cobro_importe) : '')+'</span> '
       : '<span class="chip gris sin">Sin cobrar en obra</span> ')+
-    (v.facturado
-      ? '<span class="chip ok sin">Facturada'+(v.factura_ref ? ' · '+esc(v.factura_ref) : '')+'</span> '
-      : '<span class="chip aviso sin">Sin facturar</span> ')+
+    /* ---- Dónde está este parte, y qué toca hacer (27-11-2026) ----
+       El chip dice en qué paso está y el botón hace el paso siguiente: revisar,
+       facturar, cobrar. Así la oficina no tiene que abrir nada para saber qué
+       le falta a cada visita. */
+    (S.sinRevisar ? ''
+      : v.no_facturar
+      ? '<span class="chip gris sin" title="'+esc(v.no_facturar_motivo || '')+'">No se factura'+
+        (v.no_facturar_por ? ' · '+esc(v.no_facturar_por) : '')+'</span> '
+      : !v.revisado_en
+      ? '<span class="chip aviso sin">Por revisar</span> '
+      : '<span class="chip ok sin">Revisado'+
+        (v.revisado_por ? ' · '+esc(v.revisado_por) : '')+'</span> ')+
+    (v.no_facturar ? '' :
+      (v.facturado
+        ? '<span class="chip ok sin">Facturada'+(v.factura_ref ? ' · '+esc(v.factura_ref) : '')+'</span> '
+        : '<span class="chip aviso sin">Sin facturar</span> ')+
+      chipCobro(v))+
     '<button class="btn sm plana" data-act="ver-valoracion" data-id="'+a.id+'">Ver la valoración</button>'+
-    (v.facturado ? '' :
-      ' <button class="btn sm plana" data-act="marcar-facturado" data-id="'+a.id+'">Apuntar la factura</button>')+
+    /* El paso siguiente, uno solo: el que toca ahora */
+    (S.sinRevisar || v.no_facturar ? ''
+      : !v.revisado_en
+      ? ' <button class="btn sm pri" data-act="revisar-parte" data-id="'+a.id+'">Marcar revisado</button>'+
+        ' <button class="btn sm plana" data-act="no-facturar" data-id="'+a.id+'">No facturar</button>'
+      : !v.facturado
+      ? ' <button class="btn sm pri" data-act="marcar-facturado" data-id="'+a.id+'">Apuntar la factura</button>'+
+        ' <button class="btn sm plana" data-act="no-facturar" data-id="'+a.id+'">No facturar</button>'
+      : ' <button class="btn sm plana" data-act="marcar-facturado" data-id="'+a.id+'">Cobro y factura</button>')+
+    (S.sinRevisar && !v.facturado
+      ? ' <button class="btn sm plana" data-act="marcar-facturado" data-id="'+a.id+'">Apuntar la factura</button>'
+      : '')+
+    (v.no_facturar
+      ? ' <button class="btn sm plana" data-act="si-facturar" data-id="'+a.id+'">Volver a facturarla</button>'
+      : '')+
     '</p>';
   return h;
+}
+/* ---- En qué punto está el cobro (27-11-2026) ----
+   David: «estos cerrados deben de poderse marcar como cobrados completo,
+   cobrado parcial y o no cobrado por oficina.»
+
+   El estado no se guarda: se saca de lo cobrado contra el total. Guardarlo
+   sería tener dos datos que pueden decir cosas distintas, y el día que no
+   coincidan nadie sabrá cuál es el bueno. Las facturas de antes del 27-11-2026
+   no tienen importe cobrado: si están marcadas como cobradas, lo están del
+   todo, que es lo que significaba la marca entonces. */
+/* Lo que se le cobra al cliente lleva IVA, y imp_total es SIN IVA. Comparar lo
+   cobrado contra el importe sin IVA diría que una factura pagada entera está
+   cobrada de más, y que una pagada sin IVA está completa. Así que el total a
+   cobrar es con IVA, al tipo de la tarifa. (27-11-2026) */
+function totalACobrar(v){
+  const base = +((v || {}).imp_total) || 0;
+  const iva = +((S.tarifas || {}).iva);
+  return Math.round(base * (1 + (isNaN(iva) ? 21 : iva) / 100) * 100) / 100;
+}
+const cobradoDe = v => (v || {}).cobrado_importe == null
+  ? ((v || {}).cobrado_el ? totalACobrar(v) : 0)
+  : (+v.cobrado_importe || 0);
+function estadoCobro(v){
+  if (!v || !v.facturado) return 'sin';
+  const total = totalACobrar(v);
+  const cob = cobradoDe(v);
+  if (cob <= 0) return 'nada';
+  if (cob + 0.005 < total) return 'parcial';
+  return 'todo';
+}
+function chipCobro(v){
+  const e = estadoCobro(v);
+  if (e === 'sin') return '';
+  const total = totalACobrar(v);
+  const cob = cobradoDe(v);
+  if (e === 'todo') return '<span class="chip ok sin">Cobrada</span> ';
+  if (e === 'parcial')
+    return '<span class="chip aviso sin">Cobrada a medias · '+eur(cob)+' de '+eur(total)+
+      ' · falta '+eur(Math.round((total - cob) * 100) / 100)+'</span> ';
+  return '<span class="chip mal sin">Sin cobrar</span> ';
 }
 function chipsEstadoAsis(a){
   let h = '';
@@ -4035,6 +4108,28 @@ function vistaRealizadas(){
 
   const hechas  = filas.filter(a => !a.anulada).length;
   const anulada = filas.filter(a => a.anulada).length;
+  /* ---- Las tres secciones de Realizados (27-11-2026) ----
+     David: «Oficina debe de poder marcar los revisado y pasarlos a otra sección
+     dentro de realizados que diga cerrados», y «yo incluiría en los partes
+     realizados la decisión de mandar a facturar o no».
+
+     Así que lo cerrado se parte en tres, y en este orden, que es el del
+     trabajo:
+
+       POR REVISAR      lo que acaba de llegar y nadie ha repasado.
+       CERRADOS         repasado por la oficina. Aquí se factura y se cobra.
+       PARTES ELIMINADOS lo que se decidió NO facturar. Sigue contando su coste.
+
+     Solo para la oficina y la administración: un técnico no revisa ni factura,
+     y para él Realizados sigue siendo una sola lista con sus visitas. */
+  const porSecciones = esGestion() && !S.sinRevisar && !S.histTipo && !S.histArchivadas;
+  const vdeA = a => valoracionDe(a.id) || {};
+  const seccionDe = a => {
+    if (a.anulada) return 'anuladas';
+    const v = vdeA(a);
+    if (v.no_facturar) return 'eliminados';
+    return v.revisado_en ? 'cerrados' : 'revisar';
+  };
   const tipos = lista('tipos_asistencia', Object.keys(ASISTENCIAS));
 
   let h = '<div class="stack">';
@@ -4078,6 +4173,53 @@ function vistaRealizadas(){
            ? 'Ninguna asistencia cerrada coincide con lo que has puesto.'
            : 'Todavía no hay ninguna asistencia cerrada. Aquí irán apareciendo a medida que se cierren las visitas.')+
          '</p></div>';
+    return h + '</div>';
+  }
+
+  /* ---- Partido en secciones para la oficina (27-11-2026) ----
+     Cada sección con su cuenta y su dinero: lo que hay por revisar, lo cerrado
+     y lo que no se factura. Dentro de cada una, lo más reciente primero, que es
+     como se trabaja: lo que acaba de llegar es lo que hay que repasar. */
+  if (porSecciones){
+    const SECCIONES = [
+      ['revisar',    'Por revisar',
+       'Partes que ha cerrado el técnico y nadie ha repasado todavía. Mira las horas, que el '+
+       'material esté valorado y el importe, y márcalos revisados: pasan a «Cerrados».'],
+      ['cerrados',   'Cerrados',
+       'Repasados por la oficina. De aquí sale la factura, y aquí se apunta el cobro: entero, a '+
+       'medias o sin cobrar.'],
+      ['eliminados', 'Partes eliminados',
+       'Los que se decidió NO facturar. Siguen contando su coste: las horas del técnico, el '+
+       'desplazamiento y el material que se puso. Eso es lo que va en el correo mensual al '+
+       'administrador.'],
+    ];
+    const anuladas = filas.filter(a => a.anulada);
+    SECCIONES.forEach(([clave, titulo, explica]) => {
+      const arr = filas.filter(a => seccionDe(a) === clave);
+      const imp = arr.reduce((t, a) => t + (+vdeA(a).imp_total || 0), 0);
+      const cost = arr.reduce((t, a) => t + (+vdeA(a).coste_total || 0), 0);
+      h += '<div class="panel"><div class="panel-h"><h2>'+titulo+'</h2>'+
+        '<span class="mini">'+arr.length+
+        (clave === 'eliminados'
+          ? (arr.length ? ' · coste perdido '+eur(cost) : '')
+          : (arr.length ? ' · '+eur(imp) : ''))+'</span></div>'+
+        '<p class="mini" style="margin:0 0 10px">'+explica+'</p>';
+      if (!arr.length)
+        h += '<p class="muted" style="margin:0">'+
+          (clave === 'revisar' ? 'Nada por revisar. Todo lo cerrado está repasado.'
+           : clave === 'cerrados' ? 'Nada aquí todavía: los partes llegan cuando los marcas revisados.'
+           : 'Ningún parte sin facturar. Mejor así.')+'</p>';
+      else h += '<div class="avisos">'+arr.slice(0, 120).map(tarjetaAviso).join('')+'</div>'+
+        (arr.length > 120 ? '<p class="mini" style="margin:10px 0 0">Se enseñan las 120 primeras. '+
+          'Acota con el buscador o las fechas.</p>' : '');
+      h += '</div>';
+    });
+    if (anuladas.length)
+      h += '<div class="panel"><div class="panel-h"><h2>Anuladas</h2>'+
+        '<span class="mini">'+anuladas.length+'</span></div>'+
+        '<p class="mini" style="margin:0 0 10px">No se hicieron, así que no entran en ninguna '+
+        'cuenta: ni facturable, ni coste, ni margen.</p>'+
+        '<div class="avisos">'+anuladas.slice(0, 60).map(tarjetaAviso).join('')+'</div></div>';
     return h + '</div>';
   }
 
@@ -4990,6 +5132,8 @@ const QUE_HACE_FALTA = [
     pierdes:'No se lleva lo pendiente de facturar ni los impagados.' },
   { marca:'sinFotoAviso', fichero:'fotos-aviso.sql', que:'Fotos de antes y después',
     pierdes:'Las fotos de la visita no se separan en antes y después.' },
+  { marca:'sinRevisar', fichero:'revisar-y-cobrar.sql', que:'Revisar, no facturar y cobrar a medias',
+    pierdes:'Realizados no se parte en por revisar, cerrados y partes eliminados, y una factura solo puede estar cobrada o no, nunca a medias.' },
   { marca:'sinPrecioMano', fichero:'precio-a-mano.sql', que:'El precio puesto a mano',
     pierdes:'El importe es siempre el que sale del cálculo: no se puede poner el precio acordado con el cliente sin tocar las horas.' },
   { marca:'sinCorregir', fichero:'corregir-parte.sql', que:'Corregir un parte ya cerrado',
@@ -24140,6 +24284,12 @@ dlgForm.addEventListener('submit', async e => {
 /* Contrato: el total se recalcula solo y la duración fija el vencimiento */
 dlgForm.addEventListener('input', e => {
   if (e.target.classList && e.target.classList.contains('k-c')) sumarCuotas();
+  /* ---- Los dos números que se miran mientras se escriben (27-11-2026) ----
+     El margen que deja un precio puesto a mano, y lo que falta por cobrar de
+     una factura. Los dos van aquí y no en el oyente de «change»: se escriben
+     mirando el resultado, y «change» no salta hasta salir del campo. */
+  if (e.target.id === 'pm-imp'){ pintarMargenMano(); return; }
+  if (e.target.id === 'fa-cob-imp'){ pintarFaltaCobro(e.target); return; }
   /* La cantidad de puertas de un tipo se escribe a mano, así que el resumen del
      desplegable se repinta mientras se teclea y no solo al salir del campo: si
      esperara al «change», el título diría una cosa y el campo otra. */
@@ -24520,8 +24670,6 @@ dlgForm.addEventListener('change', async e => {
     }
   }
   if (t.id === 'fa-vence') t.dataset.tocado = '1';
-  /* El margen que deja el importe que se está escribiendo a mano (27-11-2026) */
-  if (t.id === 'pm-imp') pintarMargenMano();
   if (t.id === 'k-dur' || t.id === 'k-alta'){
     const dur = +val('k-dur'), alta = val('k-alta') || hoy();
     const venc = document.getElementById('k-venc');
@@ -28711,6 +28859,21 @@ function dlgPrecioMano(avisoId){
 }
 /* El margen que quedaría con el importe que se está escribiendo, debajo del
    campo: la decisión se toma viendo lo que deja. */
+/* ---- Lo que falta por cobrar, mientras se escribe (27-11-2026) ----
+   Va en el oyente de «input» y no en el de «change»: al teclear hace falta ver
+   lo que falta, y «change» no salta hasta salir del campo. Lo cazó la prueba de
+   revisar, que escribe el importe y mira la pista. */
+function pintarFaltaCobro(t){
+  const p = document.getElementById('fa-cob-falta');
+  const tot = +(t.dataset.total || 0);
+  if (!p || !tot) return;
+  const c = +t.value || 0;
+  const falta = Math.round((tot - c) * 100) / 100;
+  p.innerHTML = c <= 0 ? 'Sin cobrar nada todavía'
+    : falta > 0.004 ? 'Cobrada a medias: <b>faltan '+eur(falta)+'</b> de '+eur(tot)
+    : (falta < -0.004 ? 'Cuidado: eso es <b>más</b> que el total de '+eur(tot)
+                      : 'Cobrada del todo');
+}
 let PM_COSTE = 0;
 function pintarMargenMano(){
   const e = document.getElementById('pm-margen');
@@ -28721,6 +28884,65 @@ function pintarMargenMano(){
   const m = Math.round((imp - coste) * 100) / 100;
   e.innerHTML = 'Margen con ese importe: <b style="color:'+(m < 0 ? 'var(--mal)' : 'var(--ok)')+'">'+
     eur(m)+'</b>'+(imp ? ' · '+pct(m, imp) : '');
+}
+/* ---- No facturar un parte (27-11-2026) ----
+   David: «yo incluiría en los partes realizados la decisión de mandar a
+   facturar o no. Lo no facturado calculará sus márgenes igualmente con costes
+   de personal y el material enviado a material roto dando de baja en almacén y
+   calculando su coste, pero en apartado diferente.»
+
+   Lo que se enseña aquí antes de decidir es lo que cuesta la decisión: las
+   horas, el desplazamiento y el material que se va a dejar de cobrar. Decidir
+   sin ver el coste es como no decidir. */
+function dlgNoFacturar(avisoId){
+  const a = S.avisos.find(x => x.id === avisoId);
+  const v = valoracionDe(avisoId);
+  if (!a || !v || S.sinRevisar) return;
+  if (!esGestion()){ toast('Esto lo decide la oficina o la administración.'); return; }
+  const h = '<h3>No facturar esta visita</h3>'+
+    '<p class="mini" style="margin:0 0 12px">'+esc(nombreCliente(a))+' · '+esc(tipoAsis(a))+
+    ' · cerrada el '+esc(fechaCorta(a.cerrado))+'</p>'+
+    '<div class="sin-ficha" style="margin-bottom:12px">'+
+    'La visita <b>no desaparece</b>: pasa al apartado <b>«Partes eliminados»</b> y su coste se '+
+    'sigue contando. Las horas del técnico se pagan igual y el material ya salió del almacén, así '+
+    'que esto es dinero puesto que no se va a cobrar. Va en el correo mensual al administrador.'+
+    '</div>'+
+    '<dl class="datos">'+
+    '<div><dt>Se deja de facturar</dt><dd>'+eur(v.imp_total)+'</dd></div>'+
+    '<div><dt>Coste que se queda la empresa</dt><dd><b style="color:var(--mal)">'+
+      eur(v.coste_total)+'</b></dd></div>'+
+    '</dl>'+
+    '<div class="campos" style="margin-top:10px">'+
+    '<div class="campo full"><label for="nf-motivo">Por qué no se factura</label>'+
+    '<input id="nf-motivo" type="text" maxlength="200" list="nf-motivos" '+
+    'value="'+esc(v.no_facturar_motivo || '')+'" '+
+    'placeholder="Ej.: cortesía por la avería repetida del mes pasado">'+
+    '<datalist id="nf-motivos">'+
+    ['Cortesía con el cliente','Error nuestro','Entra en el contrato de mantenimiento',
+     'El cliente no acepta el cargo','Garantía de un trabajo anterior','Trabajo mal hecho']
+      .map(x => '<option value="'+esc(x)+'">').join('')+'</datalist>'+
+    '<span class="pista">Hace falta: es lo que explica el coste perdido del mes cuando lo lea el '+
+    'administrador</span></div></div>'+
+    '<p class="err"></p><div class="pie"><span class="sp"></span>'+
+    '<button type="button" class="btn plana" data-cerrar>Cancelar</button>'+
+    '<button type="submit" class="btn pri">No facturarla</button></div>';
+  abrirDlg(h, async () => {
+    const m = (val('nf-motivo') || '').trim();
+    if (!m) return setErr('Escribe por qué no se factura. Queda guardado con tu nombre y la fecha.');
+    try {
+      const { error } = await sb.from('valoraciones').update({
+        no_facturar: true, no_facturar_motivo: m,
+        no_facturar_por: yo(), no_facturar_en: new Date().toISOString(),
+        /* Revisada queda igual: decidir no facturarla es haberla revisado. */
+        revisado_en: v.revisado_en || new Date().toISOString(),
+        revisado_por: v.revisado_por || yo(),
+      }).eq('aviso_id', a.id);
+      if (error) throw error;
+      cerrarDlg(); await cargar();
+      toast('No se factura. Pasa a «Partes eliminados» con su coste.');
+      return true;
+    } catch(err){ setErr((err && err.message) || 'No se pudo guardar.'); }
+  });
 }
 function dlgFacturar(avisoId){
   const a = S.avisos.find(x => x.id === avisoId);
@@ -28764,6 +28986,19 @@ function dlgFacturar(avisoId){
       '<input type="checkbox" id="fa-cob"'+(v.cobrado_el || a.cobrado ? ' checked' : '')+
         ' style="accent-color:var(--amarillo);width:18px;height:18px">Sí, esta factura está cobrada</label>'+
       '<div class="campos" style="margin-top:10px">'+
+      /* ---- Cuánto se ha cobrado (27-11-2026) ----
+         David: «estos cerrados deben de poderse marcar como cobrados completo,
+         cobrado parcial y o no cobrado por oficina.»
+         Se guarda lo cobrado y lo pendiente se calcula: al revés, el total
+         puede cambiar y el pendiente guardado dejaría de cuadrar solo. */
+      (S.sinRevisar ? '' :
+        '<div class="campo"><label for="fa-cob-imp">Cuánto se ha cobrado (€)</label>'+
+        '<input id="fa-cob-imp" type="number" step="0.01" min="0" data-act="fa-cob-imp" '+
+        'data-total="'+esc(String(conIva || v.imp_total || 0))+'" value="'+
+          esc(v.cobrado_importe != null ? v.cobrado_importe
+              : (v.cobrado_el || a.cobrado ? (conIva || v.imp_total) : ''))+'">'+
+        '<span class="pista" id="fa-cob-falta">Si es menos que el total, queda cobrada a medias y '+
+        'la diferencia sigue pendiente</span></div>')+
       '<div class="campo"><label for="fa-cob-fecha">Cobrada el</label>'+
       '<input id="fa-cob-fecha" type="date" value="'+
         esc(v.cobrado_el || (a.cobrado ? String(a.cerrado || '').slice(0,10) : hoy()))+'">'+
@@ -28794,6 +29029,13 @@ function dlgFacturar(avisoId){
         o.vence_el = val('fa-vence') || null;
         const cob = !!(document.getElementById('fa-cob') || {}).checked;
         o.cobrado_el  = cob ? (val('fa-cob-fecha') || hoy()) : null;
+        /* Lo cobrado, para poder decir «a medias». Si la casilla está sin
+           marcar, no hay cobro: se deja en nulo y no en cero, porque cero
+           cobrado y «no se ha mirado» no son lo mismo. */
+        if (!S.sinRevisar){
+          const ci = val('fa-cob-imp');
+          o.cobrado_importe = cob ? (ci === '' ? null : +ci) : null;
+        }
         o.cobro_forma = cob ? (val('fa-cob-forma') || null) : null;
         o.cobro_ref   = cob ? (val('fa-cob-ref') || null) : null;
       }
@@ -33534,6 +33776,32 @@ raiz.addEventListener('click', async e => {
   else if (a === 'articulo-nuevo') dlgArticulo(null);
   else if (a === 'articulo-editar') dlgArticulo(b.dataset.id);
   else if (a === 'ver-valoracion') dlgValoracion(b.dataset.id);
+  /* ---- Los dos pasos de la oficina (27-11-2026) ----
+     Revisar es de un toque: es decir «he repasado esto», y se puede deshacer.
+     No facturar pide motivo, porque es la decisión que se acaba explicando. */
+  else if (a === 'revisar-parte'){
+    if (!esGestion()){ toast('Revisar un parte es cosa de la oficina.'); return; }
+    try {
+      const { error } = await sb.from('valoraciones').update({
+        revisado_en: new Date().toISOString(), revisado_por: yo(),
+      }).eq('aviso_id', b.dataset.id);
+      if (error) throw error;
+      await cargar(); toast('Parte revisado. Pasa a «Cerrados».');
+    } catch(err){ fallo(err); }
+  }
+  else if (a === 'no-facturar') dlgNoFacturar(b.dataset.id);
+  else if (a === 'si-facturar'){
+    if (!esGestion()) return;
+    if (!armar(b, 'Confirmar')) return;
+    try {
+      const { error } = await sb.from('valoraciones').update({
+        no_facturar: false, no_facturar_motivo: null,
+        no_facturar_por: null, no_facturar_en: null,
+      }).eq('aviso_id', b.dataset.id);
+      if (error) throw error;
+      await cargar(); toast('Vuelve a estar para facturar.');
+    } catch(err){ fallo(err); }
+  }
   else if (a === 'revalorar'){
     try { await sb.rpc('valorar_aviso', { p_aviso: b.dataset.id }); await cargar(); toast('Visita recalculada.'); }
     catch(err){ fallo(err); }
